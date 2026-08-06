@@ -39,6 +39,16 @@ _SLOT_HINT = QColor(160, 160, 160, 90)
 _TEXT = QColor(30, 30, 30)
 _BACKGROUND = QColor(255, 255, 255)
 _TRAILING_TOKEN = re.compile(r"[A-Za-z0-9]+$")
+_CONTROL_LATEX = {
+    "%": (r"\%", "%"),
+    "#": (r"\#", "#"),
+    "&": (r"\&", "&"),
+    "_": (r"\_", "_"),
+    "$": (r"\$", "$"),
+    "{": (r"\{", "{"),
+    "}": (r"\}", "}"),
+    "|": (r"\|", "|"),
+}
 
 
 @dataclass
@@ -150,6 +160,49 @@ class MathEditorWidget(QWidget):
         elif key == "integral":
             node = BigOp(symbol="int", lower=MathSequence(), upper=MathSequence(), body=MathSequence())
             role = "body"
+        elif key == "prod":
+            node = BigOp(symbol="prod", lower=MathSequence(), upper=MathSequence(), body=MathSequence())
+            role = "body"
+        elif key == "lim":
+            node = BigOp(symbol="lim", lower=None, upper=None, body=MathSequence())
+            role = "body"
+        elif key == "derivative":
+            node = Frac(
+                numerator=MathSequence(items=[Text("d")]),
+                denominator=MathSequence(items=[Text("dx")]),
+            )
+            role = None
+        elif key == "log10":
+            self._insert_scripted_command("log", "10", sub=True)
+            return
+        elif key == "logab":
+            self._insert_scripted_command("log", "", sub=True)
+            return
+        elif key == "exp":
+            self._insert_scripted_command("", "", super=True, base_text="e")
+            return
+        elif key == "exp10":
+            self._insert_scripted_command("", "", super=True, base_text="10")
+            return
+        elif key in ("inverse_sin", "inverse_cos", "inverse_tan"):
+            name = key.removeprefix("inverse_")
+            self._insert_scripted_command(name, "-1", super=True)
+            return
+        elif key == "nth_root":
+            node = Command(latex=r"\sqrt[n]{}", display="ⁿ√x")
+            role = None
+        elif key == "matrix":
+            node = Command(
+                latex=r"\begin{matrix}  &  \\  &  \end{matrix}",
+                display="矩阵",
+            )
+            role = None
+        elif key == "cases":
+            node = Command(
+                latex=r"\begin{cases}  &  \\  &  \end{cases}",
+                display="分段",
+            )
+            role = None
         elif key == "greek_alpha":
             node = Command(latex=r"\alpha", display="α")
             role = None
@@ -177,6 +230,60 @@ class MathEditorWidget(QWidget):
             self.index = 0
         else:
             self.index = self._boundary_after(slot, insert_index)
+        self.anchor = None
+        self._pending_command = ""
+        self.update()
+
+    def _insert_scripted_command(
+        self,
+        name: str,
+        script_text: str,
+        *,
+        super: bool = False,
+        sub: bool = False,
+        base_text: str = "",
+    ) -> None:
+        """Insert a command (or text) with an attached script slot."""
+
+        self._push_history()
+        slot, boundary_index = self._current_slot_and_index()
+        boundary = self._boundary_at(slot, boundary_index)
+        insert_index = self._split_text_at(slot, boundary)
+        if name:
+            display = symbol_display(name) or name
+            base_item: MathNode = Command(latex="\\" + name, display=display)
+        elif base_text:
+            base_item = Text(base_text)
+        else:
+            base_item = Text("")
+        script = Script(base=MathSequence(items=[base_item]))
+        if super:
+            script.super = MathSequence(items=[Text(script_text)]) if script_text else MathSequence()
+            role = "super"
+        else:
+            script.sub = MathSequence(items=[Text(script_text)]) if script_text else MathSequence()
+            role = "sub"
+        slot.items.insert(insert_index, script)
+        self.path.append((role, 0, insert_index))
+        self.index = 0
+        self.anchor = None
+        self._pending_command = ""
+        self.update()
+
+    def insert_command(self, name: str) -> None:
+        """Insert a LaTeX command node at the cursor."""
+
+        self._push_history()
+        slot, boundary_index = self._current_slot_and_index()
+        boundary = self._boundary_at(slot, boundary_index)
+        insert_index = self._split_text_at(slot, boundary)
+        if name in _CONTROL_LATEX:
+            latex, display = _CONTROL_LATEX[name]
+        else:
+            latex = "\\" + name
+            display = symbol_display(name) or name
+        slot.items.insert(insert_index, Command(latex=latex, display=display))
+        self._set_boundary_after(slot, insert_index, 0)
         self.anchor = None
         self._pending_command = ""
         self.update()

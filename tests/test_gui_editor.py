@@ -2303,6 +2303,86 @@ class FormulaComposerTests(TestCase):
         self.assertEqual(plan.text, r"$a+b\cdot c$")
         dialog.close()
 
+    def test_keyboard_fraction_button_inserts_structure(self) -> None:
+        from app.gui.math_keyboard import MathKeyButton
+
+        source = "Text $a+b$ here"
+        start = source.index("$")
+        end = start + len("$a+b$")
+        dialog = FormulaDialog(None, source, start, end)
+
+        fraction_button = next(
+            button
+            for button in dialog.keyboard.findChildren(MathKeyButton)
+            if button.action == "structure:fraction"
+        )
+        fraction_button.click()
+
+        self.assertEqual(dialog.visual_edit.latex(), r"a+b\frac{}{}")
+        self.assertEqual(dialog.keyboard.isEnabled(), True)
+        dialog.close()
+
+    def test_keyboard_digits_and_symbols_insert_text(self) -> None:
+        from app.gui.math_keyboard import MathKeyButton
+
+        source = "Text $a+b$ here"
+        start = source.index("$")
+        end = start + len("$a+b$")
+        dialog = FormulaDialog(None, source, start, end)
+
+        actions = {
+            button.action: button
+            for button in dialog.keyboard.findChildren(MathKeyButton)
+        }
+        actions["text:7"].click()
+        actions["text:+"].click()
+        actions["text:8"].click()
+        actions["command:times"].click()
+        actions["command:pi"].click()
+
+        self.assertEqual(dialog.visual_edit.latex(), r"a+b7+8\times\pi")
+        dialog.close()
+
+    def test_keyboard_category_switch_preserves_formula(self) -> None:
+        from app.gui.math_keyboard import MathKeyButton
+
+        source = "Text $a+b$ here"
+        start = source.index("$")
+        end = start + len("$a+b$")
+        dialog = FormulaDialog(None, source, start, end)
+
+        sqrt_button = next(
+            button
+            for button in dialog.keyboard.findChildren(MathKeyButton)
+            if button.action == "structure:sqrt"
+        )
+        sqrt_button.click()
+        self.assertEqual(dialog.visual_edit.latex(), r"a+b\sqrt{}")
+
+        from PySide6.QtWidgets import QPushButton
+
+        greek_button = next(
+            button
+            for button in dialog.keyboard.findChildren(QPushButton)
+            if button.text() == "希腊字母"
+        )
+        greek_button.click()
+
+        self.assertEqual(dialog.visual_edit.latex(), r"a+b\sqrt{}")
+        dialog.close()
+
+    def test_keyboard_disabled_in_source_mode(self) -> None:
+        source = "Text $a+b$ here"
+        start = source.index("$")
+        end = start + len("$a+b$")
+        dialog = FormulaDialog(None, source, start, end)
+
+        dialog.source_mode_check.setChecked(True)
+        self.assertFalse(dialog.keyboard.isEnabled())
+        dialog.source_mode_check.setChecked(False)
+        self.assertTrue(dialog.keyboard.isEnabled())
+        dialog.close()
+
     def test_acceptance_inline_fraction_never_forces_newline(self) -> None:
         source = r"The result is \(\) under this condition."
         window, tab = self._window_with_document(source)

@@ -35,6 +35,7 @@ from app.core.formula_input import (
     render_formula,
 )
 from app.gui.math_editor_widget import MathEditorWidget
+from app.gui.math_keyboard import MathKeyboard
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from app.core.formula_input import FinalTextEditPlan
@@ -47,17 +48,6 @@ MODE_ORDER: tuple[tuple[str, FormulaMode], ...] = (
     ("equation", FormulaMode.EQUATION),
     ("equation*", FormulaMode.EQUATION_STAR),
 )
-
-TEMPLATE_ORDER: tuple[tuple[str, str], ...] = (
-    ("分数", "fraction"),
-    ("根式", "sqrt"),
-    ("上标", "superscript"),
-    ("下标", "subscript"),
-    ("求和", "sum"),
-    ("积分", "integral"),
-    ("α", "greek_alpha"),
-)
-
 
 class FormulaDialog(QDialog):
     """Edit an exact formula selection as a draft; returns an edit plan."""
@@ -72,7 +62,8 @@ class FormulaDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("编辑公式")
-        self.setMinimumWidth(560)
+        self.setMinimumWidth(700)
+        self.resize(980, 780)
         self._document_text = document_text
         self._start = start
         self._end = end
@@ -132,12 +123,9 @@ class FormulaDialog(QDialog):
         mode_row.addWidget(self.source_mode_check)
         layout.addLayout(mode_row)
 
-        template_row = QHBoxLayout()
-        for label, key in TEMPLATE_ORDER:
-            button = QPushButton(label)
-            button.clicked.connect(lambda _checked=False, k=key: self._apply_template_clicked(k))
-            template_row.addWidget(button)
-        layout.addLayout(template_row)
+        self.keyboard = MathKeyboard()
+        self.keyboard.actionRequested.connect(self._on_keyboard_action)
+        layout.addWidget(self.keyboard)
 
         layout.addWidget(self.status_label)
         layout.addWidget(QLabel("将应用到编辑器："))
@@ -233,14 +221,6 @@ class FormulaDialog(QDialog):
 
     # ------------------------------------------------------------------
 
-    def _apply_template_clicked(self, key: str) -> None:
-        if not self.apply_template(key):
-            QMessageBox.information(
-                self,
-                "编辑公式",
-                "当前不是完整公式，或该模板对当前内容不可用；正文不会被猜测改写。",
-            )
-
     def _on_mode_changed(self, _index: int) -> None:
         if self._applying_change:
             return
@@ -254,6 +234,7 @@ class FormulaDialog(QDialog):
         self._refresh()
 
     def _on_source_mode_toggled(self, checked: bool) -> None:
+        self.keyboard.setEnabled(not checked)
         if checked:
             self._sync_source_from_visual()
         else:
@@ -274,6 +255,29 @@ class FormulaDialog(QDialog):
             self.visual_edit.set_latex(envelope.body)
         self.editor_stack.setCurrentIndex(1 if checked else 0)
         self._refresh()
+
+    def _on_keyboard_action(self, action: str) -> None:
+        if self.source_mode_check.isChecked():
+            return
+        editor = self.visual_edit
+        if action.startswith("text:"):
+            editor.type_key(action[5:])
+        elif action.startswith("command:"):
+            editor.insert_command(action[8:])
+        elif action.startswith("structure:"):
+            editor.insert_structure(action[10:])
+        elif action == "cursor:left":
+            editor.cursor_left()
+        elif action == "cursor:right":
+            editor.cursor_right()
+        elif action == "delete":
+            editor.delete_backspace()
+        elif action == "apply":
+            self._on_apply()
+            return
+        self._sync_source_from_visual()
+        self._refresh()
+        editor.setFocus()
 
     def _sync_source_from_visual(self) -> None:
         mode = MODE_ORDER[self.mode_combo.currentIndex()][1]

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 import os
+import time
 from itertools import count
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -57,6 +58,17 @@ def app() -> QApplication:
 def isolated_settings() -> AppSettings:
     settings_file = Path(_SETTINGS_TEMP.name) / f"settings-{next(_SETTINGS_COUNTER)}.ini"
     return AppSettings(QSettings(str(settings_file), QSettings.Format.IniFormat))
+
+
+def wait_until(predicate, timeout_s: float = 3.0) -> bool:
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        QApplication.processEvents()
+        if predicate():
+            return True
+        time.sleep(0.02)
+    QApplication.processEvents()
+    return predicate()
 
 
 class GuiEditorTests(TestCase):
@@ -1169,13 +1181,45 @@ class GuiEditorTests(TestCase):
             window._add_tab(tab, source.name)
 
             window.insert_dropped_images([str(image)])
+            self.assertTrue(
+                wait_until(lambda: "\\includegraphics" in editor.toPlainText()),
+                "drop import did not complete",
+            )
 
             text = editor.toPlainText()
-            self.assertTrue((root / "figures" / "raw_image.png").exists())
+            # Already inside the project: reused without creating a copy.
+            self.assertFalse((root / "figures").exists())
             self.assertIn("\\usepackage{graphicx}", text)
-            self.assertIn("\\includegraphics[width=0.8\\textwidth]{figures/raw_image.png}", text)
+            self.assertIn("\\includegraphics[width=0.8\\textwidth]{raw image.png}", text)
             self.assertIn("\\caption{raw image}", text)
             self.assertIn("\\label{fig:raw_image}", text)
+            tab.modified = False
+            tab.dirty = False
+            window.close()
+
+    def test_dropped_external_image_is_copied_into_figures(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            outside = Path(directory).parent / "external-source"
+            outside.mkdir(exist_ok=True)
+            image = outside / "plot.png"
+            image.write_bytes(b"image")
+            source = root / "main.tex"
+            source.write_text("\\documentclass{article}\n\\begin{document}\n\\end{document}\n", encoding="utf-8")
+            window = MainWindow(settings_store=isolated_settings())
+            window.auto_compile_action.setChecked(False)
+            editor = window._make_editor(source.read_text(encoding="utf-8"))
+            tab = EditorTab(editor=editor, path=source)
+            window._add_tab(tab, source.name)
+
+            window.insert_dropped_images([str(image)])
+            self.assertTrue(
+                wait_until(lambda: "\\includegraphics" in editor.toPlainText()),
+                "drop import did not complete",
+            )
+
+            self.assertTrue((root / "figures" / "plot.png").exists())
+            self.assertIn("{figures/plot.png}", editor.toPlainText())
             tab.modified = False
             tab.dirty = False
             window.close()
@@ -1196,11 +1240,44 @@ class GuiEditorTests(TestCase):
             window._add_tab(tab, source.name)
 
             window.insert_dropped_images([str(first), str(second)])
+            self.assertTrue(
+                wait_until(lambda: editor.toPlainText().count("\\begin{figure}") == 2),
+                "drop import did not complete",
+            )
 
             text = editor.toPlainText()
             self.assertEqual(text.count("\\begin{figure}"), 2)
-            self.assertIn("figures/first.png", text)
-            self.assertIn("figures/second.jpg", text)
+            self.assertIn("{first.png}", text)
+            self.assertIn("{second.jpg}", text)
+            tab.modified = False
+            tab.dirty = False
+            window.close()
+
+    def test_dropped_images_roll_back_on_failure(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            outside = Path(directory).parent / "external-fail-source"
+            outside.mkdir(exist_ok=True)
+            good = outside / "good.png"
+            good.write_bytes(b"good")
+            missing = outside / "missing.png"
+            source = root / "main.tex"
+            source.write_text("\\documentclass{article}\n\\begin{document}\n\\end{document}\n", encoding="utf-8")
+            window = MainWindow(settings_store=isolated_settings())
+            window.auto_compile_action.setChecked(False)
+            editor = window._make_editor(source.read_text(encoding="utf-8"))
+            tab = EditorTab(editor=editor, path=source)
+            window._add_tab(tab, source.name)
+
+            with patch("app.gui.insertion_actions.QMessageBox.warning") as warning:
+                window.insert_dropped_images([str(good), str(missing)])
+                self.assertTrue(
+                    wait_until(lambda: warning.called),
+                    "failure warning did not appear",
+                )
+
+            self.assertNotIn("\\begin{figure}", editor.toPlainText())
+            self.assertFalse((root / "figures" / "good.png").exists())
             tab.modified = False
             tab.dirty = False
             window.close()

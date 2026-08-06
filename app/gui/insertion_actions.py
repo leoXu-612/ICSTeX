@@ -45,6 +45,7 @@ from app.core.project_tools import (
 from app.core.text_encoding import write_latex_text_atomic
 from app.gui import bib_helpers
 from app.gui.formula_dialog import FormulaDialog
+from app.gui.drop_import_worker import DropCopyWorker
 from app.gui.insert_panel import (
     FigureDialog,
     HyperlinkDialog,
@@ -176,47 +177,67 @@ class InsertionActions:
 
         recorder = import_metrics.begin_transaction()
         recorder.step("drop_received", count=str(len(image_paths)))
-        try:
-            snippets: list[str] = []
-            for image_path in image_paths:
-                recorder.step("source_validated", source=image_path)
-                relative_path = self.copy_image_asset(tab, image_path)
-                if relative_path is None:
-                    continue
-                recorder.step("destination_resolved", destination=relative_path)
-                snippets.append(
-                    figure_snippet(
-                        FigureSpec(
-                            image_path=relative_path,
-                            caption=self._default_figure_caption(relative_path),
-                            label=self._default_figure_label(relative_path),
-                        )
-                    )
-                )
+        recorder.step("copy_started")
+        worker = DropCopyWorker(tab.path.parent, tab.path, image_paths)
+        self._drop_worker = worker  # keep a reference while the thread runs
+        worker.completed.connect(
+            lambda results, t=tab, r=recorder: self._on_drop_copied(t, r, results)
+        )
+        worker.finished.connect(worker.deleteLater)
+        window.statusBar().showMessage(f"正在后台复制 {len(image_paths)} 张图片...", 2500)
+        worker.start()
 
-            if not snippets:
-                import_metrics.finish_transaction(recorder)
-                return
-            recorder.step("source_edit_started")
-            self.insert_snippet(
-                tab,
-                "\n\n".join(snippets),
-                FIGURE_PACKAGES,
-                f"已拖入 {len(snippets)} 张图片并生成 figure。",
-            )
-            recorder.step("source_edit_finished", count=str(len(snippets)))
-            import_metrics.record_compile_request("asset_import_complete")
-            recorder.step("index_update_started")
-            window.refresh_project_panels()
-            recorder.step("index_update_finished")
+    def _on_drop_copied(self, tab: EditorTab, recorder, results: list) -> None:
+        """Finish the import transaction on the main thread after copying."""
+
+        window = self.window
+        errors = [result for result in results if result.error]
+        recorder.step("copy_finished", count=str(len(results)))
+        if errors:
+            for result in results:
+                if result.destination is not None and result.destination != result.source:
+                    try:
+                        result.destination.unlink(missing_ok=True)
+                    except OSError:
+                        pass
+            recorder.step("import_failed", errors=str(len(errors)))
             import_metrics.finish_transaction(recorder)
-            window.append_log(
-                "导入性能: " + recorder.format_summary().replace("\n", " | ")
+            QMessageBox.warning(
+                window,
+                "导入失败",
+                "部分图片导入失败，已回滚本次新增副本：\n"
+                + "\n".join(f"{result.source.name}: {result.error}" for result in errors),
             )
-        except Exception:
-            recorder.step("import_failed")
+            return
+
+        ok = [result for result in results if result.relative_path]
+        if not ok:
             import_metrics.finish_transaction(recorder)
-            raise
+            return
+        snippets = [
+            figure_snippet(
+                FigureSpec(
+                    image_path=result.relative_path,
+                    caption=self._default_figure_caption(result.relative_path),
+                    label=self._default_figure_label(result.relative_path),
+                )
+            )
+            for result in ok
+        ]
+        recorder.step("source_edit_started")
+        self.insert_snippet(
+            tab,
+            "\n\n".join(snippets),
+            FIGURE_PACKAGES,
+            f"已拖入 {len(snippets)} 张图片并生成 figure。",
+        )
+        recorder.step("source_edit_finished", count=str(len(snippets)))
+        import_metrics.record_compile_request("asset_import_complete")
+        recorder.step("index_update_started")
+        window.refresh_project_panels()
+        recorder.step("index_update_finished")
+        import_metrics.finish_transaction(recorder)
+        window.append_log("导入性能: " + recorder.format_summary().replace("\n", " | "))
 
     def insert_figure(self) -> None:
         window = self.window

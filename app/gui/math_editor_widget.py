@@ -14,7 +14,7 @@ import re
 
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QFontMetricsF, QKeyEvent, QPainter, QPen
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QApplication, QWidget
 
 from app.core.formula_tree import (
     BigOp,
@@ -30,6 +30,7 @@ from app.core.formula_tree import (
     parse_math_latex,
     symbol_display,
 )
+from app.core.formula_input import recognize_formula
 
 
 _CARET = QColor(35, 110, 200)
@@ -207,6 +208,50 @@ class MathEditorWidget(QWidget):
             insert_index = self._insert_index_at(boundary, slot)
             slot.items.insert(insert_index, Text(text))
             self._set_boundary_after(slot, insert_index, len(text))
+        self.anchor = None
+        self._pending_command = ""
+        self.update()
+
+    def paste_clipboard(self, text: str) -> None:
+        """Paste LaTeX or plain text at the cursor.
+
+        A pasted text that is exactly one supported formula wrapper (``$...$``,
+        ``\\(...\\)``, ``\\[...\\]``, equation, equation*) is inserted with its
+        wrapper stripped: the dialog's formula mode owns the outer wrapper.
+        Unsupported or malformed content is preserved losslessly through the
+        math parser. Newlines and tabs are collapsed to spaces (mathematics
+        ignores whitespace, and the visual editor renders single-line).
+        """
+
+        if not text:
+            return
+        cleaned = (
+            text.replace("\r\n", " ")
+            .replace("\r", " ")
+            .replace("\n", " ")
+            .replace("\t", " ")
+            .strip()
+        )
+        if not cleaned:
+            return
+        envelope = recognize_formula(cleaned)
+        body = envelope.body if envelope is not None else cleaned
+
+        if self.anchor is not None:
+            self._delete_selection()  # pushes history
+        else:
+            self._push_history()
+
+        slot, boundary_index = self._current_slot_and_index()
+        boundary = self._boundary_at(slot, boundary_index)
+        insert_index = self._split_text_at(slot, boundary)
+        parsed = parse_math_latex(body)
+        slot.items[insert_index:insert_index] = parsed.items
+        if parsed.items:
+            last_index = insert_index + len(parsed.items) - 1
+            self.index = self._boundary_after(slot, last_index)
+        else:
+            self.index = boundary_index
         self.anchor = None
         self._pending_command = ""
         self.update()
@@ -1109,6 +1154,11 @@ class MathEditorWidget(QWidget):
             return
         if key == Qt.Key.Key_Y and modifiers & Qt.KeyboardModifier.ControlModifier:
             self.redo()
+            return
+        if key == Qt.Key.Key_V and modifiers & (
+            Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier
+        ):
+            self.paste_clipboard(QApplication.clipboard().text())
             return
         if key == Qt.Key.Key_A and modifiers & Qt.KeyboardModifier.ControlModifier:
             self.select_all()

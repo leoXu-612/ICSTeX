@@ -2290,6 +2290,19 @@ class FormulaComposerTests(TestCase):
         self.assertEqual(plan.text, r"\begin{equation}\frac{}{}\end{equation}")
         dialog.close()
 
+    def test_dialog_paste_into_visual_editor(self) -> None:
+        source = "Text $a+b$ here"
+        start = source.index("$")
+        end = start + len("$a+b$")
+        dialog = FormulaDialog(None, source, start, end)
+
+        dialog.visual_edit.paste_clipboard(r"\cdot c")
+        plan = dialog.build_plan()
+
+        assert plan is not None
+        self.assertEqual(plan.text, r"$a+b\cdot c$")
+        dialog.close()
+
     def test_acceptance_inline_fraction_never_forces_newline(self) -> None:
         source = r"The result is \(\) under this condition."
         window, tab = self._window_with_document(source)

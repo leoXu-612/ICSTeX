@@ -6,6 +6,8 @@ from unittest import TestCase
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QKeyEvent
 
 from app.gui.math_editor_widget import MathEditorWidget
 
@@ -134,6 +136,57 @@ class MathEditorWidgetTests(TestCase):
         widget = MathEditorWidget()
         widget.set_latex(r"\mystery{a}{b}")
         self.assertEqual(widget.latex(), r"\mystery{a}{b}")
+
+    def test_paste_plain_text_at_cursor(self) -> None:
+        widget = MathEditorWidget()
+        widget.set_latex("x")
+        widget.paste_clipboard("+y^2")
+        self.assertEqual(widget.latex(), "x+y^2")
+
+    def test_paste_wrapped_formula_strips_wrapper(self) -> None:
+        widget = MathEditorWidget()
+        widget.set_latex("")
+        widget.paste_clipboard(r"\(\frac{a}{b}\)")
+        self.assertEqual(widget.latex(), r"\frac{a}{b}")
+
+        widget.set_latex("")
+        widget.paste_clipboard(r"$E=mc^2$")
+        self.assertEqual(widget.latex(), r"E=mc^2")
+
+    def test_paste_replaces_selection(self) -> None:
+        widget = MathEditorWidget()
+        widget.set_latex("abc+def")
+        widget.select_all()
+        widget.paste_clipboard(r"\sqrt{x}")
+        self.assertEqual(widget.latex(), r"\sqrt{x}")
+
+    def test_paste_is_undoable(self) -> None:
+        widget = MathEditorWidget()
+        widget.set_latex("x")
+        widget.paste_clipboard("+1")
+        self.assertEqual(widget.latex(), "x+1")
+        widget.undo()
+        self.assertEqual(widget.latex(), "x")
+
+    def test_paste_unknown_content_is_lossless(self) -> None:
+        widget = MathEditorWidget()
+        widget.set_latex("")
+        widget.paste_clipboard(r"\begin{matrix}a&b\\c&d\end{matrix}")
+        self.assertEqual(widget.latex(), r"\begin{matrix}a&b\\c&d\end{matrix}")
+
+    def test_paste_via_keyboard_shortcut(self) -> None:
+        app().clipboard().setText(r"\frac{1}{2}")
+        widget = MathEditorWidget()
+        widget.set_latex("x=")
+        event = QKeyEvent(
+            QKeyEvent.Type.KeyPress,
+            Qt.Key.Key_V,
+            Qt.KeyboardModifier.ControlModifier,
+            "v",
+        )
+        widget.keyPressEvent(event)
+        self.assertEqual(widget.latex(), r"x=\frac{1}{2}")
+        app().clipboard().clear()
 
     def test_selection_delete(self) -> None:
         widget = MathEditorWidget()

@@ -318,7 +318,7 @@ class FormulaDialog(QDialog):
             self.status_label.setText("源码模式：直接编辑 LaTeX；正文仅按你的操作变换。")
         else:
             self.status_label.setText(
-                "可视化模式：输入 / 生成分式，^ 生成上标，_ 生成下标，\\alpha 转为 α。"
+                "可视化模式：输入 / 生成分式，^ 上标，_ 下标，\\alpha 转为 α，可直接粘贴 LaTeX。"
             )
         package_text = "、".join(plan.packages) if plan.packages else "无"
         if plan.start == plan.end:

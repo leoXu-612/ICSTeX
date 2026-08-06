@@ -36,7 +36,8 @@ class BlockRendererTests(TestCase):
 
     def test_render_block_types(self) -> None:
         text = Block(id="blk_text", type="text", alias="t", semantic=Semantic(role="text"), content=content_for_text("a & b"))
-        self.assertEqual(render_block(text).strip(), r"a \& b")
+        self.assertIn(r"a \& b", render_block(text))
+        self.assertIn("% ICSTEX:BEGIN block=blk_text", render_block(text))
 
         raw = Block(id="blk_raw", type="rawLatex", alias="r", semantic=Semantic(role="raw-latex"), content=content_for_raw_latex(r"\textbf{ok}"))
         self.assertIn(r"\textbf{ok}", render_block(raw))

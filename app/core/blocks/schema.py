@@ -262,10 +262,81 @@ LAYOUT_SCHEMA = {
 }
 
 
+APP_THEME_SCHEMA = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://icstex.local/schema/app-theme/1.0.0",
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["schemaVersion", "kind", "id", "name", "mode", "tokens", "typography", "effects"],
+    "properties": {
+        "schemaVersion": {"const": SCHEMA_VERSION},
+        "kind": {"const": "app-theme"},
+        "id": {"type": "string", "minLength": 4},
+        "name": {"type": "string"},
+        "mode": {"enum": ["light", "dark", "system"]},
+        "tokens": {
+            "type": "object",
+            "required": [
+                "background",
+                "surface",
+                "surfaceElevated",
+                "foreground",
+                "foregroundMuted",
+                "border",
+                "accent",
+                "accentForeground",
+                "selection",
+                "success",
+                "warning",
+                "error",
+                "layoutGuide",
+            ],
+        },
+        "typography": {"type": "object"},
+        "effects": {"type": "object"},
+    },
+}
+
+
+DOCUMENT_THEME_SCHEMA = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://icstex.local/schema/document-theme/1.0.0",
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["schemaVersion", "kind", "id", "name", "page", "typography"],
+    "properties": {
+        "schemaVersion": {"const": SCHEMA_VERSION},
+        "kind": {"const": "document-theme"},
+        "id": {"type": "string", "minLength": 4},
+        "name": {"type": "string"},
+        "page": {
+            "type": "object",
+            "required": ["size", "orientation", "columns", "margin"],
+            "properties": {
+                "size": {"enum": ["a4", "letter"]},
+                "orientation": {"enum": ["portrait", "landscape"]},
+                "columns": {"enum": [1, 2]},
+                "margin": {"type": "object"},
+            },
+        },
+        "typography": {
+            "type": "object",
+            "required": ["textFamily", "mathFamily", "monoFamily", "baseSizePt", "lineSpacing"],
+        },
+        "headings": {"type": "object"},
+        "figures": {"type": "object"},
+        "tables": {"type": "object"},
+        "layout": {"type": "object"},
+    },
+}
+
+
 _VALIDATORS = {
     "block": Draft202012Validator(BLOCK_SCHEMA),
     "project": Draft202012Validator(PROJECT_SCHEMA),
     "layout": Draft202012Validator(LAYOUT_SCHEMA),
+    "app-theme": Draft202012Validator(APP_THEME_SCHEMA),
+    "document-theme": Draft202012Validator(DOCUMENT_THEME_SCHEMA),
 }
 _CONTENT_VALIDATORS = {
     block_type: Draft202012Validator(schema) for block_type, schema in CONTENT_SCHEMAS.items()
@@ -300,3 +371,11 @@ def validate_project(data: dict) -> list[str]:
 
 def validate_layout(data: dict) -> list[str]:
     return _issues(_VALIDATORS["layout"], data)
+
+
+def validate_theme(data: dict) -> list[str]:
+    kind = data.get("kind")
+    validator = _VALIDATORS.get(kind)
+    if validator is None:
+        return ["未知主题类型：" + str(kind)]
+    return _issues(validator, data)

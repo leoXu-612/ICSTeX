@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import os
+import subprocess
 import threading
 from tempfile import TemporaryDirectory
 from pathlib import Path
@@ -58,6 +59,49 @@ class CompileManagerTests(TestCase):
         self.assertTrue(
             popen.call_args.kwargs["env"]["TEXINPUTS"].startswith(str(overlay.resolve()))
         )
+
+    def test_explicit_timeout_terminates_and_reports_timeout(self) -> None:
+        class HangingProcess:
+            returncode: int | None = None
+            terminated = False
+            killed = False
+
+            def communicate(self, timeout: float | None = None) -> tuple[str, str]:
+                if timeout is not None:
+                    time.sleep(0.2)
+                    raise subprocess.TimeoutExpired(cmd="latexmk", timeout=timeout)
+                self.returncode = -9
+                return "stdout", "stderr"
+
+            def terminate(self) -> None:
+                self.terminated = True
+
+            def wait(self, timeout: float | None = None) -> int:
+                if self.terminated:
+                    return self.returncode or 0
+                raise subprocess.TimeoutExpired(cmd="latexmk", timeout=timeout or 1)
+
+            def kill(self) -> None:
+                self.killed = True
+
+        with TemporaryDirectory() as directory:
+            tex = Path(directory) / "main.tex"
+            tex.write_text("\\documentclass{article}", encoding="utf-8")
+            manager = CompileManager(
+                tex,
+                toolchain=LaTeXToolchain(latexmk="/bin/latexmk", pdflatex=None, texcount=None, synctex=None),
+            )
+            process = HangingProcess()
+            with patch("app.core.compiler.subprocess.Popen", return_value=process):
+                start = time.monotonic()
+                result = manager.compile_now(timeout_seconds=0.05)
+                elapsed = time.monotonic() - start
+
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result.outcome, CompileOutcome.TIMEOUT)
+        self.assertLess(elapsed, 2.0)
+        self.assertTrue(process.terminated)
 
     def test_pending_final_request_cannot_be_downgraded_by_preview(self) -> None:
         with TemporaryDirectory() as directory:
@@ -486,6 +530,6 @@ class CompileOutcomeTests(TestCase):
         self.assertFalse(manager.is_running)
 
     def test_no_compile_timeout_is_introduced(self) -> None:
-        # Stop remains the only control for a runaway compile.
-        source = inspect.getsource(CompileManager._run_compile)
-        self.assertNotIn("timeout", source)
+        # Normal compiles stay unbounded; timeout is an explicit opt-in only.
+        signature = inspect.signature(CompileManager.compile_now)
+        self.assertIsNone(signature.parameters["timeout_seconds"].default)

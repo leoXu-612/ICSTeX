@@ -23,47 +23,56 @@ def render_block(block: Block, *, in_box: bool = False) -> str:
 
     block_type = block.type
     if block_type == "text":
-        return escape_latex(str(block.content.get("text", ""))) + "\n"
-    if block_type == "heading":
+        latex = escape_latex(str(block.content.get("text", ""))) + "\n"
+    elif block_type == "heading":
         level = max(1, min(6, int(block.content.get("level", 1))))
         command = ["section", "subsection", "subsubsection", "paragraph", "subparagraph", "subparagraph"][level - 1]
         if in_box:
-            return "\\textbf{" + escape_latex(str(block.content.get("text", ""))) + "}\n"
-        return f"\\{command}{{{escape_latex(str(block.content.get('text', '')))}}}\n"
-    if block_type == "quote":
-        return "\\begin{quote}\n" + escape_latex(str(block.content.get("text", ""))) + "\n\\end{quote}\n"
-    if block_type == "list":
+            latex = "\\textbf{" + escape_latex(str(block.content.get("text", ""))) + "}\n"
+        else:
+            latex = f"\\{command}{{{escape_latex(str(block.content.get('text', '')))}}}\n"
+    elif block_type == "quote":
+        latex = "\\begin{quote}\n" + escape_latex(str(block.content.get("text", ""))) + "\n\\end{quote}\n"
+    elif block_type == "list":
         environment = "enumerate" if block.content.get("ordered") else "itemize"
         items = "\n".join(f"  \\item {escape_latex(str(item))}" for item in block.content.get("items", []))
-        return f"\\begin{{{environment}}}\n{items}\n\\end{{{environment}}}\n"
-    if block_type == "rawLatex":
+        latex = f"\\begin{{{environment}}}\n{items}\n\\end{{{environment}}}\n"
+    elif block_type == "rawLatex":
         trusted = bool(block.content.get("trusted"))
-        return f"% ICSTEX:raw-latex trusted={str(trusted).lower()}\n{block.content.get('latex', '')}\n"
-    if block_type == "formula":
+        latex = f"% ICSTEX:raw-latex trusted={str(trusted).lower()}\n{block.content.get('latex', '')}\n"
+    elif block_type == "formula":
         latex = str(block.content.get("latexCache", ""))
         label = block.semantic.label
         role = block.semantic.role
         if role == "inline":
-            return f"\\({latex}\\)\n"
-        body = latex
-        if label:
-            body = latex + f"\n  \\label{{{label}}}"
-        return f"\\[\n  {body}\n\\]\n"
-    if block_type == "image":
-        return _render_image(block, in_box=in_box)
-    if block_type == "table":
+            latex = f"\\({latex}\\)\n"
+        else:
+            body = latex
+            if label:
+                body = latex + f"\n  \\label{{{label}}}"
+            latex = f"\\[\n  {body}\n\\]\n"
+    elif block_type == "image":
+        latex = _render_image(block, in_box=in_box)
+    elif block_type == "table":
         try:
             table = TableData.from_content_dict(block.content)
         except (KeyError, TypeError, ValueError):
-            return f"% ICSTEX:table block={block.id} 无法解析表格内容\n"
-        return render_table(
-            table,
-            caption=block.semantic.caption.text if block.semantic.caption else None,
-            label=block.semantic.label,
-            in_box=in_box,
-            block_id=block.id,
-        )
-    return f"% ICSTEX:unknown-block-type {block_type}\n"
+            latex = f"% ICSTEX:table block={block.id} 无法解析表格内容\n"
+        else:
+            latex = render_table(
+                table,
+                caption=block.semantic.caption.text if block.semantic.caption else None,
+                label=block.semantic.label,
+                in_box=in_box,
+                block_id=block.id,
+            )
+    else:
+        latex = f"% ICSTEX:unknown-block-type {block_type}\n"
+    return _wrap_block(block.id, latex)
+
+
+def _wrap_block(block_id: str, latex: str) -> str:
+    return f"% ICSTEX:BEGIN block={block_id}\n{latex}% ICSTEX:END block={block_id}\n"
 
 
 def required_packages_for_block(block: Block, *, in_box: bool = False) -> tuple[str, ...]:

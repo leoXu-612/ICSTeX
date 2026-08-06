@@ -16,6 +16,7 @@ from PySide6.QtWidgets import QDialog, QMessageBox
 
 from app.core.formula_input import FinalTextEditPlan, parse_document_selection
 from app.core.image_assets import copy_image_atomic
+from app.core.import_metrics import import_metrics
 from app.core.latex_insertions import (
     FIGURE_PACKAGES,
     HYPERLINK_PACKAGES,
@@ -173,30 +174,49 @@ class InsertionActions:
             QMessageBox.information(window, "请先保存", "请先保存当前 LaTeX 文件，再拖入图片。")
             return
 
-        snippets: list[str] = []
-        for image_path in image_paths:
-            relative_path = self.copy_image_asset(tab, image_path)
-            if relative_path is None:
-                continue
-            snippets.append(
-                figure_snippet(
-                    FigureSpec(
-                        image_path=relative_path,
-                        caption=self._default_figure_caption(relative_path),
-                        label=self._default_figure_label(relative_path),
+        recorder = import_metrics.begin_transaction()
+        recorder.step("drop_received", count=str(len(image_paths)))
+        try:
+            snippets: list[str] = []
+            for image_path in image_paths:
+                recorder.step("source_validated", source=image_path)
+                relative_path = self.copy_image_asset(tab, image_path)
+                if relative_path is None:
+                    continue
+                recorder.step("destination_resolved", destination=relative_path)
+                snippets.append(
+                    figure_snippet(
+                        FigureSpec(
+                            image_path=relative_path,
+                            caption=self._default_figure_caption(relative_path),
+                            label=self._default_figure_label(relative_path),
+                        )
                     )
                 )
-            )
 
-        if not snippets:
-            return
-        self.insert_snippet(
-            tab,
-            "\n\n".join(snippets),
-            FIGURE_PACKAGES,
-            f"已拖入 {len(snippets)} 张图片并生成 figure。",
-        )
-        window.refresh_project_panels()
+            if not snippets:
+                import_metrics.finish_transaction(recorder)
+                return
+            recorder.step("source_edit_started")
+            self.insert_snippet(
+                tab,
+                "\n\n".join(snippets),
+                FIGURE_PACKAGES,
+                f"已拖入 {len(snippets)} 张图片并生成 figure。",
+            )
+            recorder.step("source_edit_finished", count=str(len(snippets)))
+            import_metrics.record_compile_request("asset_import_complete")
+            recorder.step("index_update_started")
+            window.refresh_project_panels()
+            recorder.step("index_update_finished")
+            import_metrics.finish_transaction(recorder)
+            window.append_log(
+                "导入性能: " + recorder.format_summary().replace("\n", " | ")
+            )
+        except Exception:
+            recorder.step("import_failed")
+            import_metrics.finish_transaction(recorder)
+            raise
 
     def insert_figure(self) -> None:
         window = self.window

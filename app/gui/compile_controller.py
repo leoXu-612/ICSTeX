@@ -34,6 +34,7 @@ from app.core.paths import (
     preview_root_dir_for,
     resolve_root_tex,
 )
+from app.core.import_metrics import import_metrics
 from app.gui.image_proxy_cache import ImageProxyCache
 from app.gui.main_window_support import set_dynamic_property
 
@@ -387,6 +388,7 @@ class CompileController:
             engine=engine,
             debounce_ms=window.compile_debounce_ms,
             preview_preparer=self._prepare_preview,
+            metrics_hook=import_metrics.record_compile_event,
         )
         manager.on_started = lambda root, build_id: self._emit_started(manager, root, build_id)
         manager.on_finished = lambda result: self._emit_finished(manager, result)

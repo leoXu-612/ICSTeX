@@ -106,6 +106,7 @@ class CompileManager:
         on_started: StartedCallback | None = None,
         on_finished: FinishedCallback | None = None,
         preview_preparer: PreviewPreparer | None = None,
+        metrics_hook: Callable[[str, str], None] | None = None,
     ) -> None:
         self.root_file = normalize_path(root_file)
         self.output_dir = normalize_path(output_dir) if output_dir else build_dir_for(self.root_file)
@@ -115,6 +116,7 @@ class CompileManager:
         self.on_started = on_started
         self.on_finished = on_finished
         self.preview_preparer = preview_preparer
+        self.metrics_hook = metrics_hook
         self._timer: threading.Timer | None = None
         self._timer_generation = 0
         self._lock = threading.Lock()
@@ -193,6 +195,8 @@ class CompileManager:
             self._timer.daemon = True
             self._timer.start()
         self._log(f"已安排{self._purpose_label(selected)}：{reason}")
+        if self.metrics_hook is not None:
+            self.metrics_hook("request", reason)
 
     def compile_async(self, purpose: BuildPurpose | str = BuildPurpose.FINAL) -> None:
         selected = BuildPurpose(purpose)
@@ -209,6 +213,8 @@ class CompileManager:
             self._idle_event.clear()
         thread = threading.Thread(target=self._run_async, args=(selected,), daemon=True)
         thread.start()
+        if self.metrics_hook is not None:
+            self.metrics_hook("request", "compile_async")
 
     def _fire_scheduled_compile(self, generation: int, purpose: BuildPurpose) -> None:
         with self._lock:
@@ -218,9 +224,13 @@ class CompileManager:
         self.compile_async(purpose)
 
     def _run_async(self, purpose: BuildPurpose) -> None:
+        if self.metrics_hook is not None:
+            self.metrics_hook("start", purpose.value)
         try:
             self.compile_now(purpose)
         finally:
+            if self.metrics_hook is not None:
+                self.metrics_hook("finish", purpose.value)
             with self._lock:
                 self._launch_count = max(0, self._launch_count - 1)
                 if self._launch_count == 0 and not self._running:

@@ -127,6 +127,12 @@ class ImportMetrics:
 
     def begin_transaction(self, transaction_id: str | None = None) -> ImportRecorder:
         with self._lock:
+            stale = self._awaiting or self._current
+        if stale is not None:
+            # One import at a time: finalize any open transaction so compile
+            # attribution for the next import cannot be polluted.
+            self._finalize(stale)
+        with self._lock:
             recorder = ImportRecorder(transaction_id)
             self._current = recorder
             return recorder

@@ -284,6 +284,11 @@ class MainWindow(QMainWindow):
     def open_formula_composer(self) -> None:
         self.insertions.open_formula_composer()
 
+    def show_import_perf_dialog(self) -> None:
+        from app.gui.import_perf_dialog import ImportPerfDialog
+
+        ImportPerfDialog(self).exec()
+
     def insert_list(self) -> None:
         self.insertions.insert_list()
 

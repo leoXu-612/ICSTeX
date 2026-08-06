@@ -2597,3 +2597,19 @@ class FormulaComposerTests(TestCase):
             tab.modified = False
             tab.dirty = False
             window.close()
+
+    def test_import_perf_dialog_shows_summaries(self) -> None:
+        from app.core.import_metrics import import_metrics
+        from app.gui.import_perf_dialog import ImportPerfDialog
+
+        recorder = import_metrics.begin_transaction("perf-test")
+        import_metrics.record_compile_request("asset_import")
+        import_metrics.record_compile_start("preview")
+        import_metrics.record_compile_finish("preview")
+
+        dialog = ImportPerfDialog(None)
+        text = dialog.text.toPlainText()
+        self.assertIn("perf-test", text)
+        self.assertIn("compile requested=1", text)
+        self.assertIn("started=1", text)
+        dialog.close()

@@ -195,8 +195,6 @@ class CompileManager:
             self._timer.daemon = True
             self._timer.start()
         self._log(f"已安排{self._purpose_label(selected)}：{reason}")
-        if self.metrics_hook is not None:
-            self.metrics_hook("request", reason)
 
     def compile_async(self, purpose: BuildPurpose | str = BuildPurpose.FINAL) -> None:
         selected = BuildPurpose(purpose)
@@ -213,8 +211,6 @@ class CompileManager:
             self._idle_event.clear()
         thread = threading.Thread(target=self._run_async, args=(selected,), daemon=True)
         thread.start()
-        if self.metrics_hook is not None:
-            self.metrics_hook("request", "compile_async")
 
     def _fire_scheduled_compile(self, generation: int, purpose: BuildPurpose) -> None:
         with self._lock:

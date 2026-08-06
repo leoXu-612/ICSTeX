@@ -12,9 +12,16 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QEvent, QMimeData, QPointF, QSettings, Qt, QUrl
 from PySide6.QtGui import QCloseEvent, QDropEvent, QKeyEvent, QTextCursor
-from PySide6.QtWidgets import QApplication, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea
+from PySide6.QtWidgets import QApplication, QDialog, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea
 
 from app.core.compiler import BuildPurpose, CompileManager, CompileOutcome, CompileResult
+from app.core.formula_input import (
+    FormulaDraft,
+    FormulaMode,
+    apply_formula_template,
+    final_edit_plan,
+    parse_document_selection,
+)
 from app.core.log_parser import LaTeXError
 from app.core.pdf_state import PdfFreshness
 from app.core.preview_state import PreviewFreshness
@@ -24,6 +31,7 @@ from app.core.latex_insertions import HYPERLINK_PACKAGES
 from app.gui.diagnostics_panel import DiagnosticsPanel
 from app.gui.environment_doctor_dialog import EnvironmentDoctorDialog
 from app.gui.find_replace import FindReplaceBar
+from app.gui.formula_dialog import FormulaDialog
 from app.gui.insert_panel import FigureDialog, HyperlinkDialog, SideBySideFigureDialog, TableDialog
 from app.gui.latex_editor import LaTeXEditor
 from app.gui.main_window import EditorTab, MainWindow
@@ -2085,3 +2093,264 @@ class GuiPdfStateTests(TestCase):
             self.window.reveal_pdf()  # must not raise
 
         self.assertIn("无法打开文件管理器", self.window.log_view.toPlainText())
+
+
+class FormulaComposerTests(TestCase):
+    """Focused tests for the DS-001 formula composer GUI slice."""
+
+    def setUp(self) -> None:
+        app()
+
+    def _window_with_document(self, text: str) -> tuple[MainWindow, EditorTab]:
+        window = MainWindow(settings_store=isolated_settings())
+        window.auto_compile_action.setChecked(False)
+        editor = window._make_editor(text)
+        tab = EditorTab(editor=editor)
+        window._add_tab(tab, "formula_test.tex")
+        return window, tab
+
+    @staticmethod
+    def _select(editor: LaTeXEditor, start: int, end: int) -> None:
+        cursor = editor.textCursor()
+        cursor.setPosition(start)
+        cursor.setPosition(end, QTextCursor.MoveMode.KeepAnchor)
+        editor.setTextCursor(cursor)
+
+    @staticmethod
+    def _close(window: MainWindow, tab: EditorTab) -> None:
+        tab.modified = False
+        tab.dirty = False
+        window.close()
+
+    def test_apply_plan_replaces_formula_and_merges_package_into_one_undo(self) -> None:
+        source = "\\documentclass{article}\n\\begin{document}\nText $a+b$ here\n\\end{document}\n"
+        window, tab = self._window_with_document(source)
+        editor = tab.editor
+        start = source.index("$")
+        end = start + len("$a+b$")
+
+        envelope = parse_document_selection(source, start, end)
+        assert envelope is not None
+        fraction = apply_formula_template(
+            FormulaDraft(mode=envelope.mode, body=envelope.body), "fraction"
+        )
+        assert fraction is not None
+        draft = FormulaDraft(mode=FormulaMode.EQUATION_STAR, body=fraction.draft.body)
+        plan = final_edit_plan(
+            source,
+            start,
+            end,
+            draft,
+            body_cursor_offset=fraction.cursor_offset,
+        )
+        assert plan is not None
+        self.assertEqual(plan.packages, ("amsmath",))
+
+        applied = window.insertions.apply_formula_plan(tab, plan)
+
+        self.assertTrue(applied)
+        text = editor.toPlainText()
+        self.assertIn("\\usepackage{amsmath}", text)
+        self.assertIn("\\begin{equation*}\\frac{a+b}{}\\end{equation*}", text)
+        self.assertNotIn("$a+b$", text)
+        # A single Undo step restores both the package and the formula text.
+        editor.undo()
+        self.assertEqual(editor.toPlainText(), source)
+        self._close(window, tab)
+
+    def test_apply_plan_refuses_stale_selection(self) -> None:
+        source = "Text $a+b$ here"
+        window, tab = self._window_with_document(source)
+        editor = tab.editor
+        start = source.index("$")
+        end = start + len("$a+b$")
+        plan = final_edit_plan(
+            source,
+            start,
+            end,
+            FormulaDraft(mode=FormulaMode.INLINE_DOLLAR, body="a+b"),
+        )
+        assert plan is not None
+
+        editor.setPlainText("Text $x+y$ here")  # external edit at the same offsets
+        with patch("app.gui.insertion_actions.QMessageBox.warning") as warning:
+            applied = window.insertions.apply_formula_plan(tab, plan)
+
+        self.assertFalse(applied)
+        self.assertEqual(editor.toPlainText(), "Text $x+y$ here")
+        warning.assert_called_once()
+        self._close(window, tab)
+
+    def test_composer_requires_exact_formula_selection(self) -> None:
+        source = "Text $a+b$ here"
+        window, tab = self._window_with_document(source)
+        editor = tab.editor
+        self._select(editor, 0, len(source))
+
+        with patch("app.gui.insertion_actions.QMessageBox.information") as information:
+            window.open_formula_composer()
+
+        self.assertEqual(editor.toPlainText(), source)
+        information.assert_called_once()
+        self._close(window, tab)
+
+    def test_composer_without_selection_opens_dialog_and_inserts_new_formula(self) -> None:
+        source = "\\documentclass{article}\n\\begin{document}\n\n\\end{document}\n"
+        window, tab = self._window_with_document(source)
+        editor = tab.editor
+        position = len(source) - len("\\end{document}\n")
+        cursor = editor.textCursor()
+        cursor.setPosition(position)
+        editor.setTextCursor(cursor)
+
+        with patch("app.gui.insertion_actions.FormulaDialog") as dialog_cls:
+            dialog_cls.return_value.exec.return_value = QDialog.DialogCode.Accepted
+            dialog_cls.return_value.plan.return_value = final_edit_plan(
+                source,
+                position,
+                position,
+                FormulaDraft(mode=FormulaMode.EQUATION, body=""),
+                body_cursor_offset=0,
+            )
+            window.open_formula_composer()
+
+        _, kwargs = dialog_cls.call_args
+        self.assertEqual(kwargs.get("seed_text"), r"\begin{equation}\end{equation}")
+        self.assertIn(r"\begin{equation}\end{equation}", editor.toPlainText())
+        editor.undo()
+        self.assertEqual(editor.toPlainText(), source)
+        self._close(window, tab)
+
+    def test_toolbox_equation_button_routes_through_composer(self) -> None:
+        source = "\\documentclass{article}\n\\begin{document}\n\n\\end{document}\n"
+        window, tab = self._window_with_document(source)
+        editor = tab.editor
+        cursor = editor.textCursor()
+        cursor.setPosition(len(source) - len("\\end{document}\n"))
+        editor.setTextCursor(cursor)
+
+        with patch("app.gui.insertion_actions.FormulaDialog") as dialog_cls:
+            dialog_cls.return_value.exec.return_value = QDialog.DialogCode.Rejected
+            window.insert_panel.equationRequested.emit()
+
+        dialog_cls.assert_called_once()
+        self.assertEqual(editor.toPlainText(), source)
+        self._close(window, tab)
+
+    def test_dialog_seeds_from_selection_and_builds_plan(self) -> None:
+        source = "Text $a+b$ here"
+        start = source.index("$")
+        end = start + len("$a+b$")
+        dialog = FormulaDialog(None, source, start, end)
+
+        self.assertEqual(dialog.text_edit.toPlainText(), "$a+b$")
+        self.assertTrue(dialog.apply_template("fraction"))
+        self.assertEqual(dialog.text_edit.toPlainText(), r"$\frac{a+b}{}$")
+        self.assertTrue(dialog.set_mode(FormulaMode.EQUATION))
+        self.assertEqual(
+            dialog.text_edit.toPlainText(),
+            r"\begin{equation}\frac{a+b}{}\end{equation}",
+        )
+
+        plan = dialog.build_plan()
+        assert plan is not None
+        self.assertEqual(plan.start, start)
+        self.assertEqual(plan.end, end)
+        self.assertEqual(plan.text, r"\begin{equation}\frac{a+b}{}\end{equation}")
+        dialog.close()
+
+    def test_dialog_rejects_template_and_plan_on_invalid_text(self) -> None:
+        source = "Text $a+b$ here"
+        start = source.index("$")
+        end = start + len("$a+b$")
+        dialog = FormulaDialog(None, source, start, end)
+
+        dialog.text_edit.setPlainText("$a$ $b$")
+        self.assertFalse(dialog.apply_template("fraction"))
+        self.assertEqual(dialog.text_edit.toPlainText(), "$a$ $b$")
+        self.assertIsNone(dialog.build_plan())
+        self.assertIsNone(dialog.plan())
+        dialog.close()
+
+    def test_dialog_accepts_explicit_seed_text_for_insertion(self) -> None:
+        source = "Text here"
+        dialog = FormulaDialog(
+            None,
+            source,
+            4,
+            4,
+            seed_text=r"\begin{equation}\end{equation}",
+        )
+
+        self.assertEqual(dialog.text_edit.toPlainText(), r"\begin{equation}\end{equation}")
+        self.assertTrue(dialog.apply_template("fraction"))
+        self.assertEqual(
+            dialog.text_edit.toPlainText(),
+            r"\begin{equation}\frac{}{}\end{equation}",
+        )
+        plan = dialog.build_plan()
+        assert plan is not None
+        self.assertEqual(plan.start, 4)
+        self.assertEqual(plan.end, 4)
+        self.assertEqual(plan.source_text, "")
+        dialog.close()
+
+    def test_composer_end_to_end_apply_via_dialog(self) -> None:
+        source = "Text $a+b$ here"
+        window, tab = self._window_with_document(source)
+        editor = tab.editor
+        start = source.index("$")
+        end = start + len("$a+b$")
+        self._select(editor, start, end)
+
+        class FakeDialog:
+            def __init__(self, _parent, document_text: str, sel_start: int, sel_end: int) -> None:
+                self._document_text = document_text
+                self._sel_start = sel_start
+                self._sel_end = sel_end
+
+            def exec(self) -> QDialog.DialogCode:
+                return QDialog.DialogCode.Accepted
+
+            def plan(self):
+                envelope = parse_document_selection(
+                    self._document_text, self._sel_start, self._sel_end
+                )
+                assert envelope is not None
+                fraction = apply_formula_template(
+                    FormulaDraft(mode=envelope.mode, body=envelope.body), "fraction"
+                )
+                assert fraction is not None
+                return final_edit_plan(
+                    self._document_text,
+                    self._sel_start,
+                    self._sel_end,
+                    fraction.draft,
+                    body_cursor_offset=fraction.cursor_offset,
+                )
+
+        with patch("app.gui.insertion_actions.FormulaDialog", FakeDialog):
+            window.open_formula_composer()
+
+        self.assertIn(r"$\frac{a+b}{}$", editor.toPlainText())
+        self.assertNotIn("$a+b$", editor.toPlainText())
+        # Cursor lands inside the empty denominator slot: 1 ($) + 11 (body offset).
+        self.assertEqual(editor.textCursor().position(), start + 12)
+        self._close(window, tab)
+
+    def test_cancel_leave_editor_untouched(self) -> None:
+        source = "Text $a+b$ here"
+        window, tab = self._window_with_document(source)
+        editor = tab.editor
+        start = source.index("$")
+        end = start + len("$a+b$")
+        self._select(editor, start, end)
+
+        with patch(
+            "app.gui.insertion_actions.FormulaDialog.exec",
+            return_value=QDialog.DialogCode.Rejected,
+        ):
+            window.open_formula_composer()
+
+        self.assertEqual(editor.toPlainText(), source)
+        self._close(window, tab)

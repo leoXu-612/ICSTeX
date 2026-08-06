@@ -108,6 +108,7 @@ class FinalTextEditPlan:
 
     start: int
     end: int
+    source_text: str
     text: str
     packages: tuple[str, ...] = ()
     cursor_offset: int | None = None  # offset inside text, relative to start
@@ -222,15 +223,25 @@ def final_edit_plan(
 ) -> FinalTextEditPlan | None:
     """Build the text replacement plan for a validated formula selection.
 
-    The current selection must still be exactly one formula envelope;
-    otherwise None is returned and nothing is planned. The plan carries the
-    full replacement text, required package names, and an optional cursor
-    offset inside the replacement text. No editor, file, or state is touched.
+    With a non-empty range, the current selection must still be exactly one
+    formula envelope; otherwise None is returned and nothing is planned. With
+    an empty range (start == end), this is an insertion: the draft itself must
+    render as a complete formula envelope, and the plan inserts it at the
+    cursor without touching existing content. The plan carries the full
+    replacement text, the exact source text it replaces ("" for insertion),
+    required package names, and an optional cursor offset. No editor, file,
+    or state is touched.
     """
 
-    if parse_document_selection(document, start, end) is None:
+    if not (0 <= start <= end <= len(document)):
+        return None
+    if start < end:
+        if parse_document_selection(document, start, end) is None:
+            return None
+    elif recognize_formula(render_formula(draft)) is None:
         return None
     text = render_formula(draft)
+    source_text = document[start:end]
     cursor_offset = None
     if body_cursor_offset is not None:
         cursor_offset = len(draft.mode.wrapper_prefix) + body_cursor_offset
@@ -238,6 +249,7 @@ def final_edit_plan(
     return FinalTextEditPlan(
         start=start,
         end=end,
+        source_text=source_text,
         text=text,
         packages=merged_packages,
         cursor_offset=cursor_offset,

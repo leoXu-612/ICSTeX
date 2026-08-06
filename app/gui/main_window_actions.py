@@ -80,6 +80,10 @@ def build_actions(window: "MainWindow") -> None:
     window.settings_action = QAction(icon("settings"), "设置", window)
     window.find_action = QAction("查找", window)
     window.replace_action = QAction("查找替换", window)
+    window.formula_composer_action = QAction("编辑公式", window)
+    window.formula_composer_action.setToolTip(
+        "选中完整公式（$…$、\\(…\\)、\\[…\\]、equation 或 equation*）后打开公式编辑器。"
+    )
     window.find_action.setShortcut(QKeySequence.StandardKey.Find)
     window.replace_action.setShortcut(QKeySequence("Ctrl+H"))
     window.settings_action.setShortcut(QKeySequence("Ctrl+,"))
@@ -161,6 +165,8 @@ def build_actions(window: "MainWindow") -> None:
     edit_menu = window.menuBar().addMenu("编辑")
     edit_menu.addAction(window.find_action)
     edit_menu.addAction(window.replace_action)
+    edit_menu.addSeparator()
+    edit_menu.addAction(window.formula_composer_action)
     edit_menu.addSeparator()
     for action in (
         window.auto_item_action,

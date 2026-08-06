@@ -58,6 +58,7 @@ def connect_signals(window: "MainWindow") -> None:
     window.settings_action.triggered.connect(window.show_settings_dialog)
     window.find_action.triggered.connect(window.show_find_bar)
     window.replace_action.triggered.connect(window.show_replace_bar)
+    window.formula_composer_action.triggered.connect(window.open_formula_composer)
 
     # Editor tab life cycle
     window.editor_tabs.tabCloseRequested.connect(window.close_tab)
@@ -104,7 +105,7 @@ def connect_signals(window: "MainWindow") -> None:
     window.insert_panel.sideBySideFigureRequested.connect(window.insert_side_by_side_figures)
     window.insert_panel.tableRequested.connect(window.insert_table)
     window.insert_panel.hyperlinkRequested.connect(window.insert_hyperlink)
-    window.insert_panel.equationRequested.connect(window.insert_equation)
+    window.insert_panel.equationRequested.connect(window.open_formula_composer)
     window.insert_panel.listRequested.connect(window.insert_list)
     window.insert_panel.sectionRequested.connect(window.insert_section)
     window.insert_panel.casesRequested.connect(window.insert_cases)

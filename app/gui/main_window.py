@@ -281,6 +281,9 @@ class MainWindow(QMainWindow):
     def insert_equation(self) -> None:
         self.insertions.insert_equation()
 
+    def open_formula_composer(self) -> None:
+        self.insertions.open_formula_composer()
+
     def insert_list(self) -> None:
         self.insertions.insert_list()
 

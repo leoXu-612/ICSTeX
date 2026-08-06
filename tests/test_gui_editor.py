@@ -2243,20 +2243,16 @@ class FormulaComposerTests(TestCase):
         end = start + len("$a+b$")
         dialog = FormulaDialog(None, source, start, end)
 
-        self.assertEqual(dialog.text_edit.toPlainText(), "$a+b$")
+        self.assertEqual(dialog.visual_edit.latex(), "a+b")
         self.assertTrue(dialog.apply_template("fraction"))
-        self.assertEqual(dialog.text_edit.toPlainText(), r"$\frac{a+b}{}$")
+        self.assertEqual(dialog.visual_edit.latex(), r"a+b\frac{}{}")
         self.assertTrue(dialog.set_mode(FormulaMode.EQUATION))
-        self.assertEqual(
-            dialog.text_edit.toPlainText(),
-            r"\begin{equation}\frac{a+b}{}\end{equation}",
-        )
 
         plan = dialog.build_plan()
         assert plan is not None
         self.assertEqual(plan.start, start)
         self.assertEqual(plan.end, end)
-        self.assertEqual(plan.text, r"\begin{equation}\frac{a+b}{}\end{equation}")
+        self.assertEqual(plan.text, r"\begin{equation}a+b\frac{}{}\end{equation}")
         dialog.close()
 
     def test_dialog_rejects_template_and_plan_on_invalid_text(self) -> None:
@@ -2265,9 +2261,10 @@ class FormulaComposerTests(TestCase):
         end = start + len("$a+b$")
         dialog = FormulaDialog(None, source, start, end)
 
-        dialog.text_edit.setPlainText("$a$ $b$")
+        dialog.source_mode_check.setChecked(True)
+        dialog.source_edit.setPlainText("$a$ $b$")
         self.assertFalse(dialog.apply_template("fraction"))
-        self.assertEqual(dialog.text_edit.toPlainText(), "$a$ $b$")
+        self.assertEqual(dialog.source_edit.toPlainText(), "$a$ $b$")
         self.assertIsNone(dialog.build_plan())
         self.assertIsNone(dialog.plan())
         dialog.close()
@@ -2282,18 +2279,67 @@ class FormulaComposerTests(TestCase):
             seed_text=r"\begin{equation}\end{equation}",
         )
 
-        self.assertEqual(dialog.text_edit.toPlainText(), r"\begin{equation}\end{equation}")
+        self.assertEqual(dialog.visual_edit.latex(), "")
         self.assertTrue(dialog.apply_template("fraction"))
-        self.assertEqual(
-            dialog.text_edit.toPlainText(),
-            r"\begin{equation}\frac{}{}\end{equation}",
-        )
+        self.assertEqual(dialog.visual_edit.latex(), r"\frac{}{}")
         plan = dialog.build_plan()
         assert plan is not None
         self.assertEqual(plan.start, 4)
         self.assertEqual(plan.end, 4)
         self.assertEqual(plan.source_text, "")
+        self.assertEqual(plan.text, r"\begin{equation}\frac{}{}\end{equation}")
         dialog.close()
+
+    def test_acceptance_inline_fraction_never_forces_newline(self) -> None:
+        source = r"The result is \(\) under this condition."
+        window, tab = self._window_with_document(source)
+        editor = tab.editor
+        start = source.index(r"\(")
+        end = start + len(r"\(\)")
+        self._select(editor, start, end)
+
+        class InlineFractionDialog(FormulaDialog):
+            def exec(self) -> QDialog.DialogCode:
+                self.visual_edit.insert_structure("fraction")
+                self.visual_edit.type_key("a")
+                self.visual_edit.cursor_tab()
+                self.visual_edit.type_key("b")
+                self.set_mode(FormulaMode.INLINE_PAREN)
+                self._on_apply()
+                return QDialog.DialogCode.Accepted
+
+        with patch("app.gui.insertion_actions.FormulaDialog", InlineFractionDialog):
+            window.open_formula_composer()
+
+        text = editor.toPlainText()
+        self.assertEqual(text, r"The result is \(\frac{a}{b}\) under this condition.")
+        self.assertNotIn("\n", text)
+        self._close(window, tab)
+
+    def test_acceptance_read_back_and_modify_formula(self) -> None:
+        source = r"See \(E=mc^2\) here."
+        window, tab = self._window_with_document(source)
+        editor = tab.editor
+        start = source.index(r"\(")
+        end = start + len(r"\(E=mc^2\)")
+        self._select(editor, start, end)
+
+        class ModifyDialog(FormulaDialog):
+            def exec(self) -> QDialog.DialogCode:
+                self.visual_edit.cursor_home()
+                self.visual_edit.cursor_right()  # enter the base slot
+                self.visual_edit.cursor_right()
+                self.visual_edit.cursor_right()  # right after "E="
+                for char in ("\\", "g", "a", "m", "m", "a", " "):
+                    self.visual_edit.type_key(char)
+                self._on_apply()
+                return QDialog.DialogCode.Accepted
+
+        with patch("app.gui.insertion_actions.FormulaDialog", ModifyDialog):
+            window.open_formula_composer()
+
+        self.assertEqual(editor.toPlainText(), r"See \(E=\gamma mc^2\) here.")
+        self._close(window, tab)
 
     def test_composer_end_to_end_apply_via_dialog(self) -> None:
         source = "Text $a+b$ here"

@@ -8,24 +8,9 @@ emit an explicit placeholder comment.
 from __future__ import annotations
 
 from app.core.blocks.model import Block
-
-
-def escape_latex(text: str) -> str:
-    """Escape LaTeX special characters in user text (backslash first)."""
-
-    escaped = (
-        text.replace("\\", r"\textbackslash{}")
-        .replace("#", r"\#")
-        .replace("$", r"\$")
-        .replace("%", r"\%")
-        .replace("&", r"\&")
-        .replace("_", r"\_")
-        .replace("{", r"\{")
-        .replace("}", r"\}")
-        .replace("~", r"\textasciitilde{}")
-        .replace("^", r"\textasciicircum{}")
-    )
-    return escaped
+from app.core.blocks.latex_escape import escape_latex
+from app.core.blocks.table_model import TableData
+from app.core.blocks.table_renderer import render_table, required_packages
 
 
 def render_block(block: Block, *, in_box: bool = False) -> str:
@@ -67,8 +52,34 @@ def render_block(block: Block, *, in_box: bool = False) -> str:
     if block_type == "image":
         return _render_image(block, in_box=in_box)
     if block_type == "table":
-        return f"% ICSTEX:table block={block.id} rendering in Sprint 4\n"
+        try:
+            table = TableData.from_content_dict(block.content)
+        except (KeyError, TypeError, ValueError):
+            return f"% ICSTEX:table block={block.id} 无法解析表格内容\n"
+        return render_table(
+            table,
+            caption=block.semantic.caption.text if block.semantic.caption else None,
+            label=block.semantic.label,
+            in_box=in_box,
+            block_id=block.id,
+        )
     return f"% ICSTEX:unknown-block-type {block_type}\n"
+
+
+def required_packages_for_block(block: Block, *, in_box: bool = False) -> tuple[str, ...]:
+    """Packages required to compile this Block's rendered LaTeX."""
+
+    if block.type == "table":
+        try:
+            table = TableData.from_content_dict(block.content)
+        except (KeyError, TypeError, ValueError):
+            return ()
+        return required_packages(table, in_box=in_box)
+    if block.type == "image" and in_box:
+        return ("caption",)
+    if block.type == "formula":
+        return ("amsmath",)
+    return ()
 
 
 def _render_image(block: Block, *, in_box: bool) -> str:

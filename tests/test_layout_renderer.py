@@ -7,7 +7,7 @@ from unittest import TestCase, skipUnless
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from app.core.blocks.block_renderer import escape_latex, render_block
+from app.core.blocks.block_renderer import escape_latex, render_block, required_packages_for_block
 from app.core.blocks.formula_adapter import FormulaBlockAdapter
 from app.core.blocks.layout import LayoutNode, Size, block_slot
 from app.core.blocks.layout_renderer import render_layout
@@ -136,6 +136,13 @@ class MixedGridCompileTests(TestCase):
                 ),
             }
             block_latex = {block_id: render_block(block, in_box=True) for block_id, block in blocks.items()}
+            packages = sorted(
+                {
+                    package
+                    for block in blocks.values()
+                    for package in required_packages_for_block(block, in_box=True)
+                }
+            )
             layout = LayoutNode(
                 id="lyt_demo",
                 kind="grid",
@@ -152,7 +159,8 @@ class MixedGridCompileTests(TestCase):
                 "\\documentclass{ctexart}\n"
                 "\\usepackage{graphicx}\n"
                 "\\usepackage{amsmath}\n"
-                "\\usepackage{caption}\n"
+                + "".join(f"\\usepackage{{{package}}}\n" for package in packages)
+                + "\\usepackage{caption}\n"
                 "\\graphicspath{{figures/}}\n"
                 "\\begin{document}\n"
                 f"{rendered}"

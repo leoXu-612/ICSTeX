@@ -1,0 +1,417 @@
+from __future__ import annotations
+
+from collections.abc import Callable
+from pathlib import Path
+
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QDoubleSpinBox,
+    QFileDialog,
+    QFormLayout,
+    QFrame,
+    QHBoxLayout,
+    QInputDialog,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QSpinBox,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+
+from app.core.latex_insertions import FigureSpec, HyperlinkSpec, SideBySideFigureSpec, TableSpec, all_templates, parse_delimited, parse_tabular
+
+
+class InsertPanel(QWidget):
+    figureRequested = Signal()
+    sideBySideFigureRequested = Signal()
+    tableRequested = Signal()
+    hyperlinkRequested = Signal()
+    equationRequested = Signal()
+    listRequested = Signal()
+    sectionRequested = Signal()
+    casesRequested = Signal()
+    quoteRequested = Signal()
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setObjectName("insertPanel")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
+
+        tools = [
+            ("插入图片", self.figureRequested),
+            ("并排图片", self.sideBySideFigureRequested),
+            ("插入表格", self.tableRequested),
+            ("超链接", self.hyperlinkRequested),
+            ("公式", self.equationRequested),
+            ("列表", self.listRequested),
+            ("章节标题", self.sectionRequested),
+            ("分段函数", self.casesRequested),
+            ("引用块", self.quoteRequested),
+        ]
+        for label, signal in tools:
+            button = _tool_button(label)
+            button.clicked.connect(signal.emit)
+            layout.addWidget(button)
+        layout.addStretch()
+
+
+class TemplatesPanel(QWidget):
+    templateRequested = Signal(str)
+    saveCurrentRequested = Signal()
+    importRequested = Signal()
+    exportRequested = Signal(str)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setObjectName("templatesPanel")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
+
+        self.template_combo = QComboBox()
+        self.refresh_templates()
+        layout.addWidget(self.template_combo)
+
+        create_button = _tool_button("用所选模板新建")
+        create_button.setObjectName("primaryButton")
+        create_button.clicked.connect(self._emit_create)
+        layout.addWidget(create_button)
+
+        export_button = _tool_button("导出所选模板")
+        export_button.clicked.connect(self._emit_export)
+        layout.addWidget(export_button)
+
+        import_button = _tool_button("导入 .tex 模板")
+        import_button.clicked.connect(self.importRequested.emit)
+        layout.addWidget(import_button)
+
+        save_button = _tool_button("保存当前为模板")
+        save_button.clicked.connect(self.saveCurrentRequested.emit)
+        layout.addWidget(save_button)
+        layout.addStretch()
+
+    def refresh_templates(self) -> None:
+        current_key = self.template_combo.currentData() if hasattr(self, "template_combo") else None
+        self.template_combo.clear()
+        for template in all_templates():
+            self.template_combo.addItem(template.title, template.key)
+        if current_key:
+            index = self.template_combo.findData(current_key)
+            if index >= 0:
+                self.template_combo.setCurrentIndex(index)
+
+    def _emit_create(self) -> None:
+        key = self.template_combo.currentData()
+        if isinstance(key, str):
+            self.templateRequested.emit(key)
+
+    def _emit_export(self) -> None:
+        key = self.template_combo.currentData()
+        if isinstance(key, str):
+            self.exportRequested.emit(key)
+
+
+class FigureDialog(QDialog):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("插入图片")
+        self.image_edit = QLineEdit()
+        self.width_spin = _ratio_spinbox(0.8)
+        self.caption_edit = QLineEdit()
+        self.label_edit = QLineEdit("fig:")
+        self.placement_combo = _placement_combo()
+        self._build(_file_row(self.image_edit, self._browse_image))
+
+    def values(self) -> FigureSpec:
+        return FigureSpec(
+            image_path=self.image_edit.text().strip(),
+            width=self.width_spin.value(),
+            caption=self.caption_edit.text().strip(),
+            label=self.label_edit.text().strip(),
+            placement=self.placement_combo.currentText(),
+        )
+
+    def _build(self, image_row: QWidget) -> None:
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
+        form.addRow("图片", image_row)
+        form.addRow("宽度", self.width_spin)
+        form.addRow("说明文字", self.caption_edit)
+        form.addRow("标签", self.label_edit)
+        form.addRow("位置", self.placement_combo)
+        layout.addLayout(form)
+        layout.addWidget(_buttons(self))
+
+    def _browse_image(self) -> None:
+        _browse_into(self, self.image_edit)
+
+
+class SideBySideFigureDialog(QDialog):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("插入并排图片")
+        self.left_image_edit = QLineEdit()
+        self.right_image_edit = QLineEdit()
+        self.left_caption_edit = QLineEdit()
+        self.right_caption_edit = QLineEdit()
+        self.caption_edit = QLineEdit()
+        self.label_edit = QLineEdit("fig:")
+        self.width_spin = _ratio_spinbox(0.48)
+        self.placement_combo = _placement_combo()
+        self._build()
+
+    def values(self) -> SideBySideFigureSpec:
+        return SideBySideFigureSpec(
+            left_image_path=self.left_image_edit.text().strip(),
+            right_image_path=self.right_image_edit.text().strip(),
+            left_caption=self.left_caption_edit.text().strip(),
+            right_caption=self.right_caption_edit.text().strip(),
+            caption=self.caption_edit.text().strip(),
+            label=self.label_edit.text().strip(),
+            width=self.width_spin.value(),
+            placement=self.placement_combo.currentText(),
+        )
+
+    def _build(self) -> None:
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
+        form.addRow("左图", _file_row(self.left_image_edit, lambda: _browse_into(self, self.left_image_edit)))
+        form.addRow("右图", _file_row(self.right_image_edit, lambda: _browse_into(self, self.right_image_edit)))
+        form.addRow("左图说明", self.left_caption_edit)
+        form.addRow("右图说明", self.right_caption_edit)
+        form.addRow("总说明", self.caption_edit)
+        form.addRow("标签", self.label_edit)
+        form.addRow("单图宽度", self.width_spin)
+        form.addRow("位置", self.placement_combo)
+        layout.addLayout(form)
+        layout.addWidget(_buttons(self))
+
+
+class TableDialog(QDialog):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("插入表格")
+        self.rows_spin = QSpinBox()
+        self.rows_spin.setRange(1, 40)
+        self.rows_spin.setValue(3)
+        self.columns_spin = QSpinBox()
+        self.columns_spin.setRange(1, 12)
+        self.columns_spin.setValue(3)
+        self.alignment_combo = QComboBox()
+        self.alignment_combo.addItems(["c", "l", "r"])
+        self.booktabs_check = QCheckBox("booktabs")
+        self.booktabs_check.setChecked(True)
+        self.caption_edit = QLineEdit()
+        self.label_edit = QLineEdit("tab:")
+        self.placement_combo = _placement_combo()
+        self.preview_table = QTableWidget()
+        self._build()
+        self._resize_table()
+        self.rows_spin.valueChanged.connect(lambda _value: self._resize_table())
+        self.columns_spin.valueChanged.connect(lambda _value: self._resize_table())
+
+    def values(self) -> TableSpec:
+        headers = tuple(self._cell_text(0, column) for column in range(self.columns_spin.value()))
+        cells = tuple(
+            tuple(self._cell_text(row, column) for column in range(self.columns_spin.value()))
+            for row in range(1, self.rows_spin.value() + 1)
+        )
+        return TableSpec(
+            rows=self.rows_spin.value(),
+            columns=self.columns_spin.value(),
+            alignment=self.alignment_combo.currentText(),
+            use_booktabs=self.booktabs_check.isChecked(),
+            caption=self.caption_edit.text().strip(),
+            label=self.label_edit.text().strip(),
+            placement=self.placement_combo.currentText(),
+            headers=headers,
+            cells=cells,
+        )
+
+    def _build(self) -> None:
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
+        form.addRow("行数", self.rows_spin)
+        form.addRow("列数", self.columns_spin)
+        form.addRow("对齐", self.alignment_combo)
+        form.addRow("样式", self.booktabs_check)
+        form.addRow("说明文字", self.caption_edit)
+        form.addRow("标签", self.label_edit)
+        form.addRow("位置", self.placement_combo)
+        layout.addLayout(form)
+        import_button = QPushButton("导入现有表格")
+        import_button.setToolTip("粘贴已有的 table/tabular LaTeX 代码，反向填入下面的网格。")
+        import_button.clicked.connect(self._import_existing)
+        layout.addWidget(import_button)
+        paste_button = QPushButton("粘贴 CSV / Excel")
+        paste_button.setToolTip("从 Excel、Numbers、Google Sheets 复制单元格，或粘贴 CSV，自动填入网格。")
+        paste_button.clicked.connect(self._import_delimited)
+        layout.addWidget(paste_button)
+        self.preview_table.setMinimumSize(460, 220)
+        layout.addWidget(self.preview_table)
+        layout.addWidget(_buttons(self))
+
+    def _import_existing(self) -> None:
+        text, ok = QInputDialog.getMultiLineText(
+            self, "导入现有表格", "粘贴 LaTeX 表格代码（table/tabular）：", ""
+        )
+        if not ok or not text.strip():
+            return
+        spec = parse_tabular(text)
+        if spec is None:
+            QMessageBox.information(
+                self, "导入现有表格", "没有找到 tabular 环境，请确认粘贴的是表格代码。"
+            )
+            return
+        self.load_spec(spec)
+
+    def _import_delimited(self) -> None:
+        text, ok = QInputDialog.getMultiLineText(
+            self,
+            "粘贴 CSV / Excel",
+            "粘贴表格数据（Excel/Numbers/Sheets 单元格或 CSV，第一行作为表头）：",
+            "",
+        )
+        if not ok or not text.strip():
+            return
+        spec = parse_delimited(text)
+        if spec is None:
+            QMessageBox.information(
+                self, "粘贴 CSV / Excel", "没有解析出表格内容，请确认粘贴的是带分隔符的数据。"
+            )
+            return
+        self.load_spec(spec)
+
+    def load_spec(self, spec: TableSpec) -> None:
+        self.rows_spin.setValue(max(1, spec.rows))
+        self.columns_spin.setValue(max(1, spec.columns))
+        alignment_index = self.alignment_combo.findText(spec.alignment)
+        self.alignment_combo.setCurrentIndex(alignment_index if alignment_index >= 0 else 0)
+        self.booktabs_check.setChecked(spec.use_booktabs)
+        self.caption_edit.setText(spec.caption)
+        self.label_edit.setText(spec.label or "tab:")
+        placement_index = self.placement_combo.findText(spec.placement)
+        if placement_index >= 0:
+            self.placement_combo.setCurrentIndex(placement_index)
+        self._resize_table()
+        columns = self.columns_spin.value()
+        for column in range(columns):
+            value = spec.headers[column] if column < len(spec.headers) else ""
+            self.preview_table.setItem(0, column, QTableWidgetItem(value))
+        for row in range(1, self.rows_spin.value() + 1):
+            row_cells = spec.cells[row - 1] if row - 1 < len(spec.cells) else ()
+            for column in range(columns):
+                value = row_cells[column] if column < len(row_cells) else ""
+                self.preview_table.setItem(row, column, QTableWidgetItem(value))
+
+    def _resize_table(self) -> None:
+        existing = {
+            (row, column): self._cell_text(row, column)
+            for row in range(self.preview_table.rowCount())
+            for column in range(self.preview_table.columnCount())
+        }
+        rows = self.rows_spin.value() + 1
+        columns = self.columns_spin.value()
+        self.preview_table.setRowCount(rows)
+        self.preview_table.setColumnCount(columns)
+        self.preview_table.setVerticalHeaderLabels(["表头", *[f"第 {index} 行" for index in range(1, rows)]])
+        self.preview_table.setHorizontalHeaderLabels([f"第 {index} 列" for index in range(1, columns + 1)])
+        for row in range(rows):
+            for column in range(columns):
+                value = existing.get((row, column), "")
+                if not value:
+                    value = f"Header {column + 1}" if row == 0 else f"Cell {row}-{column + 1}"
+                self.preview_table.setItem(row, column, QTableWidgetItem(value))
+
+    def _cell_text(self, row: int, column: int) -> str:
+        item = self.preview_table.item(row, column)
+        return item.text().strip() if item is not None else ""
+
+
+class HyperlinkDialog(QDialog):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("插入超链接")
+        self.text_edit = QLineEdit()
+        self.url_edit = QLineEdit("https://")
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
+        form.addRow("显示文本", self.text_edit)
+        form.addRow("URL", self.url_edit)
+        layout.addLayout(form)
+        layout.addWidget(_buttons(self))
+
+    def values(self) -> HyperlinkSpec:
+        return HyperlinkSpec(text=self.text_edit.text().strip(), url=self.url_edit.text().strip())
+
+
+def scrollable_panel(widget: QWidget) -> QScrollArea:
+    area = QScrollArea()
+    area.setObjectName("sidebarScroll")
+    area.setWidgetResizable(True)
+    area.setFrameShape(QFrame.Shape.NoFrame)
+    area.setWidget(widget)
+    return area
+
+
+def _tool_button(text: str) -> QPushButton:
+    button = QPushButton(text)
+    button.setObjectName("toolCard")
+    button.setMinimumHeight(34)
+    return button
+
+
+def _ratio_spinbox(value: float) -> QDoubleSpinBox:
+    spin = QDoubleSpinBox()
+    spin.setRange(0.05, 1.0)
+    spin.setSingleStep(0.05)
+    spin.setDecimals(2)
+    spin.setValue(value)
+    spin.setSuffix(r"\textwidth")
+    return spin
+
+
+def _placement_combo() -> QComboBox:
+    combo = QComboBox()
+    combo.addItems(["htbp", "H", "t", "b", "p"])
+    return combo
+
+
+def _file_row(edit: QLineEdit, browse: Callable[[], None]) -> QWidget:
+    row = QWidget()
+    layout = QHBoxLayout(row)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(6)
+    button = QPushButton("浏览")
+    button.clicked.connect(browse)
+    layout.addWidget(edit)
+    layout.addWidget(button)
+    return row
+
+
+def _browse_into(parent: QWidget, edit: QLineEdit) -> None:
+    file_name, _ = QFileDialog.getOpenFileName(
+        parent,
+        "选择图片",
+        str(Path.home()),
+        "图片 (*.pdf *.png *.jpg *.jpeg);;所有文件 (*)",
+    )
+    if file_name:
+        edit.setText(file_name)
+
+
+def _buttons(dialog: QDialog) -> QDialogButtonBox:
+    buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+    buttons.accepted.connect(dialog.accept)
+    buttons.rejected.connect(dialog.reject)
+    return buttons

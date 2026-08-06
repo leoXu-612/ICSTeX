@@ -1,0 +1,5 @@
+# Build-only dependencies. Install with:
+#   python3 -m pip install -r requirements.txt -r requirements-packaging.txt
+# before running packaging/build_macos.sh or packaging/build_windows.bat.
+
+pyinstaller>=6.0

@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "icstex"
+version = "0.2.7"
+description = "ICC Student's TeX: a cross-platform Overleaf-style desktop LaTeX editor and live compiler."
+requires-python = ">=3.11"
+dependencies = [
+    "PySide6>=6.7",
+    "watchdog>=4.0",
+    "pylatexenc>=2.10,<3.0",
+]
+
+[project.optional-dependencies]
+packaging = ["pyinstaller>=6.0"]
+
+[project.scripts]
+icstex = "app.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["app*"]

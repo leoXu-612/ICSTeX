@@ -50,6 +50,16 @@ def render_document_theme_sty(theme: DocumentTheme) -> str:
     if tables.get("verticalRules") is False:
         lines.append("% ICSTEX:table vertical rules disabled")
 
+    headings = theme.headings or {}
+    section = headings.get("section") or {}
+    before = section.get("spaceBeforePt")
+    after = section.get("spaceAfterPt")
+    if before is not None or after is not None:
+        lines.append("\\usepackage{titlesec}")
+        lines.append(
+            f"\\titlespacing*{{\\section}}{{0pt}}{{{before or 12}pt}}{{{after or 6}pt}}"
+        )
+
     layout = theme.layout or {}
     block_gap = layout.get("blockGapPt")
     if block_gap:

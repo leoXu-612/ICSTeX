@@ -113,6 +113,17 @@ class ThemeRendererTests(TestCase):
         self.assertIn("letter", changed)
         self.assertNotIn("letter", base)
 
+    def test_headings_emit_titlespacing(self) -> None:
+        theme = theme_from_dict(
+            document_theme_dict(headings={"section": {"spaceBeforePt": 16, "spaceAfterPt": 7}})
+        )
+        latex = render_document_theme_sty(theme)
+        self.assertIn("\\usepackage{titlesec}", latex)
+        self.assertIn("\\titlespacing*{\\section}{0pt}{16pt}{7pt}", latex)
+
+        plain = render_document_theme_sty(theme_from_dict(document_theme_dict(headings={})))
+        self.assertNotIn("titlesec", plain)
+
     def test_app_theme_never_reaches_latex(self) -> None:
         latex = render_document_theme_sty(theme_from_dict(document_theme_dict()))
         self.assertNotIn("app-theme", latex)

@@ -290,15 +290,20 @@ class MainWindow(QMainWindow):
         ImportPerfDialog(self).exec()
 
     def show_block_project_dialog(self) -> None:
-        from app.core.blocks.registry import BlockRegistry
-        from app.core.blocks.table_model import TableData, TableEditorModel
-        from app.core.blocks.theme import AppTheme
+        from PySide6.QtWidgets import QFileDialog
+
+        from app.core.blocks.project_io import load_block_project
         from app.gui.blocks.project_dialog import BlockProjectDialog
 
+        directory = QFileDialog.getExistingDirectory(self, "选择 Block 项目目录")
+        if not directory:
+            return
+        project = load_block_project(directory)
         BlockProjectDialog(
-            BlockRegistry(),
-            table_model=TableEditorModel(TableData()),
-            theme=AppTheme(id="theme_custom", name="Custom"),
+            project["registry"],
+            layout=project["layout"],
+            theme=project["theme"],
+            project_dir=project["project_dir"],
         ).exec()
 
     def insert_list(self) -> None:

@@ -28,6 +28,8 @@ def required_packages(table: TableData, *, style: dict | None = None, in_box: bo
         packages.append("tabularx")
     if strategy.strategy == "longtable":
         packages.append("longtable")
+    if _has_vertical_merges(table.merges):
+        packages.append("multirow")
     if in_box:
         packages.append("caption")
     return tuple(dict.fromkeys(packages))
@@ -125,23 +127,54 @@ def _render_body(table: TableData, strategy) -> str:
     lines: list[str] = ["\\toprule"]
     header_rows = table.rows[: table.header_row_count]
     body_rows = table.rows[table.header_row_count :]
-    for row in header_rows:
-        lines.append(_render_row(table, row, strategy, header=True) + r" \\")
+    origin, covered = _merged_map(table)
+    for row_index, row in enumerate(header_rows):
+        lines.append(_render_row(table, row_index, row, strategy, origin, covered, header=True) + r" \\")
     lines.append("\\midrule")
-    for row in body_rows:
-        lines.append(_render_row(table, row, strategy, header=False) + r" \\")
+    for row_index, row in enumerate(body_rows, start=len(header_rows)):
+        lines.append(_render_row(table, row_index, row, strategy, origin, covered, header=False) + r" \\")
     lines.append("\\bottomrule")
     return "\n".join(lines)
 
 
-def _render_row(table: TableData, row, strategy, *, header: bool) -> str:
+def _render_row(
+    table: TableData,
+    row_index: int,
+    row,
+    strategy,
+    origin: dict,
+    covered: set,
+    *,
+    header: bool,
+) -> str:
     cells: list[str] = []
-    for column, layout in zip(table.columns, strategy.column_layouts):
+    skip_until = -1
+    for column_index, (column, layout) in enumerate(zip(table.columns, strategy.column_layouts)):
+        if column_index <= skip_until:
+            continue
+        if (row_index, column_index) in covered:
+            if column_index <= skip_until:
+                continue
+            cells.append("")
+            continue
+        merge = origin.get((row_index, column_index))
         if header:
-            cells.append(_render_header_cell(column))
+            content = _render_header_cell(column)
         else:
             cell = row.cells.get(column.id, Cell())
-            cells.append(_render_cell(cell, layout))
+            content = _render_cell(cell, layout)
+        if merge is not None:
+            r1, r2, c1, c2 = merge
+            span = c2 - c1 + 1
+            rows = r2 - r1 + 1
+            if rows > 1:
+                content = f"\\multirow{{{rows}}}{{*}}{{{content}}}"
+            if span > 1:
+                content = f"\\multicolumn{{{span}}}{{c}}{{{content}}}"
+                skip_until = c2
+        cells.append(content)
+    if not cells:
+        cells = [""] * len(table.columns)
     return " & ".join(cells)
 
 
@@ -163,3 +196,23 @@ def _render_cell(cell: Cell, layout: ColumnLayout) -> str:
     if cell.kind == "boolean":
         return escape_latex(str(cell.value).lower())
     return escape_latex(str(cell.value or ""))
+
+
+def _merged_map(table: TableData) -> tuple[dict, set]:
+    """Return (origin per top-left cell, covered cells) from table.merges."""
+
+    origin: dict = {}
+    covered: set = set()
+    for merge in table.merges:
+        r1, r2, c1, c2 = merge
+        for row in range(r1, r2 + 1):
+            for column in range(c1, c2 + 1):
+                if (row, column) == (r1, c1):
+                    origin[(r1, c1)] = merge
+                else:
+                    covered.add((row, column))
+    return origin, covered
+
+
+def _has_vertical_merges(merges: list[list[int]]) -> bool:
+    return any(r1 != r2 for r1, r2, _c1, _c2 in merges)

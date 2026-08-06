@@ -9,7 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from app.core.blocks.model import Block, Caption, Semantic
 from app.core.blocks.table_model import Cell, ColumnSpec, TableData, TableRow
-from app.core.blocks.table_renderer import render_table
+from app.core.blocks.table_renderer import render_table, required_packages
 from app.core.compiler import BuildPurpose, CompileManager
 from app.core.latex_tools import LaTeXEngine, detect_toolchain
 
@@ -75,6 +75,24 @@ class TableRendererTests(TestCase):
         self.assertIn("\\endfirsthead", latex)
         self.assertIn("\\endhead", latex)
 
+    def test_merges_emit_multicolumn_and_multirow(self) -> None:
+        table = TableData(
+            columns=[ColumnSpec(id="a", name="A", dataType="text"), ColumnSpec(id="b", name="B", dataType="text")],
+            rows=[
+                TableRow(id="r1", cells={"a": Cell(kind="text", value="上"), "b": Cell(kind="text", value="右")}),
+                TableRow(id="r2", cells={"a": Cell(kind="text", value="下"), "b": Cell(kind="text", value="B2")}),
+                TableRow(id="r3", cells={"a": Cell(kind="text", value="A3"), "b": Cell(kind="text", value="B3")}),
+            ],
+            header_row_count=0,
+            merges=[[0, 1, 0, 1]],
+        )
+
+        latex = render_table(table)
+
+        self.assertIn("\\multicolumn{2}{c}{", latex)
+        self.assertIn("\\multirow{2}{*}{", latex)
+        self.assertIn("multirow", required_packages(table))
+
 
 @skipUnless(TOOLCHAIN.is_compile_ready, "latexmk or pdflatex is not available")
 class TableCompileTests(TestCase):
@@ -100,6 +118,33 @@ class TableCompileTests(TestCase):
                 "\\usepackage{amsmath}\n"
                 "\\begin{document}\n"
                 f"{render_block(table_block, in_box=True)}"
+                "\\end{document}\n",
+                encoding="utf-8",
+            )
+            result = CompileManager(main, toolchain=TOOLCHAIN, engine=LaTeXEngine.XELATEX).compile_now(
+                BuildPurpose.FINAL
+            )
+            self.assertTrue(result.ok, result.combined_output)
+
+    def test_merged_table_compiles_with_multirow(self) -> None:
+        table = TableData(
+            columns=[ColumnSpec(id="a", name="A", dataType="text"), ColumnSpec(id="b", name="B", dataType="text")],
+            rows=[
+                TableRow(id="r1", cells={"a": Cell(kind="text", value="上"), "b": Cell(kind="text", value="右")}),
+                TableRow(id="r2", cells={"a": Cell(kind="text", value="下"), "b": Cell(kind="text", value="B2")}),
+            ],
+            header_row_count=0,
+            merges=[[0, 1, 0, 1]],
+        )
+        with TemporaryDirectory() as directory:
+            project = Path(directory).resolve()
+            main = project / "main.tex"
+            main.write_text(
+                "\\documentclass{ctexart}\n"
+                "\\usepackage{booktabs}\n"
+                "\\usepackage{multirow}\n"
+                "\\begin{document}\n"
+                f"{render_table(table)}"
                 "\\end{document}\n",
                 encoding="utf-8",
             )

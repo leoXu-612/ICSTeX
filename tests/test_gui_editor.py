@@ -2493,3 +2493,30 @@ class FormulaComposerTests(TestCase):
 
         self.assertEqual(editor.toPlainText(), source)
         self._close(window, tab)
+
+    def test_images_refresh_uses_incremental_index(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            figures = root / "figures"
+            figures.mkdir()
+            (figures / "a.png").write_bytes(b"png-asset")
+            source = root / "main.tex"
+            source.write_text(
+                "\\documentclass{article}\n\\begin{document}\n\\end{document}\n",
+                encoding="utf-8",
+            )
+            window = MainWindow(settings_store=isolated_settings())
+            window.auto_compile_action.setChecked(False)
+            editor = window._make_editor(source.read_text(encoding="utf-8"))
+            tab = EditorTab(editor=editor, path=source)
+            window._add_tab(tab, source.name)
+
+            window.refresh_project_panels()
+            self.assertEqual(window.images_panel.table.rowCount(), 1)
+            self.assertTrue((root / ".icstex" / "asset-index.json").exists())
+
+            window.refresh_project_panels()
+            self.assertEqual(window.images_panel.table.rowCount(), 1)
+            tab.modified = False
+            tab.dirty = False
+            window.close()

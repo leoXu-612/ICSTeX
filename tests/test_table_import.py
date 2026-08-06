@@ -42,6 +42,10 @@ class CsvAdapterTests(TestCase):
         gbk = "温度\n20\n".encode("gbk")
         self.assertEqual(read_csv_bytes(gbk).columns[0].name, "温度")
 
+    def test_oversized_source_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            read_csv_bytes(b"x" * 100, max_bytes=10)
+
 
 class ClipboardAdapterTests(TestCase):
     def test_tsv_rectangle(self) -> None:
@@ -121,3 +125,10 @@ class SpreadsheetAdapterTests(TestCase):
             workbook.save(str(path))
             with self.assertRaises(ValueError):
                 SpreadsheetImportAdapter(path).read_sheet("Nope")
+
+    def test_oversized_workbook_is_rejected(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "book.xlsx"
+            path.write_bytes(b"x" * 100)
+            with self.assertRaises(ValueError):
+                SpreadsheetImportAdapter(path, max_bytes=10)

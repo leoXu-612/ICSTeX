@@ -85,7 +85,9 @@ def required_packages_for_block(block: Block, *, in_box: bool = False) -> tuple[
             return ()
         return required_packages(table, in_box=in_box)
     if block.type == "image" and in_box:
-        return ("caption",)
+        return ("graphicx", "caption")
+    if block.type == "image":
+        return ("graphicx",)
     if block.type == "formula":
         return ("amsmath",)
     return ()

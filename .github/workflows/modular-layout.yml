@@ -1,0 +1,52 @@
+name: modular-layout-mvp
+
+on:
+  push:
+    branches: [main, feature/modular-layout-mvp]
+  pull_request:
+
+jobs:
+  unit-schema-golden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Compile check
+        run: python -m compileall -q app tests packaging/install_build_dependencies.py
+      - name: Schema and core unit tests
+        run: python -m unittest tests.test_blocks tests.test_block_migration tests.test_layout tests.test_table_model tests.test_table_strategy tests.test_source_merge tests.test_source_registry tests.test_export_package tests.test_determinism tests.test_formula_adapter
+        env:
+          QT_QPA_PLATFORM: offscreen
+
+  macos-compile-demo:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install TeX Live (xelatex)
+        run: |
+          brew install --cask basictex
+          export PATH="/Library/TeX/texbin:$PATH"
+          sudo tlmgr update --self
+          sudo tlmgr install ctex xecjk cjk booktabs siunitx caption tabularx longtable multirow geometry fontspec graphics xcolor tools
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Full test suite
+        run: QT_QPA_PLATFORM=offscreen python -m unittest discover -s tests
+      - name: Build demo
+        run: QT_QPA_PLATFORM=offscreen python -c "from app.core.blocks.demo import build_demo; from pathlib import Path; build_demo(Path('demo'))"
+      - name: Upload demo artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-pdf
+          path: demo/output/demo.pdf

@@ -16,12 +16,12 @@ def render_layout(node: SolvedNode, block_latex: dict[str, str]) -> str:
 def _render_node(node: SolvedNode, block_latex: dict[str, str]) -> str:
     header = f"% ICSTEX:layout={node.layoutId}"
     if node.kind == "row":
-        cells = [_render_slot(child, block_latex) for child in node.children]
+        cells = [_render_cell(child, block_latex) for child in node.children]
         return header + "\n\\noindent\n" + "\n\\hfill\n".join(cells)
     if node.kind == "grid":
         columns = max(1, node.columns or 1)
         rows: list[str] = []
-        cells = [_render_slot(child, block_latex) for child in node.children]
+        cells = [_render_cell(child, block_latex) for child in node.children]
         for index in range(0, len(cells), columns):
             rows.append("\n\\hfill\n".join(cells[index : index + columns]))
         return header + "\n\\noindent\n" + "\n\n".join(rows)
@@ -39,7 +39,10 @@ def _render_child(child: object, block_latex: dict[str, str]) -> str:
     return _render_node(child, block_latex)
 
 
-def _render_slot(slot: SolvedSlot, block_latex: dict[str, str]) -> str:
+def _render_cell(child: object, block_latex: dict[str, str]) -> str:
+    if not isinstance(child, SolvedSlot):
+        return _render_node(child, block_latex)
+    slot = child
     return (
         f"\\begin{{minipage}}[t]{{{slot.ratio:.4f}\\linewidth}}\n"
         "  \\vspace{0pt}\n"

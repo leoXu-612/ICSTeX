@@ -24,6 +24,7 @@ NUMBER_RE = re.compile(r"^[+-]?(\d+([.]\d*)?|[.]\d+)([eE][+-]?\d+)?$")
 DATE_RE = re.compile(r"^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$")
 MAX_ROWS = 5000
 MAX_COLS = 200
+MAX_SOURCE_BYTES = 200 * 1024 * 1024
 
 _MAIN_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 _REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -99,7 +100,14 @@ def read_csv_text(text: str, *, header_row: bool = True) -> TableData:
     return _table_from_grid(raw_rows, header_row=header_row)
 
 
-def read_csv_bytes(data: bytes, *, header_row: bool = True) -> TableData:
+def read_csv_bytes(
+    data: bytes,
+    *,
+    header_row: bool = True,
+    max_bytes: int = MAX_SOURCE_BYTES,
+) -> TableData:
+    if len(data) > max_bytes:
+        raise ValueError(f"文件过大（>{max_bytes} 字节），已拒绝导入。")
     encoding = detect_encoding(data)
     return read_csv_text(data.decode(encoding), header_row=header_row)
 
@@ -209,10 +217,19 @@ def _parse_html_table(text: str) -> list[list[str]]:
 class SpreadsheetImportAdapter:
     """Reads XLSX workbooks with cached values only (no formula execution)."""
 
-    def __init__(self, path: Path, *, max_rows: int = MAX_ROWS, max_cols: int = MAX_COLS) -> None:
+    def __init__(
+        self,
+        path: Path,
+        *,
+        max_rows: int = MAX_ROWS,
+        max_cols: int = MAX_COLS,
+        max_bytes: int = MAX_SOURCE_BYTES,
+    ) -> None:
         import openpyxl
 
         self._path = Path(path)
+        if self._path.stat().st_size > max_bytes:
+            raise ValueError(f"文件过大（>{max_bytes} 字节），已拒绝导入。")
         self._workbook = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
         self._max_rows = max_rows
         self._max_cols = max_cols

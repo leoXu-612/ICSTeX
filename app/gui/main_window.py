@@ -289,6 +289,18 @@ class MainWindow(QMainWindow):
 
         ImportPerfDialog(self).exec()
 
+    def show_block_project_dialog(self) -> None:
+        from app.core.blocks.registry import BlockRegistry
+        from app.core.blocks.table_model import TableData, TableEditorModel
+        from app.core.blocks.theme import AppTheme
+        from app.gui.blocks.project_dialog import BlockProjectDialog
+
+        BlockProjectDialog(
+            BlockRegistry(),
+            table_model=TableEditorModel(TableData()),
+            theme=AppTheme(id="theme_custom", name="Custom"),
+        ).exec()
+
     def insert_list(self) -> None:
         self.insertions.insert_list()
 

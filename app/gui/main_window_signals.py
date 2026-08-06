@@ -43,6 +43,7 @@ def connect_signals(window: "MainWindow") -> None:
     window.environment_doctor_action.triggered.connect(window.show_environment_doctor)
     window.feedback_bundle_action.triggered.connect(window.copy_feedback_bundle)
     window.import_perf_action.triggered.connect(window.show_import_perf_dialog)
+    window.block_project_action.triggered.connect(window.show_block_project_dialog)
     window.user_guide_action.triggered.connect(window.show_user_guide)
     window.word_count_action.triggered.connect(window.update_word_count)
     window.sync_pdf_action.triggered.connect(window.sync_current_source_to_pdf)

@@ -93,7 +93,7 @@ class SideBySideFigureMigration(MigrationPlan):
                     "kind": "row",
                     "gap": {"value": 8, "unit": "mm"},
                     "alignment": "top",
-                    "fallback": {"strategy": "stack"},
+                    "fallback": {"strategy": "stackVertically"},
                     "children": [
                         {
                             "instanceId": new_instance_id(),

@@ -193,31 +193,70 @@ LAYOUT_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
     "required": ["schemaVersion", "id", "kind", "children"],
+    "$defs": {
+        "size": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["value", "unit"],
+            "properties": {
+                "value": {"type": "number", "minimum": 0},
+                "unit": {"enum": ["mm", "pt"]},
+            },
+        },
+        "slot": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["instanceId", "kind", "blockId"],
+            "properties": {
+                "instanceId": {"type": "string", "minLength": 4},
+                "kind": {"const": "block"},
+                "blockId": {"type": "string"},
+                "weight": {"type": "number", "exclusiveMinimum": 0},
+                "minWidthPt": {"type": ["number", "null"], "minimum": 0},
+            },
+        },
+        "child": {
+            "oneOf": [
+                {"$ref": "#/$defs/slot"},
+                {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["instanceId", "kind", "children"],
+                    "properties": {
+                        "instanceId": {"type": "string", "minLength": 4},
+                        "kind": {"const": "container"},
+                        "children": {
+                            "type": "array",
+                            "items": {"$ref": "#/$defs/child"},
+                        },
+                    },
+                },
+            ]
+        },
+    },
     "properties": {
         "schemaVersion": {"const": SCHEMA_VERSION},
         "id": {"type": "string", "minLength": 4},
         "kind": {"enum": ["row", "column", "grid", "fullWidth"]},
-        "columns": {"type": "integer", "minimum": 1},
-        "gap": {"type": "object"},
-        "rowGap": {"type": "object"},
+        "columns": {"type": ["integer", "null"], "minimum": 1},
+        "gap": {"$ref": "#/$defs/size"},
+        "rowGap": {"$ref": "#/$defs/size"},
         "alignment": {"type": "string"},
-        "keepTogether": {"type": "string"},
-        "fallback": {"type": "object"},
+        "keepTogether": {"enum": ["row", "grid", "none"]},
+        "fallback": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "strategy": {
+                    "enum": ["reduceGap", "normalizeWeights", "wrapRows", "stackVertically", "error"],
+                },
+                "minimumChildWidthPt": {"type": "number", "minimum": 0},
+                "stackGap": {"$ref": "#/$defs/size"},
+            },
+        },
         "children": {
             "type": "array",
-            "items": {
-                "type": "object",
-                "additionalProperties": False,
-                "required": ["instanceId", "kind"],
-                "properties": {
-                    "instanceId": {"type": "string", "minLength": 4},
-                    "kind": {"enum": ["block", "container"]},
-                    "blockId": {"type": ["string", "null"]},
-                    "weight": {"type": ["number", "null"], "exclusiveMinimum": 0},
-                    "minWidthPt": {"type": ["number", "null"], "minimum": 0},
-                    "children": {"type": ["array", "null"]},
-                },
-            },
+            "items": {"$ref": "#/$defs/child"},
         },
     },
 }

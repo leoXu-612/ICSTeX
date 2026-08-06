@@ -3,12 +3,14 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest import TestCase
+from unittest import TestCase, skipUnless
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication, QTabWidget
+from PySide6.QtGui import QColor, QImage, QImageWriter
 
+from app.core.blocks.formula_adapter import FormulaBlockAdapter
 from app.core.blocks.layout import LayoutNode, block_slot
 from app.core.blocks.layout_solver import solve_layout
 from app.core.blocks.model import Semantic, content_for_text
@@ -16,11 +18,16 @@ from app.core.blocks.registry import BlockRegistry, CreateBlockInput
 from app.core.blocks.source_merge import CellChange, MergeResult
 from app.core.blocks.table_model import Cell, ColumnSpec, TableData, TableEditorModel, TableRow
 from app.core.blocks.theme import AppTheme
+from app.core.compiler import BuildPurpose, CompileManager
+from app.core.latex_tools import LaTeXEngine, detect_toolchain
 from app.gui.blocks.layout_panel import BlockLayoutPanel
 from app.gui.blocks.merge_dialog import MergeDialog
 from app.gui.blocks.project_dialog import BlockProjectDialog
 from app.gui.blocks.table_editor import TableEditor
 from app.gui.blocks.theme_settings import ThemeSettings
+
+
+TOOLCHAIN = detect_toolchain()
 
 
 def app() -> QApplication:
@@ -126,6 +133,16 @@ class BlockLayoutPanelTests(TestCase):
         solved = solve_layout(panel.layout, 300.0)  # type: ignore[arg-type]
         self.assertAlmostEqual(solved.children[0].widthPt, (300.0 - 8 * 72.27 / 25.4) / 2, places=2)
 
+    def test_slot_drag_reorder_with_undo(self) -> None:
+        layout = LayoutNode(id="lyt_row", kind="row", children=(block_slot("blk_a"), block_slot("blk_b")))
+        panel = BlockLayoutPanel(registry_with_blocks(), layout)
+
+        panel.move_slot(0, 2)
+
+        self.assertEqual(panel.layout.children[0].blockId, "blk_b")  # type: ignore[union-attr]
+        panel.undo()
+        self.assertEqual(panel.layout.children[0].blockId, "blk_a")  # type: ignore[union-attr]
+
 
 class MergeDialogTests(TestCase):
     def setUp(self) -> None:
@@ -201,3 +218,72 @@ class BlockProjectDialogTests(TestCase):
         dialog = BlockProjectDialog(registry)
         self.assertEqual(dialog.findChild(QTabWidget).count(), 5)
         dialog.close()
+
+    @skipUnless(TOOLCHAIN.is_compile_ready, "xelatex required")
+    def test_preview_builds_pdf_and_syncs_table(self) -> None:
+        from app.core.blocks.model import Block, Caption, Semantic, content_for_text
+        from app.core.blocks.table_model import Cell, ColumnSpec, TableData, TableRow
+
+        with TemporaryDirectory() as directory:
+            project = Path(directory) / "proj"
+            (project / "assets" / "images").mkdir(parents=True)
+            image = QImage(4, 4, QImage.Format.Format_RGB32)
+            image.fill(QColor(200, 200, 200))
+            QImageWriter(str(project / "assets" / "images" / "a.png"), b"png").write(image)
+
+            registry = BlockRegistry()
+            registry.create(
+                CreateBlockInput(
+                    type="image",
+                    alias="img",
+                    semantic=Semantic(role="figure", caption=Caption("装置")),
+                    content={"source": "assets/images/a.png"},
+                )
+            )
+            table_block = registry.create(
+                CreateBlockInput(
+                    type="table",
+                    alias="tab",
+                    semantic=Semantic(role="table"),
+                    content=TableData(
+                        columns=[ColumnSpec(id="c1", name="温度", dataType="number")],
+                        rows=[TableRow(id="r1", cells={"c1": Cell(kind="number", value=20)})],
+                        header_row_count=0,
+                    ).to_content_dict(),
+                )
+            )
+            registry.create(
+                CreateBlockInput(
+                    type="formula",
+                    alias="eq",
+                    semantic=Semantic(role="equation"),
+                    content=FormulaBlockAdapter().content_for(r"E=mc^2"),
+                )
+            )
+            registry.create(
+                CreateBlockInput(
+                    type="text",
+                    alias="txt",
+                    semantic=Semantic(role="text"),
+                    content=content_for_text("分析"),
+                )
+            )
+            model = TableEditorModel(TableData(columns=[ColumnSpec(id="c1", name="温度", dataType="number")]))
+            model.set_cell("r1", "c1", Cell(kind="number", value=30))
+            layout = LayoutNode(id="lyt_row", kind="row", children=(block_slot("blk_a"), block_slot("blk_b")))
+
+            dialog = BlockProjectDialog(
+                registry,
+                layout=layout,
+                table_model=model,
+                project_dir=project,
+            )
+            result = dialog._build_pdf_sync()
+
+            self.assertTrue(result.ok, result.combined_output)
+            self.assertTrue(result.pdf_file.exists())
+            self.assertTrue((project / "main.tex").exists())
+            self.assertIn("\\begin{document}", (project / "main.tex").read_text(encoding="utf-8"))
+            synced = registry.get(table_block.id).content
+            self.assertEqual(synced["rows"][0]["cells"]["c1"]["value"], 30)
+            dialog.close()

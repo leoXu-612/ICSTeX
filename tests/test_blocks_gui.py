@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase, skipUnless
+from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -18,9 +19,11 @@ from app.core.blocks.registry import BlockRegistry, CreateBlockInput
 from app.core.blocks.source_merge import CellChange, MergeResult
 from app.core.blocks.table_model import Cell, ColumnSpec, TableData, TableEditorModel, TableRow
 from app.core.blocks.theme import AppTheme
+from app.core.formula_input import FinalTextEditPlan
 from app.core.compiler import BuildPurpose, CompileManager
 from app.core.latex_tools import LaTeXEngine, detect_toolchain
 from app.gui.blocks.layout_panel import BlockLayoutPanel
+from app.gui.blocks.formula_tab import FormulaBlockTab
 from app.gui.blocks.merge_dialog import MergeDialog
 from app.gui.blocks.project_dialog import BlockProjectDialog
 from app.gui.blocks.table_editor import TableEditor
@@ -216,8 +219,44 @@ class BlockProjectDialogTests(TestCase):
     def test_tabs_exist(self) -> None:
         registry = registry_with_blocks()
         dialog = BlockProjectDialog(registry)
-        self.assertEqual(dialog.findChild(QTabWidget).count(), 5)
+        self.assertEqual(dialog.findChild(QTabWidget).count(), 6)
         dialog.close()
+
+    def test_formula_tab_edits_block_ast(self) -> None:
+        registry = BlockRegistry()
+        block = registry.create(
+            CreateBlockInput(
+                type="formula",
+                alias="eq",
+                semantic=Semantic(role="equation"),
+                content=FormulaBlockAdapter().content_for(r"E=mc^2"),
+            )
+        )
+        tab = FormulaBlockTab(registry)
+        tab.block_list.item(0).setSelected(True)
+
+        class FakeFormulaDialog:
+            class DialogCode:
+                Accepted = 1
+
+            def __init__(self, *args, **kwargs) -> None:
+                pass
+
+            def exec(self) -> int:
+                return 1
+
+            def plan(self):
+                return FinalTextEditPlan(
+                    start=0,
+                    end=0,
+                    source_text="",
+                    text=r"\(E=\gamma mc^2\)",
+                )
+
+        with patch("app.gui.blocks.formula_tab.FormulaDialog", FakeFormulaDialog):
+            tab._edit_selected()
+
+        self.assertEqual(registry.get(block.id).content["latexCache"], r"E=\gamma mc^2")
 
     @skipUnless(TOOLCHAIN.is_compile_ready, "xelatex required")
     def test_preview_builds_pdf_and_syncs_table(self) -> None:

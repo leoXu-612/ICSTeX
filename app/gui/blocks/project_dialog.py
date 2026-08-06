@@ -31,6 +31,7 @@ from app.core.compiler import BuildPurpose, CompileManager
 from app.core.latex_tools import LaTeXEngine, detect_toolchain
 from app.gui.blocks.layout_panel import BlockLayoutPanel
 from app.gui.blocks.merge_dialog import MergeDialog
+from app.gui.blocks.formula_tab import FormulaBlockTab
 from app.gui.blocks.table_editor import TableEditor
 from app.gui.blocks.theme_settings import ThemeSettings
 
@@ -60,6 +61,7 @@ class BlockProjectDialog(QDialog):
         tabs = QTabWidget(self)
         tabs.addTab(self.layout_panel, "布局")
         tabs.addTab(self.table_editor, "表格")
+        tabs.addTab(FormulaBlockTab(registry), "公式")
         tabs.addTab(self._build_sync_tab(), "同步")
         tabs.addTab(self.theme_settings, "主题")
         tabs.addTab(self._build_export_tab(), "导出")

@@ -191,3 +191,50 @@ class MultiLineDialogTests(TestCase):
         self.assertIn(r"c &= d", latex)
         self.assertIn(r"\end{aligned}", latex)
         dialog.close()
+
+    def test_roi_canvas_add_and_clear(self) -> None:
+        _app()
+        from PySide6.QtCore import QRect
+        from PySide6.QtGui import QColor, QImage
+
+        from app.gui.formula_ocr.roi_canvas import RoiCanvas
+
+        canvas = RoiCanvas()
+        canvas.set_image(QImage(300, 120, QImage.Format.Format_RGB32))
+        canvas.add_rect(QRect(10, 10, 100, 20))
+        canvas.add_rect(QRect(10, 60, 100, 20))
+        self.assertEqual(len(canvas.rois()), 2)
+        canvas.clear()
+        self.assertEqual(canvas.rois(), [])
+
+    def test_dialog_with_image_auto_recognizes_rois(self) -> None:
+        _app()
+        from PySide6.QtCore import QObject, QTimer, Signal
+        from PySide6.QtGui import QColor, QImage, QPainter, QPen
+
+        from app.gui.formula_ocr.multi_line_dialog import MultiLineOcrDialog
+
+        class StubResult:
+            latex = r"x=1"
+            elapsed_ms = 1
+            model_version = "stub"
+
+        class StubManager(QObject):
+            recognition_finished = Signal(object)
+            recognition_failed = Signal(str, str, str)
+
+            def recognize(self, request, session_id):
+                QTimer.singleShot(0, lambda: self.recognition_finished.emit((request.request_id, session_id, StubResult())))
+
+        image = QImage(300, 120, QImage.Format.Format_RGB32)
+        image.fill(QColor("white"))
+        painter = QPainter(image)
+        painter.setPen(QPen(QColor("black"), 3))
+        painter.drawLine(30, 20, 270, 20)
+        painter.drawLine(30, 80, 270, 80)
+        painter.end()
+
+        dialog = MultiLineOcrDialog(None, image=image, manager=StubManager())
+        self.assertEqual(len(dialog.line_edits), 2)
+        self.assertTrue(all(edit.text() for edit in dialog.line_edits))
+        dialog.close()

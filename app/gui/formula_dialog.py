@@ -185,22 +185,18 @@ class FormulaDialog(QDialog):
         manager, image = self._prepare_ocr()
         if manager is None or image is None:
             return
-        from app.gui.formula_ocr.multi_line_dialog import MultiLineOcrDialog, split_and_recognize
+        from app.gui.formula_ocr.multi_line_dialog import MultiLineOcrDialog
 
-        self.ocr_status_label.setText("拆分识别中…")
+        self.ocr_status_label.setText("识别中…")
         QApplication.processEvents()
-        lines = split_and_recognize(image, manager)
-        self.ocr_status_label.setText("")
-        if not lines:
-            QMessageBox.warning(self, "多行公式识别", "未能从图片中拆出可识别的行。")
-            return
-        dialog = MultiLineOcrDialog(lines, self)
+        dialog = MultiLineOcrDialog(None, image=image, manager=manager, parent=self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             latex = dialog.result_latex()
             if latex:
                 self.visual_edit.set_latex(latex)
                 self.editor_stack.setCurrentWidget(self.visual_edit)
                 self.source_mode_check.setChecked(False)
+        self.ocr_status_label.setText("")
 
     def _prepare_ocr(self):
         app = QApplication.instance()

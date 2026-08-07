@@ -29,8 +29,8 @@ def _row_dark_counts(image: QImage) -> tuple[list[int], int]:
     return counts, width
 
 
-def split_formula_lines(image: QImage, *, padding: int = PADDING) -> list[QImage]:
-    """Split a formula image into single-line crops (top-to-bottom)."""
+def split_formula_line_rects(image: QImage, *, padding: int = PADDING) -> list[QRect]:
+    """Split a formula image into single-line bounding rects (top-to-bottom)."""
     width, height = image.width(), image.height()
     if width == 0 or height == 0:
         return []
@@ -60,7 +60,7 @@ def split_formula_lines(image: QImage, *, padding: int = PADDING) -> list[QImage
     gray = image.convertToFormat(QImage.Format.Format_Grayscale8)
     bytes_per_line = gray.bytesPerLine()
     data = bytes(gray.bits())
-    crops: list[QImage] = []
+    rects: list[QRect] = []
     for y0, y1 in merged:
         x_min = width
         x_max = -1
@@ -80,5 +80,10 @@ def split_formula_lines(image: QImage, *, padding: int = PADDING) -> list[QImage
             min(width, x_max + padding) - max(0, x_min - padding),
             min(height, y1 + padding) - max(0, y0 - padding),
         )
-        crops.append(image.copy(rect))
-    return crops
+        rects.append(rect)
+    return rects
+
+
+def split_formula_lines(image: QImage, *, padding: int = PADDING) -> list[QImage]:
+    """Split a formula image into single-line crops (top-to-bottom)."""
+    return [image.copy(rect) for rect in split_formula_line_rects(image, padding=padding)]

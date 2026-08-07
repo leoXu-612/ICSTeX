@@ -169,8 +169,10 @@ class FormulaDialog(QDialog):
         app = QApplication.instance()
         manager = getattr(app, "ocr_manager", None)
         if manager is None:
-            QMessageBox.information(self, "公式识别", "可选本地公式识别未启用。")
-            return
+            from app.optional_tools.pix2tex.manager import OcrManager
+
+            manager = OcrManager(app)
+            app.ocr_manager = manager
         if manager.status() in ("NOT_INSTALLED", "MODEL_MISSING"):
             QMessageBox.information(self, "公式识别", "pix2tex 未安装或模型缺失。")
             return

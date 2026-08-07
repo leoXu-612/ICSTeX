@@ -33,6 +33,7 @@ atomic replace so an encoding error cannot truncate the original paper.
 
 ## Project documentation
 
+- User guide (使用指引): [`docs/user-guide.md`](docs/user-guide.md)
 - Current verified state: [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md)
 - Product and technical roadmap: [`docs/ROADMAP.md`](docs/ROADMAP.md)
 - Architecture decisions: [`docs/DECISION_LOG.md`](docs/DECISION_LOG.md)

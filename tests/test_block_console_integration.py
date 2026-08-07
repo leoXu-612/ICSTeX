@@ -436,6 +436,23 @@ class MainWindowBlockIntegrationTests(TestCase):
         session.undo_stack.redo()
         self.assertEqual(session.registry.get(block.id).alias, "新名")
 
+    def test_layout_edits_enter_global_undo_stack(self) -> None:
+        registry = _registry_with_two_blocks()
+        session = ProjectSession(registry=registry)
+        self._install(session)
+        panel = self.window.block_workspace.layout_panel
+        self.assertIs(panel.command_stack, session.undo_stack)
+
+        panel.block_list.item(0).setSelected(True)
+        panel.block_list.item(1).setSelected(True)
+        before = session.undo_stack.count()
+        panel.apply_row()
+        self.assertGreater(session.undo_stack.count(), before)
+        self.assertIsNotNone(session.layout)
+
+        self.window.block_undo_action.trigger()
+        self.assertIsNone(session.layout)
+
     def test_mode_switch_keeps_single_pdf_panel(self) -> None:
         from app.gui.block_mode import _set_block_mode
 

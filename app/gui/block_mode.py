@@ -109,6 +109,9 @@ def _install_session(window, session: ProjectSession) -> None:
 
     workspace = BlockWorkspaceWidget(session)
     window.block_workspace = workspace
+    # Route layout edits (row/grid/reorder/inspector props) through the
+    # session's global QUndoStack so Block-menu undo/redo covers them too.
+    workspace.layout_panel.command_stack = session.undo_stack
     workspace.preview_requested.connect(lambda: session.compile_final())
     workspace.edit_requested.connect(lambda block_id: _open_block_editor(window, block_id))
     workspace.block_selected.connect(lambda block_id: session.selection.select_block(block_id, source="workspace"))

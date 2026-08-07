@@ -57,30 +57,40 @@ def remove() -> None:
 
 
 def download_models(timeout: int = 900) -> dict:
-    """One-shot model download into models_dir; writes the manifest.
-
-    Runs inside the venv with explicit config/checkpoint paths so upstream
-    downloads the weights exactly once into the optional tool directory.
-    """
+    """Download pix2tex weights once (upstream package checkpoints dir)."""
     code = (
-        "import json, pathlib\n"
+        "import json\n"
+        "import pathlib\n"
+        "from pix2tex import cli as _cli\n"
+        "import inspect\n"
+        "import os\n"
         "from pix2tex.cli import LatexOCR\n"
-        "root = pathlib.Path(__import__('app.optional_tools.pix2tex.environment', fromlist=['models_dir']).models_dir())\n"
-        "root.mkdir(parents=True, exist_ok=True)\n"
-        "config = root / 'config.yaml'\n"
-        "checkpoint = root / 'weights.pth'\n"
-        "LatexOCR(config=str(config), checkpoint=str(checkpoint), no_cuda=True)\n"
-        "manifest = {'version': 'pix2tex-0.1.4', 'checkpoint': 'weights.pth', "
-        "'image_resizer': 'image_resizer.pth', 'tokenizer': 'tokenizer.json', 'config': 'config.yaml'}\n"
-        "(root / 'model-manifest.json').write_text(json.dumps(manifest), encoding='utf-8')\n"
+        "pkg = pathlib.Path(inspect.getfile(LatexOCR)).parent\n"
+        "LatexOCR()\n"
+        "ckpt = pkg / 'model' / 'checkpoints'\n"
+        "manifest = {\n"
+        "  'version': 'pix2tex-0.1.4',\n"
+        "  'checkpoint': str(ckpt / 'weights.pth'),\n"
+        "  'image_resizer': str(ckpt / 'image_resizer.pth'),\n"
+        "  'tokenizer': str(ckpt / 'tokenizer.json'),\n"
+        "  'config': str(pkg / 'settings' / 'config.yaml'),\n"
+        "}\n"
+        "print(json.dumps(manifest))\n"
     )
-    result = subprocess.run(
-        [str(python_executable()), "-c", code],
-        check=False,
-        timeout=timeout,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            [str(python_executable()), "-c", code],
+            check=False,
+            timeout=timeout,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "detail": "model download timed out"}
     if result.returncode != 0:
         return {"ok": False, "detail": (result.stderr or result.stdout)[-500:]}
+    import json as _json
+
+    manifest = _json.loads(result.stdout.strip().splitlines()[-1])
+    manifest_path().write_text(_json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     return {"ok": True, "status": status()}

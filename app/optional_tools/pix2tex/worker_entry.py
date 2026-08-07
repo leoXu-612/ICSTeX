@@ -62,15 +62,19 @@ def main(argv: list[str] | None = None) -> int:
     _disable_clipboard_side_effects()
     _emit({"event": "loading_model"})
     try:
+        from munch import Munch
         from pix2tex.cli import LatexOCR
 
-        model = LatexOCR(
-            config=str(manifest.config),
-            checkpoint=str(manifest.checkpoint),
-            no_cuda=True,
-            no_resize=not args.use_resizer,
-            temperature=args.temperature,
+        arguments = Munch(
+            {
+                "config": str(manifest.config),
+                "checkpoint": str(manifest.checkpoint),
+                "no_cuda": True,
+                "no_resize": not args.use_resizer,
+                "temperature": args.temperature,
+            }
         )
+        model = LatexOCR(arguments=arguments)
     except Exception as exc:  # noqa: BLE001
         _emit({"event": "error", "error": {"code": "MODEL_LOAD_FAILED", "message": str(exc)}})
         return 4
@@ -101,7 +105,10 @@ def main(argv: list[str] | None = None) -> int:
         _emit({"id": request_id, "event": "inference_started"})
         started = time.perf_counter()
         try:
-            latex = model(str(image_path))
+            from PIL import Image
+
+            image = Image.open(image_path).convert("RGB")
+            latex = model(image)
         except Exception as exc:  # noqa: BLE001
             _emit({"id": request_id, "error": {"code": "INFERENCE_FAILED", "message": str(exc)}})
             continue

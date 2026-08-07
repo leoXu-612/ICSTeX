@@ -16,7 +16,8 @@ class ModelManifest:
     config: Path
 
     def missing_files(self) -> list[Path]:
-        return [path for path in (self.checkpoint, self.image_resizer, self.tokenizer, self.config) if not path.exists()]
+        required = (self.checkpoint, self.image_resizer, self.config)
+        return [path for path in required if not path.exists()]
 
 
 def load_manifest(path: Path) -> ModelManifest:

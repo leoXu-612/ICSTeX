@@ -526,3 +526,18 @@ must link here instead of repeating old task details.
   before/after architecture, event flows, manual acceptance steps and
   known limitations.
 - Not pushed; remote CI remains gated by the GitHub billing/spending limit.
+
+## 2026-08-07 - UI Scale 与响应式布局修复 (feature/ui-scale-responsive-layout)
+
+- Executed the UI scale/responsive layout plan on
+  `feature/ui-scale-responsive-layout` (from 527808f, 644 tests baseline):
+  fixed-size audit, unified UiMetrics/TypographyMetrics, UiScaleManager with
+  90/100/110/125/150% tiers from base font (no drift), AppSettings
+  persistence, responsive welcome page (4/2/1 reflow + scroll), tab bars
+  with scroll/elide, PDF toolbar tiering with More menu (zoom isolated to
+  QPdfView), diagnostics auto-expand, dock/splitter clamp on scale change,
+  and a project-close compile race fix.
+- Full suite: 658 tests OK (15 new UI scale/responsive tests); local CI
+  simulation green. Known: full-suite runtime rose to ~130s due to app-wide
+  stylesheet rebuilds on scale change; production single-window switch is
+  fast. Not pushed.

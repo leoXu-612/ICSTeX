@@ -94,15 +94,19 @@ def refresh_window_metrics(window: QWidget, metrics: UiMetrics) -> None:
     for toolbar in window.findChildren(QToolBar):
         toolbar.setMinimumHeight(metrics.control_height)
 
-    for splitter in window.findChildren(QSplitter):
-        clamp_splitter_sizes(splitter)
-
-    for widget in window.findChildren(QWidget):
-        layout = widget.layout()
-        if layout is not None:
-            layout.invalidate()
-            layout.activate()
-    window.updateGeometry()
+    # The heavy re-layout pass only runs for visible windows: iterating every
+    # widget of every hidden/lingering window makes test suites pathologically
+    # slow without any visual benefit.
+    if window.isVisible():
+        for splitter in window.findChildren(QSplitter):
+            clamp_splitter_sizes(splitter)
+        layout_getter = getattr(window, "layout", None)
+        if callable(layout_getter):
+            layout = layout_getter()
+            if layout is not None:
+                layout.invalidate()
+                layout.activate()
+        window.updateGeometry()
 
 
 def clamp_splitter_sizes(splitter: QSplitter) -> None:

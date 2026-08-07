@@ -8,6 +8,7 @@ on:
 jobs:
   unit-schema-golden:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -26,6 +27,7 @@ jobs:
 
   macos-compile-demo:
     runs-on: macos-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -44,7 +46,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       - name: Full test suite
-        run: QT_QPA_PLATFORM=offscreen python -m unittest discover -s tests
+        run: QT_QPA_PLATFORM=offscreen python -m unittest discover -s tests -v
       - name: Build demo
         run: QT_QPA_PLATFORM=offscreen python -c "from app.core.blocks.demo import build_demo; from pathlib import Path; build_demo(Path('demo'))"
       - name: Upload demo artifacts

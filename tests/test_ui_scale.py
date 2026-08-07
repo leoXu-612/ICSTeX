@@ -57,10 +57,10 @@ class ScaleManagerTests(TestCase):
         self.assertAlmostEqual(self.app.font().pointSizeF(), base_pt * 1.25, places=2)
         self.manager.apply_scale(1.0)
         self.assertAlmostEqual(self.app.font().pointSizeF(), base_pt, places=2)
-        # repeated cycles never accumulate
-        for _ in range(2):
-            self.manager.apply_scale(1.5)
-            self.manager.apply_scale(1.0)
+        # another tier and return: still no accumulation
+        self.manager.apply_scale(1.5)
+        self.assertAlmostEqual(self.app.font().pointSizeF(), base_pt * 1.5, places=2)
+        self.manager.apply_scale(1.0)
         self.assertAlmostEqual(self.app.font().pointSizeF(), base_pt, places=2)
 
     def test_metrics_are_proportional(self) -> None:

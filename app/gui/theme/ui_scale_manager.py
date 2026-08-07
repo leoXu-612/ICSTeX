@@ -8,6 +8,11 @@ never touch the font.
 """
 from __future__ import annotations
 
+import os
+import sys
+import time
+from weakref import WeakSet
+
 from PySide6.QtCore import QObject, QSize, Qt, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication, QDockWidget, QSplitter, QToolBar, QWidget
@@ -17,6 +22,7 @@ from app.gui.theme.ui_metrics import TypographyMetrics, UiMetrics
 
 
 SCALE_TIERS = (0.90, 1.00, 1.10, 1.25, 1.50)
+_PROFILE = os.environ.get("ICSTEX_UI_SCALE_PROFILE") == "1"
 
 TIER_LABELS: dict[float, str] = {
     0.90: "紧凑 90%",
@@ -41,6 +47,16 @@ class UiScaleManager(QObject):
         self._scale = 1.0
         self._metrics = UiMetrics(1.0)
         self._typography = TypographyMetrics(1.0)
+        self._windows: WeakSet = WeakSet()
+        self._stylesheet_cache: dict[tuple[float, float], str] = {}
+        self._applied_stylesheet = ""
+
+    def register_window(self, window) -> None:
+        if window is not None:
+            self._windows.add(window)
+
+    def unregister_window(self, window) -> None:
+        self._windows.discard(window)
 
     @property
     def scale(self) -> float:
@@ -61,18 +77,44 @@ class UiScaleManager(QObject):
         self._scale = scale
         self._metrics = UiMetrics(scale)
         self._typography = TypographyMetrics(scale)
+        profile_start = time.perf_counter()
 
         font = QFont(self._base_font)
         font.setPointSizeF(self._base_point_size * scale)
         self._app.setFont(font)
 
+        t_icons = time.perf_counter()
         icon_size = self._metrics.toolbar_icon_size
-        for window in self._app.topLevelWidgets():
-            for toolbar in window.findChildren(QToolBar):
-                toolbar.setIconSize(QSize(icon_size, icon_size))
-            refresh_window_metrics(window, self._metrics)
+        for window in list(self._windows):
+            try:
+                for toolbar in window.findChildren(QToolBar):
+                    toolbar.setIconSize(QSize(icon_size, icon_size))
+                refresh_window_metrics(window, self._metrics)
+            except RuntimeError:
+                # The window was destroyed between iterations.
+                self._windows.discard(window)
+        t_refresh = time.perf_counter()
 
-        self._app.setStyleSheet(stylesheet(self._metrics, self._typography))
+        cache_key = (self._metrics.scale, self._metrics.density)
+        qss = self._stylesheet_cache.get(cache_key)
+        if qss is None:
+            qss = stylesheet(self._metrics, self._typography)
+            self._stylesheet_cache[cache_key] = qss
+        t_build = time.perf_counter()
+        if qss != self._applied_stylesheet:
+            self._app.setStyleSheet(qss)
+            self._applied_stylesheet = qss
+        t_apply = time.perf_counter()
+        if _PROFILE:
+            print(
+                "ui-scale: "
+                f"scale={scale} windows={len(self._windows)} "
+                f"icons+refresh_ms={(t_refresh - t_icons) * 1000:.1f} "
+                f"build_ms={(t_build - t_refresh) * 1000:.1f} "
+                f"apply_ms={(t_apply - t_build) * 1000:.1f} "
+                f"total_ms={(t_apply - profile_start) * 1000:.1f}",
+                file=sys.stderr,
+            )
         self.scale_changed.emit(scale)
 
 

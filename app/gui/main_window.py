@@ -136,6 +136,9 @@ class MainWindow(QMainWindow):
         self.preferences_controller = PreferencesController(self)
 
         self._build_ui()
+        app = QApplication.instance()
+        if app is not None and hasattr(app, "ui_scale_manager"):
+            app.ui_scale_manager.register_window(self)
         saved_window_state = self.app_settings.settings.value("window/block_console_state")
         if saved_window_state:
             self.restoreState(saved_window_state)

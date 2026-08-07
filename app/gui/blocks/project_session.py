@@ -221,3 +221,5 @@ class ProjectSession(QObject):
     def stop_compile(self) -> None:
         if self.compile_manager is not None:
             self.compile_manager.stop_current(timeout=1.0)
+            # Late worker results must never emit on a closed session.
+            self.compile_manager.on_finished = None

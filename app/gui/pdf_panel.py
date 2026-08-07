@@ -6,13 +6,16 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import QEvent, QObject, QPointF, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMenu,
     QPushButton,
     QSpinBox,
     QStackedWidget,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -41,6 +44,8 @@ class PdfViewState:
 
 class PdfPanel(QWidget):
     sourceRequested = Signal(int, float, float)
+
+    _PDF_TOOLBAR_NARROW_WIDTH = 700
 
     def __init__(self) -> None:
         super().__init__()
@@ -103,6 +108,8 @@ class PdfPanel(QWidget):
     def _build_toolbar(self, layout: QVBoxLayout) -> None:
         toolbar = QWidget()
         toolbar.setObjectName("pdfToolbar")
+        self._toolbar = toolbar
+        toolbar.installEventFilter(self)
         row = QHBoxLayout(toolbar)
         row.setContentsMargins(8, 6, 8, 6)
         row.setSpacing(6)
@@ -110,7 +117,7 @@ class PdfPanel(QWidget):
         self.next_page_button = self._icon_button("chevron-right", "下一页")
         self.page_spin = QSpinBox()
         self.page_spin.setRange(1, 1)
-        self.page_spin.setFixedWidth(72)
+        self.page_spin.setMinimumWidth(64)
         self.page_spin.setAccessibleName("PDF 页码")
         self.page_count_label = QLabel("/ 0")
         self.zoom_out_button = self._icon_button("zoom-out", "缩小")
@@ -128,25 +135,69 @@ class PdfPanel(QWidget):
         self.reveal_pdf_button = self._icon_button("folder-open", reveal_tooltip)
         self.export_pdf_button.setEnabled(False)
         self.reveal_pdf_button.setEnabled(False)
-        for widget in (
-            self.prev_page_button,
-            self.next_page_button,
+        core_widgets = (
             self.page_spin,
             self.page_count_label,
             self.zoom_out_button,
             self.zoom_in_button,
             self.fit_width_button,
+        )
+        secondary_widgets = (
+            self.prev_page_button,
+            self.next_page_button,
             self.fit_page_button,
-        ):
+            self.pdf_search_edit,
+            self.pdf_search_prev_button,
+            self.pdf_search_next_button,
+            self.pdf_search_status,
+            self.export_pdf_button,
+            self.reveal_pdf_button,
+        )
+        for widget in core_widgets:
             row.addWidget(widget)
         row.addStretch()
-        row.addWidget(self.pdf_search_edit)
-        row.addWidget(self.pdf_search_prev_button)
-        row.addWidget(self.pdf_search_next_button)
-        row.addWidget(self.pdf_search_status)
-        row.addWidget(self.export_pdf_button)
-        row.addWidget(self.reveal_pdf_button)
+        self._secondary_panel = QWidget()
+        secondary_row = QHBoxLayout(self._secondary_panel)
+        secondary_row.setContentsMargins(0, 0, 0, 0)
+        secondary_row.setSpacing(6)
+        for widget in secondary_widgets:
+            secondary_row.addWidget(widget)
+        row.addWidget(self._secondary_panel)
+        self._more_button = QToolButton()
+        self._more_button.setText("更多")
+        self._more_button.setObjectName("pdfMoreButton")
+        self._more_button.setMenu(self._build_overflow_menu())
+        self._more_button.hide()
+        row.addWidget(self._more_button)
         layout.addWidget(toolbar)
+        self._update_toolbar_mode()
+
+    def _build_overflow_menu(self) -> QMenu:
+        menu = QMenu(self)
+        reveal_label = "在 Finder 中显示" if sys.platform == "darwin" else "在文件夹中显示"
+        entries = (
+            ("上一页", self.prev_page_button),
+            ("下一页", self.next_page_button),
+            ("适合页面", self.fit_page_button),
+            ("导出 PDF", self.export_pdf_button),
+            (reveal_label, self.reveal_pdf_button),
+        )
+        for label, button in entries:
+            action = QAction(label, menu)
+            action.triggered.connect(button.clicked.emit)
+            menu.addAction(action)
+        return menu
+
+    def _update_toolbar_mode(self) -> None:
+        if not hasattr(self, "_toolbar"):
+            return
+        narrow = self._toolbar.width() < self._PDF_TOOLBAR_NARROW_WIDTH
+        self._secondary_panel.setVisible(not narrow)
+        self._more_button.setVisible(narrow)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._update_toolbar_mode()
 
     @staticmethod
     def _icon_button(icon_name: str, tooltip: str) -> QPushButton:
@@ -222,6 +273,9 @@ class PdfPanel(QWidget):
         set_dynamic_property(self.freshness_label, "severity", severity)
 
     def eventFilter(self, watched: QObject, event: Any) -> bool:
+        if watched is getattr(self, "_toolbar", None) and event.type() == QEvent.Type.Resize:
+            self._update_toolbar_mode()
+            return False
         if self._view is not None and watched == self._view.viewport() and event.type() == QEvent.Type.MouseButtonDblClick:
             mapped = self.pdf_position_for_viewport_point(event.position())
             if mapped is None:

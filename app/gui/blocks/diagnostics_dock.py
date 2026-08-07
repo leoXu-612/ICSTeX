@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 
 from app.core.blocks.source_map import block_at_line
 from app.gui.blocks.project_session import ProjectSession
+from PySide6.QtCore import Signal
 
 
 _ERROR_LINE_RE = re.compile(r"([^:\s]+\.tex):(\d+):")
@@ -21,6 +22,8 @@ _ERROR_LINE_RE = re.compile(r"([^:\s]+\.tex):(\d+):")
 
 class BlockDiagnostics(QWidget):
     """Shows compile state and lets the user jump to the offending Block."""
+
+    error_seen = Signal()
 
     def __init__(self, session: ProjectSession, parent=None) -> None:
         super().__init__(parent)
@@ -61,7 +64,10 @@ class BlockDiagnostics(QWidget):
             return
         combined = "\n".join(part for part in (getattr(result, "stdout", "") or "", getattr(result, "stderr", "") or "") if part)
         self.log_view.setPlainText(combined[-4000:])
-        self.locate_button.setEnabled(bool(self._error_line()))
+        has_error = self._error_line() is not None
+        self.locate_button.setEnabled(has_error)
+        if has_error:
+            self.error_seen.emit()
 
     def _error_line(self) -> int | None:
         result = self._last_result

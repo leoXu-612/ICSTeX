@@ -131,6 +131,7 @@ def _install_session(window, session: ProjectSession) -> None:
     diagnostics = BlockDiagnostics(session)
     window.block_diagnostics = diagnostics
     window.block_diagnostics_dock.setWidget(diagnostics)
+    diagnostics.error_seen.connect(lambda: window.block_diagnostics_dock.show())
 
     session.compile_finished.connect(lambda result: _on_block_compile_finished(window, result))
     session.undo_stack.indexChanged.connect(lambda _index: _sync_block_undo_actions(window))

@@ -87,6 +87,9 @@ def refresh_window_metrics(window: QWidget, metrics: UiMetrics) -> None:
         dock = window.findChild(QDockWidget, object_name)
         if dock is not None:
             dock.setMinimumWidth(minimum)
+    diagnostics = window.findChild(QDockWidget, "blockDiagnosticsDock")
+    if diagnostics is not None:
+        diagnostics.setMinimumHeight(round(120 * metrics.scale))
 
     for toolbar in window.findChildren(QToolBar):
         toolbar.setMinimumHeight(metrics.control_height)

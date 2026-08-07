@@ -2,7 +2,25 @@
 
 ## 未发布
 
-暂无。
+UI Scale 与响应式布局：
+
+- 新增统一 `UiMetrics`/`TypographyMetrics` 设计令牌与 `UiScaleManager`，视图 → UI Scale
+  提供 90/100/110/125/150% 五档，始终从基准字体计算（无累计漂移），并持久化到 AppSettings。
+- 欢迎页支持宽/中/窄三档响应式重排（操作按钮 4/2/1 列、卡片 2/1/1 列）并放入可滚动容器；
+  标签栏支持滚动按钮与标题省略；PDF 工具栏在窄宽度下把次要功能收进“更多”菜单。
+- PDF 内容 Zoom 与应用 UI Scale 完全隔离；Dock/Splitter/Diagnostics 使用统一度量并在
+  Scale 切换后重新约束；编译错误时 Diagnostics 自动展开。
+- 修复项目关闭后晚到编译结果向已删除会话发送信号的竞态。
+
+Block 模块与主控制台集成（上阶段未发布增量）：
+
+- 单一 `ProjectSession` 收敛 registry/layout/sources/主题/表格模型/唯一 CompileManager/
+  全局 QUndoStack/SelectionManager；旧 BlockProjectDialog 变为共享会话的轻量包装器。
+- 主控制台嵌入 Block 导航/属性/诊断三个 Dock 与中央 Block 工作区，共用同一 PDF 面板；
+  布局操作接入全局撤销栈；统一图片资产导入（复制不移动、拖拽建块/换图）。
+- 修复 Block 控制台打开已有项目崩溃（DocumentTheme/AppTheme 类型不匹配）。
+
+测试：新增 UI Scale / 响应式 / 主控制台集成测试，全套件 659 项通过（本地）。
 
 ## 0.2.7 - 2026-07-11
 

@@ -330,8 +330,8 @@ must link here instead of repeating old task details.
   `ICS-Project-/_backups/ICSTeX-pre-move-20260711-2326-CST.tar.gz`;
   gzip validation passed and SHA-256 is
   `5039ff2da338090089185b8ae1f2cd59aa6b3211638043ddb5ae45603a246253`.
-- Migrated the authoritative workspace to
-  `<HOME>/Desktop/Codex/ICS-Project-/ICSTeX`, preserving source,
+- Migrated the authoritative workspace to this repository root
+  (`ICS-Project-/ICSTeX`), preserving source,
   tests, documentation, release artifacts, and collaboration files.
 - Excluded rebuildable `build/`, Python bytecode, Finder metadata, and
   transient watcher/Claude lock files. The old root remains as a rollback copy.
@@ -541,3 +541,24 @@ must link here instead of repeating old task details.
   simulation green. Known: full-suite runtime rose to ~130s due to app-wide
   stylesheet rebuilds on scale change; production single-window switch is
   fast. Not pushed.
+
+## 2026-08-07 - UI Scale 收口与版本冻结准备（feature/ui-scale-responsive-layout）
+
+- Phase A: 测试基线口径澄清并写入报告——643（主控制台集成正式报告）→ 644（提交 527808f
+  新增 A6 布局撤销栈回归测试）→ 659（本轮新增 15 项 UI Scale/响应式测试）。
+- Phase B: 清理 docs/PROJECT_LOG/CHANGELOG 中所有本机绝对路径，改为相对链接或可移植表述；
+  grep 复查为空。
+- Phase C: `RealTeXTest/`（127MB 个人本地测试材料）按情况 A 写入 `.git/info/exclude`，
+  工作区 git 状态恢复干净。
+- Phase D: 生成 docs/assets/ui-scale/ 截图矩阵（90-wide/100-medium/125-narrow/150-wide/
+  pdf-more-menu）与 docs/ui-scale-visual-acceptance.md；多显示器未手测（仅内置 Retina），
+  已在文档如实标注。
+- Phase E: 性能治理——QSS 缓存、注册窗口 WeakSet、可见窗口重排、`ICSTEX_UI_SCALE_PROFILE=1`
+  探针；定位根因（应用级 setStyleSheet × ~100 残留窗口，~9.6s/次）；生产单窗口实测
+  72.5ms（目标 <300ms 达标）；套件耗时记为技术债（结果 B），见
+  docs/ui-scale-performance-report.md。
+- Phase F/G: screenChanged 未发现真实二次 DPR 问题，保持 Qt6 原生；Density 记为 P2 待
+  外观设置阶段提供 UI。
+- Phase H: 最终回归 compileall OK、全套件 659 tests OK、run_mvp_ci.sh 全绿、
+  Stable LaTeX 在 90% 与 150% 下输出字节一致。
+- Phase I/J: 报告补 15 问回答与基线说明；CHANGELOG 未发布段更新；收口提交；未推送。

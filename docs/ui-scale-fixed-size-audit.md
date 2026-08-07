@@ -1,7 +1,7 @@
 # UI Scale 与响应式布局 - 固定尺寸审计（Phase 1）
 
 > 分支：`feature/ui-scale-responsive-layout`（基线 `527808f`，644 tests OK）
-> 依据：`<HOME>/Downloads/ICSTeX_UI_Scale与响应式布局修复执行方案.md`
+> 依据：`ICSTeX_UI_Scale与响应式布局修复执行方案.md`（外部输入，未随仓库分发）
 
 ## 1. 固定几何 API 审计
 

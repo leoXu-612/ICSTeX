@@ -2,7 +2,7 @@
 
 > 分支：`feature/block-console-integration`（基于 `feature/modular-layout-mvp` 9ee1c22）
 > 基线：621 tests OK（2026-08-07 本地冻结）
-> 依据：`<HOME>/Downloads/ICSTeX_Block模块与主控制台集成执行方案.md`
+> 依据：`ICSTeX_Block模块与主控制台集成执行方案.md`（外部输入，未随仓库分发）
 
 ## 1. 现有组件图
 

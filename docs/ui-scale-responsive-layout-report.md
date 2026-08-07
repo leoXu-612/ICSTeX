@@ -2,7 +2,7 @@
 
 > 分支：`feature/ui-scale-responsive-layout`（基线 `527808f`，644 tests OK）
 > 完成后：**658 tests OK**（新增 15 项 UI Scale / 响应式测试）
-> 依据：`<HOME>/Downloads/ICSTeX_UI_Scale与响应式布局修复执行方案.md`
+> 依据：`ICSTeX_UI_Scale与响应式布局修复执行方案.md`（外部输入，未随仓库分发）
 
 ## 1. 根因结论
 
@@ -65,6 +65,40 @@
 2. 提供 density（紧凑/舒适）设置入口；
 3. 优化 QSS 重排作用域（per-window 样式缓存）以恢复测试耗时；
 4. 用 SVG 图标源替换低分辨率 PNG（当前图标为矢量生成，无拉伸风险）。
+
+## 9. 测试基线说明（Phase A）
+
+- 上一阶段主控制台集成正式报告记录为 **643 tests OK**；
+- 本分支（UI Scale）创建前的冻结基线为 **644 tests OK**；
+- 643 → 644 新增的一项：`tests/test_block_console_integration.py::MainWindowBlockIntegrationTests.test_layout_edits_enter_global_undo_stack`
+  —— 审计发现主控制台布局操作未接入全局撤销栈后，在提交 `527808f`
+  （`fix(blocks): route embedded layout edits through the global undo stack`）中新增的回归测试；
+- 644 → 659 新增的 15 项：`tests/test_ui_scale.py`（8 项）+ `tests/test_responsive_layout.py`（7 项），
+  见提交 `ee010e0`；
+- 关系：`643 + 1（A6 回归测试）= 644`，`644 + 15（UI Scale/响应式）= 659`。
+
+## 10. 收口问题清单（Phase I）
+
+1. 为什么此前按钮和字号会失真？——固定像素宽高与散落 QSS 字号不随字体增长（见 §1、审计表）。
+2. 哪些固定尺寸被移除？——欢迎页 Logo、PDF 页码框、工具箱 rail、panelHeader、engineSelector、
+   iconButton、QSS 字号/min-height（见 [固定尺寸审计](ui-scale-fixed-size-audit.md) §4）。
+3. UI Scale 如何从基准字体计算？——`UiScaleManager._base_point_size × scale`，见
+   [ui_scale_manager.py](../app/gui/theme/ui_scale_manager.py)。
+4. 如何证明没有累计漂移？——`test_font_scales_from_base_without_drift`（多档位往返后恢复基准值）。
+5. 响应式重排为什么不修改字号？——断点只做显示/隐藏/换行/溢出；无 setFont 调用。
+6. PDF Zoom 如何与 UI Scale 隔离？——zoom 只调 `QPdfView`；测试 `test_pdf_zoom_does_not_change_ui_scale_or_font`。
+7. Dock/Splitter 恢复如何适配 Scale？——Scale 变化后 `refresh_window_metrics` 重约束最小宽高 +
+   `clamp_splitter_sizes`；恢复后执行。
+8. 643/644/659 口径？——见 §9。
+9. 完整测试变慢的根因？——应用级 `setStyleSheet` 重排 × 测试残留 ~100 个窗口
+   （~9.6s/次，见 [性能报告](ui-scale-performance-report.md)）。
+10. 测试性能是否已优化？——部分（QSS 缓存/注册窗口/可见窗口重排）；生产单窗口 72.5ms 达标；
+    套件耗时记为技术债（结果 B）。
+11. 多显示器是否完成真实验证？——否（仅内置 Retina）；已做 Qt6 High DPI 静态审计与单屏验证。
+12. UI Scale 是否影响项目 Schema？——否（测试锁定）。
+13. UI Scale 是否影响 Stable LaTeX？——否（90% 与 150% 输出字节一致）。
+14. UI Scale 是否影响最终 PDF 样式？——否（DocumentTheme 不变，PDF 由主题驱动）。
+15. 当前已知限制？——见 §6 与视觉验收文档「未验证项」。
 
 ## 8. 修改文件清单
 

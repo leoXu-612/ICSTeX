@@ -22,7 +22,7 @@ LaTeX 编辑器。它应帮助学生可靠地创建、检查、编译和交付 I
 
 ## Current Source State
 
-- 权威工作区：`<HOME>/Desktop/Codex/ICS-Project-/ICSTeX`
+- 权威工作区：本仓库根目录
 - 版本元数据：`0.2.7`
 - 技术栈：Python 3.11+、PySide6、本机 LaTeX distribution、PyInstaller
 - 当前源码包含已验证的 post-0.2.7 UI、PDF 状态、字体与快速预览改进。

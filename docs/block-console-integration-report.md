@@ -2,7 +2,7 @@
 
 > 分支：`feature/block-console-integration`
 > 基线：621 tests OK（Phase 0 冻结）→ 643 tests OK（集成完成）
-> 依据：`<HOME>/Downloads/ICSTeX_Block模块与主控制台集成执行方案.md`
+> 依据：`ICSTeX_Block模块与主控制台集成执行方案.md`（外部输入，未随仓库分发）
 
 ## 1. 根因与现状分析
 

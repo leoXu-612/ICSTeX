@@ -30,6 +30,7 @@ from app.gui.blocks.merge_dialog import MergeDialog
 from app.gui.blocks.project_session import ProjectSession
 from app.gui.blocks.table_editor import TableEditor
 from app.gui.blocks.theme_settings import ThemeSettings
+from app.gui.responsive.helpers import configure_tab_bar
 
 
 class BlockWorkspaceWidget(QWidget):
@@ -63,6 +64,7 @@ class BlockWorkspaceWidget(QWidget):
         tabs.addTab(self._build_sync_tab(), "同步")
         tabs.addTab(self.theme_settings, "主题")
         tabs.addTab(self._build_export_tab(), "导出")
+        configure_tab_bar(tabs)
         self.tabs = tabs
 
         self.preview_label = QLabel("尚未生成 PDF")

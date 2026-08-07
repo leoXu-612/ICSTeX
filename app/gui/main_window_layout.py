@@ -46,6 +46,7 @@ from app.gui.project_panels import (
     ProjectSearchPanel,
     ReferencesPanel,
 )
+from app.gui.responsive.helpers import configure_tab_bar
 from app.gui.theme import log_font
 from app.gui.toolbox_navigation import ToolboxNavigation
 from app.gui.welcome_page import WelcomePage
@@ -164,6 +165,7 @@ def _install_source_pane(window: "MainWindow") -> None:
     window.editor_tabs.setObjectName("sourceTabs")
     window.editor_tabs.setTabsClosable(True)
     window.editor_tabs.setDocumentMode(True)
+    configure_tab_bar(window.editor_tabs)
 
     window.find_replace_bar = FindReplaceBar()
     window.welcome_page = WelcomePage()
@@ -249,6 +251,7 @@ def _install_word_count_panel(window: "MainWindow") -> None:
 def _install_bottom_tabs(window: "MainWindow") -> None:
     tabs = QTabWidget()
     tabs.setObjectName("bottomTabs")
+    configure_tab_bar(tabs)
     tabs.addTab(window.log_view, "日志")
     tabs.addTab(window.error_table, "错误")
     tabs.addTab(window.word_count_panel, "字数")

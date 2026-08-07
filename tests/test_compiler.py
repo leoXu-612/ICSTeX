@@ -7,7 +7,7 @@ import threading
 from tempfile import TemporaryDirectory
 from pathlib import Path
 import time
-from unittest import TestCase
+from unittest import TestCase, skipIf
 from unittest.mock import patch
 
 from app.core.compiler import (
@@ -533,3 +533,50 @@ class CompileOutcomeTests(TestCase):
         # Normal compiles stay unbounded; timeout is an explicit opt-in only.
         signature = inspect.signature(CompileManager.compile_now)
         self.assertIsNone(signature.parameters["timeout_seconds"].default)
+
+    @skipIf(os.name == "nt", "process groups differ on Windows")
+    def test_timeout_kills_entire_process_tree(self) -> None:
+        # A real driver (like latexmk) spawns an engine child that inherits the
+        # stdout/stderr pipes. Killing only the driver would leave the engine
+        # holding the pipe open, so the post-timeout communicate() could block
+        # forever (the observed 28-minute macOS CI hang). The timeout must
+        # terminate the whole process tree.
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            tex = root / "main.tex"
+            tex.write_text("\\documentclass{article}", encoding="utf-8")
+            driver = root / "fake-driver.py"
+            driver.write_text(
+                "#!/usr/bin/env python3\n"
+                "import subprocess, sys\n"
+                "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])\n"
+                "open('grandchild.pid', 'w').write(str(child.pid))\n"
+                "child.wait()\n",
+                encoding="utf-8",
+            )
+            driver.chmod(0o755)
+            manager = CompileManager(
+                tex,
+                toolchain=LaTeXToolchain(
+                    latexmk=str(driver),
+                    pdflatex=None,
+                    texcount=None,
+                    synctex=None,
+                ),
+            )
+
+            result = manager.compile_now(timeout_seconds=1.0)
+
+            self.assertIsNotNone(result)
+            assert result is not None
+            self.assertEqual(result.outcome, CompileOutcome.TIMEOUT)
+            grandchild_pid = int((root / "grandchild.pid").read_text(encoding="utf-8").strip())
+            dead = False
+            for _ in range(30):
+                try:
+                    os.kill(grandchild_pid, 0)
+                except ProcessLookupError:
+                    dead = True
+                    break
+                time.sleep(0.1)
+            self.assertTrue(dead, "engine child survived the compile timeout")

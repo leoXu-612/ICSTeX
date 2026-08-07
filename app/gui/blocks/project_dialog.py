@@ -36,6 +36,11 @@ from app.gui.blocks.table_editor import TableEditor
 from app.gui.blocks.theme_settings import ThemeSettings
 
 
+# Bound the synchronous preview compile so a hung TeX run cannot block the
+# dialog (or the test suite) forever; the CompileManager reports TIMEOUT.
+_PREVIEW_COMPILE_TIMEOUT_SECONDS = 300
+
+
 class BlockProjectDialog(QDialog):
     def __init__(
         self,
@@ -188,7 +193,10 @@ class BlockProjectDialog(QDialog):
                 toolchain=detect_toolchain(),
                 engine=LaTeXEngine.XELATEX,
             )
-        return self._preview_manager.compile_now(BuildPurpose.FINAL)
+        return self._preview_manager.compile_now(
+            BuildPurpose.FINAL,
+            timeout_seconds=_PREVIEW_COMPILE_TIMEOUT_SECONDS,
+        )
 
     def _sync_table_to_registry(self) -> None:
         table_block = next((block for block in self.registry.blocks() if block.type == "table"), None)

@@ -59,7 +59,7 @@ Block、Layout、Project、AppTheme、DocumentTheme、Source 六个 Schema 均�
 ```bash
 python3 -m compileall -q app tests packaging/install_build_dependencies.py
 QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests
-# 619 tests passed（本机，2026-08-07 复跑；含 golden、编译、安全、确定性、GUI）
+# 620 tests passed（本机，2026-08-07 复跑；含 golden、编译、安全、确定性、GUI）
 ```
 
 本地 CI 模拟 `tools/run_mvp_ci.sh` 完整通过（compileall → ubuntu 子集 →
@@ -71,9 +71,13 @@ QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests
   macOS 全套件 + Demo + artifacts 上传）。
 - ubuntu 任务在实跑中已绿（22s）。
 - macOS 任务：TeX 安装已修复（`longtable/tabularx` 属 tools collection，
-  已从 tlmgr 清单移除）并安装成功；“全套件”步骤曾在 runner 上挂起 40 分钟
-  被取消。已提交加固：job 级 `timeout-minutes: 30`、`-v` 输出、真实编译调用
-  `timeout_seconds=300`。**恢复额度并推送后**即可定位并完成 macOS 任务。
+  已从 tlmgr 清单移除）并安装成功。挂起根因已从超时运行日志定位：
+  `BlockProjectDialog._build_pdf_sync` 的预览编译无超时，且超时/停止只终止
+  直接子进程（latexmk），xelatex 引擎子进程残留并持有管道，导致后续
+  `communicate()` 永久阻塞（表现为静默 28 分钟至 job 超时、清理时残留
+  xetex 孤儿进程）。已修复：编译进程以独立进程组启动，超时/停止整组终止
+  （POSIX `killpg`，Windows `taskkill /T /F`）；预览编译加 300 秒超时；
+  新增进程树终止回归测试。**恢复额度并推送后**按 `-v`/TIMEOUT 日志复核。
 - 分支 `feature/modular-layout-mvp` 已推送过并建立 Draft PR #1；当前按维护者
   指示暂停推送（Actions 额度耗尽）。
 
@@ -89,14 +93,18 @@ data/snapshots/results.xlsx、output/demo.pdf（2×2 田字格：实验装置图
 
 - Grid 等宽（45:55 通过 Row 权重实现）；垂直合并已支持（multirow）。
 - `.sty` 未覆盖 titlesec 权重样式细节；两栏切换交由 documentclass。
-- 超时终止直接子进程；进程组强杀未做。
+- 超时/停止已按进程组终止整个编译树（含 latexmk 派生的引擎子进程）；
+  Windows 路径依赖 `taskkill /T /F`，未做 POSIX 信号模拟。
 - 像素级拖拽画布未实现（列表多选 + 槽位拖拽重排已满足清单验收点）。
 - PDF.js 不适用（Python 栈沿用 Qt pdf_panel）；Electron 安全边界不适用。
-- GitHub Actions macOS 全套件挂起根因待额度恢复后凭 `-v`/TIMEOUT 日志定位。
+- GitHub Actions 实跑唯一剩余障碍是账户计费/支出上限
+  （“recent account payments have failed or your spending limit needs to be
+  increased”），需在 GitHub Billing 设置处理；恢复后重推即可复核 CI。
 
 ## 8. 后续建议
 
-1. 恢复 Actions 额度后重推分支，按 `-v`/TIMEOUT 日志修复 macOS 套件挂点至绿。
+1. 修复 GitHub 账户计费/支出上限后重推分支，按 `-v`/TIMEOUT 日志复核 macOS
+   套件（进程树终止 + 预览编译超时已提交，预期不再静默挂起）。
 2. 合并 `modular-layout.yml` 到 main 使其正式注册。
 3. 完成最终门禁宣告（P0 全部完成、无数据丢失、导出无敏感路径、Demo 空环境
    可编译、同输入稳定 LaTeX、公式编辑器无回归——均已满足，待 CI 绿收尾）。

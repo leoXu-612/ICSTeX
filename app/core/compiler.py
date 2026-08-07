@@ -4,7 +4,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from itertools import count
 import logging
+import os
 from pathlib import Path
+import signal
 import subprocess
 import threading
 import time
@@ -308,18 +310,7 @@ class CompileManager:
             self._stop_requested = True
             process = self._process
         if process is not None and process.poll() is None:
-            try:
-                process.terminate()
-            except OSError:
-                pass
-            remaining = max(0.0, deadline - time.monotonic())
-            try:
-                process.wait(timeout=remaining)
-            except subprocess.TimeoutExpired:
-                try:
-                    process.kill()
-                except OSError:
-                    pass
+            self._terminate_process(process)
         return self.wait_until_idle(max(0.0, deadline - time.monotonic()))
 
     def wait_until_idle(self, timeout: float = 1.5) -> bool:
@@ -390,16 +381,25 @@ class CompileManager:
         self._log("运行命令：" + " ".join(command))
         timed_out = False
         try:
-            process = subprocess.Popen(
-                command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                cwd=self.root_file.parent,
-                env=latex_subprocess_env(texinputs_prefix=preparation.overlay_dir),
-            )
+            popen_kwargs: dict[str, object] = {
+                "stdout": subprocess.PIPE,
+                "stderr": subprocess.PIPE,
+                "text": True,
+                "encoding": "utf-8",
+                "errors": "replace",
+                "cwd": self.root_file.parent,
+                "env": latex_subprocess_env(texinputs_prefix=preparation.overlay_dir),
+            }
+            if os.name == "nt":
+                # A new process group lets stop/timeout kill latexmk and the
+                # engine children it spawns (taskkill /T targets the tree).
+                popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+            else:
+                # Session leader: os.killpg(pid, SIGTERM/SIGKILL) covers the
+                # whole driver+engine tree so engine children cannot survive
+                # and hold the stdout/stderr pipes open after a timeout.
+                popen_kwargs["start_new_session"] = True
+            process = subprocess.Popen(command, **popen_kwargs)
             with self._lock:
                 self._process = process
                 stop_requested = self._stop_requested or self._retired
@@ -480,13 +480,58 @@ class CompileManager:
 
     @staticmethod
     def _terminate_process(process: subprocess.Popen[str]) -> None:
-        try:
-            process.terminate()
-        except OSError:
-            pass
+        """Terminate the whole compile tree, not just the direct child.
+
+        latexmk drives engine children (xelatex/pdflatex) that inherit the
+        stdout/stderr pipes. Killing only the driver leaves the engine holding
+        the pipe write ends open, so a subsequent communicate() can block
+        forever waiting for EOF.
+        """
+        process_pid = getattr(process, "pid", None)
+        group_kill = process_pid is not None and os.name != "nt"
+        windows_tree_kill = process_pid is not None and os.name == "nt"
+        if group_kill:
+            try:
+                os.killpg(os.getpgid(process_pid), signal.SIGTERM)
+            except OSError:
+                group_kill = False
+        if windows_tree_kill:
+            try:
+                subprocess.run(
+                    ["taskkill", "/pid", str(process_pid), "/T", "/F"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                )
+            except OSError:
+                windows_tree_kill = False
+        if not group_kill and not windows_tree_kill:
+            try:
+                process.terminate()
+            except OSError:
+                pass
         try:
             process.wait(timeout=1.0)
         except subprocess.TimeoutExpired:
+            if group_kill:
+                try:
+                    os.killpg(os.getpgid(process_pid), signal.SIGKILL)
+                    return
+                except OSError:
+                    pass
+            if windows_tree_kill:
+                try:
+                    subprocess.run(
+                        ["taskkill", "/pid", str(process_pid), "/T", "/F"],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        check=False,
+                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                    )
+                    return
+                except OSError:
+                    pass
             try:
                 process.kill()
             except OSError:

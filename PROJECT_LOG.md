@@ -475,3 +475,20 @@ must link here instead of repeating old task details.
   (22s); macOS full-suite hardening (job timeout, `-v`, `timeout_seconds=300`)
   is committed. Push is paused per maintainer instruction until Actions quota
   is restored.
+
+## 2026-08-07 - macOS CI Hang Root Cause and Compile Tree-Kill Fix
+
+- Diagnosed the macOS runner hang from the timeout-cancelled run logs: the
+  suite stopped right after `test_blocks_gui`'s formula test and stayed silent
+  for 28 minutes; job cleanup found orphan `xetex` + `Python` processes.
+- Root cause: `BlockProjectDialog._build_pdf_sync` compiled without a timeout,
+  and timeout/stop termination killed only the direct child (latexmk), leaving
+  the xelatex engine child holding the stdout/stderr pipes so the subsequent
+  `communicate()` blocked forever.
+- Fix: compile processes now start in their own process group/session and are
+  terminated as a tree (POSIX `killpg` SIGTERM→SIGKILL; Windows
+  `taskkill /T /F`); the dialog preview compile gained a 300 s timeout.
+- Added regression test `test_timeout_kills_entire_process_tree` (verifies the
+  engine grandchild dies on timeout). Full suite: 620 tests OK locally.
+- GitHub billing/spending-limit remains the only gate for the remote run;
+  push stays paused per maintainer instruction.

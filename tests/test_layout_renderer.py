@@ -169,7 +169,7 @@ class MixedGridCompileTests(TestCase):
                 encoding="utf-8",
             )
             manager = CompileManager(main, toolchain=TOOLCHAIN, engine=LaTeXEngine.XELATEX)
-            result = manager.compile_now(BuildPurpose.FINAL)
+            result = manager.compile_now(BuildPurpose.FINAL, timeout_seconds=300)
 
             self.assertIsNotNone(result)
             assert result is not None

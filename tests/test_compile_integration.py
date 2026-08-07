@@ -25,7 +25,7 @@ class CompileIntegrationTests(TestCase):
             )
             manager = CompileManager(tex, toolchain=TOOLCHAIN)
 
-            result = manager.compile_now()
+            result = manager.compile_now(timeout_seconds=300)
 
             self.assertIsNotNone(result)
             assert result is not None
@@ -47,7 +47,7 @@ class CompileIntegrationTests(TestCase):
             )
             manager = CompileManager(tex, toolchain=TOOLCHAIN)
 
-            result = manager.compile_now()
+            result = manager.compile_now(timeout_seconds=300)
 
             self.assertIsNotNone(result)
             assert result is not None

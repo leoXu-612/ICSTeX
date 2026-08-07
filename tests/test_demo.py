@@ -47,6 +47,6 @@ class DemoBuildTests(TestCase):
                 exported / "main.tex",
                 toolchain=TOOLCHAIN,
                 engine=LaTeXEngine.XELATEX,
-            ).compile_now(BuildPurpose.FINAL)
+            ).compile_now(BuildPurpose.FINAL, timeout_seconds=300)
             self.assertTrue(result.ok, result.combined_output)
             self.assertTrue(result.pdf_file.exists())

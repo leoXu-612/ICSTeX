@@ -217,7 +217,9 @@ def build_demo(project_dir: Path) -> DemoResult:
     output = project / "output"
     output.mkdir(exist_ok=True)
     toolchain = detect_toolchain()
-    result = CompileManager(main, toolchain=toolchain, engine=LaTeXEngine.XELATEX).compile_now(BuildPurpose.FINAL)
+    result = CompileManager(main, toolchain=toolchain, engine=LaTeXEngine.XELATEX).compile_now(
+        BuildPurpose.FINAL, timeout_seconds=300
+    )
     if result is None or not result.ok or result.pdf_file is None:
         raise RuntimeError("Demo 编译失败：" + (result.combined_output if result else "无结果"))
     pdf = output / "demo.pdf"

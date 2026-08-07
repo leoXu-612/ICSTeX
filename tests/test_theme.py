@@ -147,6 +147,6 @@ class DocumentThemeCompileTests(TestCase):
                 encoding="utf-8",
             )
             result = CompileManager(main, toolchain=TOOLCHAIN, engine=LaTeXEngine.XELATEX).compile_now(
-                BuildPurpose.FINAL
+                BuildPurpose.FINAL, timeout_seconds=300
             )
             self.assertTrue(result.ok, result.combined_output)

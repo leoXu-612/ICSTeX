@@ -57,8 +57,8 @@ class PreviewCompileIntegrationTests(TestCase):
                 toolchain=TOOLCHAIN,
                 preview_preparer=prepare,
             )
-            preview = manager.compile_now(BuildPurpose.PREVIEW)
-            final = manager.compile_now(BuildPurpose.FINAL)
+            preview = manager.compile_now(BuildPurpose.PREVIEW, timeout_seconds=300)
+            final = manager.compile_now(BuildPurpose.FINAL, timeout_seconds=300)
 
             assert preview is not None and final is not None
             self.assertTrue(preview.ok, preview.combined_output)
@@ -123,8 +123,8 @@ class PreviewCompileIntegrationTests(TestCase):
                 )
 
             manager = CompileManager(root, toolchain=TOOLCHAIN, preview_preparer=prepare)
-            preview = manager.compile_now(BuildPurpose.PREVIEW)
-            final = manager.compile_now(BuildPurpose.FINAL)
+            preview = manager.compile_now(BuildPurpose.PREVIEW, timeout_seconds=300)
+            final = manager.compile_now(BuildPurpose.FINAL, timeout_seconds=300)
 
             assert preview is not None and final is not None
             self.assertTrue(preview.ok, preview.combined_output)

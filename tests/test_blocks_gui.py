@@ -18,7 +18,8 @@ from app.core.blocks.model import Semantic, content_for_text
 from app.core.blocks.registry import BlockRegistry, CreateBlockInput
 from app.core.blocks.source_merge import CellChange, MergeResult
 from app.core.blocks.table_model import Cell, ColumnSpec, TableData, TableEditorModel, TableRow
-from app.core.blocks.theme import AppTheme
+from app.core.blocks.theme import AppTheme, DocumentTheme
+from app.core.blocks.project_io import load_block_project
 from app.core.formula_input import FinalTextEditPlan
 from app.core.compiler import BuildPurpose, CompileManager
 from app.core.latex_tools import LaTeXEngine, detect_toolchain
@@ -325,4 +326,44 @@ class BlockProjectDialogTests(TestCase):
             self.assertIn("\\begin{document}", (project / "main.tex").read_text(encoding="utf-8"))
             synced = registry.get(table_block.id).content
             self.assertEqual(synced["rows"][0]["cells"]["c1"]["value"], 30)
+            dialog.close()
+
+    def test_dialog_opens_with_loaded_document_theme(self) -> None:
+        # load_block_project() supplies a DocumentTheme; passing the load
+        # result straight into the dialog must not crash the AppTheme-only
+        # ThemeSettings tab, and the preview PDF must honor the loaded theme.
+        with TemporaryDirectory() as directory:
+            project = Path(directory) / "proj"
+            (project / "assets" / "images").mkdir(parents=True)
+            registry = BlockRegistry()
+            block = registry.create(
+                CreateBlockInput(
+                    type="text",
+                    alias="txt",
+                    semantic=Semantic(role="text"),
+                    content=content_for_text("验收文本"),
+                )
+            )
+            layout = LayoutNode(id="lyt_row", kind="row", children=(block_slot(block.id),))
+            loaded_document_theme = DocumentTheme(
+                id="doc_loaded",
+                name="Loaded",
+                page={"size": "letter", "orientation": "portrait", "columns": 1, "margin": {"leftMm": 30, "rightMm": 25, "topMm": 25, "bottomMm": 25}},
+                typography={"textFamily": "", "mathFamily": "", "monoFamily": "", "baseSizePt": 11, "lineSpacing": 1.15},
+                tables={"preset": "booktabs"},
+                layout={"blockGapPt": 10},
+            )
+            dialog = BlockProjectDialog(
+                registry,
+                layout=layout,
+                theme=loaded_document_theme,
+                document_theme=loaded_document_theme,
+                project_dir=project,
+            )
+            self.assertIs(dialog.document_theme, loaded_document_theme)
+            self.assertEqual(dialog.findChild(QTabWidget).count(), 6)
+            result = dialog._build_pdf_sync()
+            self.assertTrue(result.ok, getattr(result, "combined_output", ""))
+            sty = (project / "styles" / "icstex-generated.sty").read_text(encoding="utf-8")
+            self.assertIn("letterpaper", sty)
             dialog.close()

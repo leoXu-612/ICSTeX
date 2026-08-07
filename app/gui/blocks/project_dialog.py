@@ -50,6 +50,7 @@ class BlockProjectDialog(QDialog):
         table_model: TableEditorModel | None = None,
         merge_result: MergeResult | None = None,
         theme: AppTheme | None = None,
+        document_theme: DocumentTheme | None = None,
         project_dir: Path | None = None,
         parent=None,
     ) -> None:
@@ -59,7 +60,10 @@ class BlockProjectDialog(QDialog):
         self.registry = registry
         self.project_dir = project_dir
         self.merge_result = merge_result
-        self.theme_settings = ThemeSettings(theme)
+        self.document_theme = document_theme
+        # The settings tab edits an AppTheme; a project load supplies a
+        # DocumentTheme, which must never reach AppTheme-only code.
+        self.theme_settings = ThemeSettings(theme if isinstance(theme, AppTheme) else None)
         self.layout_panel = BlockLayoutPanel(registry, layout)
         self.table_editor = TableEditor(table_model or TableEditorModel(TableData()))
 
@@ -163,11 +167,12 @@ class BlockProjectDialog(QDialog):
         layout = self.layout_panel.layout
         body = render_layout(solve_layout(layout, 426.0), block_latex) if layout is not None else ""
         packages = sorted(
-            {package for block in self.registry.blocks() for package in required_packages_for_block(block, in_box=True)}
+            {"graphicx"}
+            | {package for block in self.registry.blocks() for package in required_packages_for_block(block, in_box=True)}
         )
         styles = project / "styles"
         styles.mkdir(parents=True, exist_ok=True)
-        document_theme = DocumentTheme(
+        document_theme = self.document_theme or DocumentTheme(
             id="doc_preview",
             name="Preview",
             page={"size": "a4", "orientation": "portrait", "columns": 1, "margin": {"leftMm": 30, "rightMm": 25, "topMm": 25, "bottomMm": 25}},

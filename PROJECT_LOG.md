@@ -492,3 +492,20 @@ must link here instead of repeating old task details.
   engine grandchild dies on timeout). Full suite: 620 tests OK locally.
 - GitHub billing/spending-limit remains the only gate for the remote run;
   push stays paused per maintainer instruction.
+
+## 2026-08-07 - Block Console Acceptance Blocker Fix (DocumentTheme/AppTheme)
+
+- Acceptance found the "Block 项目（MVP）" console silently failed to open any
+  existing project: `load_block_project()` returns a `DocumentTheme`, which was
+  passed straight into the AppTheme-only `ThemeSettings`, raising
+  `AttributeError: 'DocumentTheme' object has no attribute 'tokens'` during
+  dialog construction (the console never appeared; unit tests never passed a
+  theme, so they missed it).
+- Fix: `BlockProjectDialog` now accepts a separate `document_theme` (loaded
+  document theme) and defensively falls back to a default `AppTheme` for the
+  settings tab when a non-AppTheme is passed as `theme`; the preview build now
+  honors the loaded document theme instead of a hardcoded one; the preview
+  preamble always loads `graphicx` so empty/text-only projects compile.
+- Added regression test `test_dialog_opens_with_loaded_document_theme`
+  (dialog opens with a loaded DocumentTheme, six tabs, preview PDF honors the
+  loaded theme). Full suite: 621 tests OK locally.

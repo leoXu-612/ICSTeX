@@ -302,7 +302,7 @@ class MainWindow(QMainWindow):
         BlockProjectDialog(
             project["registry"],
             layout=project["layout"],
-            theme=project["theme"],
+            document_theme=project["document_theme"],
             project_dir=project["project_dir"],
         ).exec()
 

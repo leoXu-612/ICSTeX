@@ -37,4 +37,10 @@ def load_block_project(project_dir: Path) -> dict:
                 theme = loaded
         except (OSError, ValueError, KeyError):
             pass
-    return {"registry": registry, "layout": layout, "theme": theme, "project_dir": project}
+    return {
+        "registry": registry,
+        "layout": layout,
+        "theme": theme,
+        "document_theme": theme,
+        "project_dir": project,
+    }

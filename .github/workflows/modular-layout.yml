@@ -36,7 +36,9 @@ jobs:
           brew install --cask basictex
           export PATH="/Library/TeX/texbin:$PATH"
           sudo tlmgr update --self
-          sudo tlmgr install ctex xecjk cjk booktabs siunitx caption tabularx longtable multirow geometry fontspec graphics xcolor tools
+          # longtable/tabularx belong to the tools collection (already
+          # installed by basictex); installing them by name makes tlmgr abort.
+          sudo tlmgr install ctex xecjk cjk siunitx multirow
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip

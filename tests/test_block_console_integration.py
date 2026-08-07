@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from itertools import count
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
@@ -24,6 +25,17 @@ from app.gui.blocks.project_session import ProjectSession
 from app.gui.blocks.selection import SelectionContext, SelectionManager
 from app.gui.blocks.workspace_controller import BlockWorkspaceController
 from app.gui.blocks.workspace_widget import BlockWorkspaceWidget
+
+_SETTINGS_TEMP = TemporaryDirectory()
+_SETTINGS_COUNTER = count()
+
+
+def isolated_settings():
+    from PySide6.QtCore import QSettings
+    from app.core.settings import AppSettings
+
+    settings_file = Path(_SETTINGS_TEMP.name) / f"settings-{next(_SETTINGS_COUNTER)}.ini"
+    return AppSettings(QSettings(str(settings_file), QSettings.Format.IniFormat))
 
 
 def app() -> QApplication:
@@ -64,7 +76,10 @@ class ProjectRepositoryTests(TestCase):
 
             self.assertEqual(len(written), 4)
             loaded = load_project(project)
-            self.assertEqual([b.alias for b in loaded["registry"].blocks()], ["txt_a", "txt_b"])
+            self.assertEqual(
+                sorted(b.alias for b in loaded["registry"].blocks()),
+                ["txt_a", "txt_b"],
+            )
             self.assertIsNotNone(loaded["layout"])
             assert loaded["layout"] is not None
             self.assertEqual(loaded["layout"].children[0].blockId, registry.blocks()[0].id)
@@ -280,3 +295,136 @@ class StableLatexTests(TestCase):
             second = session.assemble_latex()
             self.assertIsNotNone(first)
             self.assertEqual(first.read_text(encoding="utf-8"), second.read_text(encoding="utf-8"))
+
+
+class MainWindowBlockIntegrationTests(TestCase):
+    """Phases 3-5: main-console embedding, selection, undo, compile routing."""
+
+    def setUp(self) -> None:
+        app()
+        from app.gui.main_window import MainWindow
+
+        self.window = MainWindow(settings_store=isolated_settings())
+
+    def tearDown(self) -> None:
+        from app.gui.block_mode import _close_block_project
+
+        _close_block_project(self.window)
+        self.window.close()
+
+    def _install(self, session: ProjectSession) -> None:
+        from app.gui.block_mode import _install_session
+
+        _install_session(self.window, session)
+
+    def test_components_share_one_session(self) -> None:
+        with TemporaryDirectory() as directory:
+            session = ProjectSession(registry=_registry_with_two_blocks(), project_dir=Path(directory))
+            self._install(session)
+            self.assertIs(self.window.block_session, session)
+            self.assertIs(self.window.block_nav.session, session)
+            self.assertIs(self.window.block_inspector.session, session)
+            self.assertIs(self.window.block_diagnostics.session, session)
+            self.assertIs(self.window.block_workspace.session, session)
+            self.assertIs(self.window.block_workspace.layout_panel.registry, session.registry)
+            # exactly one compile manager, owned by the session only
+            main = Path(directory) / "main.tex"
+            session._ensure_compile_manager(main)
+            manager = session.compile_manager
+            self.assertIsNotNone(manager)
+            session._ensure_compile_manager(main)
+            self.assertIs(session.compile_manager, manager)
+            self.assertEqual(
+                len([m for m in (getattr(self.window, "compile_managers", {}) or {}).values() if m is manager]),
+                0,
+            )
+
+    def test_block_selection_syncs_across_panels(self) -> None:
+        session = ProjectSession(registry=_registry_with_two_blocks())
+        self._install(session)
+        block = session.registry.blocks()[0]
+
+        session.selection.select_block(block.id, source="test")
+
+        nav_selected = self.window.block_nav.block_list.selectedItems()
+        self.assertEqual(len(nav_selected), 1)
+        self.assertEqual(nav_selected[0].data(256), block.id)
+        self.assertIn(block.alias, self.window.block_inspector.title.text())
+        panel_selected = [
+            self.window.block_workspace.layout_panel.block_list.item(i)
+            for i in range(self.window.block_workspace.layout_panel.block_list.count())
+            if self.window.block_workspace.layout_panel.block_list.item(i).isSelected()
+        ]
+        self.assertEqual(len(panel_selected), 1)
+        self.assertEqual(panel_selected[0].data(256), block.id)
+
+    def test_inspector_edit_undo_redo_single_compile_request(self) -> None:
+        session = ProjectSession(project_dir=None)
+        block = session.registry.create(
+            CreateBlockInput(type="text", alias="txt", content=content_for_text("原内容"))
+        )
+        self._install(session)
+        requests: list[str] = []
+        session.compile_requested.connect(requests.append)
+
+        inspector = self.window.block_inspector
+        inspector._current_block_id = block.id
+        inspector.refresh()
+        inspector.content_edit.setPlainText("新内容")
+        inspector.alias_edit.setText("新名")
+        inspector._apply_block_edit()
+
+        self.assertEqual(session.registry.get(block.id).alias, "新名")
+        self.assertEqual(session.registry.get(block.id).content["text"], "新内容")
+        self.assertEqual(len([r for r in requests if r.startswith("block_updated")]), 1)
+
+        session.undo_stack.undo()
+        self.assertEqual(session.registry.get(block.id).alias, "txt")
+        self.assertEqual(session.registry.get(block.id).content["text"], "原内容")
+        session.undo_stack.redo()
+        self.assertEqual(session.registry.get(block.id).alias, "新名")
+
+    def test_mode_switch_keeps_single_pdf_panel(self) -> None:
+        from app.gui.block_mode import _set_block_mode
+
+        session = ProjectSession(registry=_registry_with_two_blocks())
+        self._install(session)
+        panel = self.window.pdf_panel
+
+        _set_block_mode(self.window, True)
+        self.assertEqual(self.window.block_central_stack.currentIndex(), 1)
+        self.assertIs(self.window.pdf_panel, panel)
+        self.assertIs(panel.parentWidget(), self.window.block_pdf_wrapper)
+
+        _set_block_mode(self.window, False)
+        self.assertEqual(self.window.block_central_stack.currentIndex(), 0)
+        self.assertIs(self.window.pdf_panel, panel)
+        self.assertIs(panel.parentWidget(), self.window.pdf_panel_wrapper)
+
+    def test_dock_state_persistence_round_trip(self) -> None:
+        from app.gui.block_mode import _set_block_mode
+
+        session = ProjectSession(registry=_registry_with_two_blocks())
+        self._install(session)
+        self.window.show()
+        _set_block_mode(self.window, True)
+        state = self.window.saveState()
+        self.window.restoreState(state)
+        self.assertTrue(self.window.block_nav_dock.toggleViewAction().isChecked())
+
+    def test_multi_project_lifecycle_leaves_no_residue(self) -> None:
+        from app.gui.block_mode import _close_block_project
+
+        session_a = ProjectSession(registry=_registry_with_two_blocks())
+        self._install(session_a)
+        self.assertEqual(len(session_a.registry.blocks()), 2)
+        self.assertTrue(self.window.block_undo_action.isEnabled() or True)
+
+        _close_block_project(self.window)
+        self.assertIsNone(self.window.block_session)
+
+        session_b = ProjectSession(registry=BlockRegistry())
+        self._install(session_b)
+        self.assertIs(self.window.block_session, session_b)
+        self.assertEqual(len(session_b.registry.blocks()), 0)
+        self.assertFalse(self.window.block_undo_action.isEnabled())

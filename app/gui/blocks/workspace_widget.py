@@ -43,6 +43,7 @@ class BlockWorkspaceWidget(QWidget):
         super().__init__(parent)
         self.session = session
         self.merge_result = merge_result
+        self._selection_syncing = False
 
         self.layout_panel = BlockLayoutPanel(session.registry, session.layout)
         self.layout_panel.layoutChanged.connect(self._on_layout_changed)
@@ -62,6 +63,7 @@ class BlockWorkspaceWidget(QWidget):
         tabs.addTab(self._build_sync_tab(), "同步")
         tabs.addTab(self.theme_settings, "主题")
         tabs.addTab(self._build_export_tab(), "导出")
+        self.tabs = tabs
 
         self.preview_label = QLabel("尚未生成 PDF")
         self.preview_button = QPushButton("生成并编译 PDF")
@@ -76,6 +78,7 @@ class BlockWorkspaceWidget(QWidget):
 
         session.compile_finished.connect(self._on_compile_finished)
         session.model_changed.connect(lambda _reason: self.layout_panel.refresh_block_list())
+        session.selection.selection_changed.connect(self._on_session_selection)
 
     # --- signal sources --------------------------------------------------
     def _on_layout_changed(self) -> None:
@@ -100,6 +103,19 @@ class BlockWorkspaceWidget(QWidget):
     def _on_table_changed(self) -> None:
         self.session.table_edited()
         self.session.notify_model_changed("table_updated")
+
+    def _on_session_selection(self, context, source: str) -> None:
+        if source == "workspace" or self._selection_syncing:
+            return
+        if context.block_id is None:
+            return
+        self._selection_syncing = True
+        try:
+            for index in range(self.layout_panel.block_list.count()):
+                item = self.layout_panel.block_list.item(index)
+                item.setSelected(item.data(256) == context.block_id)
+        finally:
+            self._selection_syncing = False
 
     def _on_compile_finished(self, result: object) -> None:
         pdf = getattr(result, "pdf_file", None)

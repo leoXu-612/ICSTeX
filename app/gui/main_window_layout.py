@@ -35,6 +35,7 @@ from app.gui.find_replace import FindReplaceBar
 from app.gui.icons import icon
 from app.gui.insert_panel import InsertPanel, TemplatesPanel, scrollable_panel
 from app.gui.main_window_actions import build_actions
+from app.gui.block_mode import install_block_mode
 from app.gui.main_window_support import make_panel, set_dynamic_property
 from app.gui.pdf_panel import PdfPanel
 from app.gui.project_panels import (
@@ -80,6 +81,7 @@ def build_ui(window: "MainWindow") -> None:
     _install_word_count_panel(window)
     _install_bottom_tabs(window)
     _install_vertical_splitter(window)
+    install_block_mode(window)
 
 
 # --- subsections ----------------------------------------------------------
@@ -201,6 +203,7 @@ def _install_main_splitter(window: "MainWindow") -> None:
     source_panel.setMinimumWidth(430)
     pdf_panel = make_panel("PDF 预览", window.pdf_panel, "双击同步源码")
     pdf_panel.setMinimumWidth(360)
+    window.pdf_panel_wrapper = pdf_panel
 
     splitter = QSplitter(Qt.Orientation.Horizontal)
     splitter.setChildrenCollapsible(False)

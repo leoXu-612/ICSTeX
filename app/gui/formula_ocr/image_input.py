@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QStandardPaths
-from PySide6.QtGui import QImage, QImageReader
+from PySide6.QtGui import QColor, QImage, QImageReader, QPainter
 from PySide6.QtWidgets import QApplication
 
 
@@ -35,7 +35,18 @@ def image_from_file(path: Path) -> QImage | None:
 
 
 def preprocess(image: QImage) -> QImage:
-    """Grayscale + white background, capped dimensions (non-destructive copy)."""
+    """White background + grayscale, capped dimensions (non-destructive copy).
+
+    Transparent pixels must composite onto white: converting transparency to
+    black produces a constant (empty-looking) image that breaks OCR.
+    """
+    if image.hasAlphaChannel():
+        white = QImage(image.size(), QImage.Format.Format_RGB32)
+        white.fill(QColor("white"))
+        painter = QPainter(white)
+        painter.drawImage(0, 0, image)
+        painter.end()
+        image = white
     processed = image.convertToFormat(QImage.Format.Format_RGB32)
     if processed.width() > MAX_IMAGE_DIMENSION or processed.height() > MAX_IMAGE_DIMENSION:
         processed = processed.scaled(

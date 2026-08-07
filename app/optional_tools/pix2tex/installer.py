@@ -72,8 +72,8 @@ def download_models(timeout: int = 900) -> dict:
         "  'version': 'pix2tex-0.1.4',\n"
         "  'checkpoint': str(ckpt / 'weights.pth'),\n"
         "  'image_resizer': str(ckpt / 'image_resizer.pth'),\n"
-        "  'tokenizer': str(ckpt / 'tokenizer.json'),\n"
-        "  'config': str(pkg / 'settings' / 'config.yaml'),\n"
+        "  'tokenizer': str(pkg / 'model' / 'settings' / 'tokenizer.json'),\n"
+        "  'config': str(pkg / 'model' / 'settings' / 'config.yaml'),\n"
         "}\n"
         "print(json.dumps(manifest))\n"
     )

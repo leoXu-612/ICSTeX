@@ -130,3 +130,17 @@ class ReviewDialogTests(TestCase):
             dialog.latex_edit.setPlainText(r"\frac{x^2}{y}")
             self.assertEqual(dialog.confirmed_latex(), r"\frac{x^2}{y}")
             dialog.close()
+
+
+class ImageInputTests(TestCase):
+    def test_preprocess_composites_transparency_on_white(self) -> None:
+        _app()
+        from PySide6.QtGui import QColor, QImage
+
+        from app.gui.formula_ocr.image_input import preprocess
+
+        image = QImage(32, 32, QImage.Format.Format_ARGB32)
+        image.fill(QColor(0, 0, 0, 0))  # fully transparent
+        processed = preprocess(image)
+        self.assertFalse(processed.hasAlphaChannel())
+        self.assertEqual(processed.pixelColor(0, 0), QColor("white"))

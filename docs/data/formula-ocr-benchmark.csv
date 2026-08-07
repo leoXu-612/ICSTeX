@@ -1,0 +1,11 @@
+fixture,expected_latex,recognized_latex,elapsed_ms
+fraction,\frac{a}{b},\scriptstyle{\frac{\pi}{\mathrm{B}}},170
+fraction_nested,\frac{x^2+1}{\sqrt{y}},\textstyle{\frac{a^{2}+1}{\sqrt{0}}},231
+greek,\alpha+\beta+\gamma,\alpha+\beta+\gamma,93
+integral,"\int_0^1 x\,dx",\textstyle\int_{\mathbf{h}}^{1}x\;d{\boldsymbol{z}},258
+matrix,\begin{pmatrix}1 & 2\\3 & 4\end{pmatrix},\left({\begin{array}{l l}{1}&{2}\\ {3}&{4}\end{array}}\right),338
+root,\sqrt{y_1+y_2},\scriptstyle{\sqrt{\mu}}\;+\;{\sqrt{\rho^{2}}},200
+scripts,x_{1}+x_{2}^{2},x_{1}+x_{2}^{2},185
+simple_inline,E=mc^2,\scriptstyle{E=m c^{2}},118
+simple_poly,x^2+1,x^{2}+1,137
+sum,\sum_{i=1}^{n} i,\textstyle\sum_{i=1}^{n}i,183

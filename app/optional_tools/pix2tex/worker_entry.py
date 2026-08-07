@@ -107,7 +107,12 @@ def main(argv: list[str] | None = None) -> int:
         try:
             from PIL import Image
 
-            image = Image.open(image_path).convert("RGB")
+            image = Image.open(image_path)
+            if image.mode in ("RGBA", "LA") or (image.mode == "P" and "transparency" in image.info):
+                white = Image.new("RGBA", image.size, "white")
+                image = Image.alpha_composite(white, image.convert("RGBA")).convert("RGB")
+            else:
+                image = image.convert("RGB")
             latex = model(image)
         except Exception as exc:  # noqa: BLE001
             _emit({"id": request_id, "error": {"code": "INFERENCE_FAILED", "message": str(exc)}})

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sys
+import os
 from pathlib import Path
 
 from PySide6.QtCore import QStandardPaths
@@ -24,6 +25,12 @@ def venv_dir() -> Path:
 
 
 def python_executable() -> Path:
+    override = os.environ.get("ICSTEX_PIX2TEX_ENV")
+    if override:
+        root = Path(override).expanduser()
+        if sys.platform == "win32":
+            return root / "Scripts" / "python.exe"
+        return root / "bin" / "python"
     if sys.platform == "win32":
         return venv_dir() / "Scripts" / "python.exe"
     return venv_dir() / "bin" / "python"

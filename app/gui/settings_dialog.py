@@ -1,6 +1,18 @@
 from __future__ import annotations
 
-from PySide6.QtWidgets import QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QSpinBox, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
+)
 
 from app.core.latex_tools import LaTeXEngine
 from app.core.settings import AppPreferences
@@ -35,6 +47,7 @@ class SettingsDialog(QDialog):
         self.soft_wrap_check = QCheckBox("源码自动换行")
         self.soft_wrap_check.setToolTip("长行接近源码窗口边缘时自动折行，避免左右拖动查看代码。")
         self.soft_wrap_check.setChecked(preferences.soft_wrap)
+        self._ocr_mgr = None
         self._build()
 
     def values(self) -> AppPreferences:
@@ -68,10 +81,49 @@ class SettingsDialog(QDialog):
         form.addRow("自动换行", self.soft_wrap_check)
         layout.addLayout(form)
 
+        self.ocr_status = QLabel("公式识别 (pix2tex)：检测中…")
+        self.ocr_status.setWordWrap(True)
+        self.ocr_install_button = QPushButton("安装（约 1.2GB 依赖 + 116MB 模型）")
+        self.ocr_remove_button = QPushButton("移除")
+        self.ocr_install_button.clicked.connect(self._ocr_install)
+        self.ocr_remove_button.clicked.connect(self._ocr_remove)
+        ocr_row = QHBoxLayout()
+        ocr_row.addWidget(self.ocr_install_button)
+        ocr_row.addWidget(self.ocr_remove_button)
+        ocr_row.addStretch()
+        layout.addWidget(QLabel("可选本地工具（不影响核心功能）："))
+        layout.addWidget(self.ocr_status)
+        layout.addLayout(ocr_row)
+        license_label = QLabel("模型权重许可 CC BY-NC-SA；仅本地使用，不随项目/导出包分发。")
+        license_label.setWordWrap(True)
+        layout.addWidget(license_label)
+        self._refresh_ocr_status()
+
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+    def _get_ocr_manager(self):
+        if self._ocr_mgr is None:
+            from app.optional_tools.pix2tex.manager import OcrManager
+
+            self._ocr_mgr = OcrManager(self)
+            self._ocr_mgr.status_changed.connect(lambda _state: self._refresh_ocr_status())
+            self._ocr_mgr.install_finished.connect(lambda _ok, _state: self._refresh_ocr_status())
+        return self._ocr_mgr
+
+    def _refresh_ocr_status(self) -> None:
+        manager = self._get_ocr_manager()
+        self.ocr_status.setText(f"公式识别 (pix2tex)：{manager.status() if manager else '未安装'}")
+
+    def _ocr_install(self) -> None:
+        self._get_ocr_manager().install(with_models=True)
+        self.ocr_status.setText("公式识别 (pix2tex)：安装中…")
+
+    def _ocr_remove(self) -> None:
+        self._get_ocr_manager().remove()
+        self.ocr_status.setText("公式识别 (pix2tex)：移除中…")
 
 
 def _spin(low: int, high: int, value: int, step: int, suffix: str) -> QSpinBox:

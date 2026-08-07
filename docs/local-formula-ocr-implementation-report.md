@@ -31,7 +31,9 @@ JSON Lines 协议；stderr 收第三方日志；剪贴板副作用被禁用；�
 - 真实模型（Spike 完成）：加载 423–448ms、热推理 132–142ms（CPU）、峰值 RSS ~670–690MB、
   固定温度 0.01 下 5/5 输出一致；venv 1.2GB、模型 116MB，见
   [pix2tex-local-spike-report.md](pix2tex-local-spike-report.md)；
-- 准确率基准（真实公式图片集）尚未建立，属下一步。
+- 准确率基准：10 张 xelatex 渲染的真实公式图，简单公式（E=mc^2、x^2+1、上下标、希腊字母、
+  求和）精确命中；分式/根号/积分语义接近（个别符号误读）；见
+  `docs/data/formula-ocr-benchmark.csv` 与 `tools/bench_formula_ocr.py`。
 
 ## Tests
 
@@ -42,8 +44,10 @@ shutdown、crash、load_fail）、Review 对话框。
 
 - 真实模型 Go 已放行（Python 3.11 + 官方 PyPI + legacy resolver）；
 - OCR 仅支持单公式图片（文件/剪贴板），无整页/表格识别；
-- 未实现截图工具与裁剪 UI（仅预处理白底/灰阶/尺寸上限）。
+- 未实现截图工具与裁剪 UI（仅预处理白底/灰阶/尺寸上限）；
+- 透明背景必须合成到白色（曾因合成到黑色导致整图恒定、OCR 报空）——已在
+  `image_input.preprocess` 与 worker 中修复并有测试。
 
 ## Suggested Next Step
 
-建立真实公式图片 fixture 准确率基准；随后补裁剪、最近使用/模板持久化与 UiMetrics 联动。
+已建立真实公式 fixture 基准；随后补裁剪、最近使用/模板持久化与 UiMetrics 联动。

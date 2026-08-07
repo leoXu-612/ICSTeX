@@ -26,6 +26,7 @@ from app.core.paths import normalize_path
 from app.gui.blocks.diagnostics_dock import BlockDiagnostics
 from app.gui.blocks.inspector import BlockInspector
 from app.gui.blocks.navigation_dock import BlockNavigationWidget
+from app.gui.blocks import profile
 from app.gui.blocks.project_session import ProjectSession
 from app.gui.blocks.workspace_widget import BlockWorkspaceWidget
 from app.gui.main_window_support import make_panel
@@ -173,6 +174,8 @@ def _on_block_compile_finished(window, result) -> None:
     if window.block_session is None:
         return
     root = normalize_path(result.root_file)
+    profile.log("DIAGNOSTICS_STARTED")
+    profile.log("DIAGNOSTICS_FINISHED")
     if getattr(result, "ok", False) and getattr(result, "pdf_file", None) is not None:
         window.pdf_state.finish_build(
             root,
@@ -182,7 +185,14 @@ def _on_block_compile_finished(window, result) -> None:
             duration_seconds=result.duration_seconds,
             engine="XeLaTeX",
         )
+        watch = profile.Stopwatch()
+        profile.log("PDF_RELOAD_STARTED")
         window.pdf_panel.load_pdf(result.pdf_file, logical_key=root)
+        profile.log(
+            "PDF_DOCUMENT_LOADED",
+            elapsed_ms=round(watch.elapsed_ms(), 2),
+            pdf_bytes=result.pdf_file.stat().st_size if result.pdf_file.exists() else 0,
+        )
         window.append_log(f"Block PDF 输出：{result.pdf_file}")
     else:
         window.pdf_state.finish_build(

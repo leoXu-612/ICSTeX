@@ -9,6 +9,7 @@ from __future__ import annotations
 from copy import deepcopy
 
 from PySide6.QtCore import Signal
+from PySide6.QtGui import QUndoStack
 from PySide6.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
@@ -25,6 +26,7 @@ from PySide6.QtWidgets import (
 from app.core.blocks.ids import new_instance_id
 from app.core.blocks.layout import BlockSlot, LayoutNode, Size, block_slot
 from app.core.blocks.registry import BlockRegistry
+from app.gui.blocks.commands import ChangeLayoutCommand
 
 
 class BlockLayoutPanel(QWidget):
@@ -35,14 +37,14 @@ class BlockLayoutPanel(QWidget):
         self.registry = registry
         self.layout: LayoutNode | None = layout
         self._undo: list[LayoutNode | None] = []
+        # When set, every mutation is pushed onto the shared QUndoStack as a
+        # ChangeLayoutCommand instead of the panel-local undo list.
+        self.command_stack: QUndoStack | None = None
 
         self.block_list = QListWidget()
         self.block_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
         self.block_list.setDragDropMode(QListWidget.DragDropMode.InternalMove)
-        for block in registry.blocks():
-            item = QListWidgetItem(f"{block.alias}（{block.id}）")
-            item.setData(256, block.id)
-            self.block_list.addItem(item)
+        self.refresh_block_list()
 
         self.row_button = QPushButton("组合为 Row")
         self.grid_button = QPushButton("组合为 Grid")
@@ -101,6 +103,17 @@ class BlockLayoutPanel(QWidget):
             if self.block_list.item(index).isSelected()
         ]
 
+    def refresh_block_list(self) -> None:
+        selected_ids = set(self.selected_block_ids())
+        self.block_list.blockSignals(True)
+        self.block_list.clear()
+        for block in self.registry.blocks():
+            item = QListWidgetItem(f"{block.alias}（{block.id}）")
+            item.setData(256, block.id)
+            item.setSelected(block.id in selected_ids)
+            self.block_list.addItem(item)
+        self.block_list.blockSignals(False)
+
     def apply_row(self) -> None:
         self._apply(lambda children: LayoutNode(id="lyt_row", kind="row", children=tuple(children)))
 
@@ -110,23 +123,32 @@ class BlockLayoutPanel(QWidget):
         )
 
     def ungroup(self) -> None:
-        self._push()
-        self.layout = None
-        self.layoutChanged.emit()
+        self._commit(None)
 
     def undo(self) -> None:
+        if self.command_stack is not None:
+            self.command_stack.undo()
+            return
         if not self._undo:
             return
-        self.layout = self._undo.pop()
-        self.layoutChanged.emit()
-        self._sync_inspector()
+        self.apply_layout_state(self._undo.pop())
 
     def _apply(self, builder) -> None:
         block_ids = self.selected_block_ids()
         if not block_ids:
             return
-        self._push()
-        self.layout = builder([block_slot(block_id) for block_id in block_ids])
+        self._commit(builder([block_slot(block_id) for block_id in block_ids]))
+
+    def _commit(self, new_layout: LayoutNode | None) -> None:
+        old_layout = deepcopy(self.layout)
+        if self.command_stack is not None:
+            self.command_stack.push(ChangeLayoutCommand(self, old_layout, new_layout))
+        else:
+            self._push()
+            self.apply_layout_state(new_layout)
+
+    def apply_layout_state(self, layout: LayoutNode | None) -> None:
+        self.layout = layout
         self.layoutChanged.emit()
         self._sync_inspector()
 
@@ -169,20 +191,20 @@ class BlockLayoutPanel(QWidget):
             return
         item = children.pop(source_row)
         children.insert(destination_row, item)
-        self._push()
-        self.layout = LayoutNode(
-            schemaVersion=self.layout.schemaVersion,
-            id=self.layout.id,
-            kind=self.layout.kind,
-            children=tuple(children),
-            columns=self.layout.columns,
-            gap=self.layout.gap,
-            alignment=self.layout.alignment,
-            keepTogether=self.layout.keepTogether,
-            fallback=self.layout.fallback,
+        self._commit(
+            LayoutNode(
+                schemaVersion=self.layout.schemaVersion,
+                id=self.layout.id,
+                kind=self.layout.kind,
+                children=tuple(children),
+                columns=self.layout.columns,
+                gap=self.layout.gap,
+                rowGap=self.layout.rowGap,
+                alignment=self.layout.alignment,
+                keepTogether=self.layout.keepTogether,
+                fallback=self.layout.fallback,
+            )
         )
-        self.layoutChanged.emit()
-        self._refresh_slots()
 
     def _on_slots_moved(self, *_args: object) -> None:
         if self.layout is None:
@@ -196,33 +218,35 @@ class BlockLayoutPanel(QWidget):
                     break
         if order and order != list(range(len(order))):
             children = [self.layout.children[index] for index in order]
-            self._push()
-            self.layout = LayoutNode(
-                schemaVersion=self.layout.schemaVersion,
-                id=self.layout.id,
-                kind=self.layout.kind,
-                children=tuple(children),
-                columns=self.layout.columns,
-                gap=self.layout.gap,
-                alignment=self.layout.alignment,
-                keepTogether=self.layout.keepTogether,
-                fallback=self.layout.fallback,
+            self._commit(
+                LayoutNode(
+                    schemaVersion=self.layout.schemaVersion,
+                    id=self.layout.id,
+                    kind=self.layout.kind,
+                    children=tuple(children),
+                    columns=self.layout.columns,
+                    gap=self.layout.gap,
+                    rowGap=self.layout.rowGap,
+                    alignment=self.layout.alignment,
+                    keepTogether=self.layout.keepTogether,
+                    fallback=self.layout.fallback,
+                )
             )
-            self.layoutChanged.emit()
 
     def _inspector_changed(self) -> None:
         if self.layout is None:
             return
-        self._push()
-        self.layout = LayoutNode(
-            schemaVersion=self.layout.schemaVersion,
-            id=self.layout.id,
-            kind=self.layout.kind,
-            children=self.layout.children,
-            columns=self.layout.columns,
-            gap=Size(value=self.gap_spin.value(), unit="mm"),
-            alignment=self.alignment_combo.currentText(),
-            keepTogether=self.layout.keepTogether,
-            fallback={"strategy": self.fallback_combo.currentText()},
+        self._commit(
+            LayoutNode(
+                schemaVersion=self.layout.schemaVersion,
+                id=self.layout.id,
+                kind=self.layout.kind,
+                children=self.layout.children,
+                columns=self.layout.columns,
+                gap=Size(value=self.gap_spin.value(), unit="mm"),
+                rowGap=self.layout.rowGap,
+                alignment=self.alignment_combo.currentText(),
+                keepTogether=self.layout.keepTogether,
+                fallback={"strategy": self.fallback_combo.currentText()},
+            )
         )
-        self.layoutChanged.emit()

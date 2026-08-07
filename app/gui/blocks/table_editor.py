@@ -7,7 +7,7 @@ from SourceStatus.
 """
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
@@ -25,6 +25,8 @@ from app.core.blocks.table_model import Cell, TableEditorModel
 
 
 class TableEditor(QWidget):
+    model_changed = Signal()
+
     def __init__(self, model: TableEditorModel, parent=None) -> None:
         super().__init__(parent)
         self.model = model
@@ -89,22 +91,26 @@ class TableEditor(QWidget):
     def undo(self) -> None:
         self.model.undo()
         self.refresh()
+        self.model_changed.emit()
 
     def redo(self) -> None:
         self.model.redo()
         self.refresh()
+        self.model_changed.emit()
 
     def insert_row(self) -> None:
         index = max(0, self.table.currentRow())
         row_id = f"row_{len(self.model.data.rows) + 1:03d}"
         self.model.insert_row(index, row_id)
         self.refresh()
+        self.model_changed.emit()
 
     def delete_row(self) -> None:
         row = self.table.currentRow()
         if 0 <= row < len(self.model.data.rows):
             self.model.delete_row(self.model.data.rows[row].id)
             self.refresh()
+            self.model_changed.emit()
 
     def insert_column(self) -> None:
         index = max(0, self.table.currentColumn())
@@ -112,12 +118,14 @@ class TableEditor(QWidget):
 
         self.model.insert_column(index, ColumnSpec(id=f"col_{index + 1}", name=f"列{index + 1}"))
         self.refresh()
+        self.model_changed.emit()
 
     def delete_column(self) -> None:
         column = self.table.currentColumn()
         if 0 <= column < len(self.model.data.columns):
             self.model.delete_column(self.model.data.columns[column].id)
             self.refresh()
+            self.model_changed.emit()
 
     def paste_clipboard_text(self, text: str) -> None:
         parsed = parse_clipboard(text)
@@ -137,3 +145,4 @@ class TableEditor(QWidget):
                 if target_column_id is not None:
                     self.model.set_cell(target_row_id, target_column_id, cell)
         self.refresh()
+        self.model_changed.emit()

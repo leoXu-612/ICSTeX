@@ -20,6 +20,27 @@ class SourceRecord:
     baseSha256: str
     createdAt: str | None = None
 
+    def to_dict(self) -> dict:
+        result = {
+            "sourceId": self.sourceId,
+            "kind": self.kind,
+            "relativePath": self.relativePath,
+            "baseSha256": self.baseSha256,
+        }
+        if self.createdAt is not None:
+            result["createdAt"] = self.createdAt
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "SourceRecord":
+        return cls(
+            sourceId=data["sourceId"],
+            kind=data.get("kind", ""),
+            relativePath=data.get("relativePath", ""),
+            baseSha256=data.get("baseSha256", ""),
+            createdAt=data.get("createdAt"),
+        )
+
 
 @dataclass(frozen=True)
 class SourceStatus:

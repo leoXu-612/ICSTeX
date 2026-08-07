@@ -16,12 +16,14 @@ from app.core.blocks.formula_adapter import FormulaBlockAdapter
 from app.core.blocks.registry import BlockRegistry
 from app.gui.formula_dialog import FormulaDialog
 from app.core.formula_input import recognize_formula
+from app.gui.blocks.commands import UpdateBlockCommand
 
 
 class FormulaBlockTab(QWidget):
-    def __init__(self, registry: BlockRegistry, parent=None) -> None:
+    def __init__(self, registry: BlockRegistry, *, session=None, parent=None) -> None:
         super().__init__(parent)
         self.registry = registry
+        self._session = session
         self.adapter = FormulaBlockAdapter()
         self.block_list = QListWidget()
         self.edit_button = QPushButton("编辑公式…")
@@ -65,5 +67,10 @@ class FormulaBlockTab(QWidget):
         if envelope is None:
             return
         content = self.adapter.update_ast(self.adapter.latex_to_ast(envelope.body))
-        self.registry.update(block.id, {"content": content})
+        if self._session is not None:
+            self._session.undo_stack.push(
+                UpdateBlockCommand(self._session, block.id, {"content": content}, text="修改公式")
+            )
+        else:
+            self.registry.update(block.id, {"content": content})
         self.refresh()

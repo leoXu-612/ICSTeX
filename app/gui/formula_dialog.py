@@ -9,8 +9,11 @@ a ``FinalTextEditPlan`` for the caller to apply.
 """
 from __future__ import annotations
 
+import uuid
+from pathlib import Path
 from typing import TYPE_CHECKING
 
+from PySide6.QtWidgets import QApplication, QFileDialog
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -36,6 +39,10 @@ from app.core.formula_input import (
 )
 from app.gui.math_editor_widget import MathEditorWidget
 from app.gui.math_keyboard import MathKeyboard
+from app.core.formula.sanitizer import sanitize_formula_latex
+from app.gui.formula_ocr.image_input import image_from_clipboard, image_from_file, preprocess, save_temp
+from app.gui.formula_ocr.review_dialog import RecognitionReviewDialog
+from app.optional_tools.pix2tex.protocol import RecognitionRequest
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from app.core.formula_input import FinalTextEditPlan
@@ -87,6 +94,13 @@ class FormulaDialog(QDialog):
         self.editor_stack.addWidget(self.visual_edit)
         self.editor_stack.addWidget(self.source_edit)
 
+        self.ocr_button = QPushButton("从图片识别…")
+        self.ocr_button.setToolTip("使用可选本地 pix2tex 识别公式图片（需先安装）。")
+        self.ocr_button.clicked.connect(self._run_ocr)
+        self.ocr_status_label = QLabel("")
+        self._ocr_request_id: str | None = None
+        self._ocr_image_path: Path | None = None
+
         self.source_mode_check = QCheckBox("源码模式")
         self.source_mode_check.setToolTip(
             "可视化模式编辑数学结构；源码模式直接修改 LaTeX（含复杂结构）。"
@@ -121,6 +135,9 @@ class FormulaDialog(QDialog):
         mode_row.addWidget(QLabel("公式模式："))
         mode_row.addWidget(self.mode_combo)
         mode_row.addWidget(self.source_mode_check)
+        mode_row.addStretch()
+        mode_row.addWidget(self.ocr_button)
+        mode_row.addWidget(self.ocr_status_label)
         layout.addLayout(mode_row)
 
         self.keyboard = MathKeyboard()
@@ -147,6 +164,54 @@ class FormulaDialog(QDialog):
         self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
         self.source_mode_check.toggled.connect(self._on_source_mode_toggled)
         self._refresh()
+
+    def _run_ocr(self) -> None:
+        app = QApplication.instance()
+        manager = getattr(app, "ocr_manager", None)
+        if manager is None:
+            QMessageBox.information(self, "公式识别", "可选本地公式识别未启用。")
+            return
+        if manager.status() in ("NOT_INSTALLED", "MODEL_MISSING"):
+            QMessageBox.information(self, "公式识别", "pix2tex 未安装或模型缺失。")
+            return
+        image = image_from_clipboard()
+        if image is None:
+            file_name, _ = QFileDialog.getOpenFileName(self, "选择公式图片", "", "图片 (*.png *.jpg *.jpeg *.webp)")
+            if not file_name:
+                return
+            image = image_from_file(Path(file_name))
+        if image is None:
+            QMessageBox.warning(self, "公式识别", "无法读取图片。")
+            return
+        temp = save_temp(preprocess(image))
+        self._ocr_image_path = temp
+        self._ocr_request_id = f"ocr-{uuid.uuid4().hex[:12]}"
+        manager.recognition_finished.connect(self._on_ocr_result)
+        manager.recognition_failed.connect(self._on_ocr_failed)
+        manager.recognize(RecognitionRequest(request_id=self._ocr_request_id, image_path=temp), session_id="formula-dialog")
+        self.ocr_status_label.setText("识别中…")
+
+    def _on_ocr_result(self, payload) -> None:
+        request_id, _session_id, result = payload
+        if request_id != self._ocr_request_id:
+            return
+        self.ocr_status_label.setText("")
+        sanitize = sanitize_formula_latex(result.latex)
+        if self._ocr_image_path is None:
+            return
+        review = RecognitionReviewDialog(self._ocr_image_path, result.latex, sanitize, self)
+        if review.exec() == QDialog.DialogCode.Accepted:
+            latex = review.confirmed_latex()
+            if latex:
+                self.visual_edit.set_latex(latex)
+                self.editor_stack.setCurrentWidget(self.visual_edit)
+                self.source_mode_check.setChecked(False)
+
+    def _on_ocr_failed(self, request_id: str, code: str, message: str) -> None:
+        if request_id and request_id != self._ocr_request_id:
+            return
+        self.ocr_status_label.setText("")
+        QMessageBox.warning(self, "公式识别失败", f"{code}：{message}")
 
     def plan(self) -> "FinalTextEditPlan | None":
         """The accepted edit plan, or None when the dialog was not accepted."""

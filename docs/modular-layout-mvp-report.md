@@ -35,7 +35,7 @@ manifest。
 
 ## 2. Schema 版本（全部 1.0.0，JSON Schema Draft 2020-12）
 
-Block、Layout、Project、AppTheme、DocumentTheme 五个 Schema 均由
+Block、Layout、Project、AppTheme、DocumentTheme、Source 六个 Schema 均由
 `app/core/blocks/schema.py` 提供运行时校验（jsonschema 4.26）。
 
 ## 3. 完成能力矩阵

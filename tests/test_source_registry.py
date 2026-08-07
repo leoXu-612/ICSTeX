@@ -9,6 +9,7 @@ from app.core.blocks.source_registry import (
     check_source,
     hash_file,
 )
+from app.core.blocks.schema import validate_source
 
 
 class SourceRegistryTests(TestCase):
@@ -59,3 +60,22 @@ class SourceRegistryTests(TestCase):
         )
         status = check_source(self.project, record)
         self.assertEqual(status.state, "unsafe")
+
+    def test_source_schema_validation(self) -> None:
+        valid = {
+            "sourceId": "src_1",
+            "kind": "xlsx",
+            "relativePath": "data/results.xlsx",
+            "baseSha256": "a" * 64,
+        }
+        self.assertEqual(validate_source(valid), [])
+
+        missing = dict(valid)
+        del missing["baseSha256"]
+        self.assertTrue(validate_source(missing))
+
+        bad_kind = dict(valid, kind="exe")
+        self.assertTrue(validate_source(bad_kind))
+
+        bad_hash = dict(valid, baseSha256="not-a-sha")
+        self.assertTrue(validate_source(bad_hash))

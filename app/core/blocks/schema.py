@@ -331,12 +331,29 @@ DOCUMENT_THEME_SCHEMA = {
 }
 
 
+SOURCE_SCHEMA = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://icstex.local/schema/source/1.0.0",
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["sourceId", "kind", "relativePath", "baseSha256"],
+    "properties": {
+        "sourceId": {"type": "string", "minLength": 4},
+        "kind": {"enum": ["csv", "xlsx", "clipboard", "linked"]},
+        "relativePath": {"type": "string", "minLength": 1},
+        "baseSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "createdAt": {"type": ["string", "null"]},
+    },
+}
+
+
 _VALIDATORS = {
     "block": Draft202012Validator(BLOCK_SCHEMA),
     "project": Draft202012Validator(PROJECT_SCHEMA),
     "layout": Draft202012Validator(LAYOUT_SCHEMA),
     "app-theme": Draft202012Validator(APP_THEME_SCHEMA),
     "document-theme": Draft202012Validator(DOCUMENT_THEME_SCHEMA),
+    "source": Draft202012Validator(SOURCE_SCHEMA),
 }
 _CONTENT_VALIDATORS = {
     block_type: Draft202012Validator(schema) for block_type, schema in CONTENT_SCHEMAS.items()
@@ -379,3 +396,7 @@ def validate_theme(data: dict) -> list[str]:
     if validator is None:
         return ["未知主题类型：" + str(kind)]
     return _issues(validator, data)
+
+
+def validate_source(data: dict) -> list[str]:
+    return _issues(_VALIDATORS["source"], data)

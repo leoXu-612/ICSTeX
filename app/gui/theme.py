@@ -35,20 +35,20 @@ CJK_SERIF_FONT_CANDIDATES = [
     "SimSun",
 ]
 
-COLOR_APP = "#f4f4f2"
+COLOR_APP = "#f6f6f4"
 COLOR_SURFACE = "#ffffff"
 COLOR_SURFACE_ALT = "#f8f8f6"
 COLOR_EDITOR = "#fcfcfb"
-COLOR_BORDER = "#d9d9d4"
+COLOR_BORDER = "#dcdcd7"
 COLOR_BORDER_SOFT = "#e8e8e4"
 COLOR_TEXT = "#202321"
 COLOR_TEXT_MUTED = "#666b67"
 COLOR_TEXT_FAINT = "#6f746f"
-COLOR_HOVER = "#eeeeeb"
-COLOR_PRESSED = "#e3e3df"
-COLOR_SELECTED = "#f3e8e6"
-COLOR_ACCENT = "#a93632"
-COLOR_ACCENT_HOVER = "#8f2c29"
+COLOR_HOVER = "#f4f4f1"
+COLOR_PRESSED = "#e8e8e3"
+COLOR_SELECTED = "#fdf1e0"
+COLOR_ACCENT = "#b45309"
+COLOR_ACCENT_HOVER = "#92400e"
 COLOR_SUCCESS = "#2f7d4e"
 COLOR_WARNING = "#a7661b"
 COLOR_ERROR = "#b3261e"
@@ -66,10 +66,11 @@ SPACE_1 = 4
 SPACE_2 = 8
 SPACE_3 = 12
 SPACE_4 = 16
-RADIUS_SMALL = 4
-RADIUS_MEDIUM = 6
-CONTROL_HEIGHT = 30
-PANEL_HEADER_HEIGHT = 36
+RADIUS_SMALL = 6
+RADIUS_MEDIUM = 10
+RADIUS_LARGE = 12
+CONTROL_HEIGHT = 32
+PANEL_HEADER_HEIGHT = 38
 
 _SYSTEM_SF_MONO_FONT_ID: int | None = None
 
@@ -162,14 +163,14 @@ def stylesheet() -> str:
         background: {COLOR_APP};
         color: {COLOR_TEXT};
         font-family: {ui_stack};
-        font-size: 12px;
+        font-size: 13px;
     }}
 
     QDialog {{
         background: {COLOR_SURFACE};
         color: {COLOR_TEXT};
         font-family: {ui_stack};
-        font-size: 12px;
+        font-size: 13px;
     }}
 
     QMenuBar {{
@@ -180,7 +181,7 @@ def stylesheet() -> str:
 
     QMenuBar::item {{
         border-radius: {RADIUS_SMALL}px;
-        padding: 5px 9px;
+        padding: 5px 11px;
         color: {COLOR_TEXT_MUTED};
     }}
 
@@ -193,13 +194,13 @@ def stylesheet() -> str:
         background: {COLOR_SURFACE};
         border: 1px solid {COLOR_BORDER};
         border-radius: {RADIUS_MEDIUM}px;
-        padding: 6px;
+        padding: 7px;
     }}
 
     QMenu::item {{
         border-radius: {RADIUS_SMALL}px;
         color: {COLOR_TEXT};
-        padding: 6px 24px;
+        padding: 7px 26px;
     }}
 
     QMenu::item:selected {{
@@ -234,8 +235,8 @@ def stylesheet() -> str:
         background: transparent;
         border: 1px solid transparent;
         border-radius: {RADIUS_SMALL}px;
-        padding: 4px 7px;
-        min-height: 22px;
+        padding: 5px 9px;
+        min-height: 24px;
     }}
 
     QToolButton:hover {{
@@ -264,8 +265,8 @@ def stylesheet() -> str:
     }}
 
     QToolButton#primaryAction:disabled {{
-        background: #d8b5b2;
-        border-color: #d8b5b2;
+        background: #ecc9a8;
+        border-color: #ecc9a8;
         color: {COLOR_SURFACE};
     }}
 
@@ -289,7 +290,22 @@ def stylesheet() -> str:
     }}
 
     QSplitter::handle:hover {{
-        background: #ead8d5;
+        background: #e7e1d8;
+    }}
+
+    QDockWidget {{
+        background: {COLOR_SURFACE};
+        border: 1px solid {COLOR_BORDER_SOFT};
+        color: {COLOR_TEXT};
+    }}
+
+    QDockWidget::title {{
+        background: {COLOR_SURFACE_ALT};
+        color: {COLOR_TEXT};
+        border-bottom: 1px solid {COLOR_BORDER_SOFT};
+        padding: 8px 12px;
+        font-weight: 650;
+        text-align: left;
     }}
 
     QDockWidget#toolboxDock {{
@@ -412,6 +428,7 @@ def stylesheet() -> str:
         color: {COLOR_TEXT_FAINT};
         font-size: 11px;
         font-weight: 650;
+        letter-spacing: 1px;
         text-transform: uppercase;
     }}
 
@@ -420,6 +437,7 @@ def stylesheet() -> str:
         font-family: {heading_stack};
         font-size: 23px;
         font-weight: 750;
+        letter-spacing: -0.4px;
     }}
 
     QLabel#welcomeSubtitle {{
@@ -444,7 +462,7 @@ def stylesheet() -> str:
     QFrame#welcomeBox {{
         background: {COLOR_SURFACE};
         border: 1px solid {COLOR_BORDER_SOFT};
-        border-radius: 7px;
+        border-radius: {RADIUS_MEDIUM}px;
     }}
 
     QPushButton#welcomeRecent {{
@@ -481,8 +499,8 @@ def stylesheet() -> str:
     }}
 
     QTreeView::item {{
-        border-radius: 5px;
-        min-height: 23px;
+        border-radius: {RADIUS_SMALL}px;
+        min-height: 26px;
         padding: 2px 6px;
     }}
 
@@ -542,9 +560,9 @@ def stylesheet() -> str:
         color: {COLOR_TEXT_MUTED};
         border: 1px solid transparent;
         border-bottom: 0;
-        border-radius: {RADIUS_SMALL}px;
-        min-height: 28px;
-        padding: 5px 11px;
+        border-radius: 8px;
+        min-height: 32px;
+        padding: 6px 14px;
         margin-right: 2px;
     }}
 
@@ -562,8 +580,8 @@ def stylesheet() -> str:
     }}
 
     QTabWidget#bottomTabs QTabBar::tab {{
-        min-height: 24px;
-        padding: 4px 10px;
+        min-height: 26px;
+        padding: 5px 12px;
     }}
 
     QPlainTextEdit {{
@@ -669,10 +687,10 @@ def stylesheet() -> str:
     QPushButton {{
         background: {COLOR_SURFACE};
         border: 1px solid {COLOR_BORDER};
-        border-radius: {RADIUS_SMALL}px;
+        border-radius: 8px;
         color: {COLOR_TEXT};
-        padding: 6px 11px;
-        min-height: 24px;
+        padding: 7px 13px;
+        min-height: 27px;
     }}
 
     QPushButton:hover {{
@@ -682,6 +700,10 @@ def stylesheet() -> str:
 
     QPushButton:pressed {{
         background: {COLOR_PRESSED};
+    }}
+
+    QPushButton:focus {{
+        border-color: {COLOR_ACCENT};
     }}
 
     QPushButton#primaryButton {{
@@ -702,17 +724,17 @@ def stylesheet() -> str:
     QComboBox {{
         background: {COLOR_SURFACE};
         border: 1px solid {COLOR_BORDER};
-        border-radius: {RADIUS_SMALL}px;
+        border-radius: 8px;
         color: {COLOR_TEXT};
-        padding: 5px 9px;
-        min-height: 24px;
+        padding: 6px 10px;
+        min-height: 28px;
     }}
 
     QLineEdit:focus,
     QSpinBox:focus,
     QDoubleSpinBox:focus,
     QComboBox:focus {{
-        border-color: #a9aba5;
+        border-color: {COLOR_ACCENT};
         background: {COLOR_SURFACE};
     }}
 
@@ -742,8 +764,8 @@ def stylesheet() -> str:
     }}
 
     QComboBox QAbstractItemView::item {{
-        min-height: 28px;
-        padding: 6px 10px;
+        min-height: 30px;
+        padding: 7px 12px;
     }}
 
     QComboBox QAbstractItemView::item:selected {{
@@ -759,14 +781,14 @@ def stylesheet() -> str:
     QProgressBar#compileProgress {{
         background: {COLOR_HOVER};
         border: 1px solid {COLOR_BORDER};
-        border-radius: {RADIUS_SMALL}px;
-        height: 8px;
+        border-radius: {RADIUS_MEDIUM}px;
+        height: 9px;
         text-align: center;
     }}
 
     QProgressBar#compileProgress::chunk {{
         background: {COLOR_ACCENT};
-        border-radius: 4px;
+        border-radius: 6px;
     }}
 
     QLabel#compileTimer {{
@@ -778,15 +800,15 @@ def stylesheet() -> str:
         color: {COLOR_TEXT_MUTED};
         background: {COLOR_SURFACE_ALT};
         border: 1px solid {COLOR_BORDER_SOFT};
-        border-radius: {RADIUS_SMALL}px;
-        padding: 3px 7px;
+        border-radius: 8px;
+        padding: 4px 9px;
         margin-left: 3px;
     }}
 
     QLabel#statusPill[state="active"] {{
         color: {COLOR_ACCENT};
         background: {COLOR_SELECTED};
-        border-color: #e5c8c4;
+        border-color: #f0d9b8;
     }}
 
     QLabel#compileTimer[state="active"] {{ color: {COLOR_ACCENT}; }}
@@ -801,7 +823,7 @@ def stylesheet() -> str:
     QWidget#wordHighlightPanel {{
         background: {COLOR_SURFACE};
         border: 1px solid {COLOR_BORDER_SOFT};
-        border-radius: 6px;
+        border-radius: {RADIUS_MEDIUM}px;
         padding: 8px;
     }}
 
@@ -814,7 +836,7 @@ def stylesheet() -> str:
         background: {COLOR_EDITOR};
         color: {COLOR_TEXT};
         border: 1px solid {COLOR_BORDER_SOFT};
-        border-radius: 6px;
+        border-radius: {RADIUS_MEDIUM}px;
         padding: 10px 12px;
         selection-background-color: #d9dde2;
         selection-color: #111315;
@@ -833,7 +855,7 @@ def stylesheet() -> str:
     QWidget#wordStat {{
         background: {COLOR_SURFACE_ALT};
         border: 1px solid {COLOR_BORDER_SOFT};
-        border-radius: 6px;
+        border-radius: {RADIUS_MEDIUM}px;
         min-height: 68px;
     }}
 
@@ -881,12 +903,12 @@ def stylesheet() -> str:
     QProgressBar#wordCategoryBar {{
         background: #e8e9e6;
         border: none;
-        border-radius: 4px;
+        border-radius: 6px;
     }}
 
     QProgressBar#wordCategoryBar::chunk {{
         background: #587f8c;
-        border-radius: 4px;
+        border-radius: 6px;
     }}
 
     QProgressBar#wordCategoryBar[category="effective"]::chunk {{ background: #3478c4; }}
@@ -905,13 +927,13 @@ def stylesheet() -> str:
 
     QScrollBar:vertical {{
         background: transparent;
-        width: 10px;
+        width: 9px;
         margin: 2px;
     }}
 
     QScrollBar::handle:vertical {{
         background: #c9c9c2;
-        border-radius: 5px;
+        border-radius: 4px;
         min-height: 28px;
     }}
 
@@ -926,13 +948,13 @@ def stylesheet() -> str:
 
     QScrollBar:horizontal {{
         background: transparent;
-        height: 10px;
+        height: 9px;
         margin: 2px;
     }}
 
     QScrollBar::handle:horizontal {{
         background: #c9c9c2;
-        border-radius: 5px;
+        border-radius: 4px;
         min-width: 28px;
     }}
 

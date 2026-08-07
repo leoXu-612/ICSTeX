@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 import subprocess
 import sys
@@ -143,6 +144,36 @@ class MainWindow(QMainWindow):
         self.update_document_view_state()
         self.update_welcome_page()
         self._show_toolchain_status()
+        self._apply_saved_ui_scale()
+
+    def _apply_saved_ui_scale(self) -> None:
+        from app.gui.theme.ui_scale_manager import UiScaleManager
+
+        app = QApplication.instance()
+        if app is None:
+            return
+        if not hasattr(app, "ui_scale_manager"):
+            app.ui_scale_manager = UiScaleManager(app)
+        app.ui_scale_manager.apply_scale(self.preferences.ui_scale)
+        self._sync_ui_scale_actions()
+
+    def set_ui_scale(self, scale: float) -> None:
+        from app.gui.theme.ui_scale_manager import UiScaleManager
+
+        app = QApplication.instance()
+        if app is None:
+            return
+        if not hasattr(app, "ui_scale_manager"):
+            app.ui_scale_manager = UiScaleManager(app)
+        app.ui_scale_manager.apply_scale(scale)
+        self.preferences = replace(self.preferences, ui_scale=app.ui_scale_manager.scale)
+        self.app_settings.save_preferences(self.preferences)
+        self._sync_ui_scale_actions()
+
+    def _sync_ui_scale_actions(self) -> None:
+        actions = getattr(self, "ui_scale_actions", {})
+        for scale, action in actions.items():
+            action.setChecked(abs(scale - self.preferences.ui_scale) < 0.001)
 
     def _build_ui(self) -> None:
         build_ui(self)

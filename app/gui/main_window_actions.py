@@ -16,6 +16,7 @@ from PySide6.QtWidgets import QComboBox, QToolBar
 
 from app.core.latex_tools import LaTeXEngine
 from app.gui.icons import icon
+from app.gui.theme.ui_scale_manager import SCALE_TIERS, TIER_LABELS
 from app.gui.widgets import AutoCompileToggle
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -183,6 +184,14 @@ def build_actions(window: "MainWindow") -> None:
     edit_menu.addAction(window.settings_action)
     view_menu = window.menuBar().addMenu("视图")
     view_menu.addAction(window.toolbox_action)
+    window.ui_scale_menu = view_menu.addMenu("UI Scale")
+    window.ui_scale_actions = {}
+    for tier in SCALE_TIERS:
+        action = QAction(TIER_LABELS[tier], window)
+        action.setCheckable(True)
+        action.triggered.connect(lambda _checked=False, selected=tier: window.set_ui_scale(selected))
+        window.ui_scale_menu.addAction(action)
+        window.ui_scale_actions[tier] = action
     help_menu = window.menuBar().addMenu("帮助")
     help_menu.addAction(window.user_guide_action)
     help_menu.addAction(window.environment_doctor_action)

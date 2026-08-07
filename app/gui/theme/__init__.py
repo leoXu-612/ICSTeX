@@ -7,6 +7,8 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QPalette
 from PySide6.QtWidgets import QApplication
 
+from app.gui.theme.ui_metrics import TypographyMetrics, UiMetrics
+
 
 # macOS exposes the complete built-in SF Mono family under the internal
 # ``.SF NS Mono`` name. Prefer it over a user-installed partial family.
@@ -154,7 +156,25 @@ def light_palette() -> QPalette:
     return palette
 
 
-def stylesheet() -> str:
+def stylesheet(
+    metrics: UiMetrics | None = None,
+    typography: TypographyMetrics | None = None,
+) -> str:
+    metrics = metrics or UiMetrics(1.0)
+    typography = typography or TypographyMetrics(1.0)
+    fs_body = round(typography.body_pt)
+    fs_caption = round(typography.caption_pt)
+    fs_section = round(typography.section_title_pt)
+    fs_page = round(typography.page_title_pt)
+    fs_dialog_title = round(15 * metrics.scale)
+    fs_mono = round(typography.monospace_pt)
+    minh_control = metrics.control_height
+    minh_compact = metrics.compact_control_height
+    minh_row = metrics.row_height
+    minh_tab = round(32 * metrics.scale)
+    minh_tab_compact = round(26 * metrics.scale)
+    icon_large = metrics.large_icon_size
+    eng_min_width = round(112 * metrics.scale)
     ui_stack = _qss_font_stack(_ui_font_stack())
     editor_stack = _qss_font_stack(_editor_font_stack())
     heading_stack = _qss_font_stack(_heading_font_stack())
@@ -163,14 +183,14 @@ def stylesheet() -> str:
         background: {COLOR_APP};
         color: {COLOR_TEXT};
         font-family: {ui_stack};
-        font-size: 13px;
+        font-size: {fs_body}px;
     }}
 
     QDialog {{
         background: {COLOR_SURFACE};
         color: {COLOR_TEXT};
         font-family: {ui_stack};
-        font-size: 13px;
+        font-size: {fs_body}px;
     }}
 
     QMenuBar {{
@@ -236,7 +256,7 @@ def stylesheet() -> str:
         border: 1px solid transparent;
         border-radius: {RADIUS_SMALL}px;
         padding: 5px 9px;
-        min-height: 24px;
+        min-height: {minh_compact}px;
     }}
 
     QToolButton:hover {{
@@ -347,7 +367,7 @@ def stylesheet() -> str:
 
     QLabel#panelTitle {{
         color: {COLOR_TEXT};
-        font-size: 12px;
+        font-size: {fs_section}px;
         font-weight: 650;
     }}
 
@@ -400,7 +420,7 @@ def stylesheet() -> str:
     QLabel#dialogTitle {{
         color: {COLOR_TEXT};
         font-family: {heading_stack};
-        font-size: 15px;
+        font-size: {fs_dialog_title}px;
         font-weight: 700;
         padding: 3px 0 7px 0;
     }}
@@ -426,7 +446,7 @@ def stylesheet() -> str:
 
     QLabel#welcomeKicker {{
         color: {COLOR_TEXT_FAINT};
-        font-size: 11px;
+        font-size: {fs_caption}px;
         font-weight: 650;
         letter-spacing: 1px;
         text-transform: uppercase;
@@ -435,7 +455,7 @@ def stylesheet() -> str:
     QLabel#welcomeTitle {{
         color: {COLOR_TEXT};
         font-family: {heading_stack};
-        font-size: 23px;
+        font-size: {fs_page}px;
         font-weight: 750;
         letter-spacing: -0.4px;
     }}
@@ -447,7 +467,7 @@ def stylesheet() -> str:
 
     QLabel#welcomeSectionTitle {{
         color: {COLOR_TEXT};
-        font-size: 12px;
+        font-size: {fs_section}px;
         font-weight: 650;
     }}
 
@@ -500,7 +520,7 @@ def stylesheet() -> str:
 
     QTreeView::item {{
         border-radius: {RADIUS_SMALL}px;
-        min-height: 26px;
+        min-height: {minh_row}px;
         padding: 2px 6px;
     }}
 
@@ -561,7 +581,7 @@ def stylesheet() -> str:
         border: 1px solid transparent;
         border-bottom: 0;
         border-radius: 8px;
-        min-height: 32px;
+        min-height: {minh_tab}px;
         padding: 6px 14px;
         margin-right: 2px;
     }}
@@ -580,7 +600,7 @@ def stylesheet() -> str:
     }}
 
     QTabWidget#bottomTabs QTabBar::tab {{
-        min-height: 26px;
+        min-height: {minh_tab_compact}px;
         padding: 5px 12px;
     }}
 
@@ -592,7 +612,7 @@ def stylesheet() -> str:
         selection-background-color: #d9dde2;
         selection-color: #111315;
         font-family: {editor_stack};
-        font-size: 13px;
+        font-size: {fs_mono}px;
     }}
 
     QTextEdit {{
@@ -653,10 +673,10 @@ def stylesheet() -> str:
     }}
 
     QWidget#pdfToolbar QPushButton#iconButton {{
-        min-width: 28px;
-        max-width: 28px;
-        min-height: 28px;
-        max-height: 28px;
+        min-width: {icon_large}px;
+        max-width: {icon_large}px;
+        min-height: {icon_large}px;
+        max-height: {icon_large}px;
         padding: 0;
         border-color: transparent;
     }}
@@ -690,7 +710,7 @@ def stylesheet() -> str:
         border-radius: 8px;
         color: {COLOR_TEXT};
         padding: 7px 13px;
-        min-height: 27px;
+        min-height: {minh_control}px;
     }}
 
     QPushButton:hover {{
@@ -727,7 +747,7 @@ def stylesheet() -> str:
         border-radius: 8px;
         color: {COLOR_TEXT};
         padding: 6px 10px;
-        min-height: 28px;
+        min-height: {minh_compact}px;
     }}
 
     QLineEdit:focus,
@@ -740,8 +760,8 @@ def stylesheet() -> str:
 
     QComboBox#engineSelector {{
         padding: 5px 28px 5px 10px;
-        min-height: 25px;
-        min-width: 112px;
+        min-height: {minh_compact}px;
+        min-width: {eng_min_width}px;
     }}
 
     QComboBox#engineSelector:hover {{

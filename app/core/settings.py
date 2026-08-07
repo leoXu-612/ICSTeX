@@ -25,6 +25,8 @@ class AppPreferences:
     auto_pairs: bool = True
     snippets: bool = True
     soft_wrap: bool = True
+    ui_scale: float = 1.0
+    density: str = "comfortable"
 
 
 class AppSettings:
@@ -44,6 +46,8 @@ class AppSettings:
             auto_pairs=_bool(self.settings.value("editor/auto_pairs", True)),
             snippets=_bool(self.settings.value("editor/snippets", True)),
             soft_wrap=_bool(self.settings.value("editor/soft_wrap", True)),
+            ui_scale=_float(self.settings.value("appearance/ui_scale", 1.0), 0.9, 1.5),
+            density=_str(self.settings.value("appearance/density", "comfortable")),
         )
 
     def save_preferences(self, preferences: AppPreferences) -> None:
@@ -58,6 +62,8 @@ class AppSettings:
         self.settings.setValue("editor/auto_pairs", preferences.auto_pairs)
         self.settings.setValue("editor/snippets", preferences.snippets)
         self.settings.setValue("editor/soft_wrap", preferences.soft_wrap)
+        self.settings.setValue("appearance/ui_scale", preferences.ui_scale)
+        self.settings.setValue("appearance/density", preferences.density)
         self.settings.sync()
 
     def recent_files(self) -> list[Path]:
@@ -106,6 +112,18 @@ def _int(value: Any, low: int, high: int) -> int:
     except (TypeError, ValueError):
         number = low
     return max(low, min(high, number))
+
+
+def _float(value: Any, low: float, high: float) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        number = low
+    return max(low, min(high, number))
+
+
+def _str(value: Any, default: str = "") -> str:
+    return str(value) if value is not None else default
 
 
 def _engine(value: Any) -> LaTeXEngine:

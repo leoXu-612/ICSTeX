@@ -439,6 +439,15 @@ def stylesheet(
         background: {COLOR_EDITOR};
     }}
 
+    QScrollArea#welcomeScroll {{
+        background: {COLOR_EDITOR};
+        border: 0;
+    }}
+
+    QWidget#welcomeContent {{
+        background: {COLOR_EDITOR};
+    }}
+
     QLabel#welcomeCover {{
         background: transparent;
         border: 0;

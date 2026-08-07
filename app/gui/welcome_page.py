@@ -4,11 +4,26 @@ from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QApplication,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
 
 from app.gui.assets import app_cover_path
 from app.gui.icons import icon
 from app.gui.main_window_support import set_dynamic_property
+from app.gui.responsive.helpers import (
+    layout_reflow,
+    resolve_layout_mode,
+    update_button_minimum_size,
+)
 
 
 class WelcomePage(QWidget):
@@ -21,10 +36,14 @@ class WelcomePage(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.setObjectName("welcomePage")
+        self._layout_mode = ""
         self.toolchain_label = QLabel("正在检测 LaTeX 环境...")
         self.toolchain_label.setObjectName("welcomeMuted")
         self.toolchain_label.setWordWrap(True)
         self.recent_list = QVBoxLayout()
+        self.recent_list.setSpacing(4)
+        self._action_buttons: list[QPushButton] = []
+        self._card_widgets: list[QWidget] = []
         self._build()
 
     def set_toolchain_status(self, ready: bool, message: str) -> None:
@@ -49,28 +68,18 @@ class WelcomePage(QWidget):
             self.recent_list.addWidget(button)
 
     def _build(self) -> None:
-        layout = QVBoxLayout(self)
+        content = QWidget()
+        content.setObjectName("welcomeContent")
+        layout = QVBoxLayout(content)
         layout.setContentsMargins(36, 30, 36, 30)
         layout.setSpacing(16)
 
         header = QHBoxLayout()
         header.setSpacing(18)
-        cover = QLabel()
-        cover.setObjectName("welcomeCover")
-        cover.setFixedSize(88, 88)
-        cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        pixmap = QPixmap(str(app_cover_path()))
-        if pixmap.isNull():
-            cover.setText("ICSTeX")
-        else:
-            cover.setPixmap(
-                pixmap.scaled(
-                    QSize(82, 82),
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
-                )
-            )
-        header.addWidget(cover)
+        self.cover = QLabel()
+        self.cover.setObjectName("welcomeCover")
+        self.cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        header.addWidget(self.cover)
 
         title_column = QVBoxLayout()
         title_column.setSpacing(6)
@@ -80,6 +89,7 @@ class WelcomePage(QWidget):
         title.setObjectName("welcomeTitle")
         subtitle = QLabel("从模板开始，或打开已有 LaTeX 项目。")
         subtitle.setObjectName("welcomeSubtitle")
+        subtitle.setWordWrap(True)
         title_column.addStretch()
         title_column.addWidget(kicker)
         title_column.addWidget(title)
@@ -88,8 +98,8 @@ class WelcomePage(QWidget):
         header.addLayout(title_column, 1)
         layout.addLayout(header)
 
-        action_row = QHBoxLayout()
-        action_row.setSpacing(10)
+        self.action_grid = QGridLayout()
+        self.action_grid.setSpacing(10)
         self.new_project_button = QPushButton("新建 IA 项目")
         self.new_project_button.setObjectName("primaryButton")
         self.open_file_button = QPushButton("打开 .tex")
@@ -99,12 +109,15 @@ class WelcomePage(QWidget):
         self.open_file_button.setIcon(icon("folder-open", size=16))
         self.open_folder_button.setIcon(icon("folder", size=16))
         self.guide_button.setIcon(icon("info", size=16))
-        for button in (self.new_project_button, self.open_file_button, self.open_folder_button, self.guide_button):
+        self._action_buttons = [
+            self.new_project_button,
+            self.open_file_button,
+            self.open_folder_button,
+            self.guide_button,
+        ]
+        for button in self._action_buttons:
             button.setIconSize(QSize(16, 16))
-            button.setMinimumHeight(32)
-            action_row.addWidget(button)
-        action_row.addStretch()
-        layout.addLayout(action_row)
+        layout.addLayout(self.action_grid)
 
         status_box = QFrame()
         status_box.setObjectName("welcomeBox")
@@ -122,18 +135,75 @@ class WelcomePage(QWidget):
         recent_title.setObjectName("welcomeSectionTitle")
         recent_layout.addWidget(recent_title)
         recent_layout.addLayout(self.recent_list)
-        content_row = QHBoxLayout()
-        content_row.setSpacing(12)
-        status_box.setMinimumWidth(280)
-        content_row.addWidget(status_box, 1)
-        content_row.addWidget(recent_box, 2)
-        layout.addLayout(content_row)
+        self.cards_grid = QGridLayout()
+        self.cards_grid.setSpacing(12)
+        self._card_widgets = [status_box, recent_box]
+        layout.addLayout(self.cards_grid)
         layout.addStretch()
+
+        self.scroll = QScrollArea()
+        self.scroll.setObjectName("welcomeScroll")
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.scroll.setWidget(content)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(self.scroll)
 
         self.new_project_button.clicked.connect(self.newProjectRequested.emit)
         self.open_file_button.clicked.connect(self.openFileRequested.emit)
         self.open_folder_button.clicked.connect(self.openFolderRequested.emit)
         self.guide_button.clicked.connect(self.guideRequested.emit)
+
+        app = QApplication.instance()
+        manager = getattr(app, "ui_scale_manager", None)
+        if manager is not None:
+            manager.scale_changed.connect(lambda _scale: self._apply_metrics())
+        self._apply_metrics()
+        self._apply_layout_mode(resolve_layout_mode(self.contentsRect().width()))
+
+    def _apply_metrics(self) -> None:
+        app = QApplication.instance()
+        manager = getattr(app, "ui_scale_manager", None)
+        metrics = manager.metrics if manager is not None else None
+        from app.gui.theme.ui_metrics import UiMetrics
+
+        metrics = metrics or UiMetrics(1.0)
+        self.cover.setFixedSize(metrics.logo_size, metrics.logo_size)
+        pixmap = QPixmap(str(app_cover_path()))
+        if pixmap.isNull():
+            self.cover.setText("ICSTeX")
+        else:
+            inner = max(8, metrics.logo_size - 6)
+            self.cover.setPixmap(
+                pixmap.scaled(
+                    QSize(inner, inner),
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+            )
+        for button in self._action_buttons:
+            update_button_minimum_size(button, metrics)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        mode = resolve_layout_mode(self.contentsRect().width())
+        if mode != self._layout_mode:
+            self._apply_layout_mode(mode)
+
+    def _apply_layout_mode(self, mode: str) -> None:
+        self._layout_mode = mode
+        if mode == "wide":
+            action_columns = 4
+            card_columns = 2
+        elif mode == "medium":
+            action_columns = 2
+            card_columns = 1
+        else:
+            action_columns = 1
+            card_columns = 1
+        layout_reflow(self, self.action_grid, self._action_buttons, action_columns)
+        layout_reflow(self, self.cards_grid, self._card_widgets, card_columns)
 
 
 def _clear_layout(layout: QVBoxLayout) -> None:
@@ -141,5 +211,4 @@ def _clear_layout(layout: QVBoxLayout) -> None:
         item = layout.takeAt(0)
         widget = item.widget()
         if widget is not None:
-            widget.hide()
             widget.deleteLater()

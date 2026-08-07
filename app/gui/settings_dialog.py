@@ -83,6 +83,8 @@ class SettingsDialog(QDialog):
 
         self.ocr_status = QLabel("公式识别 (pix2tex)：检测中…")
         self.ocr_status.setWordWrap(True)
+        self.text_ocr_status = QLabel("文字识别 (RapidOCR)：检测中…")
+        self.text_ocr_status.setWordWrap(True)
         self.ocr_install_button = QPushButton("安装（约 1.2GB 依赖 + 116MB 模型）")
         self.ocr_remove_button = QPushButton("移除")
         self.ocr_install_button.clicked.connect(self._ocr_install)
@@ -93,6 +95,7 @@ class SettingsDialog(QDialog):
         ocr_row.addStretch()
         layout.addWidget(QLabel("可选本地工具（不影响核心功能）："))
         layout.addWidget(self.ocr_status)
+        layout.addWidget(self.text_ocr_status)
         layout.addLayout(ocr_row)
         license_label = QLabel("模型权重许可 CC BY-NC-SA；仅本地使用，不随项目/导出包分发。")
         license_label.setWordWrap(True)
@@ -116,6 +119,14 @@ class SettingsDialog(QDialog):
     def _refresh_ocr_status(self) -> None:
         manager = self._get_ocr_manager()
         self.ocr_status.setText(f"公式识别 (pix2tex)：{manager.status() if manager else '未安装'}")
+        from app.services.recognition.runtime_manager import detect
+
+        detected = detect()
+        rapid = detected.get("rapidocr", {})
+        self.text_ocr_status.setText(
+            f"文字识别 (RapidOCR)：{'已安装' if rapid.get('installed') else '未安装'}"
+            + ("（模型缺失）" if rapid.get("installed") and not rapid.get("manifest") else "")
+        )
 
     def _ocr_install(self) -> None:
         self._get_ocr_manager().install(with_models=True)

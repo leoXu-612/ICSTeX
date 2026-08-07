@@ -12,6 +12,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtWidgets import QApplication, QTabWidget
 
 from app.core.blocks.layout import LayoutNode, block_slot
+from app.core.blocks.asset_import import import_image
 from app.core.blocks.model import content_for_text
 from app.core.blocks.project_repository import load_project, save_project
 from app.core.blocks.registry import BlockRegistry, CreateBlockInput
@@ -23,6 +24,7 @@ from app.gui.blocks.commands import DeleteBlockCommand
 from app.gui.blocks.project_dialog import BlockProjectDialog
 from app.gui.blocks.project_session import ProjectSession
 from app.gui.blocks.selection import SelectionContext, SelectionManager
+from app.gui.blocks.navigation_dock import BlockNavigationWidget
 from app.gui.blocks.workspace_controller import BlockWorkspaceController
 from app.gui.blocks.workspace_widget import BlockWorkspaceWidget
 
@@ -295,6 +297,56 @@ class StableLatexTests(TestCase):
             second = session.assemble_latex()
             self.assertIsNotNone(first)
             self.assertEqual(first.read_text(encoding="utf-8"), second.read_text(encoding="utf-8"))
+
+
+class AssetImportTests(TestCase):
+    def test_import_copies_and_dedupes_without_moving_source(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            project = root / "proj"
+            source = root / "photo.png"
+            source.write_bytes(b"\x89PNG\r\n\x1a\nfake")
+            relative = import_image(project, source)
+            self.assertEqual(relative, "assets/images/photo.png")
+            self.assertTrue((project / "assets" / "images" / "photo.png").exists())
+            self.assertTrue(source.exists(), "source file must never be moved")
+
+            second = import_image(project, source)
+            self.assertEqual(second, "assets/images/photo (1).png")
+
+
+class NavDropTests(TestCase):
+    def setUp(self) -> None:
+        app()
+        self._tmp = TemporaryDirectory()
+        self.project = Path(self._tmp.name)
+        self.session = ProjectSession(project_dir=self.project)
+        self.nav = BlockNavigationWidget(self.session)
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def test_drop_image_creates_image_block(self) -> None:
+        from PySide6.QtCore import QMimeData, QPointF, Qt, QUrl
+        from PySide6.QtGui import QDropEvent
+
+        source = self.project / "drop.png"
+        source.write_bytes(b"\x89PNG fake")
+        mime = QMimeData()
+        mime.setUrls([QUrl.fromLocalFile(str(source))])
+        event = QDropEvent(
+            QPointF(10, 10),
+            Qt.DropAction.CopyAction,
+            mime,
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+        )
+        self.nav.dropEvent(event)
+
+        images = [b for b in self.session.registry.blocks() if b.type == "image"]
+        self.assertEqual(len(images), 1)
+        self.assertEqual(images[0].content.get("source"), "assets/images/drop.png")
+        self.assertTrue((self.project / "assets" / "images" / "drop.png").exists())
 
 
 class MainWindowBlockIntegrationTests(TestCase):

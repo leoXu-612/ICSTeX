@@ -135,6 +135,9 @@ class MainWindow(QMainWindow):
         self.preferences_controller = PreferencesController(self)
 
         self._build_ui()
+        saved_window_state = self.app_settings.settings.value("window/block_console_state")
+        if saved_window_state:
+            self.restoreState(saved_window_state)
         self._connect_signals()
         self._update_pdf_action_state()
         self.update_document_view_state()
@@ -959,6 +962,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         self.tab_manager.handle_close_event(event)
+        self.app_settings.settings.setValue("window/block_console_state", self.saveState())
 
     def current_tab(self) -> EditorTab | None:
         return self.tab_manager.current()

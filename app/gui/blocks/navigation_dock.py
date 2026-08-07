@@ -1,7 +1,11 @@
 """Blocks / Layout / Sources navigation dock for the main console."""
 from __future__ import annotations
 
+from pathlib import Path
+
+from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from app.core.blocks.model import BLOCK_TYPES
+from app.core.blocks.asset_import import import_image, is_image_path
 from app.core.blocks.source_registry import SourceRecord, check_source
 from app.gui.blocks.project_session import ProjectSession
 from app.gui.blocks.workspace_controller import BlockWorkspaceController
@@ -64,6 +68,7 @@ class BlockNavigationWidget(QWidget):
         self.block_list = QListWidget()
         self.block_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
         self.block_list.setDragDropMode(QListWidget.DragDropMode.InternalMove)
+        self.block_list.setAcceptDrops(True)
         self.block_list.itemSelectionChanged.connect(self._on_block_selection)
         self.block_list.itemDoubleClicked.connect(lambda _item: self._emit_edit())
 
@@ -138,6 +143,41 @@ class BlockNavigationWidget(QWidget):
         session.model_changed.connect(lambda _reason: self.refresh())
         session.selection.selection_changed.connect(self._on_session_selection)
         self.refresh()
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        if event.mimeData().hasUrls() and any(
+            is_image_path(Path(url.toLocalFile())) for url in event.mimeData().urls()
+        ):
+            event.acceptProposedAction()
+            return
+        super().dragEnterEvent(event)
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        if self.session.project_dir is None or not event.mimeData().hasUrls():
+            event.ignore()
+            return
+        accepted = False
+        for url in event.mimeData().urls():
+            path = Path(url.toLocalFile())
+            if not is_image_path(path):
+                continue
+            relative = import_image(self.session.project_dir, path)
+            item = self.block_list.itemAt(event.position().toPoint())
+            block_id = item.data(256) if item is not None else None
+            block = self.session.registry.get(block_id) if block_id else None
+            if block is not None and block.type == "image":
+                self.controller.update_block(
+                    block.id,
+                    {"content": {**block.content, "source": relative}},
+                    text="替换图片",
+                )
+            else:
+                self.controller.add_block("image", alias=path.stem, content={"source": relative})
+            accepted = True
+        if accepted:
+            event.acceptProposedAction()
+        else:
+            event.ignore()
 
     # --- refresh ----------------------------------------------------------
     def refresh(self, *_args: object) -> None:

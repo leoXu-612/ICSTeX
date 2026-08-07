@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from pathlib import Path
 
 from PySide6.QtWidgets import (
     QComboBox,
@@ -9,6 +10,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QLabel,
     QLineEdit,
+    QFileDialog,
     QPlainTextEdit,
     QPushButton,
     QVBoxLayout,
@@ -16,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.blocks.formula_adapter import FormulaBlockAdapter
+from app.core.blocks.asset_import import import_image
 from app.core.formula_input import recognize_formula
 from app.gui.blocks.commands import ChangeLayoutCommand
 from app.gui.blocks.project_session import ProjectSession
@@ -47,6 +50,10 @@ class BlockInspector(QWidget):
         self.image_height = QDoubleSpinBox()
         self.image_height.setRange(0.0, 500.0)
         self.image_height.setSuffix(" mm")
+        self.image_source_label = QLabel("")
+        self.image_source_label.setWordWrap(True)
+        self.image_replace_button = QPushButton("替换图片…")
+        self.image_replace_button.clicked.connect(self._replace_image)
         self.caption_edit = QLineEdit()
         self.apply_button = QPushButton("应用修改")
         self.apply_button.clicked.connect(self._apply_block_edit)
@@ -75,6 +82,8 @@ class BlockInspector(QWidget):
         self.form.addRow("标题级别", self.heading_level)
         self.form.addRow("宽度", self.image_width)
         self.form.addRow("高度", self.image_height)
+        self.form.addRow("图片源", self.image_source_label)
+        self.form.addRow("", self.image_replace_button)
         self.form.addRow("标题", self.caption_edit)
         self.form.addRow("", self.formula_button)
         self.form.addRow("", self.table_button)
@@ -121,6 +130,8 @@ class BlockInspector(QWidget):
                 self.heading_level,
                 self.image_width,
                 self.image_height,
+                self.image_source_label,
+                self.image_replace_button,
                 self.caption_edit,
                 self.formula_button,
                 self.table_button,
@@ -140,6 +151,8 @@ class BlockInspector(QWidget):
             self.heading_level,
             self.image_width,
             self.image_height,
+            self.image_source_label,
+            self.image_replace_button,
             self.caption_edit,
             self.formula_button,
             self.table_button,
@@ -149,8 +162,12 @@ class BlockInspector(QWidget):
         self.formula_button.setVisible(block.type == "formula")
         self.table_button.setVisible(block.type == "table")
         self.formula_info.setVisible(block.type == "formula")
+        self.image_replace_button.setVisible(block.type == "image")
+        self.image_source_label.setVisible(block.type == "image")
         if block.type == "formula":
             self.formula_info.setText(str(content.get("latexCache", "")))
+        if block.type == "image":
+            self.image_source_label.setText(str(content.get("source", "（未设置）")))
 
     def _content_edit_for(self, block_type: str, content: dict) -> None:
         self.content_edit.setPlainText(str(content.get("text", "")))
@@ -216,6 +233,21 @@ class BlockInspector(QWidget):
     def _open_table_editor(self) -> None:
         if self.workspace is not None:
             self.workspace.tabs.setCurrentIndex(1)
+
+    def _replace_image(self) -> None:
+        block_id = self._current_block_id
+        block = self.session.registry.get(block_id) if block_id else None
+        if block is None or self.session.project_dir is None:
+            return
+        file_name, _ = QFileDialog.getOpenFileName(self, "替换图片", str(Path.home()), "图片 (*.png *.jpg *.jpeg *.gif *.pdf *.svg *.bmp)")
+        if not file_name:
+            return
+        relative = import_image(self.session.project_dir, Path(file_name))
+        self.controller.update_block(
+            block.id,
+            {"content": {**block.content, "source": relative}},
+            text="替换图片",
+        )
 
     def _apply_layout_edit(self) -> None:
         if self.layout_editor is None or self.layout_editor.layout is None:

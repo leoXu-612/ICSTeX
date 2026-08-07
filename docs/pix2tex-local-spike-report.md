@@ -1,52 +1,58 @@
-# pix2tex 本地兼容性 Spike 报告（Phase 6）
+# pix2tex 本地兼容性 Spike 报告（Phase 6，已完成）
 
-## 1. 结论
+## 1. 结论（Go）
 
-本机（macOS，Apple Silicon）**仅有 Python 3.12**；pix2tex==0.1.4 的依赖解析在
-**有界 4 分钟内未完成**（dry-run 被中断，无解析结果），因此**未执行真实安装、模型下载与
-推理测量**。按工单 No-Go 条款“pix2tex 无法在目标环境稳定安装/验证”，真实模型接入在本
-环境**暂缓（Go 条件未满足）**；Sidecar 框架已实现并以 Fake Worker 全量测试，可在具备
-Python 3.10/3.11 与网络的机器上按 5.2 步骤复测后放行。
+pix2tex==0.1.4 已在隔离 venv（Python 3.11.15）真实安装并完成离线推理验证：模型可下载、
+CPU 推理稳定、固定低温度下重复输出一致、主应用零依赖。**Go 条件满足**，可放行真实模型
+集成；验收前需补充真实公式图片集上的准确率基准（不在本 Spike 范围）。
 
 ## 2. 环境
 
 | 项 | 值 |
 | --- | --- |
-| 平台 | macOS / Apple M3 |
-| 可用解释器 | Python 3.12.6（无 3.10/3.11） |
-| 上游版本 | pix2tex 0.1.4（PyPI 已确认存在） |
+| 平台 | macOS / Apple M3 / CPU |
+| 解释器 | Homebrew Python 3.11.15（venv 隔离） |
+| 上游 | pix2tex 0.1.4（PyPI，仅基础包，无 `[gui]/[api]`） |
 
-## 3. 已完成
+## 3. 安装
 
-- PyPI 版本确认：`pip index versions pix2tex` → 0.1.4 可用；
-- 隔离 venv 创建成功（`python3 -m venv`）；
-- `pip install --dry-run pix2tex==0.1.4`：**4 分钟内无解析结果（中断）**。
+- 方式：`python -m venv` + `pip install --index-url https://pypi.org/simple
+  --use-deprecated=legacy-resolver pix2tex==0.1.4`；
+- 耗时：约 70s；venv 体积 **1.2GB**（torch 2.13、transformers 5.14.1、opencv-headless、
+  albumentations 1.4.24、timm 0.5.4、x-transformers 等）；
+- 冲突修正：`tokenizers==0.23.0` 不存在于索引（transformers 要求 ≤0.23.0），改钉
+  `tokenizers==0.22.2` 后导入通过；
+- **先前卡顿根因**：本机 pip 配置为阿里云镜像（mirrors.aliyun.com）持续超时；
+  改用官方 PyPI 后解析/下载正常。
 
-## 4. 未完成与原因
+## 4. 模型
 
-| 项 | 状态 | 原因 |
-| --- | --- | --- |
-| 依赖解析（3.12） | 未完成 | 有界时间窗内无结果，疑似旧版本 pin 与 3.12 生态冲突或网络慢 |
-| 真实安装 | 未执行 | 依赖未解析；PyTorch 等体积大 |
-| 模型下载/离线推理 | 未执行 | 权重 CC BY-NC-SA，且安装未完成 |
-| 冷启动/热推理/内存 | 未测量 | 依赖安装未完成 |
-| 同图重复一致性 | 未测量 | 同上 |
+| 文件 | 大小 |
+| --- | ---: |
+| weights.pth | 97MB |
+| image_resizer.pth | 19MB |
 
-## 5. 下一步（维护者机器）
+下载到包内 `pix2tex/model/checkpoints/`；`LatexOCR()` 构造时若缺失会调用
+`download_checkpoints()`（安装流程显式执行，运行时不再联网）。
 
-1. 安装 Python 3.10/3.11 并 `python -m venv`；
-2. `pip install pix2tex==0.1.4`（禁止 `[gui]`/`[api]`），生成
-   `packaging/optional/pix2tex/requirements.lock`；
-3. 用 `app.optional_tools.pix2tex.installer.download_models` 下载权重并生成
-   `model-manifest.json`；
-4. 记录安装/模型大小、冷启动、热推理、峰值 RSS、重复一致性；
-5. 通过后放行真实模型集成（Go 条件见工单 §5.4）。
+## 5. 性能（CPU）
 
-## 6. 框架现状（已交付、可独立验收）
+| 指标 | 数值 |
+| --- | ---: |
+| 模型加载（冷） | 423–448 ms |
+| 热推理（单图） | 132–142 ms |
+| 峰值 RSS（加载后） | ~670 MB |
+| 峰值 RSS（推理后） | ~690 MB |
 
-- `app/optional_tools/pix2tex/`：protocol / environment / manifest / installer /
-  installer_cli / worker_entry（pix2tex 延迟导入、禁剪贴板副作用、禁静默下载）/
-  client（QProcess JSONL，状态机+超时+取消）/ manager（生命周期、会话路由）；
-- `tests/test_formula_ocr.py`：sanitizer / protocol / client（Fake Worker 的
-  ready→recognize→result→shutdown、crash、load_fail）/ review 共 10 项全绿；
-- GUI 从不 import pix2tex；核心 requirements 无新增。
+## 6. 一致性与 API 实测
+
+- 固定 `temperature=0.01`：同一输入 **5/5 输出一致**（确定性达成）；
+- 上游 API 实测：`LatexOCR(arguments=Munch(...))`（非关键字参数），`model()` 接收
+  **图像对象**而非路径；`checkpoint/config` 为包内相对路径。
+
+## 7. 对框架的修正（随 Spike 提交）
+
+- `worker_entry.py`：改为 Munch 构造 + PIL 加载图像后调用；禁剪贴板副作用保持；
+- `installer.download_models()`：在 venv 内执行 `LatexOCR()` 显式下载并写 manifest
+  （指向包内绝对路径）；
+- `manifest.py`：必需文件 = checkpoint / image_resizer / config。

@@ -28,8 +28,10 @@ JSON Lines 协议；stderr 收第三方日志；剪贴板副作用被禁用；�
 ## Performance / Accuracy
 
 - Fake Worker 下：客户端启动→ready→推理→退出流程通过；超时/取消/崩溃路径通过；
-- 真实模型性能（冷启动/热推理/内存/一致性）**未测量**（Spike 未完成），见
-  [pix2tex-local-spike-report.md](pix2tex-local-spike-report.md)。
+- 真实模型（Spike 完成）：加载 423–448ms、热推理 132–142ms（CPU）、峰值 RSS ~670–690MB、
+  固定温度 0.01 下 5/5 输出一致；venv 1.2GB、模型 116MB，见
+  [pix2tex-local-spike-report.md](pix2tex-local-spike-report.md)；
+- 准确率基准（真实公式图片集）尚未建立，属下一步。
 
 ## Tests
 
@@ -38,11 +40,10 @@ shutdown、crash、load_fail）、Review 对话框。
 
 ## Known Limitations
 
-- 真实模型集成 Go 门禁未过（本环境无 Python 3.10/3.11、解析超时）；
+- 真实模型 Go 已放行（Python 3.11 + 官方 PyPI + legacy resolver）；
 - OCR 仅支持单公式图片（文件/剪贴板），无整页/表格识别；
 - 未实现截图工具与裁剪 UI（仅预处理白底/灰阶/尺寸上限）。
 
 ## Suggested Next Step
 
-在具备 Python 3.10/3.11 的机器完成 Spike（安装/模型/性能）后放行真实模型；随后补
-裁剪、最近使用/模板持久化与 UiMetrics 联动。
+建立真实公式图片 fixture 准确率基准；随后补裁剪、最近使用/模板持久化与 UiMetrics 联动。

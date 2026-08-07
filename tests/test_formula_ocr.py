@@ -144,3 +144,50 @@ class ImageInputTests(TestCase):
         processed = preprocess(image)
         self.assertFalse(processed.hasAlphaChannel())
         self.assertEqual(processed.pixelColor(0, 0), QColor("white"))
+
+
+class LineSplitterTests(TestCase):
+    def test_splits_two_bands(self) -> None:
+        _app()
+        from PySide6.QtGui import QColor, QImage, QPainter, QPen
+
+        from app.core.formula.line_splitter import split_formula_lines
+
+        image = QImage(300, 120, QImage.Format.Format_RGB32)
+        image.fill(QColor("white"))
+        painter = QPainter(image)
+        painter.setPen(QPen(QColor("black"), 3))
+        painter.drawLine(30, 20, 270, 20)  # line 1 band
+        painter.drawLine(30, 80, 270, 80)  # line 2 band
+        painter.end()
+        crops = split_formula_lines(image)
+        self.assertEqual(len(crops), 2)
+        self.assertLess(crops[0].height(), crops[1].y() if hasattr(crops[1], "y") else 120)
+        # top crop sits in the upper band, bottom crop in the lower band
+        self.assertTrue(crops[0].height() < 60)
+        self.assertTrue(crops[1].height() < 60)
+
+    def test_blank_image_returns_nothing(self) -> None:
+        _app()
+        from PySide6.QtGui import QColor, QImage
+
+        from app.core.formula.line_splitter import split_formula_lines
+
+        image = QImage(200, 80, QImage.Format.Format_RGB32)
+        image.fill(QColor("white"))
+        self.assertEqual(split_formula_lines(image), [])
+
+
+class MultiLineDialogTests(TestCase):
+    def test_result_latex_joins_lines_in_aligned(self) -> None:
+        _app()
+        from app.gui.formula_ocr.multi_line_dialog import MultiLineOcrDialog
+
+        dialog = MultiLineOcrDialog([r"a &= b", r"c &= d"])
+        dialog.line_edits[0].setText(r"x &= 1")
+        latex = dialog.result_latex()
+        self.assertIn(r"\begin{aligned}", latex)
+        self.assertIn(r"x &= 1", latex)
+        self.assertIn(r"c &= d", latex)
+        self.assertIn(r"\end{aligned}", latex)
+        dialog.close()

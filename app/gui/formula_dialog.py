@@ -97,6 +97,9 @@ class FormulaDialog(QDialog):
         self.ocr_button = QPushButton("从图片识别…")
         self.ocr_button.setToolTip("使用可选本地 pix2tex 识别公式图片（需先安装）。")
         self.ocr_button.clicked.connect(self._run_ocr)
+        self.multi_ocr_button = QPushButton("多行拆分识别…")
+        self.multi_ocr_button.setToolTip("把多行公式图拆成单行分别识别，再组合为 aligned 环境。")
+        self.multi_ocr_button.clicked.connect(self._run_multi_ocr)
         self.ocr_status_label = QLabel("")
         self._ocr_request_id: str | None = None
         self._ocr_image_path: Path | None = None
@@ -137,6 +140,7 @@ class FormulaDialog(QDialog):
         mode_row.addWidget(self.source_mode_check)
         mode_row.addStretch()
         mode_row.addWidget(self.ocr_button)
+        mode_row.addWidget(self.multi_ocr_button)
         mode_row.addWidget(self.ocr_status_label)
         layout.addLayout(mode_row)
 
@@ -166,6 +170,39 @@ class FormulaDialog(QDialog):
         self._refresh()
 
     def _run_ocr(self) -> None:
+        manager, image = self._prepare_ocr()
+        if manager is None or image is None:
+            return
+        temp = save_temp(preprocess(image))
+        self._ocr_image_path = temp
+        self._ocr_request_id = f"ocr-{uuid.uuid4().hex[:12]}"
+        manager.recognition_finished.connect(self._on_ocr_result)
+        manager.recognition_failed.connect(self._on_ocr_failed)
+        manager.recognize(RecognitionRequest(request_id=self._ocr_request_id, image_path=temp), session_id="formula-dialog")
+        self.ocr_status_label.setText("识别中…")
+
+    def _run_multi_ocr(self) -> None:
+        manager, image = self._prepare_ocr()
+        if manager is None or image is None:
+            return
+        from app.gui.formula_ocr.multi_line_dialog import MultiLineOcrDialog, split_and_recognize
+
+        self.ocr_status_label.setText("拆分识别中…")
+        QApplication.processEvents()
+        lines = split_and_recognize(image, manager)
+        self.ocr_status_label.setText("")
+        if not lines:
+            QMessageBox.warning(self, "多行公式识别", "未能从图片中拆出可识别的行。")
+            return
+        dialog = MultiLineOcrDialog(lines, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            latex = dialog.result_latex()
+            if latex:
+                self.visual_edit.set_latex(latex)
+                self.editor_stack.setCurrentWidget(self.visual_edit)
+                self.source_mode_check.setChecked(False)
+
+    def _prepare_ocr(self):
         app = QApplication.instance()
         manager = getattr(app, "ocr_manager", None)
         if manager is None:
@@ -175,23 +212,17 @@ class FormulaDialog(QDialog):
             app.ocr_manager = manager
         if manager.status() in ("NOT_INSTALLED", "MODEL_MISSING"):
             QMessageBox.information(self, "公式识别", "pix2tex 未安装或模型缺失。")
-            return
+            return None, None
         image = image_from_clipboard()
         if image is None:
             file_name, _ = QFileDialog.getOpenFileName(self, "选择公式图片", "", "图片 (*.png *.jpg *.jpeg *.webp)")
             if not file_name:
-                return
+                return None, None
             image = image_from_file(Path(file_name))
         if image is None:
             QMessageBox.warning(self, "公式识别", "无法读取图片。")
-            return
-        temp = save_temp(preprocess(image))
-        self._ocr_image_path = temp
-        self._ocr_request_id = f"ocr-{uuid.uuid4().hex[:12]}"
-        manager.recognition_finished.connect(self._on_ocr_result)
-        manager.recognition_failed.connect(self._on_ocr_failed)
-        manager.recognize(RecognitionRequest(request_id=self._ocr_request_id, image_path=temp), session_id="formula-dialog")
-        self.ocr_status_label.setText("识别中…")
+            return None, None
+        return manager, image
 
     def _on_ocr_result(self, payload) -> None:
         request_id, _session_id, result = payload

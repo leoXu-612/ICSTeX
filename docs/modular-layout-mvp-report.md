@@ -59,7 +59,7 @@ Block、Layout、Project、AppTheme、DocumentTheme、Source 六个 Schema 均�
 ```bash
 python3 -m compileall -q app tests packaging/install_build_dependencies.py
 QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests
-# 618 tests passed（本机，含 golden、编译、安全、确定性、GUI）
+# 619 tests passed（本机，2026-08-07 复跑；含 golden、编译、安全、确定性、GUI）
 ```
 
 本地 CI 模拟 `tools/run_mvp_ci.sh` 完整通过（compileall → ubuntu 子集 →

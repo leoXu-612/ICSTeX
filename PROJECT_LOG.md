@@ -455,3 +455,23 @@ must link here instead of repeating old task details.
 - Documentation and agent-instruction change only; no application source,
   version metadata, or generated artifact changed. Verification passed:
   compileall clean and all 372 offscreen tests OK.
+
+## 2026-08-07 - Modular Layout Block MVP (feature/modular-layout-mvp)
+
+- Implemented the modular Block layout MVP per the deep-research task checklist:
+  `app/core/blocks/` data model, six JSON Schemas (Draft 2020-12), atomic
+  store/migration, table import (CSV/clipboard/XLSX), four table LaTeX
+  strategies, three-way source merge, DocumentTheme-to-.sty rendering, compile
+  timeout, block source mapping, portable export, and the 2×2 demo.
+- Added `app/gui/blocks/` console: table editor, layout panel (drag reorder/
+  undo/inspector), merge dialog, theme settings, formula tab, six-tab project
+  dialog, existing-project loader, and a MainWindow help-menu entry.
+- Added `tools/run_mvp_ci.sh` local CI simulation and
+  `docs/modular-layout-mvp-report.md` final report.
+- Verification (2026-08-07, local authority): compileall clean, ubuntu subset
+  72 tests OK, full suite 619 tests OK, demo builds and compiles
+  (xelatex/ctex), export package verified in a clean temp directory.
+- GitHub Actions remains the only open gate: the ubuntu job previously passed
+  (22s); macOS full-suite hardening (job timeout, `-v`, `timeout_seconds=300`)
+  is committed. Push is paused per maintainer instruction until Actions quota
+  is restored.

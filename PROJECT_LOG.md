@@ -509,3 +509,20 @@ must link here instead of repeating old task details.
 - Added regression test `test_dialog_opens_with_loaded_document_theme`
   (dialog opens with a loaded DocumentTheme, six tabs, preview PDF honors the
   loaded theme). Full suite: 621 tests OK locally.
+
+## 2026-08-07 - Block Module Main-Console Integration (feature/block-console-integration)
+
+- Executed the integration plan end to end on
+  `feature/block-console-integration` (from modular-layout-mvp 9ee1c22):
+  Phase 0 audit + baseline freeze (621 tests), then ProjectSession/
+  repository/workspace/controller/commands extraction, MainWindow dock
+  embedding, unified selection/undo/save/compile routing, image asset
+  import, window-state persistence.
+- BlockProjectDialog is now a thin wrapper over one shared ProjectSession;
+  the duplicate CompileManager and direct LaTeX/JSON writes were removed
+  from the Block GUI layer.
+- Full suite: 643 tests OK locally; `tools/run_mvp_ci.sh` green including
+  demo build; docs/block-console-integration-report.md records the
+  before/after architecture, event flows, manual acceptance steps and
+  known limitations.
+- Not pushed; remote CI remains gated by the GitHub billing/spending limit.

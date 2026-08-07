@@ -562,3 +562,17 @@ must link here instead of repeating old task details.
 - Phase H: 最终回归 compileall OK、全套件 659 tests OK、run_mvp_ci.sh 全绿、
   Stable LaTeX 在 90% 与 150% 下输出字节一致。
 - Phase I/J: 报告补 15 问回答与基线说明；CHANGELOG 未发布段更新；收口提交；未推送。
+
+## 2026-08-07 - Formula Editor 2.0 审计与 pix2tex 本地 OCR Sidecar (feature/formula-editor-local-ocr)
+
+- Phase 1 审计：公式系统已具备 Formula Editor 2.0 主体（结构化画布、AST 权威、草稿隔离、
+  本地撤销、源码模式、无损往返），输出 docs/formula-editor-current-state-audit.md；
+- 新增 FormulaLatexSanitizer（剥包装/拒绝危险命令/路径/超长/超深）与 OCR JSONL 协议；
+- 新增可选 pix2tex Sidecar：environment/manifest/installer/installer_cli/worker_entry
+  （延迟导入、禁剪贴板副作用、禁静默下载）/client（QProcess 状态机+超时+取消）/manager
+  （生命周期与会话路由）；核心 requirements 零新增、GUI 不 import pix2tex；
+- FormulaDialog 接入“从图片识别…”→ RecognitionReviewDialog → 人工核对 → 可视化编辑 →
+  一次命令写回；
+- Spike：本机仅 Python 3.12，pix2tex==0.1.4 依赖解析在有界 4 分钟内未完成，真实模型
+  验证未执行（如实记录，Go 门禁延后）；Fake Worker 全量测试通过；
+- 新增 tests/test_formula_ocr.py 10 项；全套件 673 tests OK（本地）。未推送。

@@ -1,0 +1,5 @@
+# pix2tex sidecar dependency pin (base package only; no [gui]/[api] extras).
+# Full transitive lock pending compatibility verification on Python 3.10/3.11
+# (see docs/pix2tex-local-spike-report.md). Do not relax without re-running
+# the spike.
+pix2tex==0.1.4

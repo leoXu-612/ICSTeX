@@ -1,0 +1,7 @@
+{
+  "version": "pending-verification",
+  "checkpoint": "weights.pth",
+  "image_resizer": "image_resizer.pth",
+  "tokenizer": "tokenizer.json",
+  "config": "config.yaml"
+}

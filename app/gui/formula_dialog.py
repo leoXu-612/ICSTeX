@@ -72,6 +72,8 @@ class FormulaDialog(QDialog):
         self._template_packages: tuple[str, ...] = ()
         self._applying_change = False
         self._accepted_plan: FinalTextEditPlan | None = None
+        self._submitted = False
+        self._ocr_open = False
 
         seed = seed_text if seed_text is not None else document_text[start:end]
         envelope = recognize_formula(seed)
@@ -147,6 +149,7 @@ class FormulaDialog(QDialog):
             ok_button.setText("应用")
         if cancel_button is not None:
             cancel_button.setText("取消")
+        self._ok_button = ok_button
         buttons.accepted.connect(self._on_apply)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
@@ -158,6 +161,15 @@ class FormulaDialog(QDialog):
         self._refresh()
 
     def _open_batch_ocr(self) -> None:
+        if self._ocr_open:
+            return
+        self._ocr_open = True
+        try:
+            self._open_batch_ocr_impl()
+        finally:
+            self._ocr_open = False
+
+    def _open_batch_ocr_impl(self) -> None:
         manager = self._get_ocr_manager()
         if manager is None:
             return
@@ -386,6 +398,8 @@ class FormulaDialog(QDialog):
             )
 
     def _on_apply(self) -> None:
+        if self._submitted:
+            return
         plan = self.build_plan()
         if plan is None:
             QMessageBox.warning(
@@ -394,5 +408,8 @@ class FormulaDialog(QDialog):
                 "当前不是完整公式，或无法确认原选区；请修正后应用或取消。",
             )
             return
+        self._submitted = True
+        if self._ok_button is not None:
+            self._ok_button.setEnabled(False)
         self._accepted_plan = plan
         self.accept()

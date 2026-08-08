@@ -54,6 +54,7 @@ class MultiLineOcrDialog(QDialog):
         self._auto_timer.setInterval(500)
         self._auto_timer.timeout.connect(self._recognize_current)
         self._recognizing = False
+        self._submitted = False
 
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("逐行识别结果（可修改；右侧画布：按住 Shift 拖拽新建 ROI，直接拖拽移动，角点缩放，选中后按 Delete 删除）："))
@@ -102,6 +103,14 @@ class MultiLineOcrDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+    def accept(self) -> None:
+        """Idempotent submit: a repeated OK event must not emit output twice."""
+
+        if self._submitted:
+            return
+        self._submitted = True
+        super().accept()
 
     def _add_line_edit(self, latex: str) -> QLineEdit:
         row = QWidget()

@@ -24,7 +24,12 @@ from PySide6.QtWidgets import (
 
 from app.core.formula.line_splitter import split_formula_lines
 from app.core.formula.sanitizer import sanitize_formula_latex
-from app.gui.formula_ocr.image_input import image_from_clipboard, preprocess, save_temp
+from app.gui.formula_ocr.image_input import (
+    image_fingerprint,
+    image_from_clipboard,
+    preprocess,
+    save_temp,
+)
 from app.gui.formula_ocr.multi_line_dialog import MultiLineOcrDialog, _wait_ocr
 from app.optional_tools.pix2tex.protocol import RecognitionRequest
 
@@ -41,6 +46,8 @@ class BatchRecognitionDialog(QDialog):
         self._results: dict[int, str] = {}
         self._cancel = False
         self._starting = False
+        self._submitted = False
+        self._fingerprints: set[str] = set()
 
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("批量添加公式图片，顺序识别；识别后可在右侧核对/修改，再插入编辑器。"))
@@ -98,6 +105,14 @@ class BatchRecognitionDialog(QDialog):
         buttons_box.rejected.connect(self.reject)
         layout.addWidget(buttons_box)
 
+    def accept(self) -> None:
+        """Idempotent submit: a repeated OK event must not emit output twice."""
+
+        if self._submitted:
+            return
+        self._submitted = True
+        super().accept()
+
     # --- queue -----------------------------------------------------------
     def _add_files(self) -> None:
         file_names, _ = QFileDialog.getOpenFileNames(self, "选择公式图片", "", "图片 (*.png *.jpg *.jpeg *.webp)")
@@ -116,23 +131,33 @@ class BatchRecognitionDialog(QDialog):
         self._append_image("剪贴板图片", image)
 
     def _append_image(self, name: str, image: QImage) -> None:
+        fingerprint = image_fingerprint(image)
+        if fingerprint in self._fingerprints:
+            self.status_label.setText(f"已跳过重复图片：{name}")
+            return
+        self._fingerprints.add(fingerprint)
         self._images.append((name, preprocess(image)))
         self.image_list.addItem(name)
         self.progress.setRange(0, max(1, len(self._images)))
 
     def _remove_selected(self) -> None:
-        rows = sorted({item.row() for item in self.image_list.selectedItems()}, reverse=True)
+        rows = sorted({self.image_list.row(item) for item in self.image_list.selectedItems()}, reverse=True)
         for row in rows:
             del self._images[row]
             self.image_list.takeItem(row)
+        self._rebuild_fingerprints()
         self.progress.setRange(0, max(1, len(self._images)))
 
     def _clear_queue(self) -> None:
         self._images = []
         self.image_list.clear()
         self._results = {}
+        self._fingerprints = set()
         self.progress.setRange(0, 1)
         self.progress.setValue(0)
+
+    def _rebuild_fingerprints(self) -> None:
+        self._fingerprints = {image_fingerprint(image) for _name, image in self._images}
 
     def _request_cancel(self) -> None:
         self._cancel = True

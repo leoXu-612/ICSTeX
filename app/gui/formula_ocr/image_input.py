@@ -1,6 +1,7 @@
 """Load and preprocess formula images for OCR (temporary copies only)."""
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 from PySide6.QtCore import QStandardPaths
@@ -32,6 +33,15 @@ def image_from_file(path: Path) -> QImage | None:
     reader.setAutoTransform(True)
     image = reader.read()
     return image if not image.isNull() else None
+
+
+def image_fingerprint(image: QImage) -> str:
+    """Content hash of an image, independent of path or object identity."""
+
+    stable = image.convertToFormat(QImage.Format.Format_ARGB32)
+    bits = stable.constBits()
+    data = bits.tobytes() if hasattr(bits, "tobytes") else bytes(bits)
+    return hashlib.sha256(data).hexdigest()
 
 
 def preprocess(image: QImage) -> QImage:

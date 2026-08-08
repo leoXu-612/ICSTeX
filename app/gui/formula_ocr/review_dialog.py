@@ -25,6 +25,7 @@ class RecognitionReviewDialog(QDialog):
         self.resize(860, 520)
         self._candidate = candidate
         self._sanitize = sanitize
+        self._submitted = False
 
         image_label = QLabel()
         pixmap = QPixmap(str(image_path))
@@ -73,3 +74,11 @@ class RecognitionReviewDialog(QDialog):
 
     def confirmed_latex(self) -> str:
         return self.latex_edit.toPlainText().strip()
+
+    def accept(self) -> None:
+        """Idempotent submit: a repeated OK event must not emit output twice."""
+
+        if self._submitted:
+            return
+        self._submitted = True
+        super().accept()

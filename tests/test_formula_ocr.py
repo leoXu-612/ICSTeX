@@ -131,6 +131,33 @@ class ReviewDialogTests(TestCase):
             self.assertEqual(dialog.confirmed_latex(), r"\frac{x^2}{y}")
             dialog.close()
 
+    def test_accept_ignores_repeated_submit(self) -> None:
+        _app()
+        from unittest.mock import patch
+
+        from PySide6.QtWidgets import QDialog
+
+        from app.core.formula.sanitizer import SanitizeResult
+        from app.gui.formula_ocr.review_dialog import RecognitionReviewDialog
+
+        with TemporaryDirectory() as directory:
+            image = Path(directory) / "a.png"
+            image.write_bytes(b"\x89PNG fake")
+            dialog = RecognitionReviewDialog(image, r"\frac{x}{y}", SanitizeResult(text=r"\frac{x}{y}"))
+            original_accept = QDialog.accept
+            accept_calls: list = []
+
+            def spy(self) -> None:
+                accept_calls.append(self)
+                original_accept(self)
+
+            with patch.object(QDialog, "accept", new=spy):
+                dialog.accept()
+                dialog.accept()
+            self.assertEqual(len(accept_calls), 1)
+            self.assertTrue(dialog._submitted)
+            dialog.close()
+
 
 class ImageInputTests(TestCase):
     def test_preprocess_composites_transparency_on_white(self) -> None:
@@ -144,6 +171,21 @@ class ImageInputTests(TestCase):
         processed = preprocess(image)
         self.assertFalse(processed.hasAlphaChannel())
         self.assertEqual(processed.pixelColor(0, 0), QColor("white"))
+
+    def test_image_fingerprint_is_content_based(self) -> None:
+        _app()
+        from PySide6.QtGui import QColor, QImage
+
+        from app.gui.formula_ocr.image_input import image_fingerprint
+
+        first = QImage(64, 32, QImage.Format.Format_RGB32)
+        first.fill(QColor("white"))
+        same = QImage(64, 32, QImage.Format.Format_RGB32)
+        same.fill(QColor("white"))
+        different = QImage(64, 32, QImage.Format.Format_RGB32)
+        different.fill(QColor("black"))
+        self.assertEqual(image_fingerprint(first), image_fingerprint(same))
+        self.assertNotEqual(image_fingerprint(first), image_fingerprint(different))
 
 
 class LineSplitterTests(TestCase):
@@ -179,6 +221,29 @@ class LineSplitterTests(TestCase):
 
 
 class MultiLineDialogTests(TestCase):
+    def test_accept_ignores_repeated_submit(self) -> None:
+        _app()
+        from unittest.mock import patch
+
+        from PySide6.QtWidgets import QDialog
+
+        from app.gui.formula_ocr.multi_line_dialog import MultiLineOcrDialog
+
+        dialog = MultiLineOcrDialog([r"a &= b"])
+        original_accept = QDialog.accept
+        accept_calls: list = []
+
+        def spy(self) -> None:
+            accept_calls.append(self)
+            original_accept(self)
+
+        with patch.object(QDialog, "accept", new=spy):
+            dialog.accept()
+            dialog.accept()
+        self.assertEqual(len(accept_calls), 1)
+        self.assertTrue(dialog._submitted)
+        dialog.close()
+
     def test_result_latex_joins_lines_in_aligned(self) -> None:
         _app()
         from app.gui.formula_ocr.multi_line_dialog import MultiLineOcrDialog
@@ -345,4 +410,63 @@ class MultiLineDialogTests(TestCase):
         self.assertEqual(dialog.progress.value(), 1)
         combined = dialog.combined_latex()
         self.assertIn(r"\begin{aligned}", combined)
+        dialog.close()
+
+    def test_accept_ignores_repeated_submit(self) -> None:
+        _app()
+        from unittest.mock import patch
+
+        from PySide6.QtWidgets import QDialog
+
+        from app.gui.formula_ocr.batch_dialog import BatchRecognitionDialog
+
+        dialog = BatchRecognitionDialog(None)
+        original_accept = QDialog.accept
+        accept_calls: list = []
+
+        def spy(self) -> None:
+            accept_calls.append(self)
+            original_accept(self)
+
+        with patch.object(QDialog, "accept", new=spy):
+            dialog.accept()
+            dialog.accept()
+        self.assertEqual(len(accept_calls), 1)
+        self.assertTrue(dialog._submitted)
+        dialog.close()
+
+    def test_append_skips_duplicate_image(self) -> None:
+        _app()
+        from PySide6.QtGui import QColor, QImage
+
+        from app.gui.formula_ocr.batch_dialog import BatchRecognitionDialog
+
+        dialog = BatchRecognitionDialog(None)
+        image = QImage(120, 60, QImage.Format.Format_RGB32)
+        image.fill(QColor("white"))
+        dialog._append_image("a.png", image)
+        dialog._append_image("a.png", image)
+        self.assertEqual(len(dialog._images), 1)
+        self.assertIn("重复", dialog.status_label.text())
+        different = QImage(120, 60, QImage.Format.Format_RGB32)
+        different.fill(QColor("black"))
+        dialog._append_image("b.png", different)
+        self.assertEqual(len(dialog._images), 2)
+        dialog.close()
+
+    def test_remove_then_readd_same_image_is_allowed(self) -> None:
+        _app()
+        from PySide6.QtGui import QColor, QImage
+
+        from app.gui.formula_ocr.batch_dialog import BatchRecognitionDialog
+
+        dialog = BatchRecognitionDialog(None)
+        image = QImage(120, 60, QImage.Format.Format_RGB32)
+        image.fill(QColor("white"))
+        dialog._append_image("a.png", image)
+        dialog.image_list.setCurrentRow(0)
+        dialog._remove_selected()
+        self.assertEqual(len(dialog._images), 0)
+        dialog._append_image("a.png", image)
+        self.assertEqual(len(dialog._images), 1)
         dialog.close()

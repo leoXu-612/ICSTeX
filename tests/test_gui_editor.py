@@ -2332,6 +2332,29 @@ class FormulaComposerTests(TestCase):
         self.assertEqual(plan.text, r"\begin{equation}a+b\frac{}{}\end{equation}")
         dialog.close()
 
+    def test_dialog_apply_is_idempotent(self) -> None:
+        source = r"Before \(E=mc^2\) after."
+        seed = r"\(E=mc^2\)"
+        start = source.index(seed)
+        end = start + len(seed)
+        dialog = FormulaDialog(None, source, start, end)
+
+        original_accept = QDialog.accept
+        accept_calls: list = []
+
+        def spy(self) -> None:
+            accept_calls.append(self)
+            original_accept(self)
+
+        with patch.object(QDialog, "accept", new=spy):
+            dialog._on_apply()
+            dialog._on_apply()
+        self.assertEqual(len(accept_calls), 1)
+        self.assertTrue(dialog._submitted)
+        self.assertIsNotNone(dialog.plan())
+        self.assertFalse(dialog._ok_button.isEnabled())
+        dialog.close()
+
     def test_dialog_rejects_template_and_plan_on_invalid_text(self) -> None:
         source = "Text $a+b$ here"
         start = source.index("$")

@@ -677,3 +677,10 @@ must link here instead of repeating old task details.
 - GitHub connector 对仓库返回 404、Linear connector 要求重新授权；没有推送 branch/tag、
   没有创建 GitHub Release，也没有部署 Pages。`tools/deploy_release_site.sh --push` 还需要
   明确授权与 `ICSTEX_RELEASE_SITE_PUSH=1`。
+
+## 2026-08-08 - Release Website Figma Design Handoff
+
+- 创建 Figma design draft `ICSTeX 2.1 Beta 1 Release Website`，从本地已验证官网捕获
+  成可编辑的 1703 × 5737 画板；链接与“raw frames、源码仍为真值”的边界写入
+  `docs/release-2.1-beta1-preparation-report.md`；
+- 临时 Figma capture script 已在捕获完成后移除，静态网站没有新增第三方运行时或联网行为。

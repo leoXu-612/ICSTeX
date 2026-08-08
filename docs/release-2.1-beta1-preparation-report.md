@@ -46,7 +46,15 @@
 - Reused product assets are checked-in UI screenshots and an existing project
   application icon; no personal documents or screenshots are used.
 
-## 6. GitHub / Pages Publication State
+## 6. Design Handoff
+
+- Figma reference: [ICSTeX 2.1 Beta 1 Release Website](https://www.figma.com/design/14Y4KGsKuhXakNd7qPzyml?node-id=1-2)。
+- 该文件由本地已验证页面捕获，包含可编辑的 1703 × 5737 画板，用于视觉评审与后续
+  设计协作。
+- 捕获结果是 raw frames，不是独立组件库；`website/` 的静态源码与生成的
+  `website/release.json` 仍是官网发布真值。
+
+## 7. GitHub / Pages Publication State
 
 - GitHub remote: `https://github.com/leoXu-612/ICSTeX.git`.
 - No branch, tag, Release asset, GitHub Release or Pages deployment was pushed
@@ -57,7 +65,7 @@
   `--push` requires both an explicit maintainer decision and
   `ICSTEX_RELEASE_SITE_PUSH=1`.
 
-## 7. Follow-up Tasks and Known Limitations
+## 8. Follow-up Tasks and Known Limitations
 
 1. Obtain a Windows x64 Windows-local build environment and Inno Setup.
 2. Complete Windows TeX toolchain / source-to-PDF acceptance; do not promote the

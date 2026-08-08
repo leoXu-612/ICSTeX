@@ -121,6 +121,8 @@ class BatchRecognitionDialog(QDialog):
         self._fine_tune_open = False
         self._fine_tune_ts = 0.0
         self._fingerprints: set[str] = set()
+        self._result_manual = False
+        self._syncing_result = False
 
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("批量添加公式图片，顺序识别；每行可重试/查看错误/移除，识别后可在右侧核对再插入编辑器。"))
@@ -185,6 +187,7 @@ class BatchRecognitionDialog(QDialog):
         right_layout.addWidget(QLabel("识别结果（LaTeX，可编辑）："))
         self.result_edit = QPlainTextEdit()
         self.result_edit.setAccessibleName("识别结果 LaTeX")
+        self.result_edit.textChanged.connect(self._on_result_edited)
         right_layout.addWidget(self.result_edit)
         body.addWidget(right, 3)
         layout.addLayout(body, 1)
@@ -321,7 +324,12 @@ class BatchRecognitionDialog(QDialog):
         self.progress.setRange(0, 1)
         self.progress.setValue(0)
         self.status_label.setText("队列已清空")
-        self.result_edit.clear()
+        self._syncing_result = True
+        try:
+            self.result_edit.clear()
+        finally:
+            self._syncing_result = False
+        self._result_manual = False
 
     def _rebuild_fingerprints(self) -> None:
         self._fingerprints = {image_fingerprint(item.image) for item in self._items}
@@ -354,6 +362,8 @@ class BatchRecognitionDialog(QDialog):
             QMessageBox.information(self, "图片识别", "请先添加图片。")
             return
         if self._starting:
+            return
+        if not self._confirm_overwrite_manual_result():
             return
         self._starting = True
         self._cancel = False
@@ -400,6 +410,8 @@ class BatchRecognitionDialog(QDialog):
     def _retry_item(self, index: int) -> None:
         if self._starting or not (0 <= index < len(self._items)):
             return
+        if not self._confirm_overwrite_manual_result():
+            return
         self._starting = True
         self.start_button.setEnabled(False)
         self._set_rows_enabled(False)
@@ -438,6 +450,25 @@ class BatchRecognitionDialog(QDialog):
             "识别失败详情",
             f"图片：{item.name}\n\n{item.error or '未知错误'}",
         )
+
+    def _on_result_edited(self) -> None:
+        if not self._syncing_result:
+            self._result_manual = True
+
+    def _confirm_overwrite_manual_result(self) -> bool:
+        if not self._result_manual:
+            return True
+        answer = QMessageBox.question(
+            self,
+            "重新识别",
+            "你已手动修改合并结果，重新识别将覆盖手动修改。是否继续？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return False
+        self._result_manual = False
+        return True
 
     def _join_lines(self, lines: list[str]) -> str:
         if len(lines) > 1:
@@ -488,7 +519,11 @@ class BatchRecognitionDialog(QDialog):
             for item in self._items
             if item.status in (STATUS_SUCCEEDED, STATUS_REFINED) and item.result
         ]
-        self.result_edit.setPlainText("\n\n".join(parts))
+        self._syncing_result = True
+        try:
+            self.result_edit.setPlainText("\n\n".join(parts))
+        finally:
+            self._syncing_result = False
 
     def combined_latex(self) -> str:
         text = self.result_edit.toPlainText().strip()

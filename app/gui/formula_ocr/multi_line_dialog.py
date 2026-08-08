@@ -152,7 +152,7 @@ class MultiLineOcrDialog(QDialog):
         self._set_lines(lines)
 
     def _recognize_selected(self) -> None:
-        index = getattr(self.canvas, "_selected", None)
+        index = self.canvas.selected_index()
         if index is None or self._recognizing:
             return
         latex = self._recognize_one(index, self.canvas.rois())
@@ -201,24 +201,30 @@ def split_and_recognize(image, manager, *, timeout_ms: int = 90000) -> list[str]
 def _wait_ocr(manager, image_path: Path, *, timeout_ms: int = 90000) -> object | None:
     request = RecognitionRequest(request_id=f"ml-{uuid.uuid4().hex[:10]}", image_path=image_path)
     box: dict = {}
-
-    def on_result(payload) -> None:
-        request_id, _session, result = payload
-        if request_id == request.request_id:
-            box["result"] = result
-
-    manager.recognition_finished.connect(on_result)
     loop = QEventLoop()
     timer = QTimer()
     timer.setSingleShot(True)
     timer.timeout.connect(loop.quit)
     timer.start(timeout_ms)
-    manager.recognition_finished.connect(loop.quit)
-    manager.recognition_failed.connect(loop.quit)
+
+    def on_result(payload) -> None:
+        request_id, _session, result = payload
+        if request_id != request.request_id:
+            return  # another session finished; never end our wait
+        box["result"] = result
+        loop.quit()
+
+    def on_failed(request_id, code, message) -> None:
+        if request_id and request_id != request.request_id:
+            return  # another session failed; never end our wait
+        box["error"] = f"{code}: {message}"
+        loop.quit()
+
+    manager.recognition_finished.connect(on_result)
+    manager.recognition_failed.connect(on_failed)
     manager.recognize(request, session_id="multi-line")
     loop.exec()
     manager.recognition_finished.disconnect(on_result)
-    manager.recognition_finished.disconnect(loop.quit)
-    manager.recognition_failed.disconnect(loop.quit)
+    manager.recognition_failed.disconnect(on_failed)
     timer.stop()
     return box.get("result")

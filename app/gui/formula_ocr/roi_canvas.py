@@ -52,6 +52,11 @@ class RoiCanvas(QWidget):
             self._selected = index
             self.update()
 
+    def selected_index(self) -> int | None:
+        """Public accessor for the selected ROI index (None when none)."""
+
+        return self._selected
+
     def delete_selected(self) -> None:
         if self._selected is None:
             return
@@ -177,8 +182,10 @@ class RoiCanvas(QWidget):
         elif drag["mode"] in ("move", "resize"):
             index = drag["index"]
             if 0 <= index < len(self._rois):
-                self._rois[index] = drag.get("current", drag.get("start_rect"))
-            self.rois_changed.emit()
+                updated = drag.get("current", drag.get("start_rect"))
+                if updated != self._rois[index]:
+                    self._rois[index] = updated
+                    self.rois_changed.emit()
         self.update()
 
     def keyPressEvent(self, event: QKeyEvent) -> None:

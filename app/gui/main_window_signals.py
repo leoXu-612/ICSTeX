@@ -42,6 +42,8 @@ def connect_signals(window: "MainWindow") -> None:
     )
     window.environment_doctor_action.triggered.connect(window.show_environment_doctor)
     window.feedback_bundle_action.triggered.connect(window.copy_feedback_bundle)
+    window.import_perf_action.triggered.connect(window.show_import_perf_dialog)
+    window.block_project_action.triggered.connect(window.show_block_project_dialog)
     window.user_guide_action.triggered.connect(window.show_user_guide)
     window.word_count_action.triggered.connect(window.update_word_count)
     window.sync_pdf_action.triggered.connect(window.sync_current_source_to_pdf)
@@ -58,6 +60,7 @@ def connect_signals(window: "MainWindow") -> None:
     window.settings_action.triggered.connect(window.show_settings_dialog)
     window.find_action.triggered.connect(window.show_find_bar)
     window.replace_action.triggered.connect(window.show_replace_bar)
+    window.formula_composer_action.triggered.connect(window.open_formula_composer)
 
     # Editor tab life cycle
     window.editor_tabs.tabCloseRequested.connect(window.close_tab)
@@ -104,7 +107,7 @@ def connect_signals(window: "MainWindow") -> None:
     window.insert_panel.sideBySideFigureRequested.connect(window.insert_side_by_side_figures)
     window.insert_panel.tableRequested.connect(window.insert_table)
     window.insert_panel.hyperlinkRequested.connect(window.insert_hyperlink)
-    window.insert_panel.equationRequested.connect(window.insert_equation)
+    window.insert_panel.equationRequested.connect(window.open_formula_composer)
     window.insert_panel.listRequested.connect(window.insert_list)
     window.insert_panel.sectionRequested.connect(window.insert_section)
     window.insert_panel.casesRequested.connect(window.insert_cases)

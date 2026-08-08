@@ -25,10 +25,31 @@ class CompileIntegrationTests(TestCase):
             )
             manager = CompileManager(tex, toolchain=TOOLCHAIN)
 
-            result = manager.compile_now()
+            result = manager.compile_now(timeout_seconds=300)
 
             self.assertIsNotNone(result)
             assert result is not None
             self.assertTrue(result.ok, result.combined_output)
             self.assertEqual(result.pdf_file.parent, Path(directory).resolve() / ".latex_build")
+            self.assertTrue(result.pdf_file.exists())
+
+    def test_visual_formula_write_back_compiles(self) -> None:
+        with TemporaryDirectory() as directory:
+            tex = Path(directory) / "main.tex"
+            tex.write_text(
+                "\\documentclass{article}\n"
+                "\\usepackage{amsmath}\n"
+                "\\begin{document}\n"
+                "The result is \\(\\frac{a}{b}\\) under this condition.\n"
+                "Inline: $E=\\gamma mc^2$ and $x^2+\\frac{x^2+1}{\\sqrt{y_1+y_2}}$.\n"
+                "\\end{document}\n",
+                encoding="utf-8",
+            )
+            manager = CompileManager(tex, toolchain=TOOLCHAIN)
+
+            result = manager.compile_now(timeout_seconds=300)
+
+            self.assertIsNotNone(result)
+            assert result is not None
+            self.assertTrue(result.ok, result.combined_output)
             self.assertTrue(result.pdf_file.exists())

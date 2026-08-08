@@ -11,9 +11,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import QDialog, QMessageBox
 
+from app.core.formula_input import FinalTextEditPlan, parse_document_selection
 from app.core.image_assets import copy_image_atomic
+from app.core.import_metrics import import_metrics
 from app.core.latex_insertions import (
     FIGURE_PACKAGES,
     HYPERLINK_PACKAGES,
@@ -41,6 +44,8 @@ from app.core.project_tools import (
 )
 from app.core.text_encoding import write_latex_text_atomic
 from app.gui import bib_helpers
+from app.gui.formula_dialog import FormulaDialog
+from app.gui.drop_import_worker import DropCopyWorker
 from app.gui.insert_panel import (
     FigureDialog,
     HyperlinkDialog,
@@ -170,30 +175,69 @@ class InsertionActions:
             QMessageBox.information(window, "请先保存", "请先保存当前 LaTeX 文件，再拖入图片。")
             return
 
-        snippets: list[str] = []
-        for image_path in image_paths:
-            relative_path = self.copy_image_asset(tab, image_path)
-            if relative_path is None:
-                continue
-            snippets.append(
-                figure_snippet(
-                    FigureSpec(
-                        image_path=relative_path,
-                        caption=self._default_figure_caption(relative_path),
-                        label=self._default_figure_label(relative_path),
-                    )
+        recorder = import_metrics.begin_transaction()
+        recorder.step("drop_received", count=str(len(image_paths)))
+        recorder.step("copy_started")
+        worker = DropCopyWorker(tab.path.parent, tab.path, image_paths)
+        self._drop_worker = worker  # keep a reference while the thread runs
+        worker.completed.connect(
+            lambda results, t=tab, r=recorder: self._on_drop_copied(t, r, results)
+        )
+        worker.finished.connect(worker.deleteLater)
+        window.statusBar().showMessage(f"正在后台复制 {len(image_paths)} 张图片...", 2500)
+        worker.start()
+
+    def _on_drop_copied(self, tab: EditorTab, recorder, results: list) -> None:
+        """Finish the import transaction on the main thread after copying."""
+
+        window = self.window
+        errors = [result for result in results if result.error]
+        recorder.step("copy_finished", count=str(len(results)))
+        if errors:
+            for result in results:
+                if result.destination is not None and result.destination != result.source:
+                    try:
+                        result.destination.unlink(missing_ok=True)
+                    except OSError:
+                        pass
+            recorder.step("import_failed", errors=str(len(errors)))
+            import_metrics.finish_transaction(recorder)
+            QMessageBox.warning(
+                window,
+                "导入失败",
+                "部分图片导入失败，已回滚本次新增副本：\n"
+                + "\n".join(f"{result.source.name}: {result.error}" for result in errors),
+            )
+            return
+
+        ok = [result for result in results if result.relative_path]
+        if not ok:
+            import_metrics.finish_transaction(recorder)
+            return
+        snippets = [
+            figure_snippet(
+                FigureSpec(
+                    image_path=result.relative_path,
+                    caption=self._default_figure_caption(result.relative_path),
+                    label=self._default_figure_label(result.relative_path),
                 )
             )
-
-        if not snippets:
-            return
+            for result in ok
+        ]
+        recorder.step("source_edit_started")
         self.insert_snippet(
             tab,
             "\n\n".join(snippets),
             FIGURE_PACKAGES,
             f"已拖入 {len(snippets)} 张图片并生成 figure。",
         )
+        recorder.step("source_edit_finished", count=str(len(snippets)))
+        import_metrics.record_compile_request("asset_import_complete")
+        recorder.step("index_update_started")
         window.refresh_project_panels()
+        recorder.step("index_update_finished")
+        import_metrics.finish_transaction(recorder)
+        window.append_log("导入性能: " + recorder.format_summary().replace("\n", " | "))
 
     def insert_figure(self) -> None:
         window = self.window
@@ -302,6 +346,115 @@ class InsertionActions:
             "已插入公式。",
             cursor_offset=len("\\begin{equation}\n  "),
         )
+
+    def open_formula_composer(self) -> None:
+        """Open the formula composer for an exact formula selection.
+
+        With no selection, the composer opens in insertion mode seeded with an
+        empty ``equation`` draft and inserts the composed formula at the
+        cursor on apply. A selection that is not exactly one supported formula
+        wrapper is left untouched (source mode): the composer never guesses a
+        replacement range.
+        """
+
+        window = self.window
+        tab = window._ensure_editable_tab()
+        if tab is None:
+            return
+        editor = tab.editor
+        cursor = editor.textCursor()
+        document = editor.toPlainText()
+        start = cursor.selectionStart()
+        end = cursor.selectionEnd()
+        if start == end:
+            dialog = FormulaDialog(
+                window,
+                document,
+                start,
+                end,
+                seed_text=r"\begin{equation}\end{equation}",
+            )
+        else:
+            if parse_document_selection(document, start, end) is None:
+                QMessageBox.information(
+                    window,
+                    "编辑公式",
+                    "请先选中一个完整公式（$…$、\\(…\\)、\\[…\\]、equation 或 equation*）。\n"
+                    "原选区保持不变。",
+                )
+                return
+            dialog = FormulaDialog(window, document, start, end)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        plan = dialog.plan()
+        if plan is None:
+            return
+        if self.apply_formula_plan(tab, plan):
+            window.refresh_project_panels()
+            window.statusBar().showMessage("已应用公式编辑。", 4000)
+
+    def apply_formula_plan(self, tab: EditorTab, plan: FinalTextEditPlan) -> bool:
+        """Apply a formula edit plan with a revision guard and one Undo step.
+
+        The current selection must still be exactly the original formula
+        envelope; otherwise the edit is refused so a stale plan can never
+        overwrite newer document content. Package insertion and the formula
+        replacement are merged into one Undo step.
+        """
+
+        window = self.window
+        editor = tab.editor
+        current = editor.toPlainText()
+        if current[plan.start : plan.end] != plan.source_text:
+            QMessageBox.warning(
+                window,
+                "编辑公式",
+                "文档在公式编辑期间已变化，已取消替换，避免覆盖新内容。",
+            )
+            return False
+
+        update = None
+        inserted_text = ""
+        if plan.packages:
+            update = package_update(current, plan.packages)
+            inserted_text = update.inserted_text
+            if update.insert_position < plan.end and update.insert_position >= plan.start:
+                QMessageBox.warning(
+                    window,
+                    "编辑公式",
+                    "package 插入位置与公式选区重叠，已取消应用以保护正文。",
+                )
+                return False
+
+        cursor = editor.textCursor()
+        cursor.beginEditBlock()
+        try:
+            if inserted_text:
+                package_cursor = editor.textCursor()
+                package_cursor.setPosition(update.insert_position)
+                package_cursor.insertText(inserted_text)
+
+            shift = len(inserted_text) if update is not None and update.insert_position <= plan.start else 0
+            new_start = plan.start + shift
+            new_end = plan.end + shift
+            replace_cursor = editor.textCursor()
+            replace_cursor.setPosition(new_start)
+            replace_cursor.setPosition(new_end, QTextCursor.MoveMode.KeepAnchor)
+            replace_cursor.insertText(plan.text)
+
+            final_cursor = editor.textCursor()
+            if plan.cursor_offset is not None:
+                final_cursor.setPosition(new_start + plan.cursor_offset)
+            else:
+                final_cursor.setPosition(new_start + len(plan.text))
+            editor.setTextCursor(final_cursor)
+        finally:
+            cursor.endEditBlock()
+
+        window.apply_editor_options(editor)
+        editor.ensureCursorVisible()
+        editor.setFocus()
+        return True
 
     def insert_list(self) -> None:
         window = self.window

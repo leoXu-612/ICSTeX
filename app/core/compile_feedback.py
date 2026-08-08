@@ -30,6 +30,12 @@ _PRESENTATIONS: dict[CompileOutcome, OutcomePresentation] = {
         "warning",
         "需要时可重新编译；当前显示的 PDF 是较早的成功版本。",
     ),
+    CompileOutcome.TIMEOUT: OutcomePresentation(
+        "编译超时",
+        "编译超过时限，已终止进程；当前显示的 PDF 是较早的成功版本。",
+        "error",
+        "请检查是否有挂起的编译任务，或减少单次编译内容后重试。",
+    ),
     CompileOutcome.TOOLCHAIN_MISSING: OutcomePresentation(
         "未找到可用的 LaTeX 编译器",
         "所需的编译引擎不在 PATH 中。",

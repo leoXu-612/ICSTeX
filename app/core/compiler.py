@@ -4,7 +4,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from itertools import count
 import logging
+import os
 from pathlib import Path
+import signal
 import subprocess
 import threading
 import time
@@ -32,6 +34,7 @@ _BUILD_IDS = count(1)
 class CompileOutcome(Enum):
     SUCCESS = "success"
     STOPPED = "stopped"
+    TIMEOUT = "timeout"
     TOOLCHAIN_MISSING = "toolchain_missing"
     ROOT_FILE_MISSING = "root_file_missing"
     PROCESS_START_FAILED = "process_start_failed"
@@ -106,6 +109,7 @@ class CompileManager:
         on_started: StartedCallback | None = None,
         on_finished: FinishedCallback | None = None,
         preview_preparer: PreviewPreparer | None = None,
+        metrics_hook: Callable[[str, str], None] | None = None,
     ) -> None:
         self.root_file = normalize_path(root_file)
         self.output_dir = normalize_path(output_dir) if output_dir else build_dir_for(self.root_file)
@@ -115,6 +119,7 @@ class CompileManager:
         self.on_started = on_started
         self.on_finished = on_finished
         self.preview_preparer = preview_preparer
+        self.metrics_hook = metrics_hook
         self._timer: threading.Timer | None = None
         self._timer_generation = 0
         self._lock = threading.Lock()
@@ -218,16 +223,25 @@ class CompileManager:
         self.compile_async(purpose)
 
     def _run_async(self, purpose: BuildPurpose) -> None:
+        if self.metrics_hook is not None:
+            self.metrics_hook("start", purpose.value)
         try:
             self.compile_now(purpose)
         finally:
+            if self.metrics_hook is not None:
+                self.metrics_hook("finish", purpose.value)
             with self._lock:
                 self._launch_count = max(0, self._launch_count - 1)
                 if self._launch_count == 0 and not self._running:
                     self._stop_requested = False
                     self._idle_event.set()
 
-    def compile_now(self, purpose: BuildPurpose | str = BuildPurpose.FINAL) -> CompileResult | None:
+    def compile_now(
+        self,
+        purpose: BuildPurpose | str = BuildPurpose.FINAL,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> CompileResult | None:
         selected = BuildPurpose(purpose)
         with self._lock:
             if self._retired or (self._stop_requested and not self._running):
@@ -245,17 +259,19 @@ class CompileManager:
         try:
             if self.on_started:
                 self.on_started(self.root_file, build_id)
-            try:
-                result = self._run_compile(build_id, selected)
-            except Exception as exc:  # noqa: BLE001 - must never crash the Qt loop
-                logger.exception("编译过程发生内部错误")
-                result = self._simple_result(
-                    build_id,
-                    CompileOutcome.INTERNAL_ERROR,
-                    returncode=1,
-                    stderr=f"ICSTeX 处理编译结果时发生错误：{exc}",
-                    purpose=selected,
-                )
+            result = self._run_compile(build_id, selected, timeout_seconds=timeout_seconds)
+            if self.on_finished:
+                self.on_finished(result)
+            return result
+        except Exception as exc:  # noqa: BLE001 - must never crash the Qt loop
+            logger.exception("编译过程发生内部错误")
+            result = self._simple_result(
+                build_id,
+                CompileOutcome.INTERNAL_ERROR,
+                returncode=1,
+                stderr=f"ICSTeX 处理编译结果时发生错误：{exc}",
+                purpose=selected,
+            )
             if self.on_finished:
                 self.on_finished(result)
             return result
@@ -294,18 +310,7 @@ class CompileManager:
             self._stop_requested = True
             process = self._process
         if process is not None and process.poll() is None:
-            try:
-                process.terminate()
-            except OSError:
-                pass
-            remaining = max(0.0, deadline - time.monotonic())
-            try:
-                process.wait(timeout=remaining)
-            except subprocess.TimeoutExpired:
-                try:
-                    process.kill()
-                except OSError:
-                    pass
+            self._terminate_process(process)
         return self.wait_until_idle(max(0.0, deadline - time.monotonic()))
 
     def wait_until_idle(self, timeout: float = 1.5) -> bool:
@@ -320,7 +325,13 @@ class CompileManager:
         stopped = self.stop_current(timeout)
         return stopped or self.wait_until_idle(0)
 
-    def _run_compile(self, build_id: int, purpose: BuildPurpose) -> CompileResult:
+    def _run_compile(
+        self,
+        build_id: int,
+        purpose: BuildPurpose,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> CompileResult:
         start = time.perf_counter()
         output_dir = self.output_dir_for(purpose)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -368,17 +379,27 @@ class CompileManager:
 
         command = self.toolchain.compile_command(self.root_file, output_dir, self.engine)
         self._log("运行命令：" + " ".join(command))
+        timed_out = False
         try:
-            process = subprocess.Popen(
-                command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                cwd=self.root_file.parent,
-                env=latex_subprocess_env(texinputs_prefix=preparation.overlay_dir),
-            )
+            popen_kwargs: dict[str, object] = {
+                "stdout": subprocess.PIPE,
+                "stderr": subprocess.PIPE,
+                "text": True,
+                "encoding": "utf-8",
+                "errors": "replace",
+                "cwd": self.root_file.parent,
+                "env": latex_subprocess_env(texinputs_prefix=preparation.overlay_dir),
+            }
+            if os.name == "nt":
+                # A new process group lets stop/timeout kill latexmk and the
+                # engine children it spawns (taskkill /T targets the tree).
+                popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+            else:
+                # Session leader: os.killpg(pid, SIGTERM/SIGKILL) covers the
+                # whole driver+engine tree so engine children cannot survive
+                # and hold the stdout/stderr pipes open after a timeout.
+                popen_kwargs["start_new_session"] = True
+            process = subprocess.Popen(command, **popen_kwargs)
             with self._lock:
                 self._process = process
                 stop_requested = self._stop_requested or self._retired
@@ -387,7 +408,16 @@ class CompileManager:
                     process.terminate()
                 except OSError:
                     pass
-            stdout, stderr = process.communicate()
+            timed_out = False
+            if timeout_seconds is None:
+                stdout, stderr = process.communicate()
+            else:
+                try:
+                    stdout, stderr = process.communicate(timeout=timeout_seconds)
+                except subprocess.TimeoutExpired:
+                    timed_out = True
+                    self._terminate_process(process)
+                    stdout, stderr = process.communicate()
             returncode = process.returncode
         except OSError as exc:
             duration = time.perf_counter() - start
@@ -413,7 +443,10 @@ class CompileManager:
         combined = "\n".join(part for part in (stdout, stderr) if part)
         errors = parse_log_file(log_file, self.root_file.parent) or parse_latex_errors(combined, self.root_file.parent)
 
-        if stop_requested:
+        if timed_out:
+            stderr = "\n".join(part for part in (stderr, "编译超时，已终止进程。") if part)
+            outcome = CompileOutcome.TIMEOUT
+        elif stop_requested:
             outcome = CompileOutcome.STOPPED
         elif returncode != 0 or errors:
             outcome = CompileOutcome.LATEX_ERROR
@@ -444,6 +477,65 @@ class CompileManager:
                 preparation.asset_paths if purpose is BuildPurpose.PREVIEW else ()
             ),
         )
+
+    @staticmethod
+    def _terminate_process(process: subprocess.Popen[str]) -> None:
+        """Terminate the whole compile tree, not just the direct child.
+
+        latexmk drives engine children (xelatex/pdflatex) that inherit the
+        stdout/stderr pipes. Killing only the driver leaves the engine holding
+        the pipe write ends open, so a subsequent communicate() can block
+        forever waiting for EOF.
+        """
+        process_pid = getattr(process, "pid", None)
+        group_kill = process_pid is not None and os.name != "nt"
+        windows_tree_kill = process_pid is not None and os.name == "nt"
+        if group_kill:
+            try:
+                os.killpg(os.getpgid(process_pid), signal.SIGTERM)
+            except OSError:
+                group_kill = False
+        if windows_tree_kill:
+            try:
+                subprocess.run(
+                    ["taskkill", "/pid", str(process_pid), "/T", "/F"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                )
+            except OSError:
+                windows_tree_kill = False
+        if not group_kill and not windows_tree_kill:
+            try:
+                process.terminate()
+            except OSError:
+                pass
+        try:
+            process.wait(timeout=1.0)
+        except subprocess.TimeoutExpired:
+            if group_kill:
+                try:
+                    os.killpg(os.getpgid(process_pid), signal.SIGKILL)
+                    return
+                except OSError:
+                    pass
+            if windows_tree_kill:
+                try:
+                    subprocess.run(
+                        ["taskkill", "/pid", str(process_pid), "/T", "/F"],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        check=False,
+                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                    )
+                    return
+                except OSError:
+                    pass
+            try:
+                process.kill()
+            except OSError:
+                pass
 
     def _simple_result(
         self,

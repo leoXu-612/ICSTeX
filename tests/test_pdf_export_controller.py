@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import time
 from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import patch
@@ -75,6 +77,17 @@ class PdfExportControllerTests(TestCase):
             build_id=build_id,
             purpose=purpose,
         )
+
+    def test_export_refreshes_target_mtime(self) -> None:
+        source = self.directory / "source.pdf"
+        source.write_bytes(b"pdf-content")
+        past = time.time() - 3600
+        os.utime(source, (past, past))
+        target = self.directory / "out.pdf"
+
+        self.assertTrue(self.controller._copy_atomic(source, target))
+
+        self.assertGreater(target.stat().st_mtime, time.time() - 10)
 
     def _finish_current(self, build_id: int = 1):
         self.canonical_pdf.write_bytes(b"%PDF-1.4 canonical")

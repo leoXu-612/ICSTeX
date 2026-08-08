@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 import os
+import time
 from itertools import count
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -12,9 +13,16 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QEvent, QMimeData, QPointF, QSettings, Qt, QUrl
 from PySide6.QtGui import QCloseEvent, QDropEvent, QKeyEvent, QTextCursor
-from PySide6.QtWidgets import QApplication, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea
+from PySide6.QtWidgets import QApplication, QDialog, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea
 
 from app.core.compiler import BuildPurpose, CompileManager, CompileOutcome, CompileResult
+from app.core.formula_input import (
+    FormulaDraft,
+    FormulaMode,
+    apply_formula_template,
+    final_edit_plan,
+    parse_document_selection,
+)
 from app.core.log_parser import LaTeXError
 from app.core.pdf_state import PdfFreshness
 from app.core.preview_state import PreviewFreshness
@@ -24,6 +32,7 @@ from app.core.latex_insertions import HYPERLINK_PACKAGES
 from app.gui.diagnostics_panel import DiagnosticsPanel
 from app.gui.environment_doctor_dialog import EnvironmentDoctorDialog
 from app.gui.find_replace import FindReplaceBar
+from app.gui.formula_dialog import FormulaDialog
 from app.gui.insert_panel import FigureDialog, HyperlinkDialog, SideBySideFigureDialog, TableDialog
 from app.gui.latex_editor import LaTeXEditor
 from app.gui.main_window import EditorTab, MainWindow
@@ -49,6 +58,17 @@ def app() -> QApplication:
 def isolated_settings() -> AppSettings:
     settings_file = Path(_SETTINGS_TEMP.name) / f"settings-{next(_SETTINGS_COUNTER)}.ini"
     return AppSettings(QSettings(str(settings_file), QSettings.Format.IniFormat))
+
+
+def wait_until(predicate, timeout_s: float = 3.0) -> bool:
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        QApplication.processEvents()
+        if predicate():
+            return True
+        time.sleep(0.02)
+    QApplication.processEvents()
+    return predicate()
 
 
 class GuiEditorTests(TestCase):
@@ -1161,13 +1181,45 @@ class GuiEditorTests(TestCase):
             window._add_tab(tab, source.name)
 
             window.insert_dropped_images([str(image)])
+            self.assertTrue(
+                wait_until(lambda: "\\includegraphics" in editor.toPlainText()),
+                "drop import did not complete",
+            )
 
             text = editor.toPlainText()
-            self.assertTrue((root / "figures" / "raw_image.png").exists())
+            # Already inside the project: reused without creating a copy.
+            self.assertFalse((root / "figures").exists())
             self.assertIn("\\usepackage{graphicx}", text)
-            self.assertIn("\\includegraphics[width=0.8\\textwidth]{figures/raw_image.png}", text)
+            self.assertIn("\\includegraphics[width=0.8\\textwidth]{raw image.png}", text)
             self.assertIn("\\caption{raw image}", text)
             self.assertIn("\\label{fig:raw_image}", text)
+            tab.modified = False
+            tab.dirty = False
+            window.close()
+
+    def test_dropped_external_image_is_copied_into_figures(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            outside = Path(directory).parent / "external-source"
+            outside.mkdir(exist_ok=True)
+            image = outside / "plot.png"
+            image.write_bytes(b"image")
+            source = root / "main.tex"
+            source.write_text("\\documentclass{article}\n\\begin{document}\n\\end{document}\n", encoding="utf-8")
+            window = MainWindow(settings_store=isolated_settings())
+            window.auto_compile_action.setChecked(False)
+            editor = window._make_editor(source.read_text(encoding="utf-8"))
+            tab = EditorTab(editor=editor, path=source)
+            window._add_tab(tab, source.name)
+
+            window.insert_dropped_images([str(image)])
+            self.assertTrue(
+                wait_until(lambda: "\\includegraphics" in editor.toPlainText()),
+                "drop import did not complete",
+            )
+
+            self.assertTrue((root / "figures" / "plot.png").exists())
+            self.assertIn("{figures/plot.png}", editor.toPlainText())
             tab.modified = False
             tab.dirty = False
             window.close()
@@ -1188,11 +1240,44 @@ class GuiEditorTests(TestCase):
             window._add_tab(tab, source.name)
 
             window.insert_dropped_images([str(first), str(second)])
+            self.assertTrue(
+                wait_until(lambda: editor.toPlainText().count("\\begin{figure}") == 2),
+                "drop import did not complete",
+            )
 
             text = editor.toPlainText()
             self.assertEqual(text.count("\\begin{figure}"), 2)
-            self.assertIn("figures/first.png", text)
-            self.assertIn("figures/second.jpg", text)
+            self.assertIn("{first.png}", text)
+            self.assertIn("{second.jpg}", text)
+            tab.modified = False
+            tab.dirty = False
+            window.close()
+
+    def test_dropped_images_roll_back_on_failure(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            outside = Path(directory).parent / "external-fail-source"
+            outside.mkdir(exist_ok=True)
+            good = outside / "good.png"
+            good.write_bytes(b"good")
+            missing = outside / "missing.png"
+            source = root / "main.tex"
+            source.write_text("\\documentclass{article}\n\\begin{document}\n\\end{document}\n", encoding="utf-8")
+            window = MainWindow(settings_store=isolated_settings())
+            window.auto_compile_action.setChecked(False)
+            editor = window._make_editor(source.read_text(encoding="utf-8"))
+            tab = EditorTab(editor=editor, path=source)
+            window._add_tab(tab, source.name)
+
+            with patch("app.gui.insertion_actions.QMessageBox.warning") as warning:
+                window.insert_dropped_images([str(good), str(missing)])
+                self.assertTrue(
+                    wait_until(lambda: warning.called),
+                    "failure warning did not appear",
+                )
+
+            self.assertNotIn("\\begin{figure}", editor.toPlainText())
+            self.assertFalse((root / "figures" / "good.png").exists())
             tab.modified = False
             tab.dirty = False
             window.close()
@@ -2085,3 +2170,446 @@ class GuiPdfStateTests(TestCase):
             self.window.reveal_pdf()  # must not raise
 
         self.assertIn("无法打开文件管理器", self.window.log_view.toPlainText())
+
+
+class FormulaComposerTests(TestCase):
+    """Focused tests for the DS-001 formula composer GUI slice."""
+
+    def setUp(self) -> None:
+        app()
+
+    def _window_with_document(self, text: str) -> tuple[MainWindow, EditorTab]:
+        window = MainWindow(settings_store=isolated_settings())
+        window.auto_compile_action.setChecked(False)
+        editor = window._make_editor(text)
+        tab = EditorTab(editor=editor)
+        window._add_tab(tab, "formula_test.tex")
+        return window, tab
+
+    @staticmethod
+    def _select(editor: LaTeXEditor, start: int, end: int) -> None:
+        cursor = editor.textCursor()
+        cursor.setPosition(start)
+        cursor.setPosition(end, QTextCursor.MoveMode.KeepAnchor)
+        editor.setTextCursor(cursor)
+
+    @staticmethod
+    def _close(window: MainWindow, tab: EditorTab) -> None:
+        tab.modified = False
+        tab.dirty = False
+        window.close()
+
+    def test_apply_plan_replaces_formula_and_merges_package_into_one_undo(self) -> None:
+        source = "\\documentclass{article}\n\\begin{document}\nText $a+b$ here\n\\end{document}\n"
+        window, tab = self._window_with_document(source)
+        editor = tab.editor
+        start = source.index("$")
+        end = start + len("$a+b$")
+
+        envelope = parse_document_selection(source, start, end)
+        assert envelope is not None
+        fraction = apply_formula_template(
+            FormulaDraft(mode=envelope.mode, body=envelope.body), "fraction"
+        )
+        assert fraction is not None
+        draft = FormulaDraft(mode=FormulaMode.EQUATION_STAR, body=fraction.draft.body)
+        plan = final_edit_plan(
+            source,
+            start,
+            end,
+            draft,
+            body_cursor_offset=fraction.cursor_offset,
+        )
+        assert plan is not None
+        self.assertEqual(plan.packages, ("amsmath",))
+
+        applied = window.insertions.apply_formula_plan(tab, plan)
+
+        self.assertTrue(applied)
+        text = editor.toPlainText()
+        self.assertIn("\\usepackage{amsmath}", text)
+        self.assertIn("\\begin{equation*}\\frac{a+b}{}\\end{equation*}", text)
+        self.assertNotIn("$a+b$", text)
+        # A single Undo step restores both the package and the formula text.
+        editor.undo()
+        self.assertEqual(editor.toPlainText(), source)
+        self._close(window, tab)
+
+    def test_apply_plan_refuses_stale_selection(self) -> None:
+        source = "Text $a+b$ here"
+        window, tab = self._window_with_document(source)
+        editor = tab.editor
+        start = source.index("$")
+        end = start + len("$a+b$")
+        plan = final_edit_plan(
+            source,
+            start,
+            end,
+            FormulaDraft(mode=FormulaMode.INLINE_DOLLAR, body="a+b"),
+        )
+        assert plan is not None
+
+        editor.setPlainText("Text $x+y$ here")  # external edit at the same offsets
+        with patch("app.gui.insertion_actions.QMessageBox.warning") as warning:
+            applied = window.insertions.apply_formula_plan(tab, plan)
+
+        self.assertFalse(applied)
+        self.assertEqual(editor.toPlainText(), "Text $x+y$ here")
+        warning.assert_called_once()
+        self._close(window, tab)
+
+    def test_composer_requires_exact_formula_selection(self) -> None:
+        source = "Text $a+b$ here"
+        window, tab = self._window_with_document(source)
+        editor = tab.editor
+        self._select(editor, 0, len(source))
+
+        with patch("app.gui.insertion_actions.QMessageBox.information") as information:
+            window.open_formula_composer()
+
+        self.assertEqual(editor.toPlainText(), source)
+        information.assert_called_once()
+        self._close(window, tab)
+
+    def test_composer_without_selection_opens_dialog_and_inserts_new_formula(self) -> None:
+        source = "\\documentclass{article}\n\\begin{document}\n\n\\end{document}\n"
+        window, tab = self._window_with_document(source)
+        editor = tab.editor
+        position = len(source) - len("\\end{document}\n")
+        cursor = editor.textCursor()
+        cursor.setPosition(position)
+        editor.setTextCursor(cursor)
+
+        with patch("app.gui.insertion_actions.FormulaDialog") as dialog_cls:
+            dialog_cls.return_value.exec.return_value = QDialog.DialogCode.Accepted
+            dialog_cls.return_value.plan.return_value = final_edit_plan(
+                source,
+                position,
+                position,
+                FormulaDraft(mode=FormulaMode.EQUATION, body=""),
+                body_cursor_offset=0,
+            )
+            window.open_formula_composer()
+
+        _, kwargs = dialog_cls.call_args
+        self.assertEqual(kwargs.get("seed_text"), r"\begin{equation}\end{equation}")
+        self.assertIn(r"\begin{equation}\end{equation}", editor.toPlainText())
+        editor.undo()
+        self.assertEqual(editor.toPlainText(), source)
+        self._close(window, tab)
+
+    def test_toolbox_equation_button_routes_through_composer(self) -> None:
+        source = "\\documentclass{article}\n\\begin{document}\n\n\\end{document}\n"
+        window, tab = self._window_with_document(source)
+        editor = tab.editor
+        cursor = editor.textCursor()
+        cursor.setPosition(len(source) - len("\\end{document}\n"))
+        editor.setTextCursor(cursor)
+
+        with patch("app.gui.insertion_actions.FormulaDialog") as dialog_cls:
+            dialog_cls.return_value.exec.return_value = QDialog.DialogCode.Rejected
+            window.insert_panel.equationRequested.emit()
+
+        dialog_cls.assert_called_once()
+        self.assertEqual(editor.toPlainText(), source)
+        self._close(window, tab)
+
+    def test_dialog_seeds_from_selection_and_builds_plan(self) -> None:
+        source = "Text $a+b$ here"
+        start = source.index("$")
+        end = start + len("$a+b$")
+        dialog = FormulaDialog(None, source, start, end)
+
+        self.assertEqual(dialog.visual_edit.latex(), "a+b")
+        self.assertTrue(dialog.apply_template("fraction"))
+        self.assertEqual(dialog.visual_edit.latex(), r"a+b\frac{}{}")
+        self.assertTrue(dialog.set_mode(FormulaMode.EQUATION))
+
+        plan = dialog.build_plan()
+        assert plan is not None
+        self.assertEqual(plan.start, start)
+        self.assertEqual(plan.end, end)
+        self.assertEqual(plan.text, r"\begin{equation}a+b\frac{}{}\end{equation}")
+        dialog.close()
+
+    def test_dialog_rejects_template_and_plan_on_invalid_text(self) -> None:
+        source = "Text $a+b$ here"
+        start = source.index("$")
+        end = start + len("$a+b$")
+        dialog = FormulaDialog(None, source, start, end)
+
+        dialog.source_mode_check.setChecked(True)
+        dialog.source_edit.setPlainText("$a$ $b$")
+        self.assertFalse(dialog.apply_template("fraction"))
+        self.assertEqual(dialog.source_edit.toPlainText(), "$a$ $b$")
+        self.assertIsNone(dialog.build_plan())
+        self.assertIsNone(dialog.plan())
+        dialog.close()
+
+    def test_dialog_accepts_explicit_seed_text_for_insertion(self) -> None:
+        source = "Text here"
+        dialog = FormulaDialog(
+            None,
+            source,
+            4,
+            4,
+            seed_text=r"\begin{equation}\end{equation}",
+        )
+
+        self.assertEqual(dialog.visual_edit.latex(), "")
+        self.assertTrue(dialog.apply_template("fraction"))
+        self.assertEqual(dialog.visual_edit.latex(), r"\frac{}{}")
+        plan = dialog.build_plan()
+        assert plan is not None
+        self.assertEqual(plan.start, 4)
+        self.assertEqual(plan.end, 4)
+        self.assertEqual(plan.source_text, "")
+        self.assertEqual(plan.text, r"\begin{equation}\frac{}{}\end{equation}")
+        dialog.close()
+
+    def test_dialog_paste_into_visual_editor(self) -> None:
+        source = "Text $a+b$ here"
+        start = source.index("$")
+        end = start + len("$a+b$")
+        dialog = FormulaDialog(None, source, start, end)
+
+        dialog.visual_edit.paste_clipboard(r"\cdot c")
+        plan = dialog.build_plan()
+
+        assert plan is not None
+        self.assertEqual(plan.text, r"$a+b\cdot c$")
+        dialog.close()
+
+    def test_keyboard_fraction_button_inserts_structure(self) -> None:
+        from app.gui.math_keyboard import MathKeyButton
+
+        source = "Text $a+b$ here"
+        start = source.index("$")
+        end = start + len("$a+b$")
+        dialog = FormulaDialog(None, source, start, end)
+
+        fraction_button = next(
+            button
+            for button in dialog.keyboard.findChildren(MathKeyButton)
+            if button.action == "structure:fraction"
+        )
+        fraction_button.click()
+
+        self.assertEqual(dialog.visual_edit.latex(), r"a+b\frac{}{}")
+        self.assertEqual(dialog.keyboard.isEnabled(), True)
+        dialog.close()
+
+    def test_keyboard_digits_and_symbols_insert_text(self) -> None:
+        from app.gui.math_keyboard import MathKeyButton
+
+        source = "Text $a+b$ here"
+        start = source.index("$")
+        end = start + len("$a+b$")
+        dialog = FormulaDialog(None, source, start, end)
+
+        actions = {
+            button.action: button
+            for button in dialog.keyboard.findChildren(MathKeyButton)
+        }
+        actions["text:7"].click()
+        actions["text:+"].click()
+        actions["text:8"].click()
+        actions["command:times"].click()
+        actions["command:pi"].click()
+
+        self.assertEqual(dialog.visual_edit.latex(), r"a+b7+8\times\pi")
+        dialog.close()
+
+    def test_keyboard_category_switch_preserves_formula(self) -> None:
+        from app.gui.math_keyboard import MathKeyButton
+
+        source = "Text $a+b$ here"
+        start = source.index("$")
+        end = start + len("$a+b$")
+        dialog = FormulaDialog(None, source, start, end)
+
+        sqrt_button = next(
+            button
+            for button in dialog.keyboard.findChildren(MathKeyButton)
+            if button.action == "structure:sqrt"
+        )
+        sqrt_button.click()
+        self.assertEqual(dialog.visual_edit.latex(), r"a+b\sqrt{}")
+
+        from PySide6.QtWidgets import QPushButton
+
+        greek_button = next(
+            button
+            for button in dialog.keyboard.findChildren(QPushButton)
+            if button.text() == "希腊字母"
+        )
+        greek_button.click()
+
+        self.assertEqual(dialog.visual_edit.latex(), r"a+b\sqrt{}")
+        dialog.close()
+
+    def test_keyboard_disabled_in_source_mode(self) -> None:
+        source = "Text $a+b$ here"
+        start = source.index("$")
+        end = start + len("$a+b$")
+        dialog = FormulaDialog(None, source, start, end)
+
+        dialog.source_mode_check.setChecked(True)
+        self.assertFalse(dialog.keyboard.isEnabled())
+        dialog.source_mode_check.setChecked(False)
+        self.assertTrue(dialog.keyboard.isEnabled())
+        dialog.close()
+
+    def test_acceptance_inline_fraction_never_forces_newline(self) -> None:
+        source = r"The result is \(\) under this condition."
+        window, tab = self._window_with_document(source)
+        editor = tab.editor
+        start = source.index(r"\(")
+        end = start + len(r"\(\)")
+        self._select(editor, start, end)
+
+        class InlineFractionDialog(FormulaDialog):
+            def exec(self) -> QDialog.DialogCode:
+                self.visual_edit.insert_structure("fraction")
+                self.visual_edit.type_key("a")
+                self.visual_edit.cursor_tab()
+                self.visual_edit.type_key("b")
+                self.set_mode(FormulaMode.INLINE_PAREN)
+                self._on_apply()
+                return QDialog.DialogCode.Accepted
+
+        with patch("app.gui.insertion_actions.FormulaDialog", InlineFractionDialog):
+            window.open_formula_composer()
+
+        text = editor.toPlainText()
+        self.assertEqual(text, r"The result is \(\frac{a}{b}\) under this condition.")
+        self.assertNotIn("\n", text)
+        self._close(window, tab)
+
+    def test_acceptance_read_back_and_modify_formula(self) -> None:
+        source = r"See \(E=mc^2\) here."
+        window, tab = self._window_with_document(source)
+        editor = tab.editor
+        start = source.index(r"\(")
+        end = start + len(r"\(E=mc^2\)")
+        self._select(editor, start, end)
+
+        class ModifyDialog(FormulaDialog):
+            def exec(self) -> QDialog.DialogCode:
+                self.visual_edit.cursor_home()
+                self.visual_edit.cursor_right()  # enter the base slot
+                self.visual_edit.cursor_right()
+                self.visual_edit.cursor_right()  # right after "E="
+                for char in ("\\", "g", "a", "m", "m", "a", " "):
+                    self.visual_edit.type_key(char)
+                self._on_apply()
+                return QDialog.DialogCode.Accepted
+
+        with patch("app.gui.insertion_actions.FormulaDialog", ModifyDialog):
+            window.open_formula_composer()
+
+        self.assertEqual(editor.toPlainText(), r"See \(E=\gamma mc^2\) here.")
+        self._close(window, tab)
+
+    def test_composer_end_to_end_apply_via_dialog(self) -> None:
+        source = "Text $a+b$ here"
+        window, tab = self._window_with_document(source)
+        editor = tab.editor
+        start = source.index("$")
+        end = start + len("$a+b$")
+        self._select(editor, start, end)
+
+        class FakeDialog:
+            def __init__(self, _parent, document_text: str, sel_start: int, sel_end: int) -> None:
+                self._document_text = document_text
+                self._sel_start = sel_start
+                self._sel_end = sel_end
+
+            def exec(self) -> QDialog.DialogCode:
+                return QDialog.DialogCode.Accepted
+
+            def plan(self):
+                envelope = parse_document_selection(
+                    self._document_text, self._sel_start, self._sel_end
+                )
+                assert envelope is not None
+                fraction = apply_formula_template(
+                    FormulaDraft(mode=envelope.mode, body=envelope.body), "fraction"
+                )
+                assert fraction is not None
+                return final_edit_plan(
+                    self._document_text,
+                    self._sel_start,
+                    self._sel_end,
+                    fraction.draft,
+                    body_cursor_offset=fraction.cursor_offset,
+                )
+
+        with patch("app.gui.insertion_actions.FormulaDialog", FakeDialog):
+            window.open_formula_composer()
+
+        self.assertIn(r"$\frac{a+b}{}$", editor.toPlainText())
+        self.assertNotIn("$a+b$", editor.toPlainText())
+        # Cursor lands inside the empty denominator slot: 1 ($) + 11 (body offset).
+        self.assertEqual(editor.textCursor().position(), start + 12)
+        self._close(window, tab)
+
+    def test_cancel_leave_editor_untouched(self) -> None:
+        source = "Text $a+b$ here"
+        window, tab = self._window_with_document(source)
+        editor = tab.editor
+        start = source.index("$")
+        end = start + len("$a+b$")
+        self._select(editor, start, end)
+
+        with patch(
+            "app.gui.insertion_actions.FormulaDialog.exec",
+            return_value=QDialog.DialogCode.Rejected,
+        ):
+            window.open_formula_composer()
+
+        self.assertEqual(editor.toPlainText(), source)
+        self._close(window, tab)
+
+    def test_images_refresh_uses_incremental_index(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            figures = root / "figures"
+            figures.mkdir()
+            (figures / "a.png").write_bytes(b"png-asset")
+            source = root / "main.tex"
+            source.write_text(
+                "\\documentclass{article}\n\\begin{document}\n\\end{document}\n",
+                encoding="utf-8",
+            )
+            window = MainWindow(settings_store=isolated_settings())
+            window.auto_compile_action.setChecked(False)
+            editor = window._make_editor(source.read_text(encoding="utf-8"))
+            tab = EditorTab(editor=editor, path=source)
+            window._add_tab(tab, source.name)
+
+            window.refresh_project_panels()
+            self.assertEqual(window.images_panel.table.rowCount(), 1)
+            self.assertTrue((root / ".icstex" / "asset-index.json").exists())
+
+            window.refresh_project_panels()
+            self.assertEqual(window.images_panel.table.rowCount(), 1)
+            tab.modified = False
+            tab.dirty = False
+            window.close()
+
+    def test_import_perf_dialog_shows_summaries(self) -> None:
+        from app.core.import_metrics import import_metrics
+        from app.gui.import_perf_dialog import ImportPerfDialog
+
+        recorder = import_metrics.begin_transaction("perf-test")
+        import_metrics.record_compile_request("asset_import")
+        import_metrics.record_compile_start("preview")
+        import_metrics.record_compile_finish("preview")
+
+        dialog = ImportPerfDialog(None)
+        text = dialog.text.toPlainText()
+        self.assertIn("perf-test", text)
+        self.assertIn("compile requested=1", text)
+        self.assertIn("started=1", text)
+        dialog.close()

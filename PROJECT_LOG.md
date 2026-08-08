@@ -628,3 +628,20 @@ must link here instead of repeating old task details.
   Block 导航面板新增“文字识别…”入口，幂等提交、空内容保护、Undo 可撤销；
   报告 docs/rapidocr-text-block-flow-report.md；
 - 全套件 698→706 tests OK；未推送。
+
+## 2026-08-08 - ICSTeX 2.1.0-beta.1 版本冻结与打包（release/2.1）
+
+- 收口审计中危/低危：F2（_wait_ocr 按 request_id 退出，外来会话不再提前结束等待）、
+  F3（ROI 无几何变化不再 emit rois_changed）、F4（RoiCanvas.selected_index 公开访问器）、
+  F5（手改合并结果后重识别需确认）、F6（修正“3 项测试”文档表述）；新增 4 项回归测试；
+- 版本单一来源更新为 2.1.0-beta.1（PRODUCT_NAME/MAJOR/MINOR/VERSION/RELEASE_NAME/
+  RELEASE_CHANNEL），pyproject/README/打包文档/CLAUDE/CHANGELOG 全部对齐；
+- 冻结 2.1 Beta 1 范围：RapidOCR“文字识别…”入口禁用（代码与测试保留，后续 Beta 开放）；
+- 应用退出时关闭 OCR worker（aboutToQuit），避免孤儿进程；
+- 发布资产 release/：RELEASE_NOTES/KNOWN_LIMITATIONS/INSTALLATION/THIRD_PARTY_NOTICES/
+  SHA256SUMS + Formula-Intelligence-Demo.zip；pix2tex 代码 MIT、权重 CC BY-NC-SA 4.0、
+  权重 SHA-256 a63d9141…1dfaa 已记录；
+- 门禁：preflight 通过（版本一致 + compileall + 全套件 710 OK）；build_macos.sh 产出
+  dist/ICSTeX-2.1.0-beta.1.dmg（61MB）；打包 .app 在干净目录 offscreen 启动验证通过、
+  Demo main.tex 编译通过；DMG/ZIP 二进制不入库（gitignore）；
+- tag v2.1.0-beta.1 创建于打包验证通过后；未推送（遵循 action rate 约定）。

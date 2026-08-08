@@ -207,6 +207,22 @@ class MultiLineDialogTests(TestCase):
         canvas.clear()
         self.assertEqual(canvas.rois(), [])
 
+    def test_roi_canvas_select_and_delete(self) -> None:
+        _app()
+        from PySide6.QtCore import QRect
+        from PySide6.QtGui import QColor, QImage
+
+        from app.gui.formula_ocr.roi_canvas import RoiCanvas
+
+        canvas = RoiCanvas()
+        canvas.set_image(QImage(300, 120, QImage.Format.Format_RGB32))
+        canvas.add_rect(QRect(10, 10, 100, 20))
+        canvas.add_rect(QRect(10, 60, 100, 20))
+        canvas.select_roi(0)
+        canvas.delete_selected()
+        self.assertEqual(len(canvas.rois()), 1)
+        self.assertEqual(canvas.rois()[0].y(), 60)
+
     def test_dialog_with_image_auto_recognizes_rois(self) -> None:
         _app()
         from PySide6.QtCore import QObject, QTimer, Signal

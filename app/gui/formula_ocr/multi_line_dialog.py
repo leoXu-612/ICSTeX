@@ -44,7 +44,7 @@ class MultiLineOcrDialog(QDialog):
         self.lines_box = QVBoxLayout()
 
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("逐行识别结果（可修改；右侧画布可拖拽框选 ROI，点击矩形删除）："))
+        layout.addWidget(QLabel("逐行识别结果（可修改；右侧画布：按住 Shift 拖拽新建 ROI，直接拖拽移动，角点缩放，选中后按 Delete 删除）："))
 
         body = QHBoxLayout()
         if image is not None and not image.isNull():

@@ -645,3 +645,35 @@ must link here instead of repeating old task details.
   dist/ICSTeX-2.1.0-beta.1.dmg（61MB）；打包 .app 在干净目录 offscreen 启动验证通过、
   Demo main.tex 编译通过；DMG/ZIP 二进制不入库（gitignore）；
 - tag v2.1.0-beta.1 创建于打包验证通过后；未推送（遵循 action rate 约定）。
+
+## 2026-08-08 - 2.1.0-beta.1 Windows ARM64 Portable Build
+
+- 先核对发布基线：`release/2.1` 和本地 tag `v2.1.0-beta.1` 尚未推送；macOS
+  preflight 重新运行，710 tests OK；旧 `dist/ICSTeX-Windows.zip` 被判定为可能过期。
+- 修正 README、Windows 构建指南与当前状态中残留的 0.2.7/旧包表述；Windows 构建脚本
+  现在读取 Python architecture，并输出 `Windows-x64` 或 `Windows-arm64` 制品名。
+- 从 matching source archive 解压到 Windows-local
+  `C:\w2\ICSTeX-Source-2.1.0-beta.1`，使用 ARM64 Python 3.12.10 和 PyInstaller 6.21.0
+  成功构建 `ICSTeX-2.1.0-beta.1-Windows-arm64.zip`。
+- 在只含 Windows system directories、没有 Python 的 PATH 下启动打包应用；8 秒后
+  `ICSTeX.exe` 仍正常运行（103,924 KB working set）。ZIP 完整性检查通过，SHA-256：
+  `97cb1c8917480a3b763146ef64a601d38318bb5b2b1c9413d76fc1dc49753949`。
+- 当前虚拟机没有 MiKTeX/TeX Live 或 Inno Setup，且为 ARM64；因此 Windows
+  source-to-PDF、x64 ZIP 和 x64 Setup EXE 未验证，不能宣称 Windows 发布已完整收口。
+
+## 2026-08-08 - 2.1.0-beta.1 Release Website and Publication Preparation
+
+- 新增 `release/release-manifest.json` 作为版本、资产、SHA-256、平台状态与官网生成的
+  单一发布元数据；`tools/update_release_site.py`、`tools/verify_release_consistency.py`
+  和 `tools/release_prepare.py` 保持其与 `app/__init__.py`、release documents 和本地资产一致；
+- 新增纯静态 `website/`（HTML/CSS/vanilla JavaScript、仓库内已核验 UI 截图、无账号/
+  追踪/后端/CDN 字体）。未发布的 GitHub Release 会明确禁用下载，Windows x64 与 ARM64
+  开发者 Beta 的边界在页面中单独说明；
+- 为可追溯性分三笔提交：Release 元数据与一致性校验、静态官网、官网测试与 Pages 手动
+  交接。`tests/test_release_site.py` 覆盖生成、路径泄露、语义、资产与 push guard；
+- 验证：官网专项 6 tests、`packaging/preflight.sh` 716 tests、`tools/run_mvp_ci.sh`
+  72 项模块化子集 + 716 项完整套件 + Demo 构建均通过；真实浏览器在 1440 px / 375 px
+  视口无 console error；
+- GitHub connector 对仓库返回 404、Linear connector 要求重新授权；没有推送 branch/tag、
+  没有创建 GitHub Release，也没有部署 Pages。`tools/deploy_release_site.sh --push` 还需要
+  明确授权与 `ICSTEX_RELEASE_SITE_PUSH=1`。

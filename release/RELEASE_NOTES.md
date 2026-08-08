@@ -4,7 +4,7 @@
 
 - 工程版本：`2.1.0-beta.1`
 - 发布通道：`beta`
-- 平台：macOS Apple Silicon（arm64）Developer Beta
+- 平台：macOS Apple Silicon（arm64）与 Windows on ARM（ARM64）Developer Beta
 - Git Tag：`v2.1.0-beta.1`
 
 ## 摘要
@@ -52,3 +52,9 @@ pix2tex 本地运行时从图片识别公式。所有识别结果都会先进入
 ## 升级与回退
 
 本版本为独立安装包；如需回退，请保留 0.2.7 及更早的安装包与项目备份。
+
+## Windows 制品边界
+
+- `ICSTeX-2.1.0-beta.1-Windows-arm64.zip` 仅用于 Windows on ARM。
+- x64 ZIP 与 x64 Setup EXE 尚未生成；ARM64 包不能改名后分发给 Intel/AMD Windows 用户。
+- Windows 包未签名，且不内置 MiKTeX 或 TeX Live。

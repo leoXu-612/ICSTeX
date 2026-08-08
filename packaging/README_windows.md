@@ -15,13 +15,17 @@ ICSTeX 不内置 LaTeX 发行版。Windows 用户请先安装 MiKTeX 或 TeX Liv
 
 ## 第一次启动
 
-如果你拿到的是 `ICSTeX-2.1.0-beta.1-Windows.zip` 或 `ICSTeX-Windows.zip`：
+请先核对文件名中的架构：大多数 Intel/AMD Windows 电脑应使用 `Windows-x64`；
+Windows on ARM 设备使用 `Windows-arm64`，二者不能混称为通用包。
+
+如果你拿到的是 `ICSTeX-2.1.0-beta.1-Windows-x64.zip`、
+`ICSTeX-2.1.0-beta.1-Windows-arm64.zip` 或对应 latest alias：
 
 1. 先把 zip 解压到一个普通文件夹，例如 Desktop 或 Documents。
 2. 打开解压后的 `ICSTeX` 文件夹。
 3. 双击 `ICSTeX.exe`。
 
-如果你拿到的是 `ICSTeX-2.1.0-beta.1-Setup.exe`：
+如果你拿到的是 `ICSTeX-2.1.0-beta.1-Windows-x64-Setup.exe`：
 
 1. 双击安装器。
 2. 按提示安装到默认目录。

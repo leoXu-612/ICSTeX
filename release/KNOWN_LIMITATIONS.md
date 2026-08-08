@@ -8,10 +8,14 @@
 5. 批量队列默认将内容完全相同的图片视为重复项并跳过；可在窗口中勾选“允许相同图片重复入队”。
 6. 批量识别提供逐项失败状态、错误查看与单项重试；单张失败不会中断整个队列，但需要用户主动重试失败项。
 7. RapidOCR 文字识别尚未作为用户功能开放（入口在 2.1 Beta 1 中禁用）。
-8. 当前首发测试环境为 macOS Apple Silicon（arm64）。
+8. 当前已验证平台为 macOS Apple Silicon 与 Windows on ARM（ARM64）；Windows x64
+   ZIP/Setup 尚未构建验证。
 9. 这是 Beta 版本，重要项目应保留 Git 或其他备份。
 
 ## 打包相关说明
 
 - 安装包不包含 pix2tex 模型权重；用户主动安装“本地公式识别”组件时，Installer 下载模型并记录许可证与版本信息。
 - 应用不内置 LaTeX 发行版；用户需自行安装 MacTeX / TeX Live / MiKTeX。
+- Windows ARM64 构建机未安装 TeX distribution，因此该平台只完成启动验收，
+  尚未完成 Windows source-to-PDF 验收。
+- Windows ARM64 ZIP 未签名；x64 installer 需要独立 x64 构建环境和 Inno Setup。

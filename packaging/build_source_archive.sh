@@ -13,7 +13,7 @@ cd "$ROOT_DIR"
 rm -rf "$BUILD_DIR"
 mkdir -p "$STAGE_DIR" "$DIST_DIR"
 
-for directory in app tests packaging tools; do
+for directory in app tests packaging tools website docs; do
   mkdir -p "$STAGE_DIR/$directory"
   rsync -a \
     --exclude '.DS_Store' \
@@ -23,7 +23,14 @@ for directory in app tests packaging tools; do
     "$STAGE_DIR/$directory/"
 done
 
-for file in README.md CHANGELOG.md CLAUDE.md pyproject.toml requirements.txt requirements-packaging.txt; do
+# Release metadata is useful to source-build users, but distributable binaries
+# stay out of the source archive so it remains small and reproducible.
+mkdir -p "$STAGE_DIR/release"
+for file in release/*.md release/release-manifest.json release/*-verification.txt; do
+  [[ -f "$ROOT_DIR/$file" ]] && cp "$ROOT_DIR/$file" "$STAGE_DIR/$file"
+done
+
+for file in README.md CHANGELOG.md CLAUDE.md FORCODEX.md pyproject.toml requirements.txt requirements-packaging.txt; do
   cp "$ROOT_DIR/$file" "$STAGE_DIR/$file"
 done
 

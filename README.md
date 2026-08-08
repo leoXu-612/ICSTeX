@@ -18,8 +18,8 @@ preview: statically referenced project PNG/JPEG assets, including common
 `\graphicspath` forms, are cached as smaller proxies in `.icstex/`. Their LaTeX
 natural size is preserved; manual Compile and Export PDF always use the original
 images. Preview and final build state are isolated, and export waits for a current
-final build rather than copying a preview or stale PDF. This source-only change
-is not in 2.1.0-beta.1.
+final build rather than copying a preview or stale PDF. This dual preview/final
+build path is included in 2.1.0-beta.1.
 
 ICSTeX also understands common LaTeX editor conventions such as
 `% !TEX root = main.tex` and `% !TEX program = xelatex`, and can infer a root
@@ -123,7 +123,7 @@ bash packaging/build_source_archive.sh
 ```
 
 Extract that archive on Windows, copy the extracted project to a Windows-local
-path such as `C:\Users\<name>\ICSTeX_Build_027`, then run the batch file there.
+path such as `C:\Users\<name>\ICSTeX_Build_210b1`, then run the batch file there.
 Do not build from a `C:\Mac\...` shared-folder path.
 
 The build helper ignores unreachable `localhost`/`127.0.0.1` proxy variables
@@ -131,9 +131,11 @@ for its own `pip` subprocess without changing Windows proxy settings. For an
 offline fallback, place `pylatexenc-2.10-py3-none-any.whl` in the project root
 and run the same command again.
 
-On Windows this creates `dist\ICSTeX-2.1.0-beta.1-Windows.zip` plus the latest alias
-`dist\ICSTeX-Windows.zip`. If Inno Setup is installed and `iscc` is on `PATH`,
-it also creates `dist\ICSTeX-2.1.0-beta.1-Setup.exe`.
+On Windows this creates an architecture-specific ZIP such as
+`dist\ICSTeX-2.1.0-beta.1-Windows-x64.zip` plus the matching latest alias.
+An ARM64 Python build is labeled `Windows-arm64`; it is not a generic x64 build.
+On x64, if Inno Setup is installed and `iscc` is on `PATH`, the script also
+creates `dist\ICSTeX-2.1.0-beta.1-Windows-x64-Setup.exe`.
 
 The package does not bundle a LaTeX distribution; users need MacTeX, TeX Live,
 or MiKTeX installed separately.

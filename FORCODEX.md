@@ -1,6 +1,6 @@
 # FORCODEX.md
 
-Timestamp: 2026-08-01 (fast-preview source delta verified)
+Timestamp: 2026-08-08 (2.1.0-beta.1 public-release preparation)
 
 This is Codex's current bounded brief. Replace it when the assignment changes;
 do not append completed-task history.
@@ -8,22 +8,25 @@ do not append completed-task history.
 ## Current State
 
 The verified source/artifact matrix is maintained in `docs/PROJECT_STATE.md`.
-The source contains reviewed post-0.2.7 UI/PDF/font and dual preview/final-build
-deltas, while all existing 0.2.7 artifacts predate those changes.
+Version 2.1.0-beta.1 is frozen; macOS arm64 and Windows ARM64 beta artifacts
+are verified within their recorded scopes. The static release website is locally
+verified, but no remote branch, tag, Release or Pages deployment has been pushed.
 
 ## Next Bounded Assignment
 
-Only when explicitly requested:
+Complete the public-release gate for the frozen 2.1.0-beta.1 candidate:
 
-1. Confirm the next release version; `0.2.8` is recommended over replacing 0.2.7.
-2. Synchronize source, packaging, README, and CHANGELOG metadata.
-3. Rebuild and verify the versioned macOS DMG and clean source archive.
-4. Build and launch-test the same version from a Windows-local path.
-5. Update `docs/PROJECT_STATE.md` and append one verified release result to
-   `PROJECT_LOG.md`.
+1. Build Windows x64 from matching source in a Windows-local directory and
+   verify launch, toolchain detection and source-to-PDF with a real TeX install.
+2. Generate the x64 Setup EXE only with an x64 host and Inno Setup; never relabel
+   the ARM64 ZIP as a generic Windows artifact.
+3. Keep `release/release-manifest.json` and `website/release.json` generated and
+   checksum-consistent as artifacts change.
+4. Only after explicit maintainer approval and restored external credentials,
+   push the release branch/tag, create a GitHub prerelease and deploy Pages via
+   the guarded process in `docs/release-process.md`.
 
-Freeze the currently verified feature set during that release task. Do not
-claim that an existing 0.2.7 artifact contains any post-0.2.7 delta.
+Do not add product features or reuse the stale unversioned Windows ZIP.
 
 ## Required Context
 

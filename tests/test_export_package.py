@@ -43,3 +43,19 @@ class ExportPackageTests(TestCase):
             self.assertEqual(manifest["format"], "icstex-portable-package")
             self.assertTrue(all(file["sha256"] for file in manifest["files"]))
             self.assertEqual(len(manifest["files"]), len(result.files))
+
+    def test_export_rejects_symlink_without_partial_output(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            project = root / "project"
+            project.mkdir()
+            (project / "main.tex").write_text("safe", encoding="utf-8")
+            secret = root / "secret.txt"
+            secret.write_text("secret", encoding="utf-8")
+            (project / "notes.txt").symlink_to(secret)
+            target = root / "export"
+
+            with self.assertRaisesRegex(ValueError, "符号链接"):
+                export_package(project, target)
+
+            self.assertFalse(target.exists())

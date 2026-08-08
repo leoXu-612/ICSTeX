@@ -105,14 +105,15 @@ def find_root_tex(path: str | Path) -> Path | None:
     return resolve_root_tex(path).root
 
 
-def resolve_root_tex(path: str | Path) -> RootResolution:
+def resolve_root_tex(path: str | Path, *, selected_scope: str | Path | None = None) -> RootResolution:
     target = normalize_path(path)
+    scope = normalize_path(selected_scope) if selected_scope is not None else None
     if target.is_file():
         magic_root = magic_root_for(target)
-        if magic_root:
+        if magic_root and _safe_single_file_magic_root(target, magic_root, selected_scope=scope):
             return RootResolution(magic_root, "magic")
         parent_root = _find_parent_root_for_child(target)
-        if parent_root:
+        if parent_root and (scope is None or parent_root.is_relative_to(scope)):
             return RootResolution(parent_root, "inferred")
         return RootResolution(target, "current") if target.suffix.lower() == ".tex" else RootResolution(None, "unknown")
     if not target.is_dir():
@@ -142,6 +143,27 @@ def resolve_root_tex(path: str | Path) -> RootResolution:
         source = "inferred" if included_tex_files(roots[0]) else "current"
         return RootResolution(roots[0], source)
     return RootResolution(tex_files[0], "unknown")
+
+
+def _safe_single_file_magic_root(
+    source: Path,
+    candidate: Path,
+    *,
+    selected_scope: Path | None = None,
+) -> bool:
+    """Accept a parent project root only when it actually owns the child."""
+
+    source = source.resolve()
+    candidate = candidate.resolve()
+    if not candidate.is_file() or candidate.is_symlink() or candidate.suffix.lower() != ".tex":
+        return False
+    if selected_scope is not None and (
+        not source.is_relative_to(selected_scope) or not candidate.is_relative_to(selected_scope)
+    ):
+        return False
+    if not source.is_relative_to(candidate.parent):
+        return False
+    return source in latex_dependency_closure(candidate)
 
 
 def project_dir_for(root_file: str | Path) -> Path:

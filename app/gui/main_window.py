@@ -114,6 +114,8 @@ class MainWindow(QMainWindow):
         self.preview_asset_roots: dict[Path, set[Path]] = {}
         self.preview_root_assets: dict[Path, set[Path]] = {}
         self.compile_managers: dict[Path, CompileManager] = {}
+        self.compile_authorized_roots: set[Path] = set()
+        self.selected_project_scope: Path | None = None
         self.compile_build_owners: dict[tuple[Path, int], CompileManager] = {}
         self.compile_active_builds: dict[
             Path, tuple[CompileManager, int, BuildPurpose]
@@ -358,6 +360,7 @@ class MainWindow(QMainWindow):
     def open_file_dialog(self) -> None:
         file_name, _ = QFileDialog.getOpenFileName(self, "打开 LaTeX 文件", str(Path.home()), "LaTeX 文件 (*.tex);;所有文件 (*)")
         if file_name:
+            self.selected_project_scope = None
             self.open_file(Path(file_name))
 
     def open_folder_dialog(self) -> None:
@@ -365,6 +368,7 @@ class MainWindow(QMainWindow):
         if not folder:
             return
         root = Path(folder)
+        self.selected_project_scope = root.expanduser().resolve()
         self.tree.setRootIndex(self.model.index(str(root)))
         self._remember_recent_project(root)
         candidate = find_root_tex(root)
@@ -404,7 +408,7 @@ class MainWindow(QMainWindow):
         self._remember_recent_file(path)
         if line:
             self._jump_to_line(editor, line)
-        self.compile_current(immediate=True)
+        self.statusBar().showMessage("文件已打开。首次编译需由你显式触发。", 5000)
 
     def _decode_source_for_open(self, path: Path, data: bytes) -> DecodedLatexText | None:
         try:
@@ -466,7 +470,7 @@ class MainWindow(QMainWindow):
             return tab.manager.root_file
         if tab.path is None:
             return None
-        root_info = resolve_root_tex(tab.path)
+        root_info = resolve_root_tex(tab.path, selected_scope=self.selected_project_scope)
         return normalize_path(root_info.root or tab.path)
 
     def _active_pdf_record(self) -> PdfBuildRecord | None:
@@ -676,11 +680,13 @@ class MainWindow(QMainWindow):
         immediate: bool = False,
         show_missing_warning: bool = False,
         purpose: BuildPurpose | None = None,
+        user_initiated: bool = True,
     ) -> None:
         self.compile.compile_current(
             immediate=immediate,
             show_missing_warning=show_missing_warning,
             purpose=purpose,
+            user_initiated=user_initiated,
         )
 
     def stop_compile_current(self) -> None:
@@ -754,7 +760,11 @@ class MainWindow(QMainWindow):
             else None
         )
         diagnostics = list(self.diagnostic_panel.diagnostics) if hasattr(self, "diagnostic_panel") else []
-        root_info = resolve_root_tex(project_file) if project_file is not None else None
+        root_info = (
+            resolve_root_tex(project_file, selected_scope=self.selected_project_scope)
+            if project_file is not None
+            else None
+        )
         metadata = FeedbackMetadata(
             selected_engine=self.current_engine.display_name,
             root_file=root_info.root if root_info is not None else None,

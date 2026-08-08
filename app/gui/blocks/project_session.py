@@ -12,7 +12,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtGui import QUndoStack
 
-from app.core.blocks.block_renderer import render_block, required_packages_for_block
+from app.core.blocks.block_renderer import RenderPolicy, render_block, required_packages_for_block
 from app.core.blocks.layout import LayoutNode
 from app.core.blocks.layout_renderer import render_layout
 from app.core.blocks.layout_solver import solve_layout
@@ -186,7 +186,14 @@ class ProjectSession(QObject):
         blocks_dir.mkdir(parents=True, exist_ok=True)
         block_latex: dict[str, str] = {}
         for block in self.registry.blocks():
-            latex = render_block(block, in_box=True)
+            latex = render_block(
+                block,
+                in_box=True,
+                policy=RenderPolicy(
+                    allow_trusted_raw_latex=getattr(self, "_raw_latex_authorized", False),
+                    project_root=project,
+                ),
+            )
             path = blocks_dir / f"{block.id}.tex"
             stats["considered"] += 1
             if _write_if_changed(path, latex):
@@ -268,6 +275,7 @@ class ProjectSession(QObject):
         self._preview_timer.stop()
         if self.project_dir is None:
             return None
+        self._raw_latex_authorized = True
         main = self.assemble_latex()
         if main is None:
             return None

@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import stat
 
 
 EXCLUDED_DIRS = {".icstex", ".git", "__pycache__", ".latex_build"}
@@ -72,15 +73,29 @@ def _allowed(path: Path) -> bool:
 def export_package(project_dir: Path, target_dir: Path) -> ExportResult:
     project = project_dir.expanduser().resolve()
     target = target_dir.expanduser().resolve()
+    candidates: list[tuple[Path, str]] = []
+    for path in sorted(project.rglob("*")):
+        relative = path.relative_to(project).as_posix()
+        if path.is_symlink():
+            raise ValueError(f"项目包含符号链接，已拒绝导出：{relative}")
+        try:
+            mode = path.stat(follow_symlinks=False).st_mode
+        except OSError as exc:
+            raise ValueError(f"无法安全检查导出源：{relative}") from exc
+        if stat.S_ISDIR(mode):
+            continue
+        if not stat.S_ISREG(mode):
+            raise ValueError(f"项目包含非普通文件，已拒绝导出：{relative}")
+        canonical = path.resolve(strict=True)
+        if not canonical.is_relative_to(project):
+            raise ValueError(f"导出源越界：{relative}")
+        if _allowed(path) and safe_relative_path(relative) is not None:
+            candidates.append((path, relative))
+
     target.mkdir(parents=True, exist_ok=True)
     copied: list[str] = []
     hashes: dict[str, str] = {}
-    for path in sorted(project.rglob("*")):
-        if not path.is_file() or not _allowed(path):
-            continue
-        relative = path.relative_to(project).as_posix()
-        if safe_relative_path(relative) is None:
-            continue
+    for path, relative in candidates:
         destination = target / relative
         if not destination.resolve().is_relative_to(target):
             raise ValueError(f"导出路径越界：{relative}")

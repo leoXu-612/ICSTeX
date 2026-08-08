@@ -71,7 +71,9 @@ class LaTeXToolchain:
         if self.latexmk:
             return [
                 self.latexmk,
+                "-norc",
                 self._latexmk_engine_flag(selected_engine),
+                "-no-shell-escape",
                 "-synctex=1",
                 "-interaction=nonstopmode",
                 "-file-line-error",
@@ -82,6 +84,7 @@ class LaTeXToolchain:
         if executable:
             return [
                 executable,
+                "-no-shell-escape",
                 "-synctex=1",
                 "-interaction=nonstopmode",
                 "-halt-on-error",

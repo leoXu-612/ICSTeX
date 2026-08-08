@@ -4,8 +4,8 @@
 
 ## 权威工作区
 
-- 当前可写路径：`<HOME>/Desktop/Codex/ICS-Project-/ICSTeX`
-- 旧路径：`<HOME>/Desktop/Codex/Codex_Latex编译器`
+- 当前可写路径：`git rev-parse --show-toplevel` 返回的 `ICSTeX` 仓库根目录
+- 旧路径：仅作回滚参考的 legacy workspace
 - 旧路径只保留为 rollback context，不在其中继续开发。
 
 ## 文档入口
@@ -42,7 +42,7 @@ build/         可重建 packaging cache，不是源码权威来源
 ## 常用命令
 
 ```bash
-cd "<HOME>/Desktop/Codex/ICS-Project-/ICSTeX"
+cd "$(git rev-parse --show-toplevel)"
 python3 -m app
 python3 -m compileall -q app tests packaging/install_build_dependencies.py
 QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests

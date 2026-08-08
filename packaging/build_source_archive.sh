@@ -19,6 +19,11 @@ for directory in app tests packaging tools website docs; do
     --exclude '.DS_Store' \
     --exclude '__pycache__/' \
     --exclude '*.pyc' \
+    --exclude '.env' \
+    --exclude '.env.*' \
+    --exclude '*.pem' \
+    --exclude '*.key' \
+    --exclude 'credentials.json' \
     --exclude 'release.json' \
     "$ROOT_DIR/$directory/" \
     "$STAGE_DIR/$directory/"
@@ -38,6 +43,11 @@ done
 
 find "$STAGE_DIR" -type d -name __pycache__ -prune -exec rm -rf {} +
 find "$STAGE_DIR" -type f \( -name '*.pyc' -o -name '.DS_Store' \) -delete
+
+if grep -RIlE '(/Users/[l]eo\.xu|C:\\Users\\[l]eo|file:///Users/[l]eo\.xu)' "$STAGE_DIR" >/dev/null; then
+  echo "Source archive rejected: local absolute path found" >&2
+  exit 1
+fi
 
 rm -f "$ARCHIVE_PATH"
 (

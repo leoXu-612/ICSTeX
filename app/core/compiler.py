@@ -29,6 +29,8 @@ logger = logging.getLogger(__name__)
 # Shared across managers so two tabs compiling the same root still get
 # strictly ordered build ids; the GUI uses them to drop late stale results.
 _BUILD_IDS = count(1)
+PREVIEW_TIMEOUT_SECONDS = 120.0
+FINAL_TIMEOUT_SECONDS = 300.0
 
 
 class CompileOutcome(Enum):
@@ -226,7 +228,8 @@ class CompileManager:
         if self.metrics_hook is not None:
             self.metrics_hook("start", purpose.value)
         try:
-            self.compile_now(purpose)
+            timeout = PREVIEW_TIMEOUT_SECONDS if purpose is BuildPurpose.PREVIEW else FINAL_TIMEOUT_SECONDS
+            self.compile_now(purpose, timeout_seconds=timeout)
         finally:
             if self.metrics_hook is not None:
                 self.metrics_hook("finish", purpose.value)
@@ -240,7 +243,7 @@ class CompileManager:
         self,
         purpose: BuildPurpose | str = BuildPurpose.FINAL,
         *,
-        timeout_seconds: float | None = None,
+        timeout_seconds: float | None = FINAL_TIMEOUT_SECONDS,
     ) -> CompileResult | None:
         selected = BuildPurpose(purpose)
         with self._lock:

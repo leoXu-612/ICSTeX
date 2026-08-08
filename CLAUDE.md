@@ -7,7 +7,7 @@ Current app version: **2.1.0-beta.1**
 
 ## Read Order
 
-1. Confirm `pwd -P` is `<HOME>/Desktop/Codex/ICS-Project-/ICSTeX`.
+1. Confirm `pwd -P` matches `git rev-parse --show-toplevel` and the repository is named `ICSTeX`.
 2. Read `AGENTS.md` completely.
 3. Read `docs/PROJECT_STATE.md` for current verified facts.
 4. Read `FORCLAUDE.md` for the current bounded assignment.

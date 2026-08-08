@@ -30,6 +30,12 @@ desktop.ini
 .venv/
 venv/
 env/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
 
 # Test / coverage
 .coverage

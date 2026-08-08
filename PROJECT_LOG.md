@@ -757,3 +757,13 @@ must link here instead of repeating old task details.
   两端 Best Practices 与 SEO 均为 100；
 - 10 项官网专项测试、Release 一致性、`compileall`、720 项完整离屏测试与
   `packaging/preflight.sh` 全部通过；未修改仓库可见性，未推送或创建远端 Release。
+## 2026-08-08 - Public-release security boundary
+
+- Standard desktop security scan identified seven publication blockers across
+  compilation, Block rendering, export, Magic Root, online metadata, timeout,
+  and publication hygiene.
+- Architect review accepted the default-deny boundary recorded in D014.
+- `python3 -m compileall -q app tests packaging/install_build_dependencies.py` passed.
+- `QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests` passed: 731 tests.
+- `bash packaging/preflight.sh` passed; existing macOS/source/Windows ARM64
+  artifacts are intentionally marked stale pending rebuild.

@@ -29,10 +29,11 @@
 | D011 | Accepted | 界面、编辑内容和强调标题使用不同的字体角色 |
 | D012 | Accepted | 自动预览与原图正式输出采用隔离的双保真构建链 |
 | D013 | Proposed | 可视公式编辑保持 LaTeX 源码唯一真值并采用显式提交 |
+| D014 | Accepted | 不受信项目采用默认拒绝的本地执行边界 |
 
 ## D001 - Local Research Writing Infrastructure
 
-状态：Accepted  
+状态：Accepted
 确认日期：2026-07-14
 
 **Context**
@@ -302,3 +303,31 @@ package、注释和文档上下文，无法保证通用可视 AST 与原始源�
 - 不把正文编辑器改造成通用 WYSIWYG，也不直接移植其他应用的完整编辑器。
 - 第一阶段可以独立验证纯文本规则，降低 UI 和打包依赖带来的返工风险。
 - visual surface 可以替换或降级，而不会改变用户 `.tex` 文件的权威地位。
+
+## D014 - Default-Deny Local Execution Boundary
+
+状态：Accepted
+确认日期：2026-08-08
+
+**Context**
+
+LaTeX 项目可携带 `latexmk` 配置、Magic Root、原始 LaTeX Block、图片路径和联网
+元数据。若打开、预览、导出或清理缓存直接信任这些字段，项目内容可越过用户所选
+范围并触发本机代码执行、文件读取或数据泄露。
+
+**Decision**
+
+- 打开项目不启动编译；首次显式编译仅在当前会话授权该 normalized root 的自动预览。
+- 所有编译强制忽略项目 `latexmkrc`、关闭 shell escape，并使用有限超时。
+- Magic Root、图片和导出源必须保持在用户选择的 canonical project boundary；
+  symlink 与非普通文件 fail closed。
+- Block 的持久化 `trusted` 字段不等同运行权限；公式从受管 AST 重建，raw LaTeX
+  还需要当前会话的显式编译授权。
+- DOI/arXiv 仅访问固定 HTTPS metadata endpoint，禁止重定向并限制响应大小。
+
+**Consequences**
+
+- 依赖 `.latexmkrc`、shell escape 或 `minted` 外部进程的项目不在 Beta 安全模式支持范围。
+- 单文件 `chapter -> ../main.tex` 仅在 root 实际引用该 child 时自动接受；其他情况
+  要求用户打开项目文件夹确认边界。
+- 修改执行边界后的所有可执行安装包必须从同一 source commit 重新构建与验证。

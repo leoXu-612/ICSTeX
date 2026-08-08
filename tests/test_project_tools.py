@@ -112,12 +112,17 @@ class ProjectToolsTests(TestCase):
         self.assertIn("title = {A useful paper title}", title.bibtex)
 
     def test_fetch_bib_online_doi_returns_real_bibtex(self) -> None:
-        opener = _fake_opener(b"@article{Real2024,\n  title = {Real Title}\n}")
+        requests = []
+        opener = _fake_opener(b"@article{Real2024,\n  title = {Real Title}\n}", requests=requests)
         result = fetch_bib_online("10.1000/example", opener=opener)
         assert result is not None
         self.assertEqual(result.source, "DOI（在线）")
         self.assertEqual(result.key, "Real2024")
         self.assertIn("Real Title", result.bibtex)
+        self.assertEqual(
+            requests[0].full_url,
+            "https://api.crossref.org/works/10.1000%2Fexample/transform/application/x-bibtex",
+        )
 
     def test_fetch_bib_online_arxiv_parses_atom(self) -> None:
         atom = (
@@ -134,6 +139,24 @@ class ProjectToolsTests(TestCase):
         self.assertIn("title = {A Great Paper}", result.bibtex)
         self.assertIn("author = {Ada Lovelace and Alan Turing}", result.bibtex)
         self.assertIn("year = {2021}", result.bibtex)
+
+    def test_fetch_bib_online_rejects_unexpected_final_host(self) -> None:
+        opener = _fake_opener(b"@article{x, title={x}}", final_url="http://127.0.0.1/private")
+
+        with self.assertRaisesRegex(OSError, "重定向"):
+            fetch_bib_online("10.1000/example", opener=opener)
+
+    def test_fetch_bib_online_rejects_oversized_response(self) -> None:
+        opener = _fake_opener(b"x" * (1024 * 1024 + 1))
+
+        with self.assertRaisesRegex(OSError, "过大"):
+            fetch_bib_online("10.1000/example", opener=opener)
+
+    def test_fetch_bib_online_rejects_dangerous_tex_metadata(self) -> None:
+        opener = _fake_opener(b"@article{x, title={\\input{/tmp/secret}}}")
+
+        with self.assertRaisesRegex(OSError, "不安全"):
+            fetch_bib_online("10.1000/example", opener=opener)
 
     def test_fetch_bib_online_returns_none_for_plain_title(self) -> None:
         self.assertIsNone(fetch_bib_online("Just a title", opener=_fake_opener(b"")))
@@ -155,8 +178,9 @@ class ProjectToolsTests(TestCase):
 
 
 class _FakeResponse:
-    def __init__(self, payload: bytes) -> None:
+    def __init__(self, payload: bytes, *, final_url: str | None = None) -> None:
         self._payload = payload
+        self._final_url = final_url
         self.headers = SimpleNamespace(get_content_charset=lambda: "utf-8")
 
     def __enter__(self) -> "_FakeResponse":
@@ -165,12 +189,17 @@ class _FakeResponse:
     def __exit__(self, *args: object) -> None:
         return None
 
-    def read(self) -> bytes:
-        return self._payload
+    def read(self, size: int = -1) -> bytes:
+        return self._payload if size < 0 else self._payload[:size]
+
+    def geturl(self) -> str | None:
+        return self._final_url
 
 
-def _fake_opener(payload: bytes):  # type: ignore[no-untyped-def]
-    def opener(_request, timeout=None):  # noqa: ARG001
-        return _FakeResponse(payload)
+def _fake_opener(payload: bytes, *, requests=None, final_url: str | None = None):  # type: ignore[no-untyped-def]
+    def opener(request, timeout=None):  # noqa: ARG001
+        if requests is not None:
+            requests.append(request)
+        return _FakeResponse(payload, final_url=final_url or request.full_url)
 
     return opener

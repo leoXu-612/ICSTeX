@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 import urllib.error
 import urllib.request
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 from xml.etree import ElementTree
 
 from app.core.latex_insertions import template_for_key
@@ -26,6 +26,17 @@ BIB_ENTRY_RE = re.compile(r"@(?P<type>\w+)\s*\{\s*(?P<key>[^,\s]+)\s*,", re.S)
 DOI_RE = re.compile(r"(10\.\d{4,9}/[^\s{}]+)", re.I)
 ARXIV_RE = re.compile(r"(?:arxiv\s*:\s*)?(\d{4}\.\d{4,5}(?:v\d+)?)", re.I)
 URL_RE = re.compile(r"https?://[^\s{}]+", re.I)
+MAX_METADATA_BYTES = 1024 * 1024
+_METADATA_HOSTS = {"api.crossref.org", "export.arxiv.org"}
+_DANGEROUS_REMOTE_TEX_RE = re.compile(
+    r"\\(?:input|include|write18?|openout|read|usepackage|documentclass|catcode|csname|def|immediate|special)\b",
+    re.I,
+)
+
+
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]  # noqa: ARG002
+        raise urllib.error.HTTPError(req.full_url, code, "联网元数据禁止重定向", headers, fp)
 
 
 @dataclass(frozen=True)
@@ -203,25 +214,49 @@ def fetch_bib_online(raw_text: str, *, opener=urllib.request.urlopen, timeout: f
     doi_match = DOI_RE.search(text)
     if doi_match:
         doi = doi_match.group(1).rstrip(".,;")
-        bibtex = _http_get(opener, f"https://doi.org/{doi}", {"Accept": "application/x-bibtex"}, timeout)
+        encoded = quote(doi, safe="")
+        bibtex = _http_get(
+            opener,
+            f"https://api.crossref.org/works/{encoded}/transform/application/x-bibtex",
+            {"Accept": "application/x-bibtex"},
+            timeout,
+        )
+        if _DANGEROUS_REMOTE_TEX_RE.search(bibtex):
+            raise OSError("在线 DOI 元数据包含不安全的 TeX 命令。")
         result = _bib_import_from_raw_bibtex(bibtex)
         return replace(result, source="DOI（在线）")
 
     arxiv_match = ARXIV_RE.search(text)
     if arxiv_match:
         identifier = arxiv_match.group(1)
-        atom = _http_get(opener, f"http://export.arxiv.org/api/query?id_list={identifier}", {}, timeout)
+        atom = _http_get(opener, f"https://export.arxiv.org/api/query?id_list={identifier}", {}, timeout)
         return _arxiv_result_from_atom(identifier, atom)
 
     return None
 
 
 def _http_get(opener, url: str, headers: dict[str, str], timeout: float) -> str:  # type: ignore[no-untyped-def]
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or parsed.hostname not in _METADATA_HOSTS:
+        raise OSError("联网元数据目标不在允许列表中。")
     request = urllib.request.Request(url, headers={"User-Agent": "ICSTeX", **headers})
+    effective_opener = opener
+    if opener is urllib.request.urlopen:
+        effective_opener = urllib.request.build_opener(_NoRedirectHandler()).open
     try:
-        with opener(request, timeout=timeout) as response:
+        with effective_opener(request, timeout=timeout) as response:
+            final_url = response.geturl() if hasattr(response, "geturl") else url
+            final = urlparse(final_url or url)
+            if final.scheme != "https" or final.hostname != parsed.hostname:
+                raise OSError("联网元数据发生了不允许的重定向。")
+            content_length = response.headers.get("Content-Length") if hasattr(response.headers, "get") else None
+            if content_length is not None and int(content_length) > MAX_METADATA_BYTES:
+                raise OSError("联网元数据响应过大。")
             charset = response.headers.get_content_charset() or "utf-8"
-            return response.read().decode(charset, errors="replace")
+            payload = response.read(MAX_METADATA_BYTES + 1)
+            if len(payload) > MAX_METADATA_BYTES:
+                raise OSError("联网元数据响应过大。")
+            return payload.decode(charset, errors="replace")
     except urllib.error.URLError as exc:
         raise OSError(f"联网获取失败：{exc.reason}") from exc
 
@@ -234,12 +269,14 @@ def _arxiv_result_from_atom(identifier: str, atom: str):  # type: ignore[no-unty
         raise OSError(f"arXiv 返回内容无法解析：{exc}") from exc
     if entry is None:
         raise OSError(f"arXiv 没有返回 {identifier} 的元数据。")
-    title = re.sub(r"\s+", " ", (entry.findtext("a:title", default="", namespaces=ns) or "")).strip()
+    title = _escape_remote_bib_value(
+        re.sub(r"\s+", " ", (entry.findtext("a:title", default="", namespaces=ns) or "")).strip()
+    )
     authors = [
         (author.findtext("a:name", default="", namespaces=ns) or "").strip()
         for author in entry.findall("a:author", ns)
     ]
-    author = " and ".join(name for name in authors if name)
+    author = " and ".join(_escape_remote_bib_value(name) for name in authors if name)
     year = (entry.findtext("a:published", default="", namespaces=ns) or "")[:4]
     key = sanitize_bib_key(f"arxiv_{identifier}")
     return BibImportResult(
@@ -258,6 +295,19 @@ def _arxiv_result_from_atom(identifier: str, atom: str):  # type: ignore[no-unty
             ),
         ),
     )
+
+
+def _escape_remote_bib_value(value: str) -> str:
+    replacements = {
+        "\\": r"\textbackslash{}",
+        "{": r"\{",
+        "}": r"\}",
+        "%": r"\%",
+        "#": r"\#",
+        "&": r"\&",
+        "_": r"\_",
+    }
+    return "".join(replacements.get(char, char) for char in value)
 
 
 def append_bib_import(bib_text: str, result: BibImportResult) -> str:

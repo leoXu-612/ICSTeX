@@ -214,6 +214,7 @@ class GuiPreviewPipelineTests(TestCase):
             latexmk="/fake/latexmk",
             pdflatex="/fake/pdflatex",
         )
+        self.window.compile_authorized_roots.add(manager.root_file)
 
         with (
             patch.object(manager, "compile_async") as compile_async,

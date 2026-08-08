@@ -45,7 +45,7 @@ class CompileManagerTests(TestCase):
             class FakeProcess:
                 returncode = 0
 
-                def communicate(self):  # type: ignore[no-untyped-def]
+                def communicate(self, timeout=None):  # type: ignore[no-untyped-def]  # noqa: ARG002
                     manager.pdf_file_for(BuildPurpose.PREVIEW).write_bytes(b"%PDF-1.4 preview")
                     return "", ""
 
@@ -351,7 +351,7 @@ class CompileManagerTests(TestCase):
             release_worker = threading.Event()
             original_compile_now = manager.compile_now
 
-            def delayed_compile(purpose: BuildPurpose) -> CompileResult | None:
+            def delayed_compile(purpose: BuildPurpose, **kwargs) -> CompileResult | None:  # noqa: ARG001
                 worker_entered.set()
                 release_worker.wait(1)
                 return original_compile_now(purpose)
@@ -485,7 +485,7 @@ class CompileOutcomeTests(TestCase):
         class FakeProcess:
             returncode = 3
 
-            def communicate(self):  # type: ignore[no-untyped-def]
+            def communicate(self, timeout=None):  # type: ignore[no-untyped-def]  # noqa: ARG002
                 with manager._lock:
                     manager._stop_requested = True
                 return "", ""
@@ -529,10 +529,9 @@ class CompileOutcomeTests(TestCase):
             time.sleep(0.02)
         self.assertFalse(manager.is_running)
 
-    def test_no_compile_timeout_is_introduced(self) -> None:
-        # Normal compiles stay unbounded; timeout is an explicit opt-in only.
+    def test_compile_timeout_is_finite_by_default(self) -> None:
         signature = inspect.signature(CompileManager.compile_now)
-        self.assertIsNone(signature.parameters["timeout_seconds"].default)
+        self.assertEqual(signature.parameters["timeout_seconds"].default, 300.0)
 
     @skipIf(os.name == "nt", "process groups differ on Windows")
     def test_timeout_kills_entire_process_tree(self) -> None:

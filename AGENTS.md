@@ -5,8 +5,8 @@ This file contains the operational rules for any coding agent working on
 
 ## Start Here
 
-1. Run `pwd -P` and confirm the authoritative root is:
-   `<HOME>/Desktop/Codex/ICS-Project-/ICSTeX`
+1. Run `git rev-parse --show-toplevel` and `pwd -P`; confirm both identify the
+   current `ICSTeX` repository root.
 2. Read `docs/PROJECT_STATE.md` for the current verified source and artifact state.
 3. Read the active bounded assignment for the current agent: `FORCODEX.md`,
    `FORCLAUDE.md`, or `FORDEEPSEEK.md`.
@@ -18,8 +18,8 @@ This file contains the operational rules for any coding agent working on
 Document roles, precedence, promotion, and retirement rules are defined in
 `docs/MEMORY_MANAGEMENT.md`.
 
-If the current path is the old `Codex_Latex编译器` workspace, stop before
-editing and relaunch from the authoritative root.
+If the current directory is a legacy or backup copy, stop before editing and
+relaunch from the Git repository root.
 
 ## Product Boundary
 

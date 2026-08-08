@@ -100,6 +100,8 @@ class DocumentLifecycle:
     def compile_after_idle(self, tab: EditorTab) -> None:
         if tab.manager is None:
             return
+        if tab.manager.root_file not in self.window.compile_authorized_roots:
+            return
         purpose = (
             BuildPurpose.PREVIEW
             if self.window.preferences.fast_preview
@@ -241,7 +243,7 @@ class DocumentLifecycle:
         window._mark_source_edited(tab)
         if tab is window.current_tab():
             window._update_pdf_action_state()
-        if tab.manager is not None:
+        if tab.manager is not None and tab.manager.root_file in window.compile_authorized_roots:
             purpose = (
                 BuildPurpose.PREVIEW
                 if window.preferences.fast_preview
@@ -254,4 +256,4 @@ class DocumentLifecycle:
                 if window.preferences.fast_preview
                 else BuildPurpose.FINAL
             )
-            window.compile_current(purpose=purpose)
+            window.compile_current(purpose=purpose, user_initiated=False)

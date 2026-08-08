@@ -58,6 +58,7 @@ class CompileController:
         immediate: bool = False,
         show_missing_warning: bool = False,
         purpose: BuildPurpose | None = None,
+        user_initiated: bool = True,
     ) -> None:
         window = self.window
         # Calling this entry point is a deliberate/manual compile unless an
@@ -66,8 +67,15 @@ class CompileController:
         tab = window.current_tab()
         if not tab:
             return
+        root = window._compile_root_for_tab(tab)
+        if root is not None:
+            root = normalize_path(root)
+            if user_initiated:
+                window.compile_authorized_roots.add(root)
+            elif root not in window.compile_authorized_roots:
+                window.statusBar().showMessage("首次编译需由你显式触发；当前仅保存修改。", 4000)
+                return
         if not window.toolchain.is_compile_ready:
-            root = window._compile_root_for_tab(tab)
             if root is not None:
                 if selected_purpose is BuildPurpose.PREVIEW:
                     window.preview_state.record_failed_attempt(root)
@@ -144,7 +152,17 @@ class CompileController:
         output_dir = tab.manager.output_dir if tab.manager else build_dir_for(tab.path)
         root = window._compile_root_for_tab(tab)
         preview_dir = preview_root_dir_for(root) if root is not None else None
-        project_dir = root.parent.resolve() if root is not None else tab.path.parent.resolve()
+        selected_scope = window.selected_project_scope
+        if selected_scope is not None:
+            selected_scope = selected_scope.resolve()
+        if root is not None and selected_scope is not None and not root.is_relative_to(selected_scope):
+            QMessageBox.warning(window, "拒绝清理", f"编译根目录超出当前项目范围：{root}")
+            return False
+        project_dir = (
+            selected_scope
+            if selected_scope is not None
+            else (root.parent.resolve() if root is not None else tab.path.parent.resolve())
+        )
         if output_dir.name != ".latex_build" or not output_dir.resolve().is_relative_to(project_dir):
             QMessageBox.warning(window, "拒绝清理", f"构建目录看起来不安全：{output_dir}")
             return False
@@ -375,7 +393,7 @@ class CompileController:
         # One shared CompileManager per normalized root: root and child tabs
         # serialize builds instead of racing over the same .latex_build.
         window = self.window
-        root_info = resolve_root_tex(path)
+        root_info = resolve_root_tex(path, selected_scope=window.selected_project_scope)
         root_file = normalize_path(root_info.root or path)
         engine = self._effective_engine_for(path, root_file)
         manager = window.compile_managers.get(root_file)

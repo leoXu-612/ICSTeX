@@ -1,6 +1,6 @@
 # FORCODEX.md
 
-Timestamp: 2026-08-08 (2.1.0-beta.1 public-release preparation)
+Timestamp: 2026-08-08 (2.1.0-beta.1 secure artifact rebuild)
 
 This is Codex's current bounded brief. Replace it when the assignment changes;
 do not append completed-task history.
@@ -8,27 +8,27 @@ do not append completed-task history.
 ## Current State
 
 The verified source/artifact matrix is maintained in `docs/PROJECT_STATE.md`.
-Version 2.1.0-beta.1 is frozen; macOS arm64 and Windows ARM64 beta artifacts
-are verified within their recorded scopes. The static release website and its
-platform installer are locally verified. The repository is Private; no remote
-release branch, tag, Release or Pages deployment has been pushed.
+Version 2.1.0-beta.1 source now enforces the accepted D014 local execution
+boundary and passes the current full suite. Every existing binary predates this
+fix and is stale. The repository remains Private; no remote release branch,
+tag, Release or Pages deployment has been pushed.
 
 ## Next Bounded Assignment
 
-Complete the public-release gate for the frozen 2.1.0-beta.1 candidate:
+Complete the public-release gate for the hardened 2.1.0-beta.1 candidate:
 
-1. Build Windows x64 from matching source in a Windows-local directory and
-   verify launch, toolchain detection and source-to-PDF with a real TeX install.
-2. Generate the x64 Setup EXE only with an x64 host and Inno Setup; never relabel
-   the ARM64 ZIP as a generic Windows artifact.
+1. Rebuild macOS arm64, clean source ZIP and Windows ARM64 from the hardened
+   source; repeat their recorded launch/architecture checks.
+2. Keep Windows x64 and Setup marked unavailable unless a real x64/Inno Setup
+   environment becomes available; never relabel ARM64.
 3. Keep `release/release-manifest.json` and `website/release.json` generated and
    checksum-consistent as artifacts change.
 4. Keep the locally verified `WEB-RS-001` website gate unchanged except for
    generated metadata updates. Preserve release-data logic; do not hard-code
    version metadata or treat Vercel as the release authority.
-5. Only after explicit maintainer approval and restored external credentials,
-   push the release branch/tag, create a GitHub prerelease and deploy Pages via
-   the guarded process in `docs/release-process.md`.
+5. Before visibility changes, resolve the known low-sensitivity personal paths
+   still present in Git history. Then push the final branch/tag, create the
+   GitHub prerelease and deploy Pages through the guarded release process.
 
 Do not add product features or reuse the stale unversioned Windows ZIP.
 

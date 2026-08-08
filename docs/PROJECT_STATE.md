@@ -13,6 +13,7 @@
 - 产品边界：中文优先、本地文件与本地编译优先、不静默上传用户内容、不捆绑
   MacTeX、TeX Live 或 MiKTeX。
 - `v2.1.0-beta.1` 标签与 `release/2.1` 尚未推送到远端。
+- 公开发布候选已加入默认拒绝的本地执行边界；旧安装包早于该修复，必须重建。
 
 ## Verified Capabilities
 
@@ -26,11 +27,11 @@
 
 ## Verification Baseline
 
-2026-08-08 当前源码重新验证：
+2026-08-08 安全边界修复后的当前源码重新验证：
 
 - `bash packaging/preflight.sh`：通过。
 - `python3 -m compileall -q app tests packaging/install_build_dependencies.py`：通过。
-- `QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests`：720 tests passed。
+- `QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests`：731 tests passed。
 - `bash tools/run_mvp_ci.sh`：72 项模块化子集、716 项完整套件与 Demo 构建通过。
 - macOS arm64 打包应用冷启动与 Demo source-to-PDF：已验证。
 
@@ -38,10 +39,10 @@
 
 | 对象 | 状态 | 说明 |
 | --- | --- | --- |
-| 当前源码 | Verified, frozen | 2.1.0-beta.1；720 tests passed |
-| macOS arm64 DMG/ZIP | Verified | ad-hoc signed、未 notarize |
-| clean source ZIP | Verified | 2.1.0-beta.1；SHA-256 已记录 |
-| Windows ARM64 ZIP | Verified beta artifact | Windows-local 构建；无系统 Python 启动通过 |
+| 当前源码 | Verified, release hardening complete | 2.1.0-beta.1；731 tests passed |
+| macOS arm64 DMG/ZIP | Rebuild required | 现有制品早于安全修复；不得发布 |
+| clean source ZIP | Rebuild required | 现有制品早于安全修复；不得发布 |
+| Windows ARM64 ZIP | Rebuild required | 必须在 Windows-local path 从当前源码重建 |
 | Windows x64 ZIP | Pending | 当前构建机和 Python 均为 ARM64 |
 | Windows x64 Setup EXE | Blocked by tools | 需要 x64 构建环境和 Inno Setup |
 | Windows TeX acceptance | Blocked by tool | 构建机尚未安装 MiKTeX/TeX Live |
@@ -64,11 +65,13 @@
 
 ## Current Risks and Immediate Work
 
-- Windows ARM64 versioned ZIP、冻结版本和无系统 Python 启动已实机验证。
+- 旧 Windows ARM64 versioned ZIP 曾通过实机验证，但已被当前安全修复取代。
 - Windows x64 ZIP/Setup 仍未生成；不能把 ARM64 包改名或宣称为通用 Windows 包。
 - 构建机缺少 Inno Setup，因此 x64 Setup EXE 不能在未补齐构建环境时生成。
 - Windows 构建机缺少 MiKTeX/TeX Live，因此不能把 source-to-PDF 记为已验证。
 - GitHub 仓库仍为 Private，且远端 Tag/Release 不存在；公开下载 URL 在网页中保持禁用。
+- HEAD 中维护者绝对路径已清理；Git 历史仍含低敏工作区路径，公开前必须选择
+  重写历史、建立干净公开仓库，或明确接受其历史可见性。
 - Codex GitHub Connector 仍无法读取该 Private 仓库；本机 GitHub CLI 认证正常，两者权限相互独立。
 - macOS 仅验证 Apple Silicon，且未 Developer ID 签名或 notarize。
 - 2.1 是 Beta；公式 OCR 结果必须人工检查，重要项目仍需外部版本备份。

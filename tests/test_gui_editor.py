@@ -363,6 +363,19 @@ class GuiEditorTests(TestCase):
             tab.modified = tab.dirty = False
             window.close()
 
+    def test_open_file_never_starts_compile(self) -> None:
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "main.tex"
+            source.write_text("\\documentclass{article}", encoding="utf-8")
+            window = MainWindow(settings_store=isolated_settings())
+
+            with patch.object(window, "compile_current") as compile_current:
+                window.open_file(source)
+
+            compile_current.assert_not_called()
+            self.assertIn("首次编译", window.statusBar().currentMessage())
+            window.close()
+
     def test_open_invalid_utf8_can_be_cancelled_without_replacement(self) -> None:
         with TemporaryDirectory() as directory:
             source = Path(directory) / "unknown.tex"
@@ -991,6 +1004,7 @@ class GuiEditorTests(TestCase):
             source.write_text(raced_content, encoding="utf-8")
 
             assert tab.manager is not None
+            window.compile_authorized_roots.add(tab.manager.root_file)
             with patch.object(tab.manager, "schedule_compile") as schedule_compile:
                 window.reload_external_change(str(source))
 
@@ -1852,7 +1866,7 @@ class GuiPdfStateTests(TestCase):
         self.assertEqual(exported_b.read_bytes(), b"%PDF-1.4 BBB")
 
     def test_child_tabs_share_root_record_and_dirty_it(self) -> None:
-        root_tab = self._add_doc("main.tex", "\\documentclass{article}\n\\input{part}\n")
+        root_tab = self._add_doc("main.tex", "\\documentclass{article}\n\\input{child}\n\\input{part}\n")
         pdf = self._finish_success(root_tab, 1)
         root = root_tab.manager.root_file
 

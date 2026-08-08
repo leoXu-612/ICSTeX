@@ -48,7 +48,15 @@ def main() -> int:
         print(f"Release consistency FAILED: {exc}", file=sys.stderr)
         return 1
 
-    for key in ("repository", "version", "tag", "channel", "release_name", "github_release_published"):
+    for key in (
+        "repository",
+        "version",
+        "tag",
+        "channel",
+        "release_name",
+        "github_repository_public",
+        "github_release_published",
+    ):
         if site.get(key) != generated.get(key):
             fail(problems, f"website/release.json {key} disagrees with generated release data")
     if site != generated:

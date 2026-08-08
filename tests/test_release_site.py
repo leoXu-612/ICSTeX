@@ -51,6 +51,7 @@ class ReleaseSiteTests(TestCase):
         self.assertEqual(release["tag"], manifest["tag"])
         self.assertEqual(release["channel"], manifest["channel"])
         self.assertEqual(release["repository"], "leoXu-612/ICSTeX")
+        self.assertFalse(release["github_repository_public"])
         self.assertFalse(release["github_release_published"])
         self.assertTrue(any(item["primary_download"] for item in release["assets"]))
 
@@ -81,6 +82,7 @@ class ReleaseSiteTests(TestCase):
         self.assertIn("skip-link", html)
         self.assertIn("release.json", app)
         self.assertIn("github_release_published", app)
+        self.assertIn("github_repository_public", app)
         self.assertIn("release.release_name", app)
         self.assertIn('<span class="hero-title-version" data-release="version">', html)
         for value in (manifest["version"], manifest["tag"], "2.1 BETA 1"):
@@ -89,6 +91,25 @@ class ReleaseSiteTests(TestCase):
         self.assertIn("prefers-reduced-motion", self.read_text("website/styles.css"))
         self.assertIn('aria-live="polite"', html)
         self.assertIn('href="vendor/pico.min.css"', html)
+
+    def test_platform_install_picker_is_keyboard_accessible_and_truthful(self) -> None:
+        html = self.read_text("website/index.html")
+        app = self.read_text("website/app.js")
+
+        self.assertIn('role="tablist"', html)
+        self.assertEqual(html.count('role="tab"'), 2)
+        self.assertEqual(html.count('role="tabpanel"'), 2)
+        for value in ("macos-dmg", "macos-zip", "windows-arm64"):
+            self.assertIn(f'data-release-download="{value}"', html)
+            self.assertIn(f'data-release-sha="{value}"', html)
+        for key in ("ArrowLeft", "ArrowRight", "Home", "End"):
+            self.assertIn(key, app)
+        self.assertIn("history.replaceState", app)
+        self.assertIn('window.addEventListener("hashchange"', app)
+        self.assertIn("repositoryPublic && releasePublished", app)
+        self.assertIn("Windows x64", html)
+        self.assertIn("尚不可下载", html)
+        self.assertNotIn('href="https://github.com', html)
 
     def test_html_ids_headings_and_images_are_accessible(self) -> None:
         inspector = SiteHTMLInspector()

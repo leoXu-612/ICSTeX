@@ -59,6 +59,7 @@ def generated_release_data(manifest: dict[str, object]) -> dict[str, object]:
         "tag": tag,
         "channel": manifest["channel"],
         "release_name": manifest["release_name"],
+        "github_repository_public": manifest["github_repository_public"],
         "github_release_published": manifest["github_release_published"],
         "release_page_url": f"https://github.com/{REPOSITORY}/releases/tag/{tag}",
         "releases_url": f"https://github.com/{REPOSITORY}/releases",

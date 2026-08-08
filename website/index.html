@@ -22,7 +22,7 @@
         <a href="#workspace">工作区</a>
         <a href="#download">下载</a>
       </nav>
-      <a class="header-source" data-release-link="repository" href="https://github.com/leoXu-612/ICSTeX">查看源码</a>
+      <a class="header-source" data-release-link="repository" href="#limits">查看源码</a>
     </header>
 
     <main id="main-content">
@@ -37,7 +37,7 @@
           <p class="hero-lede">在本地写 LaTeX、核对当前 PDF，并在交付前知道结果是否可信。</p>
           <div class="hero-actions">
             <a class="button button-primary is-disabled" data-release-download="macos-primary" aria-disabled="true">下载 macOS Apple Silicon 版</a>
-            <a class="button button-secondary" data-release-link="releases" href="https://github.com/leoXu-612/ICSTeX/releases">查看全部 Release</a>
+            <a class="button button-secondary" data-release-link="releases" href="#limits">查看全部 Release</a>
           </div>
           <p class="availability" data-release-availability aria-live="polite">正在读取 Release 状态…</p>
         </div>
@@ -62,31 +62,62 @@
               <div><dt>CHANNEL</dt><dd data-release="channel">channel</dd></div>
             </dl>
           </header>
-          <div class="platforms">
-            <article class="platform-primary">
-              <div>
-                <p class="platform-label">PRIMARY DOWNLOAD</p>
-                <h3>macOS · Apple Silicon</h3>
-                <p>适用于 M1 / M2 / M3 / M4。下载前请核对 SHA-256；当前构建尚未 notarize。</p>
-              </div>
-              <span class="status-label">已验证</span>
-              <a class="button button-primary is-disabled" data-release-download="macos-primary" aria-disabled="true">下载 DMG</a>
-            </article>
-            <details class="windows-status">
-              <summary>Windows 构建状态</summary>
-              <div class="windows-grid">
-                <article>
-                  <h3>Windows x64</h3>
-                  <p>ZIP 与 Setup EXE 尚未构建或验证，不以 ARM64 制品替代。</p>
-                  <a class="text-link" data-release-link="limitations" href="https://github.com/leoXu-612/ICSTeX/blob/main/release/KNOWN_LIMITATIONS.md">查看状态 <span aria-hidden="true">→</span></a>
+          <div class="platform-picker">
+            <div class="platform-tabs" role="tablist" aria-label="选择安装平台">
+              <button type="button" id="tab-macos" role="tab" aria-selected="true" aria-controls="panel-macos" tabindex="0" data-platform-tab="macos">
+                <strong>macOS</strong><span>Apple Silicon</span>
+              </button>
+              <button type="button" id="tab-windows" role="tab" aria-selected="false" aria-controls="panel-windows" tabindex="-1" data-platform-tab="windows">
+                <strong>Windows</strong><span>x64 / ARM64</span>
+              </button>
+            </div>
+
+            <section class="platform-panel" id="panel-macos" role="tabpanel" aria-labelledby="tab-macos" tabindex="0" data-platform-panel="macos">
+              <header class="package-header">
+                <div><p class="platform-label">VERIFIED PACKAGE</p><h3>macOS · Apple Silicon</h3></div>
+                <span class="status-label">已验证</span>
+              </header>
+              <p class="platform-summary">适用于 M1 / M2 / M3 / M4；当前构建尚未 notarize，首次启动需要在“隐私与安全性”中确认。</p>
+              <div class="package-options">
+                <article class="package-option">
+                  <div><strong>DMG 安装映像</strong><span>推荐 · 拖入“应用程序”</span><code data-release-sha="macos-dmg">SHA-256 loading…</code></div>
+                  <a class="button button-primary is-disabled" data-release-download="macos-dmg" aria-disabled="true">下载 DMG</a>
                 </article>
-                <article>
-                  <h3>Windows ARM64</h3>
-                  <p>开发者 Beta 已通过无系统 Python 启动检查；source-to-PDF 仍待 Windows TeX 工具链验收。</p>
-                  <a class="text-link" data-release-link="limitations" href="https://github.com/leoXu-612/ICSTeX/blob/main/release/KNOWN_LIMITATIONS.md">了解限制 <span aria-hidden="true">→</span></a>
+                <article class="package-option">
+                  <div><strong>ZIP 便携包</strong><span>手动解压</span><code data-release-sha="macos-zip">SHA-256 loading…</code></div>
+                  <a class="button button-secondary is-disabled" data-release-download="macos-zip" aria-disabled="true">下载 ZIP</a>
                 </article>
               </div>
-            </details>
+              <ol class="install-steps" aria-label="macOS 安装步骤">
+                <li><span>01</span><strong>安装应用</strong><small>打开 DMG，将 ICSTeX 拖入“应用程序”。</small></li>
+                <li><span>02</span><strong>安装 LaTeX</strong><small>安装 MacTeX 或 BasicTeX；ICSTeX 不捆绑发行版。</small></li>
+                <li><span>03</span><strong>检查环境</strong><small>启动 ICSTeX，在“环境医生”确认 latexmk 与 texcount。</small></li>
+              </ol>
+            </section>
+
+            <section class="platform-panel" id="panel-windows" role="tabpanel" aria-labelledby="tab-windows" tabindex="0" data-platform-panel="windows" hidden>
+              <header class="package-header">
+                <div><p class="platform-label">ARCHITECTURE MATTERS</p><h3>Windows · 先确认系统类型</h3></div>
+                <span class="status-label status-pending">部分可用</span>
+              </header>
+              <p class="platform-summary">大多数 Intel / AMD 电脑需要 x64；当前只有 ARM64 开发者 Beta，不能改名代替 x64 安装包。</p>
+              <div class="package-options">
+                <article class="package-option is-unavailable">
+                  <div><strong>Windows x64</strong><span>ZIP 与 Setup EXE 尚未构建或验证</span><code>NOT AVAILABLE</code></div>
+                  <span class="button button-secondary is-disabled" aria-disabled="true">尚不可下载</span>
+                </article>
+                <article class="package-option">
+                  <div><strong>Windows ARM64 ZIP</strong><span>开发者 Beta · 仅适用于 ARM64</span><code data-release-sha="windows-arm64">SHA-256 loading…</code></div>
+                  <a class="button button-primary is-disabled" data-release-download="windows-arm64" aria-disabled="true">下载 ARM64 ZIP</a>
+                </article>
+              </div>
+              <ol class="install-steps" aria-label="Windows ARM64 安装步骤">
+                <li><span>01</span><strong>确认 ARM64</strong><small>在“设置 → 系统 → 系统信息”检查系统类型。</small></li>
+                <li><span>02</span><strong>解压到本地</strong><small>完整解压 ZIP，再运行目录中的 ICSTeX.exe。</small></li>
+                <li><span>03</span><strong>安装 LaTeX</strong><small>安装 MiKTeX 或 TeX Live，并用“环境医生”复核。</small></li>
+              </ol>
+              <a class="text-link" data-release-link="limitations" href="#limits">查看 Windows 验证边界 <span aria-hidden="true">→</span></a>
+            </section>
           </div>
         </div>
       </section>
@@ -161,17 +192,17 @@
           <li>当前 Beta 的已知限制会随 Release 元数据同步。</li>
         </ul>
         <nav class="document-links" aria-label="发布文档">
-          <a data-release-document="INSTALLATION.md" href="https://github.com/leoXu-612/ICSTeX/blob/main/release/INSTALLATION.md">安装说明</a>
-          <a data-release-document="RELEASE_NOTES.md" href="https://github.com/leoXu-612/ICSTeX/blob/main/release/RELEASE_NOTES.md">Release Notes</a>
-          <a data-release-document="SHA256SUMS.txt" href="https://github.com/leoXu-612/ICSTeX/blob/main/release/SHA256SUMS.txt">SHA-256 校验</a>
-          <a data-release-document="THIRD_PARTY_NOTICES.md" href="https://github.com/leoXu-612/ICSTeX/blob/main/release/THIRD_PARTY_NOTICES.md">第三方说明</a>
+          <a data-release-document="INSTALLATION.md" href="#limits">安装说明</a>
+          <a data-release-document="RELEASE_NOTES.md" href="#limits">Release Notes</a>
+          <a data-release-document="SHA256SUMS.txt" href="#limits">SHA-256 校验</a>
+          <a data-release-document="THIRD_PARTY_NOTICES.md" href="#limits">第三方说明</a>
         </nav>
       </section>
     </main>
 
     <footer class="site-footer">
       <div><strong translate="no">ICSTeX</strong><span>Local research-writing infrastructure for ICC students.</span></div>
-      <div><span data-release="version">release</span><a data-release-link="repository" href="https://github.com/leoXu-612/ICSTeX">GitHub</a></div>
+      <div><span data-release="version">release</span><a data-release-link="repository" href="#limits">GitHub</a></div>
     </footer>
     <script src="config.js"></script>
     <script src="app.js"></script>

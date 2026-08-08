@@ -6,13 +6,15 @@
     "website/index.html",
     "website/styles.css",
     "website/app.js",
+    "website/config.js",
+    "website/release.json",
+    "release/release-manifest.json",
+    "tools/update_release_site.py",
+    "tools/verify_release_consistency.py",
     "tests/test_release_site.py"
   ],
   "preserved": [
-    "website/config.js",
-    "website/release.json",
     "website/vendor/pico.min.css",
-    "release/release-manifest.json",
     "packaging artifacts",
     "application source"
   ],
@@ -29,8 +31,8 @@
   ],
   "evidence": {
     "release_metadata_check": "passed",
-    "focused_tests": 9,
-    "full_tests": 719,
+    "focused_tests": 10,
+    "full_tests": 720,
     "compileall": "passed",
     "packaging_preflight": "passed",
     "browser": {
@@ -51,7 +53,7 @@
     },
     "lighthouse": {
       "mobile": {
-        "performance": 97,
+        "performance": 98,
         "accessibility": 100,
         "best_practices": 100,
         "seo": 100
@@ -62,6 +64,15 @@
         "best_practices": 100,
         "seo": 100
       }
+    },
+    "github_404_gate": {
+      "repository_visibility": "private",
+      "remote_release_branch_exists": false,
+      "remote_tag_exists": false,
+      "github_release_exists": false,
+      "enabled_outbound_links_while_private": 0,
+      "connector_private_repo_access": false,
+      "local_gh_cli_access": true
     }
   },
   "publication_performed": false

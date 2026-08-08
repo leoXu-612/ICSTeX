@@ -64,6 +64,9 @@
 - Pages uses a guarded `tools/deploy_release_site.sh`: `--prepare` is local;
   `--push` requires both an explicit maintainer decision and
   `ICSTEX_RELEASE_SITE_PUSH=1`.
+- Local Pages rehearsal created the root `gh-pages` commit `434152e` containing
+  only the 10 static site files. It has not been pushed or connected to GitHub
+  Pages settings.
 
 ## 8. Follow-up Tasks and Known Limitations
 

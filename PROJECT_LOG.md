@@ -684,3 +684,9 @@ must link here instead of repeating old task details.
   成可编辑的 1703 × 5737 画板；链接与“raw frames、源码仍为真值”的边界写入
   `docs/release-2.1-beta1-preparation-report.md`；
 - 临时 Figma capture script 已在捕获完成后移除，静态网站没有新增第三方运行时或联网行为。
+
+## 2026-08-08 - Local Pages Publication Rehearsal
+
+- `tools/deploy_release_site.sh --prepare` 从干净的 Release 候选创建本地 `gh-pages`
+  root commit `434152e`，仅包含 10 个静态站点文件；未执行 `git push`、未修改 GitHub
+  Pages 设置。公开部署仍需维护者明确授权和 `ICSTEX_RELEASE_SITE_PUSH=1`。

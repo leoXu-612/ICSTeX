@@ -690,3 +690,15 @@ must link here instead of repeating old task details.
 - `tools/deploy_release_site.sh --prepare` 从干净的 Release 候选创建本地 `gh-pages`
   root commit `434152e`，仅包含 10 个静态站点文件；未执行 `git push`、未修改 GitHub
   Pages 设置。公开部署仍需维护者明确授权和 `ICSTEX_RELEASE_SITE_PUSH=1`。
+
+## 2026-08-08 - Release Website Proof-Dossier Visual Refresh
+
+- 将 `website/` 的视觉语言改为“编译证明单”：Hero 直接表达 source.tex → local build →
+  proof.pdf 的关系，信息从本地边界、功能工作台、交付路径到发布台账展开，避免通用营销卡片；
+- 中文正文采用思源宋体兼容栈，英文与技术令牌优先 SF Mono 兼容栈；对品牌和文件令牌加
+  `translate="no"`，不会加载外部字体或把用户内容交给第三方；
+- 仓库内置 Pico CSS 2.1.1（MIT，`website/vendor/`，含许可证），作为语义 HTML 的基础样式，
+  本地样式表保留可访问焦点、减弱动画、触控目标、响应式布局和明确图片尺寸/加载优先级；
+- `tests/test_release_site.py` 新增对本地 Pico 与许可证、动态下载状态的覆盖；专项 7 tests，
+  `compileall` + 离屏完整套件 717 tests 均通过；真实浏览器复核桌面与 390 px 移动视口，未见
+  横向溢出或控制项不可达。发布状态仍为未发布，未推送 GitHub、未发布 GitHub Release。

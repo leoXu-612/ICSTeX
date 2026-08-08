@@ -58,12 +58,22 @@ class ReleaseSiteTests(TestCase):
         self.assertNotIn("2.1.0-beta.1", html)
         self.assertNotIn("2.1.0-beta.1", app)
         self.assertIn("prefers-reduced-motion", self.read_text("website/styles.css"))
+        self.assertIn('aria-live="polite"', html)
+        self.assertIn('href="vendor/pico.min.css"', html)
 
     def test_reused_product_assets_are_checked_in(self) -> None:
         html = self.read_text("website/index.html")
         for name in ("main-window.png", "block-console.png", "125-narrow.png", "icstex-mark.png"):
             self.assertTrue((WEBSITE / "assets" / name).is_file(), name)
             self.assertIn(f"assets/{name}", html)
+
+    def test_local_pico_dependency_includes_its_license(self) -> None:
+        pico = WEBSITE / "vendor" / "pico.min.css"
+        license_file = WEBSITE / "vendor" / "PICO-LICENSE.md"
+        self.assertTrue(pico.is_file())
+        self.assertTrue(license_file.is_file())
+        self.assertGreater(pico.stat().st_size, 50_000)
+        self.assertIn("MIT License", license_file.read_text(encoding="utf-8"))
 
     def test_deployment_script_has_an_explicit_push_guard(self) -> None:
         script = ROOT / "tools" / "deploy_release_site.sh"
@@ -73,4 +83,3 @@ class ReleaseSiteTests(TestCase):
         self.assertIn("--prepare", source)
         self.assertIn("--push", source)
         self.assertIn("ICSTEX_RELEASE_SITE_PUSH=1", source)
-

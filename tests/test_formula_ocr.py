@@ -446,12 +446,12 @@ class MultiLineDialogTests(TestCase):
         image.fill(QColor("white"))
         dialog._append_image("a.png", image)
         dialog._append_image("a.png", image)
-        self.assertEqual(len(dialog._images), 1)
+        self.assertEqual(len(dialog._items), 1)
         self.assertIn("重复", dialog.status_label.text())
         different = QImage(120, 60, QImage.Format.Format_RGB32)
         different.fill(QColor("black"))
         dialog._append_image("b.png", different)
-        self.assertEqual(len(dialog._images), 2)
+        self.assertEqual(len(dialog._items), 2)
         dialog.close()
 
     def test_remove_then_readd_same_image_is_allowed(self) -> None:
@@ -464,11 +464,11 @@ class MultiLineDialogTests(TestCase):
         image = QImage(120, 60, QImage.Format.Format_RGB32)
         image.fill(QColor("white"))
         dialog._append_image("a.png", image)
-        dialog.image_list.setCurrentRow(0)
+        dialog.select_row(0)
         dialog._remove_selected()
-        self.assertEqual(len(dialog._images), 0)
+        self.assertEqual(len(dialog._items), 0)
         dialog._append_image("a.png", image)
-        self.assertEqual(len(dialog._images), 1)
+        self.assertEqual(len(dialog._items), 1)
         dialog.close()
 
     def test_fine_tune_ignores_rapid_repeated_clicks(self) -> None:
@@ -485,7 +485,7 @@ class MultiLineDialogTests(TestCase):
         image.fill(QColor("white"))
         dialog = BatchRecognitionDialog(None)
         dialog._append_image("a.png", image)
-        dialog.image_list.setCurrentRow(0)
+        dialog.select_row(0)
 
         opens: list = []
 
@@ -505,3 +505,86 @@ class MultiLineDialogTests(TestCase):
             dialog._fine_tune_current()
         self.assertEqual(len(opens), 2)
         dialog.close()
+
+    def test_start_marks_failed_item_with_error_and_retry(self) -> None:
+        _app()
+        from PySide6.QtCore import QObject, QTimer, Signal
+        from PySide6.QtGui import QColor, QImage, QPainter, QPen
+
+        from app.gui.formula_ocr.batch_dialog import (
+            STATUS_FAILED,
+            STATUS_SUCCEEDED,
+            BatchRecognitionDialog,
+        )
+
+        class StubResult:
+            latex = r"x=1"
+            elapsed_ms = 1
+            model_version = "stub"
+
+        class FlakyManager(QObject):
+            recognition_finished = Signal(object)
+            recognition_failed = Signal(str, str, str)
+
+            def recognize(self, request, session_id):
+                self.call_count = getattr(self, "call_count", 0) + 1
+                if self.call_count == 2:
+                    raise RuntimeError("stub model crash")
+                QTimer.singleShot(0, lambda: self.recognition_finished.emit((request.request_id, session_id, StubResult())))
+
+        def make_image(color) -> QImage:
+            image = QImage(200, 80, QImage.Format.Format_RGB32)
+            image.fill(color)
+            painter = QPainter(image)
+            painter.setPen(QPen(QColor("black"), 3))
+            painter.drawLine(30, 20, 170, 20)
+            painter.end()
+            return image
+
+        manager = FlakyManager()
+        dialog = BatchRecognitionDialog(manager)
+        dialog._append_image("a.png", make_image(QColor("white")))
+        dialog._append_image("b.png", make_image(QColor("lightgray")))
+        dialog._start()
+
+        self.assertEqual(dialog._items[0].status, STATUS_SUCCEEDED)
+        self.assertEqual(dialog._items[1].status, STATUS_FAILED)
+        self.assertIn("识别异常", dialog._items[1].error)
+        self.assertIn("stub model crash", dialog._items[1].error)
+        self.assertTrue(dialog._rows[1].retry_button.isEnabled())
+        self.assertTrue(dialog._rows[1].error_button.isEnabled())
+        combined = dialog.combined_latex()
+        self.assertEqual(combined.count("x=1"), 1)
+        self.assertNotIn("stub model crash", combined)
+
+        dialog._retry_item(1)
+        self.assertEqual(dialog._items[1].status, STATUS_SUCCEEDED)
+        self.assertEqual(dialog._items[1].error, "")
+        combined = dialog.combined_latex()
+        self.assertEqual(combined.count("x=1"), 2)
+        dialog.close()
+
+    def test_allow_duplicates_check_controls_dedupe(self) -> None:
+        _app()
+        from PySide6.QtGui import QColor, QImage
+
+        from app.gui.formula_ocr.batch_dialog import BatchRecognitionDialog
+
+        dialog = BatchRecognitionDialog(None)
+        image = QImage(120, 60, QImage.Format.Format_RGB32)
+        image.fill(QColor("white"))
+        self.assertFalse(dialog.allow_duplicates_check.isChecked())
+        dialog._append_image("a.png", image)
+        dialog._append_image("a.png", image)
+        self.assertEqual(len(dialog._items), 1)
+
+        dialog.allow_duplicates_check.setChecked(True)
+        dialog._append_image("a.png", image)
+        self.assertEqual(len(dialog._items), 2)
+        dialog.close()
+
+    def test_debounce_constant_is_named_and_used(self) -> None:
+        _app()
+        from app.gui.formula_ocr import DIALOG_OPEN_DEBOUNCE_SECONDS
+
+        self.assertEqual(DIALOG_OPEN_DEBOUNCE_SECONDS, 0.4)

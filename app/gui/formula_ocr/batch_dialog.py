@@ -1,30 +1,33 @@
-"""Unified batch image recognition window: queue + progress + review."""
+"""Unified batch image recognition window: queue + per-item status + retry."""
 from __future__ import annotations
 
+import functools
 import time
-import uuid
+from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import QEventLoop, QTimer
-from PySide6.QtGui import QImage
+from PySide6.QtGui import QImage, QMouseEvent
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
+    QFrame,
     QHBoxLayout,
     QLabel,
-    QListWidget,
     QMessageBox,
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
 
 from app.core.formula.line_splitter import split_formula_lines
 from app.core.formula.sanitizer import sanitize_formula_latex
+from app.gui.formula_ocr import DIALOG_OPEN_DEBOUNCE_SECONDS
 from app.gui.formula_ocr.image_input import (
     image_fingerprint,
     image_from_clipboard,
@@ -32,19 +35,86 @@ from app.gui.formula_ocr.image_input import (
     save_temp,
 )
 from app.gui.formula_ocr.multi_line_dialog import MultiLineOcrDialog, _wait_ocr
-from app.optional_tools.pix2tex.protocol import RecognitionRequest
+
+
+STATUS_PENDING = "pending"
+STATUS_RECOGNIZING = "recognizing"
+STATUS_SUCCEEDED = "succeeded"
+STATUS_FAILED = "failed"
+STATUS_CANCELLED = "cancelled"
+STATUS_REFINED = "refined"
+
+STATUS_LABELS = {
+    STATUS_PENDING: "待识别",
+    STATUS_RECOGNIZING: "识别中…",
+    STATUS_SUCCEEDED: "成功",
+    STATUS_FAILED: "失败",
+    STATUS_CANCELLED: "已取消",
+    STATUS_REFINED: "已精调",
+}
+STATUS_COLORS = {
+    STATUS_PENDING: "#6b7280",
+    STATUS_RECOGNIZING: "#2563eb",
+    STATUS_SUCCEEDED: "#15803d",
+    STATUS_FAILED: "#b91c1c",
+    STATUS_CANCELLED: "#9ca3af",
+    STATUS_REFINED: "#7c3aed",
+}
+
+
+@dataclass
+class QueueItem:
+    """One queued formula image with its independent recognition state."""
+
+    name: str
+    image: QImage
+    status: str = STATUS_PENDING
+    error: str = ""
+    result: str = ""
+
+
+class _RowFrame(QFrame):
+    """Selectable row: click selects, buttons stay independent of selection."""
+
+    def __init__(self, index: int, select_callback) -> None:
+        super().__init__()
+        self._index = index
+        self._select_callback = select_callback
+        self.setObjectName("ocrRow")
+        self.setFrameShape(QFrame.Shape.StyledPanel)
+        self.set_selected(False)
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        self._select_callback(self._index)
+        super().mousePressEvent(event)
+
+    def set_selected(self, selected: bool) -> None:
+        if selected:
+            self.setStyleSheet(
+                "QFrame#ocrRow { background:#eef4ff; border:1px solid #2563eb; border-radius:6px; }"
+            )
+        else:
+            self.setStyleSheet(
+                "QFrame#ocrRow { background:#ffffff; border:1px solid #d9d9d4; border-radius:6px; }"
+            )
 
 
 class BatchRecognitionDialog(QDialog):
-    """Batch formula images -> queue -> sequential OCR -> combined LaTeX."""
+    """Batch formula images -> queue -> sequential OCR -> combined LaTeX.
+
+    Every queue item carries an explicit status (Pending / Recognizing /
+    Succeeded / Failed / Cancelled / Refined) so a failed item is visible
+    instead of being silently skipped, and can be retried or inspected.
+    """
 
     def __init__(self, manager, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle("图片识别")
-        self.resize(760, 520)
+        self.resize(820, 560)
         self._manager = manager
-        self._images: list[tuple[str, QImage]] = []
-        self._results: dict[int, str] = {}
+        self._items: list[QueueItem] = []
+        self._rows: list[_RowFrame] = []
+        self._current_row = -1
         self._cancel = False
         self._starting = False
         self._submitted = False
@@ -53,26 +123,43 @@ class BatchRecognitionDialog(QDialog):
         self._fingerprints: set[str] = set()
 
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("批量添加公式图片，顺序识别；识别后可在右侧核对/修改，再插入编辑器。"))
+        layout.addWidget(QLabel("批量添加公式图片，顺序识别；每行可重试/查看错误/移除，识别后可在右侧核对再插入编辑器。"))
 
         body = QHBoxLayout()
         left = QWidget()
         left_layout = QVBoxLayout(left)
-        self.image_list = QListWidget()
-        left_layout.addWidget(QLabel("识别队列："))
-        left_layout.addWidget(self.image_list)
-        buttons = QHBoxLayout()
+        left_layout.addWidget(QLabel("识别队列（点击行选中，用于精调）："))
+
+        self.rows_container = QWidget()
+        self.rows_layout = QVBoxLayout(self.rows_container)
+        self.rows_layout.setContentsMargins(0, 0, 0, 0)
+        self.rows_layout.setSpacing(4)
+        self.rows_scroll = QScrollArea()
+        self.rows_scroll.setWidgetResizable(True)
+        self.rows_scroll.setWidget(self.rows_container)
+        self.rows_scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        left_layout.addWidget(self.rows_scroll, 1)
+
+        add_row = QHBoxLayout()
         self.add_files_button = QPushButton("添加图片…")
         self.add_clipboard_button = QPushButton("从剪贴板添加")
-        self.remove_button = QPushButton("移除选中")
         self.clear_button = QPushButton("清空队列")
         self.add_files_button.clicked.connect(self._add_files)
         self.add_clipboard_button.clicked.connect(self._add_clipboard)
-        self.remove_button.clicked.connect(self._remove_selected)
         self.clear_button.clicked.connect(self._clear_queue)
-        for button in (self.add_files_button, self.add_clipboard_button, self.remove_button, self.clear_button):
-            buttons.addWidget(button)
-        left_layout.addLayout(buttons)
+        for button in (self.add_files_button, self.add_clipboard_button, self.clear_button):
+            add_row.addWidget(button)
+        add_row.addStretch()
+        left_layout.addLayout(add_row)
+
+        opts_row = QHBoxLayout()
+        self.allow_duplicates_check = QCheckBox("允许相同图片重复入队")
+        self.allow_duplicates_check.setChecked(False)
+        self.allow_duplicates_check.setToolTip("默认按图片内容去重；勾选后完全相同的图片可多次入队。")
+        opts_row.addWidget(self.allow_duplicates_check)
+        opts_row.addStretch()
+        left_layout.addLayout(opts_row)
+
         self.start_button = QPushButton("开始识别")
         self.cancel_button = QPushButton("取消识别")
         self.fine_tune_button = QPushButton("精调当前（逐行/ROI）")
@@ -84,6 +171,7 @@ class BatchRecognitionDialog(QDialog):
         action_row.addWidget(self.cancel_button)
         action_row.addWidget(self.fine_tune_button)
         left_layout.addLayout(action_row)
+
         self.progress = QProgressBar()
         self.progress.setRange(0, 1)
         self.progress.setValue(0)
@@ -135,39 +223,134 @@ class BatchRecognitionDialog(QDialog):
 
     def _append_image(self, name: str, image: QImage) -> None:
         fingerprint = image_fingerprint(image)
-        if fingerprint in self._fingerprints:
+        if not self.allow_duplicates_check.isChecked() and fingerprint in self._fingerprints:
             self.status_label.setText(f"已跳过重复图片：{name}")
             return
         self._fingerprints.add(fingerprint)
-        self._images.append((name, preprocess(image)))
-        self.image_list.addItem(name)
-        self.progress.setRange(0, max(1, len(self._images)))
+        item = QueueItem(name=name, image=preprocess(image))
+        self._items.append(item)
+        self._insert_row(len(self._items) - 1)
+        self.progress.setRange(0, max(1, len(self._items)))
+
+    def _insert_row(self, index: int) -> None:
+        item = self._items[index]
+        row = _RowFrame(index, self._select_row)
+        row_layout = QHBoxLayout(row)
+        row_layout.setContentsMargins(6, 4, 6, 4)
+
+        name_label = QLabel(item.name)
+        name_label.setToolTip(item.name)
+        status_label = QLabel(STATUS_LABELS[item.status])
+        retry_button = QPushButton("重试此项")
+        retry_button.setToolTip("重新识别当前项")
+        retry_button.setEnabled(False)
+        error_button = QPushButton("查看错误")
+        error_button.setEnabled(False)
+        remove_button = QPushButton("从批次移除")
+
+        row.name_label = name_label
+        row.status_label = status_label
+        row.retry_button = retry_button
+        row.error_button = error_button
+        row.remove_button = remove_button
+
+        retry_button.clicked.connect(functools.partial(self._retry_row, row))
+        error_button.clicked.connect(functools.partial(self._view_error_row, row))
+        remove_button.clicked.connect(functools.partial(self._remove_row, row))
+
+        row_layout.addWidget(name_label, 1)
+        row_layout.addWidget(status_label)
+        row_layout.addWidget(retry_button)
+        row_layout.addWidget(error_button)
+        row_layout.addWidget(remove_button)
+
+        self._rows.append(row)
+        self.rows_layout.addWidget(row)
+        self._update_row_ui(index)
+
+    def _select_row(self, index: int) -> None:
+        if not (0 <= index < len(self._rows)):
+            return
+        self._current_row = index
+        for row_index, row in enumerate(self._rows):
+            row.set_selected(row_index == index)
+
+    def select_row(self, index: int) -> None:
+        """Public helper (used by tests and fine-tune flow)."""
+
+        self._select_row(index)
+
+    def _row_index(self, row: QWidget) -> int:
+        try:
+            return self._rows.index(row)
+        except ValueError:
+            return -1
 
     def _remove_selected(self) -> None:
-        rows = sorted({self.image_list.row(item) for item in self.image_list.selectedItems()}, reverse=True)
-        for row in rows:
-            del self._images[row]
-            self.image_list.takeItem(row)
+        if 0 <= self._current_row < len(self._rows):
+            self._remove_row(self._rows[self._current_row])
+
+    def _remove_row(self, row: QWidget) -> None:
+        if self._starting:
+            return
+        index = self._row_index(row)
+        if index < 0:
+            return
+        name = self._items[index].name
+        del self._items[index]
+        self.rows_layout.removeWidget(row)
+        row.setParent(None)
+        del self._rows[index]
+        if self._current_row == index:
+            self._current_row = -1
+        elif self._current_row > index:
+            self._current_row -= 1
         self._rebuild_fingerprints()
-        self.progress.setRange(0, max(1, len(self._images)))
+        self.progress.setRange(0, max(1, len(self._items)))
+        self.status_label.setText(f"已从批次移除：{name}")
+        self._refresh_result_text()
 
     def _clear_queue(self) -> None:
-        self._images = []
-        self.image_list.clear()
-        self._results = {}
+        self._items = []
+        for row in self._rows:
+            self.rows_layout.removeWidget(row)
+            row.setParent(None)
+        self._rows = []
+        self._current_row = -1
         self._fingerprints = set()
         self.progress.setRange(0, 1)
         self.progress.setValue(0)
+        self.status_label.setText("队列已清空")
+        self.result_edit.clear()
 
     def _rebuild_fingerprints(self) -> None:
-        self._fingerprints = {image_fingerprint(image) for _name, image in self._images}
+        self._fingerprints = {image_fingerprint(item.image) for item in self._items}
 
     def _request_cancel(self) -> None:
         self._cancel = True
 
+    # --- per-item UI -----------------------------------------------------
+    def _set_status(self, index: int, status: str) -> None:
+        self._items[index].status = status
+        self._update_row_ui(index)
+
+    def _update_row_ui(self, index: int) -> None:
+        item = self._items[index]
+        row = self._rows[index]
+        row.status_label.setText(STATUS_LABELS[item.status])
+        row.status_label.setStyleSheet(f"color:{STATUS_COLORS[item.status]}; font-weight:600;")
+        row.retry_button.setEnabled(item.status in (STATUS_FAILED, STATUS_CANCELLED) and not self._starting)
+        row.error_button.setEnabled(bool(item.error))
+
+    def _set_rows_enabled(self, enabled: bool) -> None:
+        for index, row in enumerate(self._rows):
+            row.remove_button.setEnabled(enabled)
+            row.name_label.setEnabled(enabled)
+            self._update_row_ui(index)
+
     # --- recognition -----------------------------------------------------
     def _start(self) -> None:
-        if not self._images:
+        if not self._items:
             QMessageBox.information(self, "图片识别", "请先添加图片。")
             return
         if self._starting:
@@ -175,32 +358,91 @@ class BatchRecognitionDialog(QDialog):
         self._starting = True
         self._cancel = False
         self.start_button.setEnabled(False)
-        blocks: list[str] = []
+        self._set_rows_enabled(False)
+        total = len(self._items)
         try:
-            for index, (_name, image) in enumerate(self._images):
+            for index, item in enumerate(self._items):
                 if self._cancel:
-                    break
-                self.status_label.setText(f"识别中 {index + 1}/{len(self._images)}…")
+                    self._set_status(index, STATUS_CANCELLED)
+                    continue
+                self.status_label.setText(f"识别中 {index + 1}/{total}…")
+                self._set_status(index, STATUS_RECOGNIZING)
                 QApplication.processEvents()
                 try:
-                    lines = self._recognize_image(image)
-                except Exception:  # noqa: BLE001 - one bad image must not abort the queue
+                    lines = self._recognize_image(item.image)
+                    error = ""
+                except Exception as exc:  # noqa: BLE001 - one bad image must not abort the queue
                     lines = []
+                    error = f"识别异常：{exc}"
                 if lines:
-                    if len(lines) > 1:
-                        blocks.append("\\begin{aligned}\n" + " \\\\\n".join(lines) + "\n\\end{aligned}")
-                    else:
-                        blocks.append(lines[0])
-                self._results[index] = "\n\n".join(blocks)
+                    item.result = self._join_lines(lines)
+                    item.error = ""
+                    self._set_status(index, STATUS_SUCCEEDED)
+                else:
+                    item.result = ""
+                    item.error = error or "未识别到内容（图片可能过空或模型未输出）"
+                    self._set_status(index, STATUS_FAILED)
                 self.progress.setValue(index + 1)
                 QApplication.processEvents()
         finally:
             self._starting = False
-        self.start_button.setEnabled(True)
+            self.start_button.setEnabled(True)
+            self._set_rows_enabled(True)
         self.status_label.setText("完成" if not self._cancel else "已取消")
-        combined = "\n\n".join(block for block in blocks if block)
-        self._results["_combined"] = combined
-        self.result_edit.setPlainText(combined)
+        self._refresh_result_text()
+
+    def _retry_row(self, row: QWidget) -> None:
+        index = self._row_index(row)
+        if index < 0 or self._starting:
+            return
+        self._retry_item(index)
+
+    def _retry_item(self, index: int) -> None:
+        if self._starting or not (0 <= index < len(self._items)):
+            return
+        self._starting = True
+        self.start_button.setEnabled(False)
+        self._set_rows_enabled(False)
+        item = self._items[index]
+        try:
+            self._set_status(index, STATUS_RECOGNIZING)
+            QApplication.processEvents()
+            try:
+                lines = self._recognize_image(item.image)
+                error = ""
+            except Exception as exc:  # noqa: BLE001 - one bad image must not abort the queue
+                lines = []
+                error = f"识别异常：{exc}"
+            if lines:
+                item.result = self._join_lines(lines)
+                item.error = ""
+                self._set_status(index, STATUS_SUCCEEDED)
+            else:
+                item.result = ""
+                item.error = error or "未识别到内容（图片可能过空或模型未输出）"
+                self._set_status(index, STATUS_FAILED)
+        finally:
+            self._starting = False
+            self.start_button.setEnabled(True)
+            self._set_rows_enabled(True)
+        self.status_label.setText("重试完成")
+        self._refresh_result_text()
+
+    def _view_error_row(self, row: QWidget) -> None:
+        index = self._row_index(row)
+        if index < 0:
+            return
+        item = self._items[index]
+        QMessageBox.warning(
+            self,
+            "识别失败详情",
+            f"图片：{item.name}\n\n{item.error or '未知错误'}",
+        )
+
+    def _join_lines(self, lines: list[str]) -> str:
+        if len(lines) > 1:
+            return "\\begin{aligned}\n" + " \\\\\n".join(lines) + "\n\\end{aligned}"
+        return lines[0]
 
     def _recognize_image(self, image: QImage) -> list[str]:
         crops = split_formula_lines(image)
@@ -217,20 +459,23 @@ class BatchRecognitionDialog(QDialog):
         return lines
 
     def _fine_tune_current(self) -> None:
-        if self._fine_tune_open or time.monotonic() - self._fine_tune_ts < 0.4:
+        if self._fine_tune_open or time.monotonic() - self._fine_tune_ts < DIALOG_OPEN_DEBOUNCE_SECONDS:
             return
-        row = self.image_list.currentRow()
-        if row < 0 or row >= len(self._images):
+        index = self._current_row
+        if index < 0 or index >= len(self._items):
+            QMessageBox.information(self, "精调", "请先在左侧队列中点击选择要精调的图片。")
             return
-        _name, image = self._images[row]
+        item = self._items[index]
         self._fine_tune_open = True
         self.fine_tune_button.setEnabled(False)
         try:
-            dialog = MultiLineOcrDialog(None, image=image, manager=self._manager, parent=self)
+            dialog = MultiLineOcrDialog(None, image=item.image, manager=self._manager, parent=self)
             if dialog.exec() == QDialog.DialogCode.Accepted:
                 latex = dialog.result_latex()
                 if latex:
-                    self._results[row] = latex
+                    item.result = latex
+                    item.error = ""
+                    self._set_status(index, STATUS_REFINED)
                     self._refresh_result_text()
         finally:
             self._fine_tune_open = False
@@ -238,11 +483,20 @@ class BatchRecognitionDialog(QDialog):
             self.fine_tune_button.setEnabled(True)
 
     def _refresh_result_text(self) -> None:
-        parts = [self._results.get(index) for index in range(len(self._images)) if self._results.get(index)]
+        parts = [
+            item.result
+            for item in self._items
+            if item.status in (STATUS_SUCCEEDED, STATUS_REFINED) and item.result
+        ]
         self.result_edit.setPlainText("\n\n".join(parts))
 
     def combined_latex(self) -> str:
         text = self.result_edit.toPlainText().strip()
         if text:
             return text
-        return self._results.get("_combined", "")
+        parts = [
+            item.result
+            for item in self._items
+            if item.status in (STATUS_SUCCEEDED, STATUS_REFINED) and item.result
+        ]
+        return "\n\n".join(parts)

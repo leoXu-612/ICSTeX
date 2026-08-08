@@ -36,6 +36,7 @@ from app.core.formula_input import (
     recognize_formula,
     render_formula,
 )
+from app.gui.formula_ocr import DIALOG_OPEN_DEBOUNCE_SECONDS
 from app.gui.math_editor_widget import MathEditorWidget
 from app.gui.math_keyboard import MathKeyboard
 
@@ -163,7 +164,7 @@ class FormulaDialog(QDialog):
         self._refresh()
 
     def _open_batch_ocr(self) -> None:
-        if self._ocr_open or time.monotonic() - self._ocr_ts < 0.4:
+        if self._ocr_open or time.monotonic() - self._ocr_ts < DIALOG_OPEN_DEBOUNCE_SECONDS:
             return
         self._ocr_open = True
         self.ocr_button.setEnabled(False)

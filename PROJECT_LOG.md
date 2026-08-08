@@ -596,3 +596,16 @@ must link here instead of repeating old task details.
   runtime_manager（检测/安装命令/pip 源检测/移除/磁盘/manifest）、泛化 JSONL
   worker_entry（pix2tex/RapidOCR 懒加载）、QProcess client、fake_worker；
 - 设置页新增 RapidOCR 文字识别状态行；测试新增 6 项；全套件 685 tests OK；未推送。
+
+## 2026-08-08 - 2.1 工单完成后的收尾调整（feature/local-recognition-runtime）
+
+- ROI 交互解耦（Shift 新建/拖拽移动/8 点手柄/Delete 删除）；aligned 种子修复
+  （_seed_editor_latex 同时写源码与可视化区并屏蔽 toggle 信号）；ROI 变化 500ms
+  自动重识别 + “识别选中 ROI”；“清空”拆分为“清空 ROI”与“清空识别内容”；
+- 统一批量图片识别窗口（队列+进度条+可滚动 ROI 行+精调当前+插入到编辑器）；
+- 修复插入链路：ROI 点击 KeyError 与识别重入 IndexError 导致批量结果为空，
+  加 drag 容错、索引校验、_recognizing 重入锁、批量单图失败容错；
+- 提交幂等：四处提交入口 _submitted 一次性锁 + 队列图片内容指纹去重；
+  打开防抖：图片识别/精调当前 400ms 防抖防排队弹窗；修正 _remove_selected
+  QListWidgetItem.row 崩溃；测试 685→698 全绿；报告写入
+  docs/ocr-post-2.1-adjustments-report.md；未推送。

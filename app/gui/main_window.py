@@ -1135,6 +1135,16 @@ def run(argv: list[str] | None = None) -> int:
     if cover_path.exists():
         app.setWindowIcon(QIcon(str(cover_path)))
     apply_theme(app)
+
+    def _shutdown_ocr_workers() -> None:
+        manager = getattr(app, "ocr_manager", None)
+        if manager is not None and hasattr(manager, "shutdown_worker"):
+            manager.shutdown_worker()
+        text_manager = getattr(app, "text_ocr_manager", None)
+        if text_manager is not None and hasattr(text_manager, "shutdown"):
+            text_manager.shutdown()
+
+    app.aboutToQuit.connect(_shutdown_ocr_workers)
     app._icstex_windows = []  # type: ignore[attr-defined]
     window = MainWindow()
     window.show()

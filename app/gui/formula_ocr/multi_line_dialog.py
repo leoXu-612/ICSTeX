@@ -42,6 +42,10 @@ class MultiLineOcrDialog(QDialog):
         self._manager = manager
         self.line_edits: list[QLineEdit] = []
         self.lines_box = QVBoxLayout()
+        self._auto_timer = QTimer(self)
+        self._auto_timer.setSingleShot(True)
+        self._auto_timer.setInterval(500)
+        self._auto_timer.timeout.connect(self._recognize_current)
 
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("逐行识别结果（可修改；右侧画布：按住 Shift 拖拽新建 ROI，直接拖拽移动，角点缩放，选中后按 Delete 删除）："))
@@ -53,20 +57,24 @@ class MultiLineOcrDialog(QDialog):
             if manager is not None:
                 rois = split_formula_line_rects(image)
                 self.canvas.set_rois(rois)
+            self.canvas.rois_changed.connect(lambda: self._auto_timer.start())
             body.addWidget(self.canvas, 3)
             right = QWidget()
             right_layout = QVBoxLayout(right)
             right_layout.addLayout(self.lines_box)
             buttons = QHBoxLayout()
             auto_button = QPushButton("自动拆分")
-            recognize_button = QPushButton("识别所选 ROI")
-            clear_button = QPushButton("清空")
+            recognize_button = QPushButton("识别选中 ROI")
+            clear_roi_button = QPushButton("清空 ROI")
+            clear_content_button = QPushButton("清空识别内容")
             auto_button.clicked.connect(self._auto_split)
-            recognize_button.clicked.connect(self._recognize_current)
-            clear_button.clicked.connect(self.canvas.clear)
+            recognize_button.clicked.connect(self._recognize_selected)
+            clear_roi_button.clicked.connect(self.canvas.clear)
+            clear_content_button.clicked.connect(self._clear_content)
             buttons.addWidget(auto_button)
             buttons.addWidget(recognize_button)
-            buttons.addWidget(clear_button)
+            buttons.addWidget(clear_roi_button)
+            buttons.addWidget(clear_content_button)
             right_layout.addLayout(buttons)
             right_layout.addStretch()
             body.addWidget(right, 2)
@@ -118,17 +126,33 @@ class MultiLineOcrDialog(QDialog):
     def _recognize_current(self) -> None:
         if self._image is None or self._manager is None:
             return
-        crops = [self._image.copy(rect) for rect in self.canvas.rois()]
-        lines: list[str] = []
-        for crop in crops:
-            temp = save_temp(crop)
-            result = _wait_ocr(self._manager, temp)
-            if result is None:
-                lines.append("")
-                continue
-            sanitized = sanitize_formula_latex(result.latex)
-            lines.append(sanitized.text if sanitized.ok else result.latex)
+        lines = [self._recognize_one(index) for index in range(len(self.canvas.rois()))]
         self._set_lines(lines)
+
+    def _recognize_selected(self) -> None:
+        index = getattr(self.canvas, "_selected", None)
+        if index is None:
+            return
+        latex = self._recognize_one(index)
+        if index < len(self.line_edits):
+            self.line_edits[index].setText(latex)
+        else:
+            self._add_line_edit(latex)
+
+    def _recognize_one(self, index: int) -> str:
+        if self._image is None or self._manager is None:
+            return ""
+        crop = self._image.copy(self.canvas.rois()[index])
+        temp = save_temp(crop)
+        result = _wait_ocr(self._manager, temp)
+        if result is None:
+            return ""
+        sanitized = sanitize_formula_latex(result.latex)
+        return sanitized.text if sanitized.ok else result.latex
+
+    def _clear_content(self) -> None:
+        for edit in self.line_edits:
+            edit.setText("")
 
     def result_latex(self) -> str:
         lines = [edit.text().strip() for edit in self.line_edits if edit.text().strip()]

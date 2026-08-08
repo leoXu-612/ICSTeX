@@ -105,13 +105,19 @@ class RoiCanvas(QWidget):
         rect = self._rois[self._selected]
         scale = self._scale()
         half = max(2, int(_HANDLE / 2))
-        for handle, (x, y) in {
+        origin = self._origin()
+        handles = {
             "tl": (rect.left(), rect.top()),
             "tr": (rect.right(), rect.top()),
             "bl": (rect.left(), rect.bottom()),
             "br": (rect.right(), rect.bottom()),
-        }.items():
-            widget = QPoint(self._origin().x() + int(x * scale), self._origin().y() + int(y * scale))
+            "t": (rect.center().x(), rect.top()),
+            "b": (rect.center().x(), rect.bottom()),
+            "l": (rect.left(), rect.center().y()),
+            "r": (rect.right(), rect.center().y()),
+        }
+        for handle, (x, y) in handles.items():
+            widget = QPoint(origin.x() + int(x * scale), origin.y() + int(y * scale))
             if abs(point.x() - widget.x()) <= half and abs(point.y() - widget.y()) <= half:
                 return handle
         return None
@@ -205,9 +211,17 @@ class RoiCanvas(QWidget):
             if selected:
                 painter.setPen(QPen(QColor("#b45309"), 1))
                 painter.setBrush(QColor("#b45309"))
-                for handle in ("tl", "tr", "bl", "br"):
-                    x = widget_rect.left() if "l" in handle else widget_rect.right()
-                    y = widget_rect.top() if "t" in handle else widget_rect.bottom()
+                handles = {
+                    "tl": (widget_rect.left(), widget_rect.top()),
+                    "tr": (widget_rect.right(), widget_rect.top()),
+                    "bl": (widget_rect.left(), widget_rect.bottom()),
+                    "br": (widget_rect.right(), widget_rect.bottom()),
+                    "t": (widget_rect.center().x(), widget_rect.top()),
+                    "b": (widget_rect.center().x(), widget_rect.bottom()),
+                    "l": (widget_rect.left(), widget_rect.center().y()),
+                    "r": (widget_rect.right(), widget_rect.center().y()),
+                }
+                for x, y in handles.values():
                     painter.drawRect(QRect(x - _HANDLE // 2, y - _HANDLE // 2, _HANDLE, _HANDLE))
         drag = self._drag
         if drag is not None and "current" in drag:

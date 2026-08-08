@@ -223,6 +223,24 @@ class MultiLineDialogTests(TestCase):
         self.assertEqual(len(canvas.rois()), 1)
         self.assertEqual(canvas.rois()[0].y(), 60)
 
+    def test_roi_canvas_edge_handles(self) -> None:
+        _app()
+        from PySide6.QtCore import QPoint, QRect
+        from PySide6.QtGui import QColor, QImage
+
+        from app.gui.formula_ocr.roi_canvas import RoiCanvas
+
+        canvas = RoiCanvas()
+        image = QImage(400, 240, QImage.Format.Format_RGB32)
+        canvas.set_image(image)
+        canvas.resize(400, 240)
+        canvas.add_rect(QRect(40, 30, 100, 50))
+        canvas.select_roi(0)
+        handle = canvas._handle_at(QPoint(140, 55))  # right-edge midpoint
+        self.assertEqual(handle, "r")
+        bottom = canvas._handle_at(QPoint(90, 80))
+        self.assertEqual(bottom, "b")
+
     def test_dialog_with_image_auto_recognizes_rois(self) -> None:
         _app()
         from PySide6.QtCore import QObject, QTimer, Signal
@@ -253,4 +271,36 @@ class MultiLineDialogTests(TestCase):
         dialog = MultiLineOcrDialog(None, image=image, manager=StubManager())
         self.assertEqual(len(dialog.line_edits), 2)
         self.assertTrue(all(edit.text() for edit in dialog.line_edits))
+        dialog.close()
+
+    def test_dialog_manual_recognize_selected(self) -> None:
+        _app()
+        from PySide6.QtCore import QObject, QTimer, Signal
+        from PySide6.QtGui import QColor, QImage, QPainter, QPen
+
+        from app.gui.formula_ocr.multi_line_dialog import MultiLineOcrDialog
+
+        class StubResult:
+            latex = r"y=1"
+            elapsed_ms = 1
+            model_version = "stub"
+
+        class StubManager(QObject):
+            recognition_finished = Signal(object)
+            recognition_failed = Signal(str, str, str)
+
+            def recognize(self, request, session_id):
+                QTimer.singleShot(0, lambda: self.recognition_finished.emit((request.request_id, session_id, StubResult())))
+
+        image = QImage(300, 120, QImage.Format.Format_RGB32)
+        image.fill(QColor("white"))
+        painter = QPainter(image)
+        painter.setPen(QPen(QColor("black"), 3))
+        painter.drawLine(30, 20, 270, 20)
+        painter.drawLine(30, 80, 270, 80)
+        painter.end()
+        dialog = MultiLineOcrDialog(None, image=image, manager=StubManager())
+        dialog.canvas.select_roi(1)
+        dialog._recognize_selected()
+        self.assertTrue(dialog.line_edits[1].text())
         dialog.close()

@@ -193,9 +193,7 @@ class FormulaDialog(QDialog):
         if dialog.exec() == QDialog.DialogCode.Accepted:
             latex = dialog.result_latex()
             if latex:
-                self.visual_edit.set_latex(latex)
-                self.editor_stack.setCurrentWidget(self.visual_edit)
-                self.source_mode_check.setChecked(False)
+                self._seed_editor_latex(latex)
         self.ocr_status_label.setText("")
 
     def _prepare_ocr(self):
@@ -232,9 +230,20 @@ class FormulaDialog(QDialog):
         if review.exec() == QDialog.DialogCode.Accepted:
             latex = review.confirmed_latex()
             if latex:
-                self.visual_edit.set_latex(latex)
-                self.editor_stack.setCurrentWidget(self.visual_edit)
-                self.source_mode_check.setChecked(False)
+                self._seed_editor_latex(latex)
+
+    def _seed_editor_latex(self, latex: str) -> None:
+        """Seed both source and visual editor without the mode toggle
+        re-parsing the previous source over the new formula."""
+        self.source_edit.setPlainText(f"\\({latex}\\)")
+        self.visual_edit.set_latex(latex)
+        self.editor_stack.setCurrentWidget(self.visual_edit)
+        if self.source_mode_check.isChecked():
+            self.source_mode_check.blockSignals(True)
+            self.source_mode_check.setChecked(False)
+            self.source_mode_check.blockSignals(False)
+        self.keyboard.setEnabled(True)
+        self._refresh()
 
     def _on_ocr_failed(self, request_id: str, code: str, message: str) -> None:
         if request_id and request_id != self._ocr_request_id:

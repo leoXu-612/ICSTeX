@@ -1,6 +1,6 @@
 # ICSTeX Roadmap
 
-更新时间：2026-08-06（Asia/Taipei）
+更新时间：2026-08-08（Asia/Taipei）
 
 本文件描述产品与技术路线，不是功能愿望清单。每个进入实施的项目都必须
 同时满足用户价值、稳定性、可维护性和可验证性要求。
@@ -36,6 +36,8 @@ ICSTeX 要成为 ICC 学生从“建立写作项目”到“提交可靠成果�
   - UI 报告正确版本；
   - 能检测 MiKTeX 或 TeX Live；
   - 基础 source-to-PDF 流程成功。
+- 在任何公开 Pages 部署前完成 `docs/tasks/WEB_RELEASE_SITE_REFACTOR.md`
+  的 WEB-001～004：移动端首屏、信息瘦身、Release 数据完整性和可复核 QA 交接。
 - 从 2026-08-01 verified source state 起只处理 release blocker。
 
 完成条件：源码、文档、macOS artifact、Windows artifact 和版本号一致，且

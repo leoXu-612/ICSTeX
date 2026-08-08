@@ -30,7 +30,7 @@
 
 - `bash packaging/preflight.sh`：通过。
 - `python3 -m compileall -q app tests packaging/install_build_dependencies.py`：通过。
-- `QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests`：716 tests passed。
+- `QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests`：717 tests passed。
 - `bash tools/run_mvp_ci.sh`：72 项模块化子集、716 项完整套件与 Demo 构建通过。
 - macOS arm64 打包应用冷启动与 Demo source-to-PDF：已验证。
 
@@ -45,7 +45,7 @@
 | Windows x64 ZIP | Pending | 当前构建机和 Python 均为 ARM64 |
 | Windows x64 Setup EXE | Blocked by tools | 需要 x64 构建环境和 Inno Setup |
 | Windows TeX acceptance | Blocked by tool | 构建机尚未安装 MiKTeX/TeX Live |
-| Static release website | Local verified | 生成元数据、专项测试与 1440/375 px 浏览器验收通过；未部署 |
+| Static release website | Local verified; protected Vercel target exists | 生成元数据和浏览器验收通过；Vercel 受登录保护且 noindex，GitHub Pages 未部署 |
 
 旧的 `dist/ICSTeX-Windows.zip` 未版本化且早于当前源码，不是 2.1.0-beta.1 制品。
 

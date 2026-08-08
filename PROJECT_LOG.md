@@ -713,3 +713,16 @@ must link here instead of repeating old task details.
   创建公开分享链接、没有配置自定义域名、没有推送 GitHub；
 - 新增 `website/.gitignore` 忽略 Vercel 生成的 `.vercel/` 本地项目关联信息，避免将团队/项目
   标识提交入仓库。后续若要公开上线或改动该 production target，必须由维护者明确授权。
+
+## 2026-08-08 - Deep Research Release Website Task Integration
+
+- 将维护者提供的 Release Website 研究报告转译为
+  `docs/tasks/WEB_RELEASE_SITE_REFACTOR.md` 的 WEB-001～004 可执行工单，覆盖移动端 Hero、
+  信息瘦身、Release 数据完整性、QA 与部署交接；
+- 消解两项报告与仓库约束的冲突：H1 版本必须继续由 `data-release-*` 注入，不硬编码
+  `ICSTeX 2.1`；GitHub Releases/Pages 保持发布真值和公开展示路径，受保护 Vercel target
+  仅作为当前外部状态，不替代正式发布流程；
+- 工单已接入 `FORCODEX.md` 当前 Release gate 与 `docs/ROADMAP.md`，明确禁止新增 React、
+  Next.js、Tailwind、Node build chain、远程字体或未经授权的 Tag/Release/Pages 发布；
+- 当前源码核查确认 `id="download"` 重复和 `2.1 BETA 1` 硬编码是待处理问题；本次仅建立
+  开发任务与验收边界，没有实施网站源码改动；`compileall` 与离屏完整套件 717 tests 通过。

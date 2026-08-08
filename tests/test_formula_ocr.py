@@ -306,6 +306,50 @@ class MultiLineDialogTests(TestCase):
         bottom = canvas._handle_at(QPoint(90, 80))
         self.assertEqual(bottom, "b")
 
+    def test_roi_canvas_selected_index_accessor(self) -> None:
+        _app()
+        from PySide6.QtCore import QRect
+        from PySide6.QtGui import QColor, QImage
+
+        from app.gui.formula_ocr.roi_canvas import RoiCanvas
+
+        canvas = RoiCanvas()
+        canvas.set_image(QImage(300, 120, QImage.Format.Format_RGB32))
+        canvas.add_rect(QRect(10, 10, 100, 20))
+        canvas.add_rect(QRect(10, 60, 100, 20))
+        canvas.select_roi(0)
+        self.assertEqual(canvas.selected_index(), 0)
+        canvas.select_roi(1)
+        self.assertEqual(canvas.selected_index(), 1)
+        canvas.clear()
+        self.assertIsNone(canvas.selected_index())
+
+    def test_roi_canvas_click_without_move_does_not_emit_change(self) -> None:
+        _app()
+        from PySide6.QtCore import QPoint, QRect, Qt
+        from PySide6.QtGui import QColor, QImage
+        from PySide6.QtTest import QTest
+
+        from app.gui.formula_ocr.roi_canvas import RoiCanvas
+
+        canvas = RoiCanvas()
+        image = QImage(400, 240, QImage.Format.Format_RGB32)
+        image.fill(QColor("white"))
+        canvas.set_image(image)
+        canvas.resize(400, 240)
+        canvas.add_rect(QRect(40, 30, 100, 50))
+        emitted: list = []
+        canvas.rois_changed.connect(lambda: emitted.append(True))
+
+        QTest.mousePress(canvas, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, QPoint(90, 55))
+        QTest.mouseRelease(canvas, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, QPoint(90, 55))
+        self.assertEqual(len(emitted), 0)
+
+        QTest.mousePress(canvas, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, QPoint(90, 55))
+        QTest.mouseMove(canvas, QPoint(120, 75))
+        QTest.mouseRelease(canvas, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, QPoint(120, 75))
+        self.assertEqual(len(emitted), 1)
+
     def test_dialog_with_image_auto_recognizes_rois(self) -> None:
         _app()
         from PySide6.QtCore import QObject, QTimer, Signal
@@ -588,3 +632,57 @@ class MultiLineDialogTests(TestCase):
         from app.gui.formula_ocr import DIALOG_OPEN_DEBOUNCE_SECONDS
 
         self.assertEqual(DIALOG_OPEN_DEBOUNCE_SECONDS, 0.4)
+
+    def test_manual_result_edit_requires_confirmation_before_rerun(self) -> None:
+        _app()
+        from PySide6.QtGui import QColor, QImage
+
+        from app.gui.formula_ocr.batch_dialog import STATUS_PENDING, STATUS_SUCCEEDED, BatchRecognitionDialog
+
+        dialog = BatchRecognitionDialog(None)
+        image = QImage(120, 60, QImage.Format.Format_RGB32)
+        image.fill(QColor("white"))
+        dialog._append_image("a.png", image)
+        dialog.result_edit.setPlainText("manual edit")
+        self.assertTrue(dialog._result_manual)
+
+        dialog._recognize_image = lambda _image: ["x=1"]
+        dialog._confirm_overwrite_manual_result = lambda: False
+        dialog._start()
+        self.assertEqual(dialog._items[0].status, STATUS_PENDING)
+
+        def confirm_true() -> bool:
+            dialog._result_manual = False
+            return True
+
+        dialog._confirm_overwrite_manual_result = confirm_true
+        dialog._start()
+        self.assertEqual(dialog._items[0].status, STATUS_SUCCEEDED)
+        self.assertFalse(dialog._result_manual)
+        dialog.close()
+
+    def test_wait_ocr_ignores_foreign_sessions(self) -> None:
+        _app()
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+
+        from PySide6.QtCore import QObject, QTimer, Signal
+
+        from app.gui.formula_ocr.multi_line_dialog import _wait_ocr
+
+        class StubManager(QObject):
+            recognition_finished = Signal(object)
+            recognition_failed = Signal(str, str, str)
+
+            def recognize(self, request, session_id):
+                # foreign result first, then our matching result
+                QTimer.singleShot(0, lambda: self.recognition_finished.emit(("foreign-1", session_id, "FOREIGN")))
+                QTimer.singleShot(0, lambda: self.recognition_failed.emit("foreign-2", "ERR", "other session failed"))
+                QTimer.singleShot(15, lambda: self.recognition_finished.emit((request.request_id, session_id, "MATCH")))
+
+        with TemporaryDirectory() as directory:
+            image = Path(directory) / "a.png"
+            image.write_bytes(b"\x89PNG fake")
+            manager = StubManager()
+            result = _wait_ocr(manager, image, timeout_ms=2000)
+        self.assertEqual(result, "MATCH")

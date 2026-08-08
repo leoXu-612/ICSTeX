@@ -1,0 +1,187 @@
+{
+  "schema_version": 1,
+  "product": "ICSTeX",
+  "naming_rule": "PRODUCT_MAJOR/MINOR + VERSION + RELEASE_NAME + RELEASE_CHANNEL; git tag v<VERSION>; assets ICSTeX-<VERSION>-<platform>-<arch>.<ext>",
+  "versions": [
+    {
+      "version": "0.2.0",
+      "major": 0,
+      "minor": 2,
+      "channel": "stable",
+      "release_name": null,
+      "release_date": "2026-06-10",
+      "git_tag": null,
+      "status": "historical",
+      "headline": "App 正式命名 ICSTeX；App 图标与 macOS DMG 测试包；插图/表格/模板/引用/标签辅助",
+      "assets": []
+    },
+    {
+      "version": "0.2.1",
+      "major": 0,
+      "minor": 2,
+      "channel": "stable",
+      "release_name": null,
+      "release_date": "2026-06-12",
+      "git_tag": null,
+      "status": "historical",
+      "headline": "环境医生与反馈包优化；Word Count 状态提示；macOS DMG 打包流程优化",
+      "assets": []
+    },
+    {
+      "version": "0.2.2",
+      "major": 0,
+      "minor": 2,
+      "channel": "stable",
+      "release_name": null,
+      "release_date": "2026-06-15",
+      "git_tag": null,
+      "status": "historical",
+      "headline": "源码自动换行与开关；多文件项目主文件识别优化",
+      "assets": []
+    },
+    {
+      "version": "0.2.3",
+      "major": 0,
+      "minor": 2,
+      "channel": "stable",
+      "release_name": null,
+      "release_date": "2026-06-30",
+      "git_tag": null,
+      "status": "historical",
+      "headline": "一键复制反馈包；Word Count 六类彩色分布条；可视化表格编辑器",
+      "assets": []
+    },
+    {
+      "version": "0.2.4",
+      "major": 0,
+      "minor": 2,
+      "channel": "stable",
+      "release_name": null,
+      "release_date": "2026-07-04",
+      "git_tag": null,
+      "status": "historical",
+      "headline": "浅色工作台重整与品牌强调色；工具栏收敛；Lucide 图标",
+      "assets": [
+        {
+          "name": "ICSTeX-0.2.4.dmg",
+          "canonical_name": "ICSTeX-0.2.4-macos-arm64.dmg",
+          "platform": "macOS",
+          "architecture": "Apple Silicon (arm64)",
+          "kind": "DMG",
+          "sha256": "f73b9079b2a6cf349af8957eec6e8ebf53a5705e0ba6f4b9ce9e05ad872fcde8"
+        }
+      ]
+    },
+    {
+      "version": "0.2.5",
+      "major": 0,
+      "minor": 2,
+      "channel": "stable",
+      "release_name": null,
+      "release_date": "2026-07-06",
+      "git_tag": null,
+      "status": "historical",
+      "headline": "每 root 独立 PDF 新鲜度状态条；标签间导出隔离",
+      "assets": []
+    },
+    {
+      "version": "0.2.6",
+      "major": 0,
+      "minor": 2,
+      "channel": "stable",
+      "release_name": null,
+      "release_date": "2026-07-08",
+      "git_tag": null,
+      "status": "historical",
+      "headline": "子文件复用父 root 编译链；另存为编译器残留修复；模板库扩展",
+      "assets": [
+        {
+          "name": "ICSTeX-0.2.6.dmg",
+          "canonical_name": "ICSTeX-0.2.6-macos-arm64.dmg",
+          "platform": "macOS",
+          "architecture": "Apple Silicon (arm64)",
+          "kind": "DMG",
+          "sha256": "8aca1679a3c5ab17379230466b76adb55319ce2353b264f5499a8c4bef2a2a42"
+        }
+      ]
+    },
+    {
+      "version": "0.2.7",
+      "major": 0,
+      "minor": 2,
+      "channel": "stable",
+      "release_name": null,
+      "release_date": "2026-07-11",
+      "git_tag": null,
+      "status": "historical",
+      "headline": "Turnitin 风格文本分层预览；Word Count 合并 input/include/subfile",
+      "assets": [
+        {
+          "name": "ICSTeX-0.2.7.dmg",
+          "canonical_name": "ICSTeX-0.2.7-macos-arm64.dmg",
+          "platform": "macOS",
+          "architecture": "Apple Silicon (arm64)",
+          "kind": "DMG",
+          "sha256": "b4ce9f668312aa2e308b3535c66021dce160ac127c886c780cb985b2e7caa7dc"
+        },
+        {
+          "name": "ICSTeX-Source-0.2.7.zip",
+          "canonical_name": "ICSTeX-Source-0.2.7.zip",
+          "platform": "Source",
+          "architecture": "Any",
+          "kind": "ZIP",
+          "sha256": "4a66f4ddabf4b52f86c3c40c12a0a29ba30e9260234b8a413f7a1d91c03fce5d"
+        }
+      ]
+    },
+    {
+      "version": "2.1.0-beta.1",
+      "major": 2,
+      "minor": 1,
+      "channel": "beta",
+      "release_name": "Formula Intelligence",
+      "release_date": "2026-08-08",
+      "git_tag": "v2.1.0-beta.1",
+      "status": "current",
+      "headline": "公式编辑器 2.0；pix2tex 本地公式识别；批量识别队列与逐项状态；ROI 交互；幂等与防抖；UI Scale；Block 主控制台",
+      "assets": [
+        {
+          "name": "ICSTeX-2.1.0-beta.1-macos-arm64.dmg",
+          "canonical_name": "ICSTeX-2.1.0-beta.1-macos-arm64.dmg",
+          "platform": "macOS",
+          "architecture": "Apple Silicon (arm64)",
+          "kind": "DMG",
+          "sha256": "7af7a99733ad7a34c5c4c49019e041fc63eb8a62aec9243f3aabd0a7870f5746",
+          "primary_download": true
+        },
+        {
+          "name": "ICSTeX-2.1.0-beta.1-macos-arm64.zip",
+          "canonical_name": "ICSTeX-2.1.0-beta.1-macos-arm64.zip",
+          "platform": "macOS",
+          "architecture": "Apple Silicon (arm64)",
+          "kind": "ZIP",
+          "sha256": "c0c6a0da6eb8658b212b99732081819aae947e03709b208b9c8ce8768e92bce2",
+          "primary_download": false
+        },
+        {
+          "name": "ICSTeX-Source-2.1.0-beta.1.zip",
+          "canonical_name": "ICSTeX-Source-2.1.0-beta.1.zip",
+          "platform": "Source",
+          "architecture": "Any",
+          "kind": "ZIP",
+          "sha256": "018b444fa2eaba4991c2024af86c36a6befe780063e65935586cd015d272b9b2",
+          "primary_download": false
+        },
+        {
+          "name": "ICSTeX-2.1.0-beta.1-Windows-arm64.zip",
+          "canonical_name": "ICSTeX-2.1.0-beta.1-Windows-arm64.zip",
+          "platform": "Windows",
+          "architecture": "ARM64 only",
+          "kind": "ZIP",
+          "sha256": "97cb1c8917480a3b763146ef64a601d38318bb5b2b1c9413d76fc1dc49753949",
+          "status": "developer-beta"
+        }
+      ]
+    }
+  ]
+}

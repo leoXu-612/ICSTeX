@@ -1,0 +1,67 @@
+{
+  "assets": [
+    {
+      "architecture": "Apple Silicon (arm64)",
+      "download_url": "https://github.com/leoXu-612/ICSTeX/releases/download/v2.1.0-beta.1/ICSTeX-2.1.0-beta.1-macos-arm64.dmg",
+      "kind": "DMG",
+      "name": "ICSTeX-2.1.0-beta.1-macos-arm64.dmg",
+      "platform": "macOS",
+      "primary_download": true,
+      "sha256": "7af7a99733ad7a34c5c4c49019e041fc63eb8a62aec9243f3aabd0a7870f5746",
+      "status": "verified"
+    },
+    {
+      "architecture": "Apple Silicon (arm64)",
+      "download_url": "https://github.com/leoXu-612/ICSTeX/releases/download/v2.1.0-beta.1/ICSTeX-2.1.0-beta.1-macos-arm64.zip",
+      "kind": "ZIP",
+      "name": "ICSTeX-2.1.0-beta.1-macos-arm64.zip",
+      "platform": "macOS",
+      "primary_download": false,
+      "sha256": "c0c6a0da6eb8658b212b99732081819aae947e03709b208b9c8ce8768e92bce2",
+      "status": "verified"
+    },
+    {
+      "architecture": "Any",
+      "download_url": "https://github.com/leoXu-612/ICSTeX/releases/download/v2.1.0-beta.1/ICSTeX-Source-2.1.0-beta.1.zip",
+      "kind": "ZIP",
+      "name": "ICSTeX-Source-2.1.0-beta.1.zip",
+      "platform": "Source",
+      "primary_download": false,
+      "sha256": "a880784eec0b121aefd5dad42339a0fe7b9276a303f9191601a124131ae5efb6",
+      "status": "verified"
+    },
+    {
+      "architecture": "ARM64 only",
+      "download_url": "https://github.com/leoXu-612/ICSTeX/releases/download/v2.1.0-beta.1/ICSTeX-2.1.0-beta.1-Windows-arm64.zip",
+      "kind": "ZIP",
+      "name": "ICSTeX-2.1.0-beta.1-Windows-arm64.zip",
+      "platform": "Windows",
+      "primary_download": false,
+      "sha256": "97cb1c8917480a3b763146ef64a601d38318bb5b2b1c9413d76fc1dc49753949",
+      "status": "developer-beta",
+      "website_visibility": "limitations-only"
+    }
+  ],
+  "channel": "beta",
+  "documents": [
+    "INSTALLATION.md",
+    "KNOWN_LIMITATIONS.md",
+    "RELEASE_NOTES.md",
+    "SHA256SUMS.txt",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "github_release_published": false,
+  "limitations": [
+    "macOS package is Apple Silicon only and is not notarized.",
+    "Windows x64 ZIP and Setup EXE are not built or validated for this beta.",
+    "Windows ARM64 is a developer beta with launch-only verification; source-to-PDF acceptance remains pending a Windows TeX distribution.",
+    "Formula recognition is optional, local, and requires user review."
+  ],
+  "release_name": "Formula Intelligence",
+  "release_page_url": "https://github.com/leoXu-612/ICSTeX/releases/tag/v2.1.0-beta.1",
+  "releases_url": "https://github.com/leoXu-612/ICSTeX/releases",
+  "repository": "leoXu-612/ICSTeX",
+  "schema_version": 1,
+  "tag": "v2.1.0-beta.1",
+  "version": "2.1.0-beta.1"
+}

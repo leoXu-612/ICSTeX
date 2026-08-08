@@ -702,3 +702,14 @@ must link here instead of repeating old task details.
 - `tests/test_release_site.py` 新增对本地 Pico 与许可证、动态下载状态的覆盖；专项 7 tests，
   `compileall` + 离屏完整套件 717 tests 均通过；真实浏览器复核桌面与 390 px 移动视口，未见
   横向溢出或控制项不可达。发布状态仍为未发布，未推送 GitHub、未发布 GitHub Release。
+
+## 2026-08-08 - Vercel Static Website Deployment Record
+
+- 使用 Vercel CLI 从 `website/` 上传静态站点；首次项目部署在未传 `--prod` 的情况下被 Vercel
+  自动标记为 production target，部署 ID 为 `dpl_47JdBfdEeGKhACBu7iH8js473VmW`。这是 Vercel
+  的首部署行为，不等同于 GitHub Release 或自定义域名发布；
+- 匿名浏览器被 Deployment Protection 重定向到 Vercel 登录页；有权限的 Vercel connector 对
+  部署源返回 HTTP 200，确认了已上传的当前 `index.html`，响应带 `x-robots-tag: noindex`。没有
+  创建公开分享链接、没有配置自定义域名、没有推送 GitHub；
+- 新增 `website/.gitignore` 忽略 Vercel 生成的 `.vercel/` 本地项目关联信息，避免将团队/项目
+  标识提交入仓库。后续若要公开上线或改动该 production target，必须由维护者明确授权。

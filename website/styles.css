@@ -78,9 +78,11 @@ h3 { margin-bottom: 0; font-size: clamp(1.25rem, 2vw, 1.7rem); line-height: 1.25
 .platform-primary p:not(.platform-label) { max-width: 55ch; margin: .6rem 0 0; color: var(--muted); font-size: .9rem; }
 .platform-primary .button { grid-column: 1 / -1; justify-self: start; }
 .status-label { padding: .25rem .45rem; border: 1px solid var(--accent); color: var(--accent-deep); font: 700 .62rem/1.2 var(--font-mono); white-space: nowrap; }
-.windows-status { margin: 0; padding: 0; border-bottom: 1px solid var(--rule-strong); }
-.windows-status summary { min-height: 48px; padding: .9rem 0; color: var(--ink); font: 700 .78rem/1.3 var(--font-ui); cursor: pointer; }
-.windows-status summary:hover { color: var(--accent-deep); }
+.windows-status { --pico-accordion-close-summary-color: var(--ink); --pico-accordion-open-summary-color: var(--ink); --pico-accordion-active-summary-color: var(--accent-deep); margin: 0; padding: 0; border-bottom: 1px solid var(--rule-strong); }
+.windows-status > summary:not([role]) { min-height: 48px; padding: .9rem 0; color: var(--ink); font: 700 .78rem/1.3 var(--font-ui); cursor: pointer; }
+.windows-status > summary:not([role]):hover { color: var(--accent-deep); }
+.windows-status summary::after { width: .55rem; height: .55rem; margin: .18rem .25rem 0 1rem; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; background-image: none; transform: rotate(45deg); }
+.windows-status[open] summary::after { margin-top: .45rem; transform: rotate(225deg); }
 .windows-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2rem; padding: .8rem 0 1.6rem; }
 .windows-grid h3 { font-size: 1.15rem; }
 .windows-grid p { margin: .5rem 0 0; color: var(--muted); font-size: .82rem; }

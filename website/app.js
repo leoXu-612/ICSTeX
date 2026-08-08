@@ -34,6 +34,7 @@
     setLink("[data-release-link='repository']", `${config.githubBaseUrl}/${release.repository}`);
     setLink("[data-release-link='releases']", release.releases_url);
     setLink("[data-release-link='limitations']", `${config.githubBaseUrl}/${release.repository}/blob/${release.tag}/release/KNOWN_LIMITATIONS.md`);
+    setLink("[data-release-link='architecture']", `${config.githubBaseUrl}/${release.repository}/blob/${release.tag}/docs/DECISION_LOG.md`);
     bindDocuments(release);
 
     const limitationList = document.querySelector("[data-release-limitations]");
@@ -46,7 +47,9 @@
     }
 
     const availability = document.querySelector("[data-release-availability]");
-    const assets = new Map(release.assets.map((asset) => [asset.name, asset]));
+    const macosPrimary = release.assets.find((asset) => (
+      asset.primary_download && asset.platform === "macOS" && asset.kind === "DMG"
+    ));
     if (!release.github_release_published) {
       disableDownloadLinks();
       if (availability) availability.textContent = "Release 尚未在 GitHub 发布；下载链接会在校验后的发布完成后启用。";
@@ -54,9 +57,8 @@
     }
 
     document.querySelectorAll("[data-release-download]").forEach((node) => {
-      const asset = assets.get(node.dataset.releaseDownload);
-      if (!asset || !asset.primary_download) return;
-      node.href = asset.download_url;
+      if (node.dataset.releaseDownload !== "macos-primary" || !macosPrimary) return;
+      node.href = macosPrimary.download_url;
       node.classList.remove("is-disabled");
       node.removeAttribute("aria-disabled");
     });

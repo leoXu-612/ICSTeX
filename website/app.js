@@ -31,6 +31,7 @@
     setText("[data-release='version']", release.version);
     setText("[data-release='tag']", release.tag);
     setText("[data-release='channel']", release.channel);
+    setText("[data-release='name']", release.release_name);
     setLink("[data-release-link='repository']", `${config.githubBaseUrl}/${release.repository}`);
     setLink("[data-release-link='releases']", release.releases_url);
     setLink("[data-release-link='limitations']", `${config.githubBaseUrl}/${release.repository}/blob/${release.tag}/release/KNOWN_LIMITATIONS.md`);

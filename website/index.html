@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#eaf1f4">
+    <meta name="theme-color" content="#f6f7f8">
     <meta name="description" content="ICSTeX 是面向 ICC 学生的本地 LaTeX 科研写作基础设施。">
     <title>ICSTeX — 本地科研写作基础设施</title>
     <link rel="icon" href="assets/icstex-mark.png" type="image/png">
@@ -18,10 +18,9 @@
         <span translate="no">ICSTeX</span>
       </a>
       <nav aria-label="主导航">
-        <a href="#features">功能</a>
-        <a href="#workflow">工作流</a>
+        <a href="#formula">公式</a>
+        <a href="#workspace">工作区</a>
         <a href="#download">下载</a>
-        <a href="#limits">边界</a>
       </nav>
       <a class="header-source" data-release-link="repository" href="https://github.com/leoXu-612/ICSTeX">查看源码</a>
     </header>
@@ -29,158 +28,134 @@
     <main id="main-content">
       <section class="hero section" aria-labelledby="hero-title">
         <div class="hero-copy">
-          <div class="hero-meta">
-            <p class="eyebrow">ICC STUDENT'S TEX · LOCAL FIRST</p>
-            <p class="release-chip"><span aria-hidden="true">●</span> <span data-release="version">release</span> / <span data-release="channel">channel</span></p>
-          </div>
-          <h1 id="hero-title">写作留在本地。<br>交付有据可查。</h1>
-          <p class="hero-lede">ICSTeX 把源码、编译、PDF、公式和项目状态放到同一条可核验的工作流中。论文、日志与截图默认不会离开你的设备。</p>
-          <div class="hero-actions" id="download">
-            <a class="button button-primary is-disabled" data-release-download="macos-primary" aria-disabled="true">获取 macOS Apple Silicon 版</a>
+          <p class="eyebrow">LOCAL RESEARCH WRITING / ICC</p>
+          <h1 id="hero-title">
+            <span class="hero-title-product" translate="no">ICSTeX</span>
+            <span class="hero-title-version" data-release="version">current release</span>
+          </h1>
+          <p class="release-name" data-release="name">release focus</p>
+          <p class="hero-lede">在本地写 LaTeX、核对当前 PDF，并在交付前知道结果是否可信。</p>
+          <div class="hero-actions">
+            <a class="button button-primary is-disabled" data-release-download="macos-primary" aria-disabled="true">下载 macOS Apple Silicon 版</a>
             <a class="button button-secondary" data-release-link="releases" href="https://github.com/leoXu-612/ICSTeX/releases">查看全部 Release</a>
           </div>
-          <p class="availability" data-release-availability aria-live="polite">正在准备 Release 资产；发布后此处会提供校验过的下载链接。</p>
-          <ul class="proof-points" aria-label="ICSTeX 的发布原则">
-            <li><b>LOCAL</b><span>文件默认留在设备</span></li>
-            <li><b>TRACEABLE</b><span>PDF 状态可以核对</span></li>
-            <li><b>EXPLICIT</b><span>联网操作由你触发</span></li>
-          </ul>
+          <p class="availability" data-release-availability aria-live="polite">正在读取 Release 状态…</p>
         </div>
 
         <figure class="hero-product">
           <div class="window-chrome" aria-hidden="true"><span></span><span></span><span></span><b>ICSTeX · workspace</b></div>
-          <img src="assets/main-window.png" alt="ICSTeX 双栏工作区：源码编辑与 PDF 预览并列显示" width="1440" height="900" fetchpriority="high">
+          <img src="assets/main-window.png" alt="ICSTeX 双栏工作区，左侧编辑 LaTeX 源码，右侧核对 PDF" width="1440" height="900" fetchpriority="high">
           <figcaption class="compile-proof">
-            <span>source.tex</span><i aria-hidden="true"></i><strong>LOCAL BUILD</strong><i aria-hidden="true"></i><span>proof.pdf</span>
+            <span translate="no">source.tex</span><i aria-hidden="true"></i><strong>LOCAL BUILD</strong><i aria-hidden="true"></i><span translate="no">proof.pdf</span>
           </figcaption>
         </figure>
       </section>
 
-      <section class="assurances section" aria-labelledby="assurances-title">
-        <div class="section-heading">
-          <p class="eyebrow">A RELEASE SHOULD EXPLAIN ITSELF</p>
-          <h2 id="assurances-title">不是又一个云端编辑器，而是一条清楚的交付路径。</h2>
-        </div>
-        <div class="assurance-list">
-          <article>
-            <p class="assurance-index">01 / LOCAL</p>
-            <div><h3>本地优先</h3><p>项目文件和编译默认留在你的设备；联网元数据查询必须由你主动触发。</p></div>
-          </article>
-          <article>
-            <p class="assurance-index">02 / PROOF</p>
-            <div><h3>结果可追溯</h3><p>编译根、源码版本与 PDF freshness 有明确边界；失败不会伪装成最新 PDF。</p></div>
-          </article>
-          <article>
-            <p class="assurance-index">03 / NEXT STEP</p>
-            <div><h3>学生可理解</h3><p>中文优先的错误信息、环境检查和项目入口，帮助你定位下一步，而不是隐藏复杂度。</p></div>
-          </article>
-        </div>
-      </section>
-
-      <section class="feature-section" id="features" aria-labelledby="features-title">
-        <div class="section feature-shell">
-          <div class="section-heading split-heading">
-            <div>
-              <p class="eyebrow">2.1 BETA 1 · FORMULA INTELLIGENCE</p>
-              <h2 id="features-title">把结构化写作中最容易失控的部分，带回同一个工作台。</h2>
-            </div>
-            <p>每项功能都保留 LaTeX 源码的可见性与最终确认权。</p>
-          </div>
-          <div class="feature-layout">
-            <article class="feature-primary">
-              <p class="card-kicker">FORMULA EDITOR 2.0</p>
-              <h3>二维公式输入，源码仍是唯一真值。</h3>
-              <p>在可视结构与 LaTeX 双视图之间工作；确认后只写回一次，支持 Undo / Redo。</p>
-              <div class="formula-sample" aria-label="LaTeX 公式示例">
-                <span class="formula-display">∫<sub>0</sub><sup>1</sup> x² dx = ⅓</span>
-                <code>\int_0^1 x^2\,dx = \frac{1}{3}</code>
-              </div>
-            </article>
-            <div class="feature-stack">
-              <article class="feature-entry">
-                <p class="card-kicker">OPTIONAL LOCAL OCR</p>
-                <h3>从公式图片到可复核的 LaTeX。</h3>
-                <p>pix2tex 运行时可选安装，在本地识别。ROI、批量队列和逐项重试让每一步可控。</p>
-                <div class="recognition-flow" aria-label="公式识别流程"><span>IMAGE</span><i></i><span>REVIEW</span><i></i><span>LaTeX</span></div>
-              </article>
-              <article class="feature-entry feature-entry-compact">
-                <p class="card-kicker">RESPONSIVE UI SCALE</p>
-                <h3>缩放界面，不缩小判断力。</h3>
-                <p>90–150% UI Scale 与窄窗口适配，保留源码、PDF 和编译控制的清晰层级。</p>
-              </article>
-            </div>
-            <figure class="feature-shot block-shot">
-              <img src="assets/block-console.png" alt="ICSTeX Block 控制台、布局和属性面板" width="1440" height="900" loading="lazy" decoding="async">
-              <figcaption>MODULAR WORKSPACE / BLOCK CONSOLE</figcaption>
-            </figure>
-            <figure class="feature-shot scale-shot">
-              <img src="assets/125-narrow.png" alt="ICSTeX 在较窄窗口中的响应式欢迎界面" width="1080" height="720" loading="lazy" decoding="async">
-              <figcaption>RESPONSIVE WORKSPACE / 125%</figcaption>
-            </figure>
-          </div>
-        </div>
-      </section>
-
-      <section class="workflow section" id="workflow" aria-labelledby="workflow-title">
-        <div class="workflow-map" aria-label="从源码到正式 PDF 的工作流">
-          <p class="eyebrow">ONE RELIABLE PATH</p>
-          <ol>
-            <li><strong>01</strong><span translate="no">source.tex</span><small>写作与保存</small></li>
-            <li><strong>02</strong><span translate="no">local build</span><small>本地编译</small></li>
-            <li><strong>03</strong><span translate="no">proof.pdf</span><small>核对 PDF</small></li>
-            <li><strong>04</strong><span translate="no">export</span><small>正式导出</small></li>
-          </ol>
-        </div>
-        <div class="workflow-copy">
-          <p class="eyebrow">PREVIEW IS NOT DELIVERY</p>
-          <h2 id="workflow-title">预览可以快，交付必须真。</h2>
-          <p>快速图片预览与最终输出使用隔离路径。手动编译和导出始终以原始图片和当前源码为准，避免把临时预览误当成正式成果。</p>
-          <a class="text-link" data-release-link="architecture" href="https://github.com/leoXu-612/ICSTeX/blob/main/docs/DECISION_LOG.md">阅读架构决策 <span aria-hidden="true">→</span></a>
-        </div>
-      </section>
-
-      <section class="download-section" aria-labelledby="download-title">
+      <section class="release-section" id="download" aria-labelledby="release-title">
         <div class="section release-layout">
-          <aside class="release-ledger" aria-label="当前发布信息">
-            <p class="eyebrow">RELEASE LEDGER</p>
-            <dl>
+          <header class="section-intro">
+            <p class="eyebrow">RELEASE / VERIFIED ASSETS</p>
+            <h2 id="release-title">先确认平台，再下载。</h2>
+            <dl class="release-meta">
               <div><dt>VERSION</dt><dd data-release="version">release</dd></div>
               <div><dt>TAG</dt><dd data-release="tag">tag</dd></div>
               <div><dt>CHANNEL</dt><dd data-release="channel">channel</dd></div>
-              <div><dt>HOST</dt><dd>GITHUB RELEASES</dd></div>
             </dl>
-          </aside>
-          <div class="download-pane" id="download">
-            <p class="eyebrow">CHECK PLATFORM FIRST</p>
-            <h2 id="download-title">下载前，先确认你的平台。</h2>
-            <div class="platform-list">
-              <article class="platform-row platform-primary">
-                <div><h3>macOS</h3><p>Apple Silicon（M1 / M2 / M3 / M4）</p></div>
-                <span>已验证</span>
-                <a class="text-link is-disabled" data-release-download="macos-primary" aria-disabled="true">下载 DMG <span aria-hidden="true">→</span></a>
-              </article>
-              <article class="platform-row">
-                <div><h3>Windows x64</h3><p>x64 ZIP 与 Setup EXE 仍在独立 Windows 构建环境验证，不以 ARM64 替代。</p></div>
-                <span>尚未发布</span>
-                <a class="text-link" data-release-link="limitations" href="https://github.com/leoXu-612/ICSTeX/blob/main/release/KNOWN_LIMITATIONS.md">查看状态 <span aria-hidden="true">→</span></a>
-              </article>
-              <article class="platform-row">
-                <div><h3>Windows ARM64</h3><p>已完成无系统 Python 的启动验证；LaTeX source-to-PDF 验收尚待 Windows TeX 工具链。</p></div>
-                <span>开发者 Beta</span>
-                <a class="text-link" data-release-link="limitations" href="https://github.com/leoXu-612/ICSTeX/blob/main/release/KNOWN_LIMITATIONS.md">了解限制 <span aria-hidden="true">→</span></a>
-              </article>
-            </div>
+          </header>
+          <div class="platforms">
+            <article class="platform-primary">
+              <div>
+                <p class="platform-label">PRIMARY DOWNLOAD</p>
+                <h3>macOS · Apple Silicon</h3>
+                <p>适用于 M1 / M2 / M3 / M4。下载前请核对 SHA-256；当前构建尚未 notarize。</p>
+              </div>
+              <span class="status-label">已验证</span>
+              <a class="button button-primary is-disabled" data-release-download="macos-primary" aria-disabled="true">下载 DMG</a>
+            </article>
+            <details class="windows-status">
+              <summary>Windows 构建状态</summary>
+              <div class="windows-grid">
+                <article>
+                  <h3>Windows x64</h3>
+                  <p>ZIP 与 Setup EXE 尚未构建或验证，不以 ARM64 制品替代。</p>
+                  <a class="text-link" data-release-link="limitations" href="https://github.com/leoXu-612/ICSTeX/blob/main/release/KNOWN_LIMITATIONS.md">查看状态 <span aria-hidden="true">→</span></a>
+                </article>
+                <article>
+                  <h3>Windows ARM64</h3>
+                  <p>开发者 Beta 已通过无系统 Python 启动检查；source-to-PDF 仍待 Windows TeX 工具链验收。</p>
+                  <a class="text-link" data-release-link="limitations" href="https://github.com/leoXu-612/ICSTeX/blob/main/release/KNOWN_LIMITATIONS.md">了解限制 <span aria-hidden="true">→</span></a>
+                </article>
+              </div>
+            </details>
           </div>
+        </div>
+      </section>
+
+      <section class="formula-section section" id="formula" aria-labelledby="formula-title">
+        <div class="feature-copy">
+          <p class="eyebrow">FORMULA EDITOR 2.0</p>
+          <h2 id="formula-title">看见结构，也始终看得见源码。</h2>
+          <p>在二维公式与 LaTeX 双视图之间工作。只有明确确认后才写回编辑器，并作为一次 Undo / Redo 操作。</p>
+        </div>
+        <div class="formula-stage" aria-label="公式结构与 LaTeX 源码示例">
+          <span class="formula-display">∫<sub>0</sub><sup>1</sup> x² dx = ⅓</span>
+          <code>\int_0^1 x^2\,dx = \frac{1}{3}</code>
+          <p>VISUAL STRUCTURE / LATEX SOURCE</p>
+        </div>
+      </section>
+
+      <section class="ocr-section" id="ocr" aria-labelledby="ocr-title">
+        <div class="section feature-row">
+          <div class="feature-copy">
+            <p class="eyebrow">OPTIONAL LOCAL OCR</p>
+            <h2 id="ocr-title">识别在本地，结果由你复核。</h2>
+            <p>pix2tex 是可选运行时。你选择图片区域、检查识别结果，再决定是否插入；识别内容不会绕过人工确认。</p>
+          </div>
+          <div class="recognition-flow" aria-label="本地公式识别的三个步骤">
+            <span><b>IMAGE</b><small>选择区域</small></span>
+            <i aria-hidden="true"></i>
+            <span><b>REVIEW</b><small>核对结果</small></span>
+            <i aria-hidden="true"></i>
+            <span><b>LATEX</b><small>明确插入</small></span>
+          </div>
+        </div>
+      </section>
+
+      <section class="workspace-section section" id="workspace" aria-labelledby="workspace-title">
+        <div class="section-intro split-intro">
+          <div>
+            <p class="eyebrow">ONE WORKSPACE</p>
+            <h2 id="workspace-title">长文档仍然可以被看清。</h2>
+          </div>
+          <p>Block 控制台、布局、表格与资源管理把项目结构放在源码和 PDF 旁边。90–150% UI Scale 保留各层级的可读性。</p>
+        </div>
+        <figure class="workspace-shot">
+          <img src="assets/block-console.png" alt="ICSTeX Block 控制台、源码编辑器、PDF 与属性面板" width="1440" height="900" loading="lazy" decoding="async">
+          <figcaption>BLOCK CONSOLE / SOURCE / PDF / PROPERTIES</figcaption>
+        </figure>
+      </section>
+
+      <section class="local-section" id="local" aria-labelledby="local-title">
+        <div class="section local-layout">
+          <header class="section-intro">
+            <p class="eyebrow">LOCAL-FIRST ASSURANCE</p>
+            <h2 id="local-title">本地优先不是口号，是默认行为。</h2>
+          </header>
+          <dl class="assurance-list">
+            <div><dt>文件留在设备</dt><dd>项目、日志、PDF 与截图默认不会被静默上传。</dd></div>
+            <div><dt>状态如实表达</dt><dd>失败构建不会伪装成最新 PDF，预览也不会冒充正式交付。</dd></div>
+            <div><dt>联网由你触发</dt><dd>需要网络的元数据查询必须显式开始，并清楚说明用途。</dd></div>
+          </dl>
         </div>
       </section>
 
       <section class="limits section" id="limits" aria-labelledby="limits-title">
-        <div class="section-heading split-heading">
+        <div class="section-intro split-intro">
           <div>
             <p class="eyebrow">HONEST BETA</p>
-            <h2 id="limits-title">边界写在前面。</h2>
+            <h2 id="limits-title">边界写在下载之前。</h2>
           </div>
-          <p>Beta 不是无条件承诺。重要项目请保持自己的备份与版本记录。</p>
+          <p>Beta 不是无条件承诺。重要项目请保持自己的备份和版本记录。</p>
         </div>
         <ul class="limit-list" data-release-limitations>
           <li>当前 Beta 的已知限制会随 Release 元数据同步。</li>
@@ -195,7 +170,7 @@
     </main>
 
     <footer class="site-footer">
-      <div><strong>ICSTeX</strong><span>Local research-writing infrastructure for ICC students.</span></div>
+      <div><strong translate="no">ICSTeX</strong><span>Local research-writing infrastructure for ICC students.</span></div>
       <div><span data-release="version">release</span><a data-release-link="repository" href="https://github.com/leoXu-612/ICSTeX">GitHub</a></div>
     </footer>
     <script src="config.js"></script>

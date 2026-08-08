@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from html.parser import HTMLParser
 from pathlib import Path
 from unittest import TestCase
 
@@ -10,6 +11,23 @@ from unittest import TestCase
 ROOT = Path(__file__).resolve().parents[1]
 WEBSITE = ROOT / "website"
 MANIFEST = ROOT / "release" / "release-manifest.json"
+
+
+class SiteHTMLInspector(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.ids: list[str] = []
+        self.heading_levels: list[int] = []
+        self.images: list[dict[str, str | None]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attributes = dict(attrs)
+        if element_id := attributes.get("id"):
+            self.ids.append(element_id)
+        if len(tag) == 2 and tag.startswith("h") and tag[1].isdigit():
+            self.heading_levels.append(int(tag[1]))
+        if tag == "img":
+            self.images.append(attributes)
 
 
 class ReleaseSiteTests(TestCase):
@@ -36,6 +54,13 @@ class ReleaseSiteTests(TestCase):
         self.assertFalse(release["github_release_published"])
         self.assertTrue(any(item["primary_download"] for item in release["assets"]))
 
+        primary = next(item for item in release["assets"] if item["primary_download"])
+        expected_url = (
+            f"https://github.com/{release['repository']}/releases/download/"
+            f"{release['tag']}/{primary['name']}"
+        )
+        self.assertEqual(primary["download_url"], expected_url)
+
     def test_static_site_has_no_local_or_development_urls(self) -> None:
         forbidden = ("localhost", "127.0.0.1", "file://", "/Users/", "C:\\\\Users\\\\")
         for path in WEBSITE.glob("*.js"):
@@ -49,23 +74,53 @@ class ReleaseSiteTests(TestCase):
     def test_structure_is_semantic_accessibile_and_release_driven(self) -> None:
         html = self.read_text("website/index.html")
         app = self.read_text("website/app.js")
+        manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
 
         for element in ("<header", "<nav", "<main", "<section", "<footer", "lang=\"zh-Hans\""):
             self.assertIn(element, html)
         self.assertIn("skip-link", html)
         self.assertIn("release.json", app)
         self.assertIn("github_release_published", app)
-        self.assertNotIn("2.1.0-beta.1", html)
-        self.assertNotIn("2.1.0-beta.1", app)
+        self.assertIn("release.release_name", app)
+        self.assertIn('<span class="hero-title-version" data-release="version">', html)
+        for value in (manifest["version"], manifest["tag"], "2.1 BETA 1"):
+            self.assertNotIn(value, html)
+            self.assertNotIn(value, app)
         self.assertIn("prefers-reduced-motion", self.read_text("website/styles.css"))
         self.assertIn('aria-live="polite"', html)
         self.assertIn('href="vendor/pico.min.css"', html)
 
+    def test_html_ids_headings_and_images_are_accessible(self) -> None:
+        inspector = SiteHTMLInspector()
+        inspector.feed(self.read_text("website/index.html"))
+
+        self.assertEqual(len(inspector.ids), len(set(inspector.ids)), inspector.ids)
+        self.assertEqual(inspector.heading_levels.count(1), 1)
+        self.assertEqual(inspector.heading_levels[0], 1)
+        for previous, current in zip(inspector.heading_levels, inspector.heading_levels[1:]):
+            self.assertLessEqual(current - previous, 1, inspector.heading_levels)
+        for image in inspector.images:
+            self.assertIn("alt", image)
+            self.assertTrue(image.get("width"), image)
+            self.assertTrue(image.get("height"), image)
+
+    def test_information_groups_and_static_architecture_are_bounded(self) -> None:
+        html = self.read_text("website/index.html")
+        combined = "\n".join(
+            (html, self.read_text("website/app.js"), self.read_text("website/styles.css"))
+        ).lower()
+
+        for element_id in ("download", "formula", "ocr", "workspace", "local", "limits"):
+            self.assertIn(f'id="{element_id}"', html)
+        for forbidden in ("react", "next.js", "tailwind", "fonts.googleapis.com"):
+            self.assertNotIn(forbidden, combined)
+
     def test_reused_product_assets_are_checked_in(self) -> None:
         html = self.read_text("website/index.html")
-        for name in ("main-window.png", "block-console.png", "125-narrow.png", "icstex-mark.png"):
+        for name in ("main-window.png", "block-console.png", "icstex-mark.png"):
             self.assertTrue((WEBSITE / "assets" / name).is_file(), name)
             self.assertIn(f"assets/{name}", html)
+        self.assertTrue((WEBSITE / "assets" / "125-narrow.png").is_file())
 
     def test_local_pico_dependency_includes_its_license(self) -> None:
         pico = WEBSITE / "vendor" / "pico.min.css"

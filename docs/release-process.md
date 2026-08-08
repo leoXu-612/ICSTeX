@@ -39,13 +39,16 @@ bash tools/deploy_release_site.sh --prepare
 
 维护者明确批准后，按顺序完成：
 
-1. `git push origin release/2.1` 与 `git push origin v<version>`；
-2. 用校验过的 assets 创建 GitHub **Draft prerelease**，核对名称、SHA-256、安装
+1. 确认公共分发边界：当前下载 URL 指向 `leoXu-612/ICSTeX`，因此公开网站要使用
+   这些 URL，仓库必须先经维护者审查并改为 Public。只有 `gh repo view` 返回
+   `PUBLIC` 后，才能把 manifest 的 `github_repository_public` 设为 `true`；
+2. `git push origin release/2.1` 与 `git push origin v<version>`；
+3. 用校验过的 assets 创建 GitHub **Draft prerelease**，核对名称、SHA-256、安装
    说明和限制；
-3. 发布 GitHub Release 后，将 manifest 的 `github_release_published` 设为 `true`，
+4. 发布 GitHub Release 后，将 manifest 的 `github_release_published` 设为 `true`，
    重新生成 `website/release.json` 并提交；
-4. 执行受环境变量保护的 `--push`，再在 GitHub Pages 中选择 `gh-pages` / root；
-5. 以无缓存浏览器检查首页、下载链接、移动端和 SHA-256。
+5. 执行受环境变量保护的 `--push`，再在 GitHub Pages 中选择 `gh-pages` / root；
+6. 以无缓存浏览器检查首页、下载链接、移动端和 SHA-256。
 
 在没有明确批准时，禁止 `git push`、`git push --tags`、`gh release create`、
 `gh release publish`、`git push origin gh-pages` 或任何替代性的线上部署。

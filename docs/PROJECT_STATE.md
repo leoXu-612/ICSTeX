@@ -30,7 +30,7 @@
 
 - `bash packaging/preflight.sh`：通过。
 - `python3 -m compileall -q app tests packaging/install_build_dependencies.py`：通过。
-- `QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests`：719 tests passed。
+- `QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests`：720 tests passed。
 - `bash tools/run_mvp_ci.sh`：72 项模块化子集、716 项完整套件与 Demo 构建通过。
 - macOS arm64 打包应用冷启动与 Demo source-to-PDF：已验证。
 
@@ -38,14 +38,15 @@
 
 | 对象 | 状态 | 说明 |
 | --- | --- | --- |
-| 当前源码 | Verified, frozen | 2.1.0-beta.1；719 tests passed |
+| 当前源码 | Verified, frozen | 2.1.0-beta.1；720 tests passed |
 | macOS arm64 DMG/ZIP | Verified | ad-hoc signed、未 notarize |
 | clean source ZIP | Verified | 2.1.0-beta.1；SHA-256 已记录 |
 | Windows ARM64 ZIP | Verified beta artifact | Windows-local 构建；无系统 Python 启动通过 |
 | Windows x64 ZIP | Pending | 当前构建机和 Python 均为 ARM64 |
 | Windows x64 Setup EXE | Blocked by tools | 需要 x64 构建环境和 Inno Setup |
 | Windows TeX acceptance | Blocked by tool | 构建机尚未安装 MiKTeX/TeX Live |
-| Static release website | WEB-RS-001 verified locally; protected Vercel target exists | 390 x 844 与 1440 x 900 浏览器验收、Lighthouse 和 9 项专项测试通过；Vercel 受登录保护且 noindex，GitHub Pages 未部署 |
+| Static release website | Platform installer verified locally; protected Vercel target exists | macOS/Windows 安装工作台、两档浏览器验收、Lighthouse 和 10 项专项测试通过；Private/未发布状态禁止 404 出站链接，GitHub Pages 未部署 |
+| GitHub repository / Release | Private / absent | 本机 `gh` 可读取仓库；Connector 无 Private 权限；远端 Release branch、Tag 和 GitHub Release 尚不存在 |
 
 旧的 `dist/ICSTeX-Windows.zip` 未版本化且早于当前源码，不是 2.1.0-beta.1 制品。
 
@@ -67,6 +68,8 @@
 - Windows x64 ZIP/Setup 仍未生成；不能把 ARM64 包改名或宣称为通用 Windows 包。
 - 构建机缺少 Inno Setup，因此 x64 Setup EXE 不能在未补齐构建环境时生成。
 - Windows 构建机缺少 MiKTeX/TeX Live，因此不能把 source-to-PDF 记为已验证。
+- GitHub 仓库仍为 Private，且远端 Tag/Release 不存在；公开下载 URL 在网页中保持禁用。
+- Codex GitHub Connector 仍无法读取该 Private 仓库；本机 GitHub CLI 认证正常，两者权限相互独立。
 - macOS 仅验证 Apple Silicon，且未 Developer ID 签名或 notarize。
 - 2.1 是 Beta；公式 OCR 结果必须人工检查，重要项目仍需外部版本备份。
 

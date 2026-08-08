@@ -9,8 +9,9 @@ do not append completed-task history.
 
 The verified source/artifact matrix is maintained in `docs/PROJECT_STATE.md`.
 Version 2.1.0-beta.1 is frozen; macOS arm64 and Windows ARM64 beta artifacts
-are verified within their recorded scopes. The static release website is locally
-verified, but no remote branch, tag, Release or Pages deployment has been pushed.
+are verified within their recorded scopes. The static release website and its
+platform installer are locally verified. The repository is Private; no remote
+release branch, tag, Release or Pages deployment has been pushed.
 
 ## Next Bounded Assignment
 

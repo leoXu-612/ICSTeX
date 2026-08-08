@@ -740,3 +740,20 @@ must link here instead of repeating old task details.
   与 `packaging/preflight.sh` 全部通过；验收证据写入 `docs/release-site-checklist.md` 和
   `release/release-site-changes.json`；
 - 未推送 branch/tag，未创建 GitHub Release，未部署 GitHub Pages 或更新 Vercel target。
+
+## 2026-08-08 - Platform Installer Interaction and GitHub 404 Gate
+
+- Release 区新增 macOS / Windows 可访问平台标签：支持鼠标、Left/Right/Home/End 键与
+  `#panel-macos` / `#panel-windows` 深链；macOS 展示 DMG/ZIP，Windows 明确区分 x64
+  尚不可用与 ARM64 开发者 Beta，并显示生成的 SHA-256 与各平台安装步骤；
+- GitHub 实查确认仓库为 Private，远端没有 `release/2.1`、`v2.1.0-beta.1` 或对应
+  Release；本机 `gh` 认证可读仓库，但 Codex GitHub Connector 仍因缺少 Private 权限
+  返回 404；
+- Release manifest 新增 `github_repository_public` 真值。下载必须同时满足仓库 Public 和
+  Release 已发布；当前 Private 状态下，内置浏览器确认 GitHub、文档和下载出站链接为 0，
+  不再把用户送往已知 404；
+- Codex 内置浏览器在 390 x 844 与 1440 x 900 验证平台切换、键盘、深链、零横向溢出和
+  零控制台错误；Lighthouse 移动端 Performance 98 / Accessibility 100，桌面端 100 / 100，
+  两端 Best Practices 与 SEO 均为 100；
+- 10 项官网专项测试、Release 一致性、`compileall`、720 项完整离屏测试与
+  `packaging/preflight.sh` 全部通过；未修改仓库可见性，未推送或创建远端 Release。

@@ -36,8 +36,8 @@ ICSTeX 要成为 ICC 学生从“建立写作项目”到“提交可靠成果�
   - UI 报告正确版本；
   - 能检测 MiKTeX 或 TeX Live；
   - 基础 source-to-PDF 流程成功。
-- 在任何公开 Pages 部署前完成 `docs/tasks/WEB_RELEASE_SITE_REFACTOR.md`
-  的 WEB-001～004：移动端首屏、信息瘦身、Release 数据完整性和可复核 QA 交接。
+- 保持已通过 WEB-001～004 的静态官网及其 Release 数据完整性；任何公开 Pages
+  部署仍需维护者明确批准并执行受保护的发布流程。
 - 从 2026-08-01 verified source state 起只处理 release blocker。
 
 完成条件：源码、文档、macOS artifact、Windows artifact 和版本号一致，且

@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "task": "WEB-RS-001",
+  "status": "verified",
+  "modified": [
+    "website/index.html",
+    "website/styles.css",
+    "website/app.js",
+    "tests/test_release_site.py"
+  ],
+  "preserved": [
+    "website/config.js",
+    "website/release.json",
+    "website/vendor/pico.min.css",
+    "release/release-manifest.json",
+    "packaging artifacts",
+    "application source"
+  ],
+  "forbidden": [
+    "hard-coded release metadata",
+    "React",
+    "Next.js",
+    "Tailwind CSS",
+    "Node build chain",
+    "remote fonts",
+    "runtime CDN dependencies",
+    "analytics",
+    "unapproved publication"
+  ],
+  "evidence": {
+    "release_metadata_check": "passed",
+    "focused_tests": 9,
+    "full_tests": 719,
+    "compileall": "passed",
+    "packaging_preflight": "passed",
+    "browser": {
+      "console_errors": 0,
+      "viewports": [
+        {
+          "width": 390,
+          "height": 844,
+          "horizontal_overflow": false,
+          "first_viewport_requirement": true
+        },
+        {
+          "width": 1440,
+          "height": 900,
+          "horizontal_overflow": false
+        }
+      ]
+    },
+    "lighthouse": {
+      "mobile": {
+        "performance": 97,
+        "accessibility": 100,
+        "best_practices": 100,
+        "seo": 100
+      },
+      "desktop": {
+        "performance": 100,
+        "accessibility": 100,
+        "best_practices": 100,
+        "seo": 100
+      }
+    }
+  },
+  "publication_performed": false
+}

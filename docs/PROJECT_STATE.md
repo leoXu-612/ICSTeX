@@ -30,7 +30,7 @@
 
 - `bash packaging/preflight.sh`：通过。
 - `python3 -m compileall -q app tests packaging/install_build_dependencies.py`：通过。
-- `QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests`：717 tests passed。
+- `QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests`：719 tests passed。
 - `bash tools/run_mvp_ci.sh`：72 项模块化子集、716 项完整套件与 Demo 构建通过。
 - macOS arm64 打包应用冷启动与 Demo source-to-PDF：已验证。
 
@@ -38,14 +38,14 @@
 
 | 对象 | 状态 | 说明 |
 | --- | --- | --- |
-| 当前源码 | Verified, frozen | 2.1.0-beta.1；716 tests passed |
+| 当前源码 | Verified, frozen | 2.1.0-beta.1；719 tests passed |
 | macOS arm64 DMG/ZIP | Verified | ad-hoc signed、未 notarize |
 | clean source ZIP | Verified | 2.1.0-beta.1；SHA-256 已记录 |
 | Windows ARM64 ZIP | Verified beta artifact | Windows-local 构建；无系统 Python 启动通过 |
 | Windows x64 ZIP | Pending | 当前构建机和 Python 均为 ARM64 |
 | Windows x64 Setup EXE | Blocked by tools | 需要 x64 构建环境和 Inno Setup |
 | Windows TeX acceptance | Blocked by tool | 构建机尚未安装 MiKTeX/TeX Live |
-| Static release website | Local verified; protected Vercel target exists | 生成元数据和浏览器验收通过；Vercel 受登录保护且 noindex，GitHub Pages 未部署 |
+| Static release website | WEB-RS-001 verified locally; protected Vercel target exists | 390 x 844 与 1440 x 900 浏览器验收、Lighthouse 和 9 项专项测试通过；Vercel 受登录保护且 noindex，GitHub Pages 未部署 |
 
 旧的 `dist/ICSTeX-Windows.zip` 未版本化且早于当前源码，不是 2.1.0-beta.1 制品。
 

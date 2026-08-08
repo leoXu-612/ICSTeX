@@ -22,9 +22,9 @@ Complete the public-release gate for the frozen 2.1.0-beta.1 candidate:
    the ARM64 ZIP as a generic Windows artifact.
 3. Keep `release/release-manifest.json` and `website/release.json` generated and
    checksum-consistent as artifacts change.
-4. Before public Pages deployment, complete the bounded `WEB-RS-001` website
-   gate in `docs/tasks/WEB_RELEASE_SITE_REFACTOR.md`. Preserve release-data logic;
-   do not hard-code version metadata or treat Vercel as the release authority.
+4. Keep the locally verified `WEB-RS-001` website gate unchanged except for
+   generated metadata updates. Preserve release-data logic; do not hard-code
+   version metadata or treat Vercel as the release authority.
 5. Only after explicit maintainer approval and restored external credentials,
    push the release branch/tag, create a GitHub prerelease and deploy Pages via
    the guarded process in `docs/release-process.md`.

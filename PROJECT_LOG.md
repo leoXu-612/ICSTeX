@@ -726,3 +726,17 @@ must link here instead of repeating old task details.
   Next.js、Tailwind、Node build chain、远程字体或未经授权的 Tag/Release/Pages 发布；
 - 当前源码核查确认 `id="download"` 重复和 `2.1 BETA 1` 硬编码是待处理问题；本次仅建立
   开发任务与验收边界，没有实施网站源码改动；`compileall` 与离屏完整套件 717 tests 通过。
+
+## 2026-08-08 - WEB-RS-001 Release Website Gate Completion
+
+- 完成 WEB-001～004：移动端 Hero 在 390 x 844 首屏展示动态版本、Formula Intelligence、
+  Apple Silicon 主操作和主截图；页面收敛为七个一级信息组，Windows 状态降为次级详情；
+- Release 名称、版本、Tag、Channel、下载 URL 和发布状态继续由生成的 `release.json` 驱动；
+  未发布下载保持禁用，未硬编码发布常量，也未改变 GitHub Releases 的发布真值边界；
+- Codex 内置浏览器在 390 x 844 和 1440 x 900 验证无横向溢出、无控制台错误；Lighthouse
+  移动端 Performance 97 / Accessibility 100，桌面端 100 / 100，两端 Best Practices 与
+  SEO 均为 100；
+- `tools/update_release_site.py --check`、9 项官网专项测试、`compileall`、719 项离屏完整套件
+  与 `packaging/preflight.sh` 全部通过；验收证据写入 `docs/release-site-checklist.md` 和
+  `release/release-site-changes.json`；
+- 未推送 branch/tag，未创建 GitHub Release，未部署 GitHub Pages 或更新 Vercel target。

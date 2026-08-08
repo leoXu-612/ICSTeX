@@ -1,6 +1,6 @@
 # WEB-RS-001 - Release Website Visual and Information Refactor
 
-Status: `QUEUED - RELEASE GATE`
+Status: `COMPLETE - VERIFIED LOCALLY`
 
 Priority: `P0 before public Pages deployment`
 
@@ -154,3 +154,7 @@ exist, the full verification commands pass and a reviewer confirms that release
 data behavior is unchanged. Commit each independently reviewable slice before
 any Pages publication. Do not create or push a tag, Release, branch or deployment
 without explicit maintainer authorization.
+
+Verified 2026-08-08: WEB-001 through WEB-004 passed. Evidence is recorded in
+`docs/release-site-checklist.md` and `release/release-site-changes.json`.
+Publication remains separately approval-gated.

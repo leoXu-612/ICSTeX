@@ -9,6 +9,7 @@ a ``FinalTextEditPlan`` for the caller to apply.
 """
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING
 
 from PySide6.QtWidgets import QApplication
@@ -74,6 +75,7 @@ class FormulaDialog(QDialog):
         self._accepted_plan: FinalTextEditPlan | None = None
         self._submitted = False
         self._ocr_open = False
+        self._ocr_ts = 0.0
 
         seed = seed_text if seed_text is not None else document_text[start:end]
         envelope = recognize_formula(seed)
@@ -161,13 +163,16 @@ class FormulaDialog(QDialog):
         self._refresh()
 
     def _open_batch_ocr(self) -> None:
-        if self._ocr_open:
+        if self._ocr_open or time.monotonic() - self._ocr_ts < 0.4:
             return
         self._ocr_open = True
+        self.ocr_button.setEnabled(False)
         try:
             self._open_batch_ocr_impl()
         finally:
             self._ocr_open = False
+            self._ocr_ts = time.monotonic()
+            self.ocr_button.setEnabled(True)
 
     def _open_batch_ocr_impl(self) -> None:
         manager = self._get_ocr_manager()

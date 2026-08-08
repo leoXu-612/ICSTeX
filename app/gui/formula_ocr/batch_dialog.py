@@ -1,6 +1,7 @@
 """Unified batch image recognition window: queue + progress + review."""
 from __future__ import annotations
 
+import time
 import uuid
 from pathlib import Path
 
@@ -47,6 +48,8 @@ class BatchRecognitionDialog(QDialog):
         self._cancel = False
         self._starting = False
         self._submitted = False
+        self._fine_tune_open = False
+        self._fine_tune_ts = 0.0
         self._fingerprints: set[str] = set()
 
         layout = QVBoxLayout(self)
@@ -164,8 +167,10 @@ class BatchRecognitionDialog(QDialog):
 
     # --- recognition -----------------------------------------------------
     def _start(self) -> None:
-        if not self._images or self._starting:
+        if not self._images:
             QMessageBox.information(self, "图片识别", "请先添加图片。")
+            return
+        if self._starting:
             return
         self._starting = True
         self._cancel = False
@@ -212,16 +217,25 @@ class BatchRecognitionDialog(QDialog):
         return lines
 
     def _fine_tune_current(self) -> None:
+        if self._fine_tune_open or time.monotonic() - self._fine_tune_ts < 0.4:
+            return
         row = self.image_list.currentRow()
         if row < 0 or row >= len(self._images):
             return
         _name, image = self._images[row]
-        dialog = MultiLineOcrDialog(None, image=image, manager=self._manager, parent=self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            latex = dialog.result_latex()
-            if latex:
-                self._results[row] = latex
-                self._refresh_result_text()
+        self._fine_tune_open = True
+        self.fine_tune_button.setEnabled(False)
+        try:
+            dialog = MultiLineOcrDialog(None, image=image, manager=self._manager, parent=self)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                latex = dialog.result_latex()
+                if latex:
+                    self._results[row] = latex
+                    self._refresh_result_text()
+        finally:
+            self._fine_tune_open = False
+            self._fine_tune_ts = time.monotonic()
+            self.fine_tune_button.setEnabled(True)
 
     def _refresh_result_text(self) -> None:
         parts = [self._results.get(index) for index in range(len(self._images)) if self._results.get(index)]

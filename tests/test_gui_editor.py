@@ -2355,6 +2355,33 @@ class FormulaComposerTests(TestCase):
         self.assertFalse(dialog._ok_button.isEnabled())
         dialog.close()
 
+    def test_ocr_button_ignores_rapid_repeated_clicks(self) -> None:
+        source = "Text $a+b$ here"
+        start = source.index("$")
+        end = start + len("$a+b$")
+        dialog = FormulaDialog(None, source, start, end)
+
+        with patch.object(FormulaDialog, "_get_ocr_manager", return_value=object()), patch(
+            "app.gui.formula_ocr.batch_dialog.BatchRecognitionDialog"
+        ) as dialog_cls:
+            instance = dialog_cls.return_value
+            instance.exec.return_value = QDialog.DialogCode.Rejected
+            dialog._open_batch_ocr()
+            dialog._open_batch_ocr()
+        self.assertEqual(dialog_cls.call_count, 1)
+        self.assertTrue(dialog.ocr_button.isEnabled())
+        self.assertFalse(dialog._ocr_open)
+
+        dialog._ocr_ts = 0.0  # debounce window expired
+        with patch.object(FormulaDialog, "_get_ocr_manager", return_value=object()), patch(
+            "app.gui.formula_ocr.batch_dialog.BatchRecognitionDialog"
+        ) as dialog_cls:
+            instance = dialog_cls.return_value
+            instance.exec.return_value = QDialog.DialogCode.Rejected
+            dialog._open_batch_ocr()
+        self.assertEqual(dialog_cls.call_count, 1)
+        dialog.close()
+
     def test_dialog_rejects_template_and_plan_on_invalid_text(self) -> None:
         source = "Text $a+b$ here"
         start = source.index("$")

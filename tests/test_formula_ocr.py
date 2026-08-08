@@ -470,3 +470,38 @@ class MultiLineDialogTests(TestCase):
         dialog._append_image("a.png", image)
         self.assertEqual(len(dialog._images), 1)
         dialog.close()
+
+    def test_fine_tune_ignores_rapid_repeated_clicks(self) -> None:
+        _app()
+        from unittest.mock import patch
+
+        from PySide6.QtGui import QColor, QImage
+        from PySide6.QtWidgets import QDialog
+
+        from app.gui.formula_ocr.batch_dialog import BatchRecognitionDialog
+        from app.gui.formula_ocr.multi_line_dialog import MultiLineOcrDialog
+
+        image = QImage(120, 60, QImage.Format.Format_RGB32)
+        image.fill(QColor("white"))
+        dialog = BatchRecognitionDialog(None)
+        dialog._append_image("a.png", image)
+        dialog.image_list.setCurrentRow(0)
+
+        opens: list = []
+
+        def fake_exec(self):
+            opens.append(self)
+            return QDialog.DialogCode.Rejected
+
+        with patch.object(MultiLineOcrDialog, "exec", new=fake_exec):
+            dialog._fine_tune_current()
+            dialog._fine_tune_current()
+        self.assertEqual(len(opens), 1)
+        self.assertTrue(dialog.fine_tune_button.isEnabled())
+        self.assertFalse(dialog._fine_tune_open)
+
+        dialog._fine_tune_ts = 0.0  # debounce window expired
+        with patch.object(MultiLineOcrDialog, "exec", new=fake_exec):
+            dialog._fine_tune_current()
+        self.assertEqual(len(opens), 2)
+        dialog.close()

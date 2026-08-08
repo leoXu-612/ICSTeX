@@ -19,14 +19,16 @@ for directory in app tests packaging tools website docs; do
     --exclude '.DS_Store' \
     --exclude '__pycache__/' \
     --exclude '*.pyc' \
+    --exclude 'release.json' \
     "$ROOT_DIR/$directory/" \
     "$STAGE_DIR/$directory/"
 done
 
-# Release metadata is useful to source-build users, but distributable binaries
-# stay out of the source archive so it remains small and reproducible.
+# Human-readable release documents are useful to source-build users, but the
+# generated manifest and website/release.json are excluded: putting a source
+# ZIP's own SHA-256 inside that ZIP would make the artifact self-referential.
 mkdir -p "$STAGE_DIR/release"
-for file in release/*.md release/release-manifest.json release/*-verification.txt; do
+for file in release/*.md release/*-verification.txt; do
   [[ -f "$ROOT_DIR/$file" ]] && cp "$ROOT_DIR/$file" "$STAGE_DIR/$file"
 done
 

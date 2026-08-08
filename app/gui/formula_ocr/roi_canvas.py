@@ -175,7 +175,9 @@ class RoiCanvas(QWidget):
         if drag["mode"] == "draw":
             self.add_rect(drag["current"])
         elif drag["mode"] in ("move", "resize"):
-            self._rois[drag["index"]] = drag["current"]
+            index = drag["index"]
+            if 0 <= index < len(self._rois):
+                self._rois[index] = drag.get("current", drag.get("start_rect"))
             self.rois_changed.emit()
         self.update()
 

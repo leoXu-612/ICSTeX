@@ -40,6 +40,7 @@ class BatchRecognitionDialog(QDialog):
         self._images: list[tuple[str, QImage]] = []
         self._results: dict[int, str] = {}
         self._cancel = False
+        self._starting = False
 
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("批量添加公式图片，顺序识别；识别后可在右侧核对/修改，再插入编辑器。"))
@@ -138,26 +139,33 @@ class BatchRecognitionDialog(QDialog):
 
     # --- recognition -----------------------------------------------------
     def _start(self) -> None:
-        if not self._images:
+        if not self._images or self._starting:
             QMessageBox.information(self, "图片识别", "请先添加图片。")
             return
+        self._starting = True
         self._cancel = False
         self.start_button.setEnabled(False)
         blocks: list[str] = []
-        for index, (_name, image) in enumerate(self._images):
-            if self._cancel:
-                break
-            self.status_label.setText(f"识别中 {index + 1}/{len(self._images)}…")
-            QApplication.processEvents()
-            lines = self._recognize_image(image)
-            if lines:
-                if len(lines) > 1:
-                    blocks.append("\\begin{aligned}\n" + " \\\\\n".join(lines) + "\n\\end{aligned}")
-                else:
-                    blocks.append(lines[0])
-            self._results[index] = "\n\n".join(blocks)
-            self.progress.setValue(index + 1)
-            QApplication.processEvents()
+        try:
+            for index, (_name, image) in enumerate(self._images):
+                if self._cancel:
+                    break
+                self.status_label.setText(f"识别中 {index + 1}/{len(self._images)}…")
+                QApplication.processEvents()
+                try:
+                    lines = self._recognize_image(image)
+                except Exception:  # noqa: BLE001 - one bad image must not abort the queue
+                    lines = []
+                if lines:
+                    if len(lines) > 1:
+                        blocks.append("\\begin{aligned}\n" + " \\\\\n".join(lines) + "\n\\end{aligned}")
+                    else:
+                        blocks.append(lines[0])
+                self._results[index] = "\n\n".join(blocks)
+                self.progress.setValue(index + 1)
+                QApplication.processEvents()
+        finally:
+            self._starting = False
         self.start_button.setEnabled(True)
         self.status_label.setText("完成" if not self._cancel else "已取消")
         combined = "\n\n".join(block for block in blocks if block)

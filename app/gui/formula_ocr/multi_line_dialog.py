@@ -53,6 +53,7 @@ class MultiLineOcrDialog(QDialog):
         self._auto_timer.setSingleShot(True)
         self._auto_timer.setInterval(500)
         self._auto_timer.timeout.connect(self._recognize_current)
+        self._recognizing = False
 
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("逐行识别结果（可修改；右侧画布：按住 Shift 拖拽新建 ROI，直接拖拽移动，角点缩放，选中后按 Delete 删除）："))
@@ -131,25 +132,30 @@ class MultiLineOcrDialog(QDialog):
         self._recognize_current()
 
     def _recognize_current(self) -> None:
-        if self._image is None or self._manager is None:
+        if self._image is None or self._manager is None or self._recognizing:
             return
-        lines = [self._recognize_one(index) for index in range(len(self.canvas.rois()))]
+        self._recognizing = True
+        try:
+            rois = self.canvas.rois()
+            lines = [self._recognize_one(index, rois) for index in range(len(rois))]
+        finally:
+            self._recognizing = False
         self._set_lines(lines)
 
     def _recognize_selected(self) -> None:
         index = getattr(self.canvas, "_selected", None)
-        if index is None:
+        if index is None or self._recognizing:
             return
-        latex = self._recognize_one(index)
+        latex = self._recognize_one(index, self.canvas.rois())
         if index < len(self.line_edits):
             self.line_edits[index].setText(latex)
         else:
             self._add_line_edit(latex)
 
-    def _recognize_one(self, index: int) -> str:
-        if self._image is None or self._manager is None:
+    def _recognize_one(self, index: int, rois: list) -> str:
+        if self._image is None or self._manager is None or not (0 <= index < len(rois)):
             return ""
-        crop = self._image.copy(self.canvas.rois()[index])
+        crop = self._image.copy(rois[index])
         temp = save_temp(crop)
         result = _wait_ocr(self._manager, temp)
         if result is None:

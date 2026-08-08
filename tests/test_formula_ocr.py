@@ -304,3 +304,45 @@ class MultiLineDialogTests(TestCase):
         dialog._recognize_selected()
         self.assertTrue(dialog.line_edits[1].text())
         dialog.close()
+
+    def test_lines_area_is_scrollable(self) -> None:
+        _app()
+        from app.gui.formula_ocr.multi_line_dialog import MultiLineOcrDialog
+
+        dialog = MultiLineOcrDialog([r"a", r"b", r"c", r"d", r"e"])
+        self.assertTrue(dialog.lines_scroll.widgetResizable())
+        dialog.close()
+
+    def test_batch_dialog_recognizes_queue_with_progress(self) -> None:
+        _app()
+        from PySide6.QtCore import QObject, QTimer, Signal
+        from PySide6.QtGui import QColor, QImage, QPainter, QPen
+
+        from app.gui.formula_ocr.batch_dialog import BatchRecognitionDialog
+
+        class StubResult:
+            latex = r"x=1"
+            elapsed_ms = 1
+            model_version = "stub"
+
+        class StubManager(QObject):
+            recognition_finished = Signal(object)
+            recognition_failed = Signal(str, str, str)
+
+            def recognize(self, request, session_id):
+                QTimer.singleShot(0, lambda: self.recognition_finished.emit((request.request_id, session_id, StubResult())))
+
+        image = QImage(300, 120, QImage.Format.Format_RGB32)
+        image.fill(QColor("white"))
+        painter = QPainter(image)
+        painter.setPen(QPen(QColor("black"), 3))
+        painter.drawLine(30, 20, 270, 20)
+        painter.drawLine(30, 80, 270, 80)
+        painter.end()
+        dialog = BatchRecognitionDialog(StubManager())
+        dialog._append_image("a.png", image)
+        dialog._start()
+        self.assertEqual(dialog.progress.value(), 1)
+        combined = dialog.combined_latex()
+        self.assertIn(r"\begin{aligned}", combined)
+        dialog.close()

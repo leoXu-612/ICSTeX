@@ -9,11 +9,9 @@ a ``FinalTextEditPlan`` for the caller to apply.
 """
 from __future__ import annotations
 
-import uuid
-from pathlib import Path
 from typing import TYPE_CHECKING
 
-from PySide6.QtWidgets import QApplication, QFileDialog
+from PySide6.QtWidgets import QApplication
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -39,10 +37,6 @@ from app.core.formula_input import (
 )
 from app.gui.math_editor_widget import MathEditorWidget
 from app.gui.math_keyboard import MathKeyboard
-from app.core.formula.sanitizer import sanitize_formula_latex
-from app.gui.formula_ocr.image_input import image_from_clipboard, image_from_file, preprocess, save_temp
-from app.gui.formula_ocr.review_dialog import RecognitionReviewDialog
-from app.optional_tools.pix2tex.protocol import RecognitionRequest
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from app.core.formula_input import FinalTextEditPlan
@@ -94,15 +88,10 @@ class FormulaDialog(QDialog):
         self.editor_stack.addWidget(self.visual_edit)
         self.editor_stack.addWidget(self.source_edit)
 
-        self.ocr_button = QPushButton("从图片识别…")
-        self.ocr_button.setToolTip("使用可选本地 pix2tex 识别公式图片（需先安装）。")
-        self.ocr_button.clicked.connect(self._run_ocr)
-        self.multi_ocr_button = QPushButton("多行拆分识别…")
-        self.multi_ocr_button.setToolTip("把多行公式图拆成单行分别识别，再组合为 aligned 环境。")
-        self.multi_ocr_button.clicked.connect(self._run_multi_ocr)
+        self.ocr_button = QPushButton("图片识别…")
+        self.ocr_button.setToolTip("打开批量图片识别窗口（队列 + 进度条；逐张可精调）。")
+        self.ocr_button.clicked.connect(self._open_batch_ocr)
         self.ocr_status_label = QLabel("")
-        self._ocr_request_id: str | None = None
-        self._ocr_image_path: Path | None = None
 
         self.source_mode_check = QCheckBox("源码模式")
         self.source_mode_check.setToolTip(
@@ -140,7 +129,6 @@ class FormulaDialog(QDialog):
         mode_row.addWidget(self.source_mode_check)
         mode_row.addStretch()
         mode_row.addWidget(self.ocr_button)
-        mode_row.addWidget(self.multi_ocr_button)
         mode_row.addWidget(self.ocr_status_label)
         layout.addLayout(mode_row)
 
@@ -169,34 +157,22 @@ class FormulaDialog(QDialog):
         self.source_mode_check.toggled.connect(self._on_source_mode_toggled)
         self._refresh()
 
-    def _run_ocr(self) -> None:
-        manager, image = self._prepare_ocr()
-        if manager is None or image is None:
+    def _open_batch_ocr(self) -> None:
+        manager = self._get_ocr_manager()
+        if manager is None:
             return
-        temp = save_temp(preprocess(image))
-        self._ocr_image_path = temp
-        self._ocr_request_id = f"ocr-{uuid.uuid4().hex[:12]}"
-        manager.recognition_finished.connect(self._on_ocr_result)
-        manager.recognition_failed.connect(self._on_ocr_failed)
-        manager.recognize(RecognitionRequest(request_id=self._ocr_request_id, image_path=temp), session_id="formula-dialog")
-        self.ocr_status_label.setText("识别中…")
+        from app.gui.formula_ocr.batch_dialog import BatchRecognitionDialog
 
-    def _run_multi_ocr(self) -> None:
-        manager, image = self._prepare_ocr()
-        if manager is None or image is None:
-            return
-        from app.gui.formula_ocr.multi_line_dialog import MultiLineOcrDialog
-
+        dialog = BatchRecognitionDialog(manager, self)
         self.ocr_status_label.setText("识别中…")
         QApplication.processEvents()
-        dialog = MultiLineOcrDialog(None, image=image, manager=manager, parent=self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            latex = dialog.result_latex()
+            latex = dialog.combined_latex()
             if latex:
                 self._seed_editor_latex(latex)
         self.ocr_status_label.setText("")
 
-    def _prepare_ocr(self):
+    def _get_ocr_manager(self):
         app = QApplication.instance()
         manager = getattr(app, "ocr_manager", None)
         if manager is None:
@@ -206,31 +182,8 @@ class FormulaDialog(QDialog):
             app.ocr_manager = manager
         if manager.status() in ("NOT_INSTALLED", "MODEL_MISSING"):
             QMessageBox.information(self, "公式识别", "pix2tex 未安装或模型缺失。")
-            return None, None
-        image = image_from_clipboard()
-        if image is None:
-            file_name, _ = QFileDialog.getOpenFileName(self, "选择公式图片", "", "图片 (*.png *.jpg *.jpeg *.webp)")
-            if not file_name:
-                return None, None
-            image = image_from_file(Path(file_name))
-        if image is None:
-            QMessageBox.warning(self, "公式识别", "无法读取图片。")
-            return None, None
-        return manager, image
-
-    def _on_ocr_result(self, payload) -> None:
-        request_id, _session_id, result = payload
-        if request_id != self._ocr_request_id:
-            return
-        self.ocr_status_label.setText("")
-        sanitize = sanitize_formula_latex(result.latex)
-        if self._ocr_image_path is None:
-            return
-        review = RecognitionReviewDialog(self._ocr_image_path, result.latex, sanitize, self)
-        if review.exec() == QDialog.DialogCode.Accepted:
-            latex = review.confirmed_latex()
-            if latex:
-                self._seed_editor_latex(latex)
+            return None
+        return manager
 
     def _seed_editor_latex(self, latex: str) -> None:
         """Seed both source and visual editor without the mode toggle
@@ -245,11 +198,6 @@ class FormulaDialog(QDialog):
         self.keyboard.setEnabled(True)
         self._refresh()
 
-    def _on_ocr_failed(self, request_id: str, code: str, message: str) -> None:
-        if request_id and request_id != self._ocr_request_id:
-            return
-        self.ocr_status_label.setText("")
-        QMessageBox.warning(self, "公式识别失败", f"{code}：{message}")
 
     def plan(self) -> "FinalTextEditPlan | None":
         """The accepted edit plan, or None when the dialog was not accepted."""

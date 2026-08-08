@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -42,6 +43,12 @@ class MultiLineOcrDialog(QDialog):
         self._manager = manager
         self.line_edits: list[QLineEdit] = []
         self.lines_box = QVBoxLayout()
+        self.lines_scroll = QScrollArea()
+        self.lines_scroll.setWidgetResizable(True)
+        self.lines_scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        lines_container = QWidget()
+        lines_container.setLayout(self.lines_box)
+        self.lines_scroll.setWidget(lines_container)
         self._auto_timer = QTimer(self)
         self._auto_timer.setSingleShot(True)
         self._auto_timer.setInterval(500)
@@ -61,7 +68,7 @@ class MultiLineOcrDialog(QDialog):
             body.addWidget(self.canvas, 3)
             right = QWidget()
             right_layout = QVBoxLayout(right)
-            right_layout.addLayout(self.lines_box)
+            right_layout.addWidget(self.lines_scroll, 1)
             buttons = QHBoxLayout()
             auto_button = QPushButton("自动拆分")
             recognize_button = QPushButton("识别选中 ROI")
@@ -85,7 +92,7 @@ class MultiLineOcrDialog(QDialog):
         else:
             for latex in lines or []:
                 self._add_line_edit(latex)
-            layout.addLayout(self.lines_box)
+            layout.addWidget(self.lines_scroll, 1)
         layout.addLayout(body, 1)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)

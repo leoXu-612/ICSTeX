@@ -1,0 +1,28 @@
+\documentclass{article}
+\usepackage{amsmath, amssymb}
+\title{ICSTeX 2.1 Beta 1 --- Formula Intelligence Demo}
+\author{ICSTeX}
+\date{2026-08-08}
+\begin{document}
+\maketitle
+
+\section{结构化公式}
+在公式编辑器（可视化模式）中输入：
+\[
+\frac{x^2+1}{\sqrt{y}}
+\]
+
+\section{图片识别（可选本地组件）}
+打开公式编辑器，点击“图片识别…”，导入公式截图，核对后应用。
+例如来自真实论文的 Attention 公式：
+\[
+\mathrm{Attention}(Q, K, V) = \mathrm{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V
+\]
+
+\section{批量识别}
+“图片识别…”窗口支持批量添加、顺序识别与进度条；每一行有
+“重试此项 / 查看错误 / 从批次移除”，失败项不会静默跳过。
+
+\section{验证}
+修改本文后应能自动编译并刷新 PDF 预览；导出 PDF 走独立编译链。
+\end{document}

@@ -1,6 +1,6 @@
 # ICSTeX
 
-Current packaged release: 2.1.0-beta.1. The working source may be ahead of the packaged
+Current version: 2.1.0-beta.1. Current packaged release: 2.1.0-beta.1. The working source may be ahead of the packaged
 release; see [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) for the exact boundary.
 
 ICSTeX - ICC Student's TeX - is local research-writing infrastructure for ICC

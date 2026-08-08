@@ -19,3 +19,5 @@
 - Windows ARM64 构建机未安装 TeX distribution，因此该平台只完成启动验收，
   尚未完成 Windows source-to-PDF 验收。
 - Windows ARM64 ZIP 未签名；x64 installer 需要独立 x64 构建环境和 Inno Setup。
+- 安全模式不支持项目 `.latexmkrc`、TeX shell escape 或依赖外部命令的 `minted`
+  工作流；此 Beta 不提供关闭该边界的项目内开关。

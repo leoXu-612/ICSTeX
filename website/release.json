@@ -7,7 +7,7 @@
       "name": "ICSTeX-2.1.0-beta.1-macos-arm64.dmg",
       "platform": "macOS",
       "primary_download": true,
-      "sha256": "7af7a99733ad7a34c5c4c49019e041fc63eb8a62aec9243f3aabd0a7870f5746",
+      "sha256": "e796cc7c88500a1a35e1dc0d7d810d130619fb4b63c335d95def751d0cc772ba",
       "status": "verified"
     },
     {
@@ -17,7 +17,7 @@
       "name": "ICSTeX-2.1.0-beta.1-macos-arm64.zip",
       "platform": "macOS",
       "primary_download": false,
-      "sha256": "c0c6a0da6eb8658b212b99732081819aae947e03709b208b9c8ce8768e92bce2",
+      "sha256": "9fd6684510157325c1cd80836ad9a33584b0140055095b2f98723e1ab27cf838",
       "status": "verified"
     },
     {
@@ -27,7 +27,7 @@
       "name": "ICSTeX-Source-2.1.0-beta.1.zip",
       "platform": "Source",
       "primary_download": false,
-      "sha256": "018b444fa2eaba4991c2024af86c36a6befe780063e65935586cd015d272b9b2",
+      "sha256": "e2556c4356e8c8bbb20d2b548f33ced91d8c631cccd5b76c147f0ae301dbb51a",
       "status": "verified"
     },
     {
@@ -37,7 +37,7 @@
       "name": "ICSTeX-2.1.0-beta.1-Windows-arm64.zip",
       "platform": "Windows",
       "primary_download": false,
-      "sha256": "97cb1c8917480a3b763146ef64a601d38318bb5b2b1c9413d76fc1dc49753949",
+      "sha256": "9f7ee34c82c6c781fbdeebf6d86704d823d91e9915185b3e64b2c12c685030fb",
       "status": "developer-beta",
       "website_visibility": "limitations-only"
     }

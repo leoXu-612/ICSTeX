@@ -1,19 +1,8 @@
-ICSTeX 2.1.0-beta.1 Windows ARM64 verification
-Build path: C:\w2\ICSTeX-Source-2.1.0-beta.1
-Build Python architecture: ARM64
-__version__ = "2.1.0-beta.1"
-信息: 用提供的模式无法找到文件。
-Packaged launch with minimal PATH started at 2026/08/08 周六 17:25:43.96
-
-映像名称                       PID 会话名              会话#       内存使用 
-========================= ======== ================ =========== ============
-ICSTeX.exe                    5360 Console                    1    103,924 K
-RESULT: PASS - packaged process remained running without Python on PATH
-
-
-Algorithm : SHA256
-Hash      : 97CB1C8917480A3B763146EF64A601D38318BB5B2B1C9413D76FC1DC49753949
-Path      : C:\w2\ICSTeX-Source-2.1.0-beta.1\dist\ICSTeX-2.1.0-beta.1-Windows-arm64.zip
-
-
-
+ICSTeX 2.1.0-beta.1 Windows ARM64 hardened rebuild
+Build directory: C:\w3\ICSTeX-Source-2.1.0-beta.1
+Build input source ZIP SHA-256: ac54dfea7a710c4c2c1de5f23e5b16e07066af8c130cbdc22b2e72526fde5aef
+Python: 3.12.10 (64 bit ARM64)
+Machine: ARM64
+Windows ZIP SHA-256: 9f7ee34c82c6c781fbdeebf6d86704d823d91e9915185b3e64b2c12c685030fb
+Packaged launch with Python removed from PATH: PASS
+Windows TeX source-to-PDF: NOT TESTED (no MiKTeX or TeX Live installed)

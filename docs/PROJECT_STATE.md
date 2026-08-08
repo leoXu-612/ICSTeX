@@ -40,9 +40,9 @@
 | 对象 | 状态 | 说明 |
 | --- | --- | --- |
 | 当前源码 | Verified, release hardening complete | 2.1.0-beta.1；731 tests passed |
-| macOS arm64 DMG/ZIP | Rebuild required | 现有制品早于安全修复；不得发布 |
-| clean source ZIP | Rebuild required | 现有制品早于安全修复；不得发布 |
-| Windows ARM64 ZIP | Rebuild required | 必须在 Windows-local path 从当前源码重建 |
+| macOS arm64 DMG/ZIP | Verified, rebuilt | hardened source；ad-hoc signed、未 notarize |
+| clean source ZIP | Verified, rebuilt | hardened source；publication hygiene scan passed |
+| Windows ARM64 ZIP | Verified beta artifact, rebuilt | Windows-local `C:\w3`；无系统 Python 启动通过 |
 | Windows x64 ZIP | Pending | 当前构建机和 Python 均为 ARM64 |
 | Windows x64 Setup EXE | Blocked by tools | 需要 x64 构建环境和 Inno Setup |
 | Windows TeX acceptance | Blocked by tool | 构建机尚未安装 MiKTeX/TeX Live |
@@ -65,7 +65,8 @@
 
 ## Current Risks and Immediate Work
 
-- 旧 Windows ARM64 versioned ZIP 曾通过实机验证，但已被当前安全修复取代。
+- Windows ARM64 ZIP 已在 Windows-local `C:\w3` 从 hardened source ZIP 重建；
+  Python 3.12.10 ARM64，移除系统 Python PATH 后的打包应用启动验收通过。
 - Windows x64 ZIP/Setup 仍未生成；不能把 ARM64 包改名或宣称为通用 Windows 包。
 - 构建机缺少 Inno Setup，因此 x64 Setup EXE 不能在未补齐构建环境时生成。
 - Windows 构建机缺少 MiKTeX/TeX Live，因此不能把 source-to-PDF 记为已验证。

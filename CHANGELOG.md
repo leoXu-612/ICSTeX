@@ -21,6 +21,12 @@ Block 模块与主控制台集成：
 - 单一 `ProjectSession` 收敛 registry/layout/sources/主题/表格模型/唯一 CompileManager/
   全局 QUndoStack/SelectionManager；主控制台嵌入 Block 导航/属性/诊断 Dock 与中央工作区。
 
+公开发布安全边界：
+
+- 打开项目不再自动编译；编译忽略项目 `.latexmkrc`、关闭 shell escape 并使用有限超时。
+- Magic Root、Block 渲染、联网元数据与可移植导出采用默认拒绝的路径和信任边界。
+- macOS、source 与 Windows ARM64 制品均已从安全修复后的源码重新构建。
+
 更新：本版本为 macOS Apple Silicon（arm64）Developer Beta，正式稳定版发布前请保留备份。
 
 ## 未发布

@@ -767,3 +767,18 @@ must link here instead of repeating old task details.
 - `QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests` passed: 731 tests.
 - `bash packaging/preflight.sh` passed; existing macOS/source/Windows ARM64
   artifacts are intentionally marked stale pending rebuild.
+
+## 2026-08-08 - Hardened artifact rebuild
+
+- Rebuilt macOS arm64 DMG and ZIP; strict deep code-sign verification, arm64
+  executable inspection, and offscreen cold-start smoke passed.
+- Rebuilt the clean source ZIP from hardened app source; final archive SHA-256 is
+  `e2556c4356e8c8bbb20d2b548f33ced91d8c631cccd5b76c147f0ae301dbb51a`.
+- Rebuilt Windows ARM64 in Windows-local `C:\w3` with Python 3.12.10 ARM64.
+  Packaged launch with Python removed from PATH passed; ZIP SHA-256 is
+  `9f7ee34c82c6c781fbdeebf6d86704d823d91e9915185b3e64b2c12c685030fb`.
+- Windows x64/Setup and Windows TeX source-to-PDF remain unavailable and are
+  still excluded from public claims.
+- Release metadata regeneration, all recorded SHA-256 checks, source archive
+  integrity/exclusion inspection, Windows PE AArch64 inspection, and 10 website
+  release tests passed.

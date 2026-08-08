@@ -58,3 +58,11 @@ pix2tex 本地运行时从图片识别公式。所有识别结果都会先进入
 - `ICSTeX-2.1.0-beta.1-Windows-arm64.zip` 仅用于 Windows on ARM。
 - x64 ZIP 与 x64 Setup EXE 尚未生成；ARM64 包不能改名后分发给 Intel/AMD Windows 用户。
 - Windows 包未签名，且不内置 MiKTeX 或 TeX Live。
+
+## 安全边界
+
+- 打开项目不再自动编译；首次 Compile 后才在本次会话恢复该项目的自动预览。
+- 编译强制忽略项目 `.latexmkrc`、关闭 shell escape，并设置有限超时。
+- Magic Root、Block 图片和可移植导出拒绝越界路径与符号链接；公式从受管 AST
+  重建，不执行可篡改的缓存文本。
+- DOI 与 arXiv 元数据只访问固定 HTTPS 端点，禁止重定向并限制响应大小。

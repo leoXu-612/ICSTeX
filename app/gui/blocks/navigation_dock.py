@@ -77,6 +77,9 @@ class BlockNavigationWidget(QWidget):
             new_menu.addAction(block_type, lambda _checked=False, t=block_type: self.controller.add_block(t))
         self.new_button = QPushButton("新建 Block")
         self.new_button.setMenu(new_menu)
+        self.text_ocr_button = QPushButton("文字识别…")
+        self.text_ocr_button.setToolTip("RapidOCR 识别图片文字并创建 Text Block")
+        self.text_ocr_button.clicked.connect(self._run_text_ocr)
         self.delete_button = QPushButton("删除")
         self.delete_button.clicked.connect(self._delete_selected)
         self.duplicate_button = QPushButton("复制")
@@ -85,7 +88,7 @@ class BlockNavigationWidget(QWidget):
         self.rename_button.clicked.connect(self._rename_selected)
 
         blocks_buttons = QHBoxLayout()
-        for button in (self.new_button, self.duplicate_button, self.rename_button, self.delete_button):
+        for button in (self.new_button, self.text_ocr_button, self.duplicate_button, self.rename_button, self.delete_button):
             blocks_buttons.addWidget(button)
         blocks_buttons.addStretch()
 
@@ -142,6 +145,12 @@ class BlockNavigationWidget(QWidget):
 
         session.model_changed.connect(lambda _reason: self.refresh())
         session.selection.selection_changed.connect(self._on_session_selection)
+        self.refresh()
+
+    def _run_text_ocr(self) -> None:
+        from app.gui.text_ocr.text_block_flow import run_text_block_ocr
+
+        run_text_block_ocr(self, self.controller)
         self.refresh()
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:

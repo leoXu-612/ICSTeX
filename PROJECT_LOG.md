@@ -609,3 +609,22 @@ must link here instead of repeating old task details.
   打开防抖：图片识别/精调当前 400ms 防抖防排队弹窗；修正 _remove_selected
   QListWidgetItem.row 崩溃；测试 685→698 全绿；报告写入
   docs/ocr-post-2.1-adjustments-report.md；未推送。
+
+## 2026-08-08 - OCR 收口工单：冻结/审计/批量状态/防抖常量/真实材料 Dogfooding/RapidOCR→Text Block
+
+- 冻结基线 tag `ocr-interaction-freeze-20260808`（指向报告提交 39f6bf7）；
+- 独立审计 6 个提交（dd3204d..d1d165b），输出 docs/ocr-post-2.1-independent-audit.md：
+  发现中危 F1（精调后合并结果重复拼接，实证复现）、F2（_wait_ocr 全局信号提前退出）、
+  F3/F4/F5 低危与 F6 提交说明不符；F1 由本次批量状态改造修复；
+- 批量队列逐项状态：Pending/Recognizing/Succeeded/Failed/Cancelled/Refined，
+  每行提供[重试此项][查看错误][从批次移除]，单项失败不再静默跳过（含“未识别到内容”与
+  “识别异常”两类错误区分），精调结果标记 Refined；每行独立结果修复 F1；
+- “允许相同图片重复入队”复选框（默认去重）；400ms 打开防抖提取为命名常量
+  DIALOG_OPEN_DEBOUNCE_SECONDS（app/gui/formula_ocr/__init__.py）；
+- 真实材料 Dogfooding：arXiv 论文公式（Attention/MultiHead/ResNet 真实 LaTeX 渲染）、
+  论文 PDF 真实页面裁剪、CROHME 真实手写轨迹光栅化，走应用真实链路推理，
+  结果与复现命令写入 docs/ocr-dogfooding-report.md；教材 PDF 因网络受限未纳入（如实记录）；
+- RapidOCR Review → Text Block 独立流程：app/gui/text_ocr/（manager+review dialog+flow），
+  Block 导航面板新增“文字识别…”入口，幂等提交、空内容保护、Undo 可撤销；
+  报告 docs/rapidocr-text-block-flow-report.md；
+- 全套件 698→706 tests OK；未推送。

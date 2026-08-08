@@ -3,6 +3,8 @@
 Claude Code and every other coding agent must follow `AGENTS.md`; this file is a
 compatibility entry point, not a second engineering manual.
 
+Current app version: **2.1.0-beta.1**
+
 ## Read Order
 
 1. Confirm `pwd -P` is `<HOME>/Desktop/Codex/ICS-Project-/ICSTeX`.

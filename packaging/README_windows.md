@@ -1,6 +1,6 @@
 # ICSTeX for Windows
 
-版本：0.2.7
+版本：2.1.0-beta.1
 
 ICSTeX - ICC Student's TeX - 是一个面向学生的桌面 LaTeX 编辑器，支持实时编译、PDF 预览、项目模板、插图/表格辅助、BibTeX 引用和标签工具。
 
@@ -15,13 +15,13 @@ ICSTeX 不内置 LaTeX 发行版。Windows 用户请先安装 MiKTeX 或 TeX Liv
 
 ## 第一次启动
 
-如果你拿到的是 `ICSTeX-0.2.7-Windows.zip` 或 `ICSTeX-Windows.zip`：
+如果你拿到的是 `ICSTeX-2.1.0-beta.1-Windows.zip` 或 `ICSTeX-Windows.zip`：
 
 1. 先把 zip 解压到一个普通文件夹，例如 Desktop 或 Documents。
 2. 打开解压后的 `ICSTeX` 文件夹。
 3. 双击 `ICSTeX.exe`。
 
-如果你拿到的是 `ICSTeX-0.2.7-Setup.exe`：
+如果你拿到的是 `ICSTeX-2.1.0-beta.1-Setup.exe`：
 
 1. 双击安装器。
 2. 按提示安装到默认目录。

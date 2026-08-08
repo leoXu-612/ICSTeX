@@ -1,6 +1,6 @@
 # ICSTeX
 
-Current packaged release: 0.2.7. The working source may be ahead of the packaged
+Current packaged release: 2.1.0-beta.1. The working source may be ahead of the packaged
 release; see [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) for the exact boundary.
 
 ICSTeX - ICC Student's TeX - is local research-writing infrastructure for ICC
@@ -19,7 +19,7 @@ preview: statically referenced project PNG/JPEG assets, including common
 natural size is preserved; manual Compile and Export PDF always use the original
 images. Preview and final build state are isolated, and export waits for a current
 final build rather than copying a preview or stale PDF. This source-only change
-is not in 0.2.7.
+is not in 2.1.0-beta.1.
 
 ICSTeX also understands common LaTeX editor conventions such as
 `% !TEX root = main.tex` and `% !TEX program = xelatex`, and can infer a root
@@ -48,7 +48,7 @@ time you open them; follow the per-platform first-launch guide:
 - macOS（「无法验证开发者」）：见 [`packaging/README_macOS.md`](packaging/README_macOS.md) 的「第一次启动」。
 - Windows（SmartScreen / 杀毒误报）：见 [`packaging/README_windows.md`](packaging/README_windows.md) 的「第一次启动」。
 
-The current macOS 0.2.7 DMG is an Apple Silicon (`arm64`) build, not an Intel
+The current macOS 2.1.0-beta.1 DMG is an Apple Silicon (`arm64`) build, not an Intel
 or Universal 2 build. Windows artifacts must be rebuilt and verified on Windows.
 
 ## Run
@@ -106,7 +106,7 @@ macOS:
 bash packaging/build_macos.sh
 ```
 
-This creates both `dist/ICSTeX-0.2.7.dmg` and a latest alias at
+This creates both `dist/ICSTeX-2.1.0-beta.1.dmg` and a latest alias at
 `dist/ICSTeX.dmg`. Share the versioned DMG when distributing test builds.
 
 Windows:
@@ -131,9 +131,9 @@ for its own `pip` subprocess without changing Windows proxy settings. For an
 offline fallback, place `pylatexenc-2.10-py3-none-any.whl` in the project root
 and run the same command again.
 
-On Windows this creates `dist\ICSTeX-0.2.7-Windows.zip` plus the latest alias
+On Windows this creates `dist\ICSTeX-2.1.0-beta.1-Windows.zip` plus the latest alias
 `dist\ICSTeX-Windows.zip`. If Inno Setup is installed and `iscc` is on `PATH`,
-it also creates `dist\ICSTeX-0.2.7-Setup.exe`.
+it also creates `dist\ICSTeX-2.1.0-beta.1-Setup.exe`.
 
 The package does not bundle a LaTeX distribution; users need MacTeX, TeX Live,
 or MiKTeX installed separately.

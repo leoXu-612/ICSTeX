@@ -1,10 +1,10 @@
-# ICSTeX 0.2.7 Windows 构建指南
+# ICSTeX 2.1.0-beta.1 Windows 构建指南
 
 Windows 安装包必须在 Windows 实机或虚拟机中构建，不能在 macOS 上生成后改名。
 
 ## 1. 准备
 
-- 将 `ICSTeX-Source-0.2.7.zip` 复制到 Windows 并解压。
+- 将 `ICSTeX-Source-2.1.0-beta.1.zip` 复制到 Windows 并解压。
 - 安装 64 位 Python 3.12–3.14，并确认 `python --version` 可用。
 - 最终用户不需要 Python；Python 只用于本次打包。
 - 源码包已附带 `packaging\wheels\pylatexenc-2.10-py3-none-any.whl`，无法连接 PyPI 时会自动优先使用。
@@ -14,7 +14,7 @@ Windows 安装包必须在 Windows 实机或虚拟机中构建，不能在 macOS
 不要直接在 `C:\Mac\...` 共享目录中运行 PyInstaller。在 Command Prompt 中执行，并把第一行路径改成实际解压位置：
 
 ```bat
-cd /d "C:\Mac\Home\Desktop\ICSTeX-Source-0.2.7"
+cd /d "C:\Mac\Home\Desktop\ICSTeX-Source-2.1.0-beta.1"
 robocopy . "%USERPROFILE%\ICSTeX_Build_027" /E /XD build dist __pycache__
 cd /d "%USERPROFILE%\ICSTeX_Build_027"
 python --version
@@ -25,14 +25,14 @@ call packaging\build_windows.bat
 
 ```text
 dist\ICSTeX\ICSTeX.exe
-dist\ICSTeX-0.2.7-Windows.zip
+dist\ICSTeX-2.1.0-beta.1-Windows.zip
 dist\ICSTeX-Windows.zip
 ```
 
 如已安装 Inno Setup 且 `iscc` 在 PATH 中，还会生成：
 
 ```text
-dist\ICSTeX-0.2.7-Setup.exe
+dist\ICSTeX-2.1.0-beta.1-Setup.exe
 ```
 
 ## 3. Windows 验收

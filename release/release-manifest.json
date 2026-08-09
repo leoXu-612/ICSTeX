@@ -4,7 +4,7 @@
   "version": "2.1.0-beta.1",
   "tag": "v2.1.0-beta.1",
   "channel": "beta",
-  "release_name": "Formula Intelligence",
+  "release_name": "公式编辑与本地识别",
   "github_repository_public": true,
   "github_release_published": true,
   "assets": [
@@ -54,9 +54,9 @@
     "THIRD_PARTY_NOTICES.md"
   ],
   "limitations": [
-    "macOS package is Apple Silicon only and is not notarized.",
-    "Windows x64 ZIP and Setup EXE are not built or validated for this beta.",
-    "Windows ARM64 is a developer beta with launch-only verification; source-to-PDF acceptance remains pending a Windows TeX distribution.",
-    "Formula recognition is optional, local, and requires user review."
+    "macOS 版只支持 Apple 芯片，尚未经过 Apple 公证。首次打开时需要在系统设置中手动确认。",
+    "这个 Beta 暂无 Windows x64 压缩包和安装程序。常见的 Intel 或 AMD Windows 电脑目前无法安装。",
+    "Windows ARM64 版目前只验证了应用可以启动。由于测试机没有安装 LaTeX 环境，尚未完成从源码生成 PDF 的测试。",
+    "公式图片识别需要另外安装本地组件，识别结果可能有误，插入文档前请自行核对。"
   ]
 }

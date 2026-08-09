@@ -39,7 +39,7 @@
   function bindAssets(release, downloadsAvailable, unavailableReason) {
     document.querySelectorAll("[data-release-sha]").forEach((node) => {
       const asset = assetForKey(release, node.dataset.releaseSha);
-      node.textContent = asset ? `SHA-256 ${asset.sha256}` : "SHA-256 unavailable";
+      node.textContent = asset ? `SHA-256 ${asset.sha256}` : "暂无 SHA-256";
     });
     document.querySelectorAll("[data-release-download]").forEach((node) => {
       const asset = assetForKey(release, node.dataset.releaseDownload);
@@ -93,13 +93,14 @@
   function bindRelease(release) {
     setText("[data-release='version']", release.version);
     setText("[data-release='tag']", release.tag);
-    setText("[data-release='channel']", release.channel);
-    setText("[data-release='name']", release.release_name);
+    const channelLabels = { beta: "Beta 测试版", stable: "正式版" };
+    setText("[data-release='channel']", channelLabels[release.channel] || release.channel);
+    setText("[data-release='name']", `本版重点：${release.release_name}`);
     const repositoryPublic = release.github_repository_public === true;
     const releasePublished = release.github_release_published === true;
     const downloadsAvailable = repositoryPublic && releasePublished;
     const documentRef = releasePublished ? release.tag : config.repositoryDefaultBranch;
-    const privateReason = "GitHub 仓库当前为 Private，公开链接尚未开放";
+    const privateReason = "项目暂未公开，当前无法打开此链接";
 
     if (repositoryPublic) {
       setLink("[data-release-link='repository']", `${config.githubBaseUrl}/${release.repository}`);
@@ -122,12 +123,12 @@
 
     const availability = document.querySelector("[data-release-availability]");
     const unavailableReason = repositoryPublic
-      ? "GitHub Release 尚未发布，下载链接尚未开放"
-      : "GitHub 仓库当前为 Private，公开下载尚未开放";
+      ? "这个版本还没有正式发布，暂时不能下载"
+      : "项目暂未公开，当前无法下载";
     bindAssets(release, downloadsAvailable, unavailableReason);
-    if (availability && !repositoryPublic) availability.textContent = "GitHub 仓库当前为 Private；为避免 404，下载入口在公开 Release 完成前保持关闭。";
-    else if (availability && !releasePublished) availability.textContent = "Release 尚未在 GitHub 发布；下载链接会在校验后的发布完成后启用。";
-    else if (availability) availability.textContent = "Release 资产由 GitHub Releases 托管；下载前请核对 SHA-256。";
+    if (availability && !repositoryPublic) availability.textContent = "项目还没有公开，下载按钮暂时不可用。";
+    else if (availability && !releasePublished) availability.textContent = "这个版本还在准备中，发布后即可下载。";
+    else if (availability) availability.textContent = "安装包由 GitHub 提供。下载后可以用页面上的 SHA-256 检查文件是否完整。";
   }
 
   setupPlatformPicker();
@@ -138,8 +139,8 @@
     })
     .then(bindRelease)
     .catch(() => {
-      disableLinks("[data-release-download]", "Release 元数据暂不可用");
+      disableLinks("[data-release-download]", "暂时无法读取版本信息");
       const availability = document.querySelector("[data-release-availability]");
-      if (availability) availability.textContent = "Release 元数据暂不可用；请前往 GitHub Releases 核对当前状态。";
+      if (availability) availability.textContent = "暂时无法读取版本信息。你仍可以前往 GitHub 的 Releases 页面查看下载文件。";
     });
 })();

@@ -144,6 +144,21 @@ class ReleaseSiteTests(TestCase):
         for forbidden in ("react", "next.js", "tailwind", "fonts.googleapis.com"):
             self.assertNotIn(forbidden, combined)
 
+        for readable_copy in (
+            "选择你的电脑系统",
+            "边看公式，边改 LaTeX",
+            "源码、PDF 和项目结构放在同一个窗口",
+            "你的论文默认留在自己的电脑里",
+            "这是 Beta 版，还有这些限制",
+        ):
+            self.assertIn(readable_copy, html)
+        for internal_copy in (
+            "LOCAL-FIRST ASSURANCE",
+            "边界写在下载之前",
+            "长文档仍然可以被看清",
+        ):
+            self.assertNotIn(internal_copy, html)
+
     def test_reused_product_assets_are_checked_in(self) -> None:
         html = self.read_text("website/index.html")
         for name in ("main-window.png", "block-console.png", "icstex-mark.png"):

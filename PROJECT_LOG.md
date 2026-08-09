@@ -774,6 +774,21 @@ must link here instead of repeating old task details.
   assigned, SSO Protection is disabled, and Git fork protection remains enabled.
 - Release-site consistency, 10 focused website tests, `compileall`, 731-test
   offscreen suite, and `packaging/preflight.sh` passed before publication.
+
+## 2026-08-09 - Public Website Copy Rewrite
+
+- Rewrote the public site from release-engineering language into user-facing
+  Chinese without changing layout, download URLs, platform truth, or interaction
+  logic. Hero, platform guidance, formula/OCR, workspace, privacy, limitations,
+  status messages, and footer now describe concrete user actions and outcomes.
+- Localized the generated Release display name and all four published
+  limitations; retained necessary terms including LaTeX, PDF, SHA-256, ARM64,
+  DOI, arXiv, and product UI labels where precision matters.
+- Added copy-regression assertions. Ten focused website tests, `compileall`, the
+  731-test offscreen suite, and `packaging/preflight.sh` passed.
+- Playwright verified macOS and Windows panels at 390 x 844 and 1440 x 900 with
+  matching viewport/scroll widths, enabled download links, and zero browser
+  warnings or errors.
 ## 2026-08-08 - Public-release security boundary
 
 - Standard desktop security scan identified seven publication blockers across

@@ -4,8 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f6f7f8">
-    <meta name="description" content="ICSTeX 是面向 ICC 学生的本地 LaTeX 科研写作基础设施。">
-    <title>ICSTeX — 本地科研写作基础设施</title>
+    <meta name="description" content="ICSTeX 是一款面向学生的本地 LaTeX 编辑器，支持 PDF 预览、公式输入和项目管理。">
+    <title>ICSTeX — 本地 LaTeX 编辑与 PDF 预览</title>
     <link rel="icon" href="assets/icstex-mark.png" type="image/png">
     <link rel="stylesheet" href="vendor/pico.min.css">
     <link rel="stylesheet" href="styles.css">
@@ -28,25 +28,25 @@
     <main id="main-content">
       <section class="hero section" aria-labelledby="hero-title">
         <div class="hero-copy">
-          <p class="eyebrow">LOCAL RESEARCH WRITING / ICC</p>
+          <p class="eyebrow">为课程论文和研究报告准备的 LaTeX 编辑器</p>
           <h1 id="hero-title">
             <span class="hero-title-product" translate="no">ICSTeX</span>
             <span class="hero-title-version" data-release="version">current release</span>
           </h1>
           <p class="release-name" data-release="name">release focus</p>
-          <p class="hero-lede">在本地写 LaTeX、核对当前 PDF，并在交付前知道结果是否可信。</p>
+          <p class="hero-lede">在一台电脑里完成 LaTeX 编辑、PDF 预览和提交前检查。文件默认留在本地。</p>
           <div class="hero-actions">
-            <a class="button button-primary is-disabled" data-release-download="macos-primary" aria-disabled="true">下载 macOS Apple Silicon 版</a>
-            <a class="button button-secondary" data-release-link="releases" href="#limits">查看全部 Release</a>
+            <a class="button button-primary is-disabled" data-release-download="macos-primary" aria-disabled="true">下载 macOS 版（Apple 芯片）</a>
+            <a class="button button-secondary" data-release-link="releases" href="#limits">其他版本与说明</a>
           </div>
           <p class="availability" data-release-availability aria-live="polite">正在读取 Release 状态…</p>
         </div>
 
         <figure class="hero-product">
-          <div class="window-chrome" aria-hidden="true"><span></span><span></span><span></span><b>ICSTeX · workspace</b></div>
+          <div class="window-chrome" aria-hidden="true"><span></span><span></span><span></span><b>ICSTeX · 项目工作区</b></div>
           <img src="assets/main-window.png" alt="ICSTeX 双栏工作区，左侧编辑 LaTeX 源码，右侧核对 PDF" width="1440" height="900" fetchpriority="high">
           <figcaption class="compile-proof">
-            <span translate="no">source.tex</span><i aria-hidden="true"></i><strong>LOCAL BUILD</strong><i aria-hidden="true"></i><span translate="no">proof.pdf</span>
+            <span translate="no">source.tex</span><i aria-hidden="true"></i><strong>在本机编译</strong><i aria-hidden="true"></i><span translate="no">proof.pdf</span>
           </figcaption>
         </figure>
       </section>
@@ -54,12 +54,12 @@
       <section class="release-section" id="download" aria-labelledby="release-title">
         <div class="section release-layout">
           <header class="section-intro">
-            <p class="eyebrow">RELEASE / VERIFIED ASSETS</p>
-            <h2 id="release-title">先确认平台，再下载。</h2>
+            <p class="eyebrow">下载</p>
+            <h2 id="release-title">选择你的电脑系统</h2>
             <dl class="release-meta">
-              <div><dt>VERSION</dt><dd data-release="version">release</dd></div>
-              <div><dt>TAG</dt><dd data-release="tag">tag</dd></div>
-              <div><dt>CHANNEL</dt><dd data-release="channel">channel</dd></div>
+              <div><dt>版本</dt><dd data-release="version">正在读取</dd></div>
+              <div><dt>标签</dt><dd data-release="tag">正在读取</dd></div>
+              <div><dt>发布类型</dt><dd data-release="channel">正在读取</dd></div>
             </dl>
           </header>
           <div class="platform-picker">
@@ -74,49 +74,49 @@
 
             <section class="platform-panel" id="panel-macos" role="tabpanel" aria-labelledby="tab-macos" tabindex="0" data-platform-panel="macos">
               <header class="package-header">
-                <div><p class="platform-label">VERIFIED PACKAGE</p><h3>macOS · Apple Silicon</h3></div>
-                <span class="status-label">已验证</span>
+                <div><p class="platform-label">macOS 下载</p><h3>适用于 Apple 芯片 Mac</h3></div>
+                <span class="status-label">可下载</span>
               </header>
-              <p class="platform-summary">适用于 M1 / M2 / M3 / M4；当前构建尚未 notarize，首次启动需要在“隐私与安全性”中确认。</p>
+              <p class="platform-summary">如果你的 Mac 使用 M1、M2、M3 或 M4 芯片，可以安装这个版本。应用尚未经过 Apple 公证，首次打开时 macOS 会要求你手动确认。</p>
               <div class="package-options">
                 <article class="package-option">
-                  <div><strong>DMG 安装映像</strong><span>推荐 · 拖入“应用程序”</span><code data-release-sha="macos-dmg">SHA-256 loading…</code></div>
+                  <div><strong>DMG 安装包</strong><span>推荐，打开后拖入“应用程序”文件夹</span><code data-release-sha="macos-dmg">正在读取 SHA-256…</code></div>
                   <a class="button button-primary is-disabled" data-release-download="macos-dmg" aria-disabled="true">下载 DMG</a>
                 </article>
                 <article class="package-option">
-                  <div><strong>ZIP 便携包</strong><span>手动解压</span><code data-release-sha="macos-zip">SHA-256 loading…</code></div>
+                  <div><strong>ZIP 压缩包</strong><span>下载后手动解压</span><code data-release-sha="macos-zip">正在读取 SHA-256…</code></div>
                   <a class="button button-secondary is-disabled" data-release-download="macos-zip" aria-disabled="true">下载 ZIP</a>
                 </article>
               </div>
               <ol class="install-steps" aria-label="macOS 安装步骤">
-                <li><span>01</span><strong>安装应用</strong><small>打开 DMG，将 ICSTeX 拖入“应用程序”。</small></li>
-                <li><span>02</span><strong>安装 LaTeX</strong><small>安装 MacTeX 或 BasicTeX；ICSTeX 不捆绑发行版。</small></li>
-                <li><span>03</span><strong>检查环境</strong><small>启动 ICSTeX，在“环境医生”确认 latexmk 与 texcount。</small></li>
+                <li><span>01</span><strong>下载并安装</strong><small>打开 DMG，把 ICSTeX 拖进“应用程序”文件夹。</small></li>
+                <li><span>02</span><strong>准备 LaTeX 环境</strong><small>另外安装 MacTeX 或 BasicTeX。ICSTeX 不会附带这些大型工具。</small></li>
+                <li><span>03</span><strong>运行环境检查</strong><small>打开 ICSTeX 的“环境医生”，确认 latexmk 和 texcount 可以使用。</small></li>
               </ol>
             </section>
 
             <section class="platform-panel" id="panel-windows" role="tabpanel" aria-labelledby="tab-windows" tabindex="0" data-platform-panel="windows" hidden>
               <header class="package-header">
-                <div><p class="platform-label">ARCHITECTURE MATTERS</p><h3>Windows · 先确认系统类型</h3></div>
+                <div><p class="platform-label">Windows 下载</p><h3>Windows 目前只提供 ARM64 版本</h3></div>
                 <span class="status-label status-pending">部分可用</span>
               </header>
-              <p class="platform-summary">大多数 Intel / AMD 电脑需要 x64；当前只有 ARM64 开发者 Beta，不能改名代替 x64 安装包。</p>
+              <p class="platform-summary">常见的 Intel 或 AMD Windows 电脑使用 x64，暂时不能运行这个版本。只有在“系统信息”中看到 ARM64 时才请下载。</p>
               <div class="package-options">
                 <article class="package-option is-unavailable">
-                  <div><strong>Windows x64</strong><span>ZIP 与 Setup EXE 尚未构建或验证</span><code>NOT AVAILABLE</code></div>
+                  <div><strong>Windows x64</strong><span>ZIP 和安装程序仍在准备中</span><code>暂未提供</code></div>
                   <span class="button button-secondary is-disabled" aria-disabled="true">尚不可下载</span>
                 </article>
                 <article class="package-option">
-                  <div><strong>Windows ARM64 ZIP</strong><span>开发者 Beta · 仅适用于 ARM64</span><code data-release-sha="windows-arm64">SHA-256 loading…</code></div>
+                  <div><strong>Windows ARM64 ZIP</strong><span>测试版，只适用于 Windows ARM64</span><code data-release-sha="windows-arm64">正在读取 SHA-256…</code></div>
                   <a class="button button-primary is-disabled" data-release-download="windows-arm64" aria-disabled="true">下载 ARM64 ZIP</a>
                 </article>
               </div>
               <ol class="install-steps" aria-label="Windows ARM64 安装步骤">
-                <li><span>01</span><strong>确认 ARM64</strong><small>在“设置 → 系统 → 系统信息”检查系统类型。</small></li>
-                <li><span>02</span><strong>解压到本地</strong><small>完整解压 ZIP，再运行目录中的 ICSTeX.exe。</small></li>
-                <li><span>03</span><strong>安装 LaTeX</strong><small>安装 MiKTeX 或 TeX Live，并用“环境医生”复核。</small></li>
+                <li><span>01</span><strong>确认系统类型</strong><small>打开“设置 → 系统 → 系统信息”，确认设备是 ARM64。</small></li>
+                <li><span>02</span><strong>完整解压</strong><small>不要直接在 ZIP 里运行。解压全部文件后，再打开 ICSTeX.exe。</small></li>
+                <li><span>03</span><strong>准备 LaTeX 环境</strong><small>安装 MiKTeX 或 TeX Live，然后运行 ICSTeX 的“环境医生”。</small></li>
               </ol>
-              <a class="text-link" data-release-link="limitations" href="#limits">查看 Windows 验证边界 <span aria-hidden="true">→</span></a>
+              <a class="text-link" data-release-link="limitations" href="#limits">查看 Windows 版已经完成的测试 <span aria-hidden="true">→</span></a>
             </section>
           </div>
         </div>
@@ -124,30 +124,30 @@
 
       <section class="formula-section section" id="formula" aria-labelledby="formula-title">
         <div class="feature-copy">
-          <p class="eyebrow">FORMULA EDITOR 2.0</p>
-          <h2 id="formula-title">看见结构，也始终看得见源码。</h2>
-          <p>在二维公式与 LaTeX 双视图之间工作。只有明确确认后才写回编辑器，并作为一次 Undo / Redo 操作。</p>
+          <p class="eyebrow">公式输入</p>
+          <h2 id="formula-title">边看公式，边改 LaTeX</h2>
+          <p>公式编辑器同时显示排版结果和 LaTeX 源码。点“插入”后才会写进文档；如果改错，可以一次撤销。</p>
         </div>
         <div class="formula-stage" aria-label="公式结构与 LaTeX 源码示例">
           <span class="formula-display">∫<sub>0</sub><sup>1</sup> x² dx = ⅓</span>
           <code>\int_0^1 x^2\,dx = \frac{1}{3}</code>
-          <p>VISUAL STRUCTURE / LATEX SOURCE</p>
+          <p>公式预览 / LaTeX 源码</p>
         </div>
       </section>
 
       <section class="ocr-section" id="ocr" aria-labelledby="ocr-title">
         <div class="section feature-row">
           <div class="feature-copy">
-            <p class="eyebrow">OPTIONAL LOCAL OCR</p>
-            <h2 id="ocr-title">识别在本地，结果由你复核。</h2>
-            <p>pix2tex 是可选运行时。你选择图片区域、检查识别结果，再决定是否插入；识别内容不会绕过人工确认。</p>
+            <p class="eyebrow">图片转公式（可选）</p>
+            <h2 id="ocr-title">从图片识别公式，确认后再插入</h2>
+            <p>安装 pix2tex 后，可以框选图片里的公式并转换成 LaTeX。识别在本机完成，结果会先交给你检查，不会直接改动文档。</p>
           </div>
           <div class="recognition-flow" aria-label="本地公式识别的三个步骤">
-            <span><b>IMAGE</b><small>选择区域</small></span>
+            <span><b>图片</b><small>框选公式</small></span>
             <i aria-hidden="true"></i>
-            <span><b>REVIEW</b><small>核对结果</small></span>
+            <span><b>检查</b><small>核对公式</small></span>
             <i aria-hidden="true"></i>
-            <span><b>LATEX</b><small>明确插入</small></span>
+            <span><b>LaTeX</b><small>插入文档</small></span>
           </div>
         </div>
       </section>
@@ -155,27 +155,27 @@
       <section class="workspace-section section" id="workspace" aria-labelledby="workspace-title">
         <div class="section-intro split-intro">
           <div>
-            <p class="eyebrow">ONE WORKSPACE</p>
-            <h2 id="workspace-title">长文档仍然可以被看清。</h2>
+            <p class="eyebrow">项目工作区</p>
+            <h2 id="workspace-title">源码、PDF 和项目结构放在同一个窗口</h2>
           </div>
-          <p>Block 控制台、布局、表格与资源管理把项目结构放在源码和 PDF 旁边。90–150% UI Scale 保留各层级的可读性。</p>
+          <p>写长文档时，可以一边编辑源码、一边看 PDF，并用 Block 控制台管理章节、表格、图片和页面布局。界面可以在 90% 到 150% 之间缩放。</p>
         </div>
         <figure class="workspace-shot">
           <img src="assets/block-console.png" alt="ICSTeX Block 控制台、源码编辑器、PDF 与属性面板" width="1440" height="900" loading="lazy" decoding="async">
-          <figcaption>BLOCK CONSOLE / SOURCE / PDF / PROPERTIES</figcaption>
+          <figcaption>项目结构 / LaTeX 源码 / PDF / 属性</figcaption>
         </figure>
       </section>
 
       <section class="local-section" id="local" aria-labelledby="local-title">
         <div class="section local-layout">
           <header class="section-intro">
-            <p class="eyebrow">LOCAL-FIRST ASSURANCE</p>
-            <h2 id="local-title">本地优先不是口号，是默认行为。</h2>
+            <p class="eyebrow">文件与隐私</p>
+            <h2 id="local-title">你的论文默认留在自己的电脑里</h2>
           </header>
           <dl class="assurance-list">
-            <div><dt>文件留在设备</dt><dd>项目、日志、PDF 与截图默认不会被静默上传。</dd></div>
-            <div><dt>状态如实表达</dt><dd>失败构建不会伪装成最新 PDF，预览也不会冒充正式交付。</dd></div>
-            <div><dt>联网由你触发</dt><dd>需要网络的元数据查询必须显式开始，并清楚说明用途。</dd></div>
+            <div><dt>不会自动上传</dt><dd>ICSTeX 不会自行上传你的 .tex、PDF、日志或截图。</dd></div>
+            <div><dt>编译结果不会混淆</dt><dd>如果本次编译失败，界面会把旧 PDF 标出来，不会把它当成最新结果。</dd></div>
+            <div><dt>联网前由你确认</dt><dd>只有你主动查询 DOI 或 arXiv 信息时，应用才会连接网络。</dd></div>
           </dl>
         </div>
       </section>
@@ -183,17 +183,17 @@
       <section class="limits section" id="limits" aria-labelledby="limits-title">
         <div class="section-intro split-intro">
           <div>
-            <p class="eyebrow">HONEST BETA</p>
-            <h2 id="limits-title">边界写在下载之前。</h2>
+            <p class="eyebrow">使用前请注意</p>
+            <h2 id="limits-title">这是 Beta 版，还有这些限制</h2>
           </div>
-          <p>Beta 不是无条件承诺。重要项目请保持自己的备份和版本记录。</p>
+          <p>请先阅读下面的说明。重要文档仍建议使用 Git 或其他方式备份。</p>
         </div>
         <ul class="limit-list" data-release-limitations>
-          <li>当前 Beta 的已知限制会随 Release 元数据同步。</li>
+          <li>正在读取这个版本的已知限制。</li>
         </ul>
         <nav class="document-links" aria-label="发布文档">
           <a data-release-document="INSTALLATION.md" href="#limits">安装说明</a>
-          <a data-release-document="RELEASE_NOTES.md" href="#limits">Release Notes</a>
+          <a data-release-document="RELEASE_NOTES.md" href="#limits">版本说明</a>
           <a data-release-document="SHA256SUMS.txt" href="#limits">SHA-256 校验</a>
           <a data-release-document="THIRD_PARTY_NOTICES.md" href="#limits">第三方说明</a>
         </nav>
@@ -201,7 +201,7 @@
     </main>
 
     <footer class="site-footer">
-      <div><strong translate="no">ICSTeX</strong><span>Local research-writing infrastructure for ICC students.</span></div>
+      <div><strong translate="no">ICSTeX</strong><span>面向学生的本地 LaTeX 编辑器。</span></div>
       <div><span data-release="version">release</span><a data-release-link="repository" href="#limits">GitHub</a></div>
     </footer>
     <script src="config.js"></script>

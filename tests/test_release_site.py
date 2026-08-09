@@ -72,13 +72,10 @@ class ReleaseSiteTests(TestCase):
 
     def test_static_site_has_no_local_or_development_urls(self) -> None:
         forbidden = ("localhost", "127.0.0.1", "file://", "/Users/", "C:\\\\Users\\\\")
-        for path in WEBSITE.glob("*.js"):
+        for path in list(WEBSITE.glob("*.js")) + list(WEBSITE.rglob("*.html")):
             source = path.read_text(encoding="utf-8")
             for value in forbidden:
                 self.assertNotIn(value, source, f"{value!r} leaked into {path.relative_to(ROOT)}")
-        html = self.read_text("website/index.html")
-        for value in forbidden:
-            self.assertNotIn(value, html, f"{value!r} leaked into website/index.html")
 
     def test_structure_is_semantic_accessibile_and_release_driven(self) -> None:
         html = self.read_text("website/index.html")
@@ -120,18 +117,19 @@ class ReleaseSiteTests(TestCase):
         self.assertNotIn('href="https://github.com', html)
 
     def test_html_ids_headings_and_images_are_accessible(self) -> None:
-        inspector = SiteHTMLInspector()
-        inspector.feed(self.read_text("website/index.html"))
+        for path in WEBSITE.rglob("*.html"):
+            inspector = SiteHTMLInspector()
+            inspector.feed(path.read_text(encoding="utf-8"))
 
-        self.assertEqual(len(inspector.ids), len(set(inspector.ids)), inspector.ids)
-        self.assertEqual(inspector.heading_levels.count(1), 1)
-        self.assertEqual(inspector.heading_levels[0], 1)
-        for previous, current in zip(inspector.heading_levels, inspector.heading_levels[1:]):
-            self.assertLessEqual(current - previous, 1, inspector.heading_levels)
-        for image in inspector.images:
-            self.assertIn("alt", image)
-            self.assertTrue(image.get("width"), image)
-            self.assertTrue(image.get("height"), image)
+            self.assertEqual(len(inspector.ids), len(set(inspector.ids)), path)
+            self.assertEqual(inspector.heading_levels.count(1), 1, path)
+            self.assertEqual(inspector.heading_levels[0], 1, path)
+            for previous, current in zip(inspector.heading_levels, inspector.heading_levels[1:]):
+                self.assertLessEqual(current - previous, 1, (path, inspector.heading_levels))
+            for image in inspector.images:
+                self.assertIn("alt", image, path)
+                self.assertTrue(image.get("width"), (path, image))
+                self.assertTrue(image.get("height"), (path, image))
 
     def test_information_groups_and_static_architecture_are_bounded(self) -> None:
         html = self.read_text("website/index.html")
@@ -165,6 +163,34 @@ class ReleaseSiteTests(TestCase):
             self.assertTrue((WEBSITE / "assets" / name).is_file(), name)
             self.assertIn(f"assets/{name}", html)
         self.assertTrue((WEBSITE / "assets" / "125-narrow.png").is_file())
+
+    def test_information_architecture_and_secondary_pages_exist(self) -> None:
+        index = self.read_text("website/index.html")
+        guide = self.read_text("website/guide/index.html")
+        about = self.read_text("website/about/index.html")
+
+        for page in (guide, about):
+            self.assertIn('lang="zh-Hans"', page)
+            self.assertIn('class="skip-link"', page)
+            self.assertIn('id="main-content"', page)
+            self.assertIn("../app.js", page)
+            self.assertIn("../config.js", page)
+        for value in ("Formula Intelligence", "使用指南", "理念", "PUBLIC BETA", "data-release-document=\"RELEASE_NOTES.md\""):
+            self.assertIn(value, index)
+        for value in ("功能一览", "安装与环境检查", "formula-editor", "formula-recognition", "compile-pdf", "Block 工作区", "常见问题"):
+            self.assertIn(value, guide)
+        for value in ("为什么有 ICSTeX", "本地优先", "容易理解", "兼容 LaTeX", "公开信", "徐铭华 敬上"):
+            self.assertIn(value, about)
+
+    def test_release_consistency_verifier_checks_all_pages(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "tools/verify_release_consistency.py"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Release consistency PASS", result.stdout)
 
     def test_local_pico_dependency_includes_its_license(self) -> None:
         pico = WEBSITE / "vendor" / "pico.min.css"

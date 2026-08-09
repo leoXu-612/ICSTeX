@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="zh-Hans">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f6f7f8">
+    <meta name="description" content="ICSTeX 使用指南：安装环境、编辑 LaTeX、输入公式、编译 PDF 和管理 Block 项目。">
+    <title>使用指南 — ICSTeX</title>
+    <link rel="icon" href="../assets/icstex-mark.png" type="image/png">
+    <link rel="stylesheet" href="../vendor/pico.min.css">
+    <link rel="stylesheet" href="../styles.css">
+  </head>
+  <body class="subpage">
+    <a class="skip-link" href="#main-content">跳到主要内容</a>
+    <header class="site-header" id="top">
+      <a class="brand" href="../" aria-label="ICSTeX 首页">
+        <img src="../assets/icstex-mark.png" alt="" width="40" height="40">
+        <span translate="no">ICSTeX</span>
+      </a>
+      <nav aria-label="主导航">
+        <a href="../#formula">功能</a>
+        <a href="./" aria-current="page">使用指南</a>
+        <a href="../about/">理念</a>
+        <a href="../#download">下载</a>
+      </nav>
+      <a class="header-source" data-release-link="repository" href="../#limits">GitHub</a>
+    </header>
+
+    <main id="main-content">
+      <section class="subpage-hero typeset-grid" aria-labelledby="guide-title">
+        <div class="subpage-hero-inner">
+          <p class="eyebrow">使用指南</p>
+          <h1 id="guide-title">从第一次启动，到完成一份可提交的 PDF。</h1>
+          <p class="subpage-lede">这份指南按实际写作顺序组织。先把环境准备好，再选择源码编辑、公式编辑或 Block 工作区。</p>
+          <p class="meta-line"><span data-release="channel">Beta 测试版</span><span aria-hidden="true">·</span><span data-release="version">正在读取版本…</span><span aria-hidden="true">·</span><span>文件默认保存在本地</span></p>
+        </div>
+      </section>
+
+      <nav class="guide-toc section" aria-label="指南目录">
+        <a href="#feature-catalog">功能一览</a>
+        <a href="#install">安装与环境</a>
+        <a href="#workflow">项目工作流</a>
+        <a href="#formula-editor">公式编辑</a>
+        <a href="#formula-recognition">图片转公式</a>
+        <a href="#compile-pdf">编译与 PDF</a>
+        <a href="#workspace">Block 工作区</a>
+        <a href="#faq">常见问题</a>
+      </nav>
+
+      <section class="guide-section section" id="feature-catalog" aria-labelledby="feature-catalog-title">
+        <p class="eyebrow">先看这里</p>
+        <h2 id="feature-catalog-title">功能一览</h2>
+        <p class="section-lede">下面的能力和限制来自当前源码、测试与发布文档；Beta 状态不会被包装成正式支持。</p>
+        <div class="table-wrap">
+          <table class="feature-catalog">
+            <caption>ICSTeX 当前功能、条件与使用入口</caption>
+            <thead>
+              <tr><th scope="col">功能</th><th scope="col">当前能力</th><th scope="col">条件</th><th scope="col">指引</th></tr>
+            </thead>
+            <tbody>
+              <tr><th scope="row">LaTeX 编辑</th><td>直接编辑项目源码并保存。</td><td>本地文件</td><td><a href="#workflow">项目工作流</a></td></tr>
+              <tr><th scope="row">PDF 预览</th><td>编译后在同一窗口核对 PDF。</td><td>本地 LaTeX 工具链</td><td><a href="#compile-pdf">编译与 PDF</a></td></tr>
+              <tr><th scope="row" translate="no">Formula Editor</th><td>公式预览、LaTeX 源码、确认写回与撤销。</td><td>内置</td><td><a href="#formula-editor">查看</a></td></tr>
+              <tr><th scope="row">图片转公式</th><td>用可选的本地 pix2tex 识别公式，再人工核对。</td><td>需另外安装组件</td><td><a href="#formula-recognition">查看</a></td></tr>
+              <tr><th scope="row">Block 工作区</th><td>管理内容 Block、布局、数据源和属性。</td><td>内置，适合结构化项目</td><td><a href="#workspace">查看</a></td></tr>
+              <tr><th scope="row">本地优先</th><td>源码、编译和 PDF 默认留在本机。</td><td>主动查询 DOI/arXiv 时才联网</td><td><a href="../about/#principles">了解原则</a></td></tr>
+              <tr><th scope="row">macOS</th><td>Apple Silicon 安装包。</td><td>需要 MacTeX 或 BasicTeX</td><td><a href="#install">安装</a></td></tr>
+              <tr><th scope="row">Windows ARM64</th><td>Developer Beta，仅限 ARM64。</td><td>需要 MiKTeX 或 TeX Live</td><td><a href="../#panel-windows">查看限制</a></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="guide-section guide-section-muted" id="install" aria-labelledby="install-title">
+        <div class="section guide-narrow">
+          <p class="eyebrow">01 / 开始使用</p>
+          <h2 id="install-title">安装与环境检查</h2>
+          <div class="guide-grid guide-grid-steps">
+            <article class="guide-step"><span>01</span><h3>下载对应平台</h3><p>前往<a href="../#download">下载区</a>，macOS 选择 Apple Silicon；Windows 只有 ARM64 包可用。</p></article>
+            <article class="guide-step"><span>02</span><h3>准备 LaTeX</h3><p>ICSTeX 不附带 LaTeX。macOS 安装 MacTeX 或 BasicTeX；Windows 安装 MiKTeX 或 TeX Live。</p></article>
+            <article class="guide-step"><span>03</span><h3>运行环境医生</h3><p>打开应用后，在“帮助 → 环境医生”检查 <code>latexmk</code>、编译器和 <code>texcount</code>。</p></article>
+          </div>
+          <p class="guide-note">首次打开 macOS 未公证应用时，需要在系统设置中确认；Windows ARM64 Beta 可能显示 SmartScreen 提示。</p>
+          <p class="guide-links"><a class="text-link" data-release-document="INSTALLATION.md" href="../#limits">阅读完整安装说明 <span aria-hidden="true">→</span></a></p>
+        </div>
+      </section>
+
+      <section class="guide-section section" id="workflow" aria-labelledby="workflow-title">
+        <p class="eyebrow">02 / 写作流程</p>
+        <h2 id="workflow-title">先打开项目，再让源码和 PDF 对照起来</h2>
+        <div class="guide-procedure">
+          <ol>
+            <li><strong>新建或打开项目。</strong>可以从模板新建，也可以打开已有的 <code>.tex</code> 文件或项目文件夹。</li>
+            <li><strong>编辑源码。</strong>LaTeX 源文件是项目的可复制、可检查的事实来源；保存不会移动光标或滚动位置。</li>
+            <li><strong>编译并核对。</strong>自动预览适合快速查看，正式“编译”用于生成可提交的 PDF。</li>
+            <li><strong>检查再导出。</strong>确认 PDF 与当前源码一致后，从“文件 → 导出 PDF”生成最终文件。</li>
+          </ol>
+          <aside class="guide-callout"><strong>遇到错误时</strong><p>先看底部“错误”标签或“帮助 → 环境医生”。编译失败时，上一份成功 PDF 会被标记为旧结果，不会冒充最新版本。</p></aside>
+        </div>
+      </section>
+
+      <section class="guide-section guide-section-muted" id="formula-editor" aria-labelledby="formula-editor-title">
+        <div class="section guide-narrow">
+          <p class="eyebrow">03 / Formula Editor</p>
+          <h2 id="formula-editor-title">用结构输入公式，确认后再写回文档</h2>
+          <div class="guide-detail-grid">
+            <div>
+              <h3>适合什么情况</h3>
+              <p>需要输入分式、根号、上下标、求和或积分等结构化公式时使用。</p>
+              <h3>如何打开</h3>
+              <p>在源码中选中完整公式，选择“编辑 → 编辑公式”；公式 Block 也可以打开同一个编辑器。</p>
+            </div>
+            <div>
+              <h3>基本操作</h3>
+              <ol>
+                <li>在可视化画布中插入或移动结构。</li>
+                <li>需要时切换到源码模式，直接修正 LaTeX。</li>
+                <li>点击“应用”才会一次写回；取消则不改项目。</li>
+              </ol>
+            </div>
+          </div>
+          <div class="parameter-table">
+            <div><strong>快捷输入</strong><span><code>/</code> 生成分式，<code>^</code>/<code>_</code> 生成上下标，<code>sqrt</code>/<code>alpha</code> 可转换为常用结构。</span></div>
+            <div><strong>安全边界</strong><span>公式从受管理的结构重新生成；无法解析时保留源码模式，不会静默丢弃原内容。</span></div>
+            <div><strong>撤销</strong><span>一次“应用”对应一次项目修改，可以使用 Undo / Redo。</span></div>
+          </div>
+          <p class="guide-note">可视化编辑器不是 PDF 正确性的替代品。重要公式仍应正式编译并检查输出。</p>
+        </div>
+      </section>
+
+      <section class="guide-section section" id="formula-recognition" aria-labelledby="formula-recognition-title">
+        <p class="eyebrow">04 / 可选本地组件</p>
+        <h2 id="formula-recognition-title">从图片识别公式，再由你决定是否插入</h2>
+        <div class="recognition-guide-flow" aria-label="图片转公式的操作流程">
+          <div><span>图片</span><small>从文件或剪贴板选择</small></div><i aria-hidden="true">→</i>
+          <div><span>识别</span><small>pix2tex 在本机运行</small></div><i aria-hidden="true">→</i>
+          <div><span>核对</span><small>修改候选 LaTeX</small></div><i aria-hidden="true">→</i>
+          <div><span>插入</span><small>确认后写回公式</small></div>
+        </div>
+        <div class="guide-detail-grid">
+          <div><h3>安装与依赖</h3><p>在设置中安装可选的 pix2tex 运行环境和模型。它约占 1.2&nbsp;GB，不属于主安装包。</p></div>
+          <div><h3>请先人工核对</h3><p>复杂公式、页面截图和手写公式可能识别错误；未确认前不会修改文档，也不会开始编译。</p></div>
+        </div>
+        <p><a class="text-link" href="../about/#principles">查看本地优先原则 <span aria-hidden="true">→</span></a></p>
+      </section>
+
+      <section class="guide-section guide-section-muted" id="compile-pdf" aria-labelledby="compile-pdf-title">
+        <div class="section guide-narrow">
+          <p class="eyebrow">05 / 输出结果</p>
+          <h2 id="compile-pdf-title">区分快速预览和正式 PDF</h2>
+          <dl class="definition-list">
+            <div><dt>自动预览</dt><dd>适合边写边看，使用隔离的快速路径；打开项目后，首次手动 Compile 前不会自动启动外部编译。</dd></div>
+            <div><dt>正式编译</dt><dd>使用原图和完整项目重新编译，是导出 PDF 前应执行的步骤。</dd></div>
+            <div><dt>SyncTeX</dt><dd>双击 PDF 或使用同步操作，在源码与 PDF 之间定位。</dd></div>
+            <div><dt>导出</dt><dd>“文件 → 导出 PDF”会确认当前源码已保存，并只接受当前版本的正式 PDF。</dd></div>
+          </dl>
+          <p class="guide-note">如果编译失败，请先处理错误再导出；不要把旧 PDF 当作本次结果。</p>
+        </div>
+      </section>
+
+      <section class="guide-section section" id="workspace" aria-labelledby="workspace-guide-title">
+        <p class="eyebrow">06 / 结构化项目</p>
+        <h2 id="workspace-guide-title">在 Block 工作区管理章节、表格和布局</h2>
+        <div class="guide-detail-grid">
+          <div><h3>从哪里打开</h3><p>选择“Block → 打开 Block 项目到工作区…”，再选项目目录。Block 生成的 <code>main.tex</code> 仍然是合法的 LaTeX。</p></div>
+          <div><h3>一次完整操作</h3><ol><li>选择或新建 Block。</li><li>在布局、表格或公式页编辑。</li><li>点击“生成并编译 PDF”。</li><li>在诊断面板处理错误，再导出 PDF 或可移植包。</li></ol></div>
+        </div>
+        <figure class="guide-shot"><img src="../assets/block-console.png" alt="Block 工作区显示 Block 导航、中央编辑区、PDF 和属性面板" width="1440" height="900" loading="lazy" decoding="async"><figcaption>Block 导航 / 工作区 / PDF / 属性</figcaption></figure>
+      </section>
+
+      <section class="guide-section guide-section-muted" id="faq" aria-labelledby="faq-title">
+        <div class="section guide-narrow">
+          <p class="eyebrow">最后检查</p>
+          <h2 id="faq-title">常见问题</h2>
+          <div class="faq-list">
+            <details><summary>为什么自动预览和正式 PDF 不一样？</summary><p>自动预览优先速度，正式编译使用完整资源。提交前请以正式编译后的 PDF 为准。</p></details>
+            <details><summary>修改 UI Scale 会影响文档吗？</summary><p>不会。UI Scale 只改变应用界面，不写入项目，也不改变 LaTeX 或 PDF 样式。</p></details>
+            <details><summary>没有 pix2tex 可以使用公式编辑器吗？</summary><p>可以。pix2tex 只是可选的图片识别组件，公式编辑器、Block、编译和 PDF 不依赖它。</p></details>
+            <details><summary>Windows ARM64 版本可以在普通 Windows 电脑上运行吗？</summary><p>不可以。Intel/AMD 电脑通常是 x64；当前 x64 ZIP 和安装程序尚未提供。</p></details>
+          </div>
+          <p class="guide-links"><a class="text-link" data-release-document="KNOWN_LIMITATIONS.md" href="../#limits">查看当前已知限制 <span aria-hidden="true">→</span></a></p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div><strong translate="no">ICSTeX</strong><span>轻量、本地优先的 LaTeX 科研写作工作台。</span></div>
+      <nav aria-label="页脚导航"><a href="../">首页</a><a href="../about/">理念</a><a data-release-link="repository" href="../#limits">GitHub</a><span data-release="version">正在读取版本…</span></nav>
+    </footer>
+    <script src="../config.js"></script>
+    <script src="../app.js"></script>
+  </body>
+</html>

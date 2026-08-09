@@ -14,6 +14,8 @@
   MacTeX、TeX Live 或 MiKTeX。
 - `v2.1.0-beta.1` 已作为公开 GitHub prerelease 发布；`release/2.1` 包含后续网站
   发布态元数据提交，版本制品仍由该标签固定。
+- 静态官网现在包含首页、`website/guide/` 使用指南和 `website/about/` 理念页；
+  版本与下载展示仍由 `release-manifest → release.json → app.js` 单向驱动。
 - 公开发布候选已加入默认拒绝的本地执行边界；旧安装包早于该修复，必须重建。
 
 ## Verified Capabilities
@@ -47,7 +49,7 @@
 | Windows x64 ZIP | Pending | 当前构建机和 Python 均为 ARM64 |
 | Windows x64 Setup EXE | Blocked by tools | 需要 x64 构建环境和 Inno Setup |
 | Windows TeX acceptance | Blocked by tool | 构建机尚未安装 MiKTeX/TeX Live |
-| Static release website | Public Vercel production deployment | `website-phi-beryl-92.vercel.app`；production READY，SSO Protection 已关闭；10 项专项测试通过 |
+| Static release website | Public Vercel production deployment | `website-phi-beryl-92.vercel.app`；首页 + Guide + About；production READY，SSO Protection 已关闭；presentation refactor and 12 focused tests verified |
 | GitHub repository / Release | Public / published prerelease | `v2.1.0-beta.1`；9 个资产；公开下载端点已匿名验证为 HTTP 200 |
 
 旧的 `dist/ICSTeX-Windows.zip` 未版本化且早于当前源码，不是 2.1.0-beta.1 制品。

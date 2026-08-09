@@ -789,6 +789,28 @@ must link here instead of repeating old task details.
 - Playwright verified macOS and Windows panels at 390 x 844 and 1440 x 900 with
   matching viewport/scroll widths, enabled download links, and zero browser
   warnings or errors.
+
+## 2026-08-09 - Release Website Content and Information Architecture Expansion
+
+- Executed the latest research work order as a presentation-layer slice. The
+  homepage now separates product understanding, current release, feature stories,
+  local-first assurances and Beta/download actions; release logic and asset facts
+  remain unchanged.
+- Added factual `website/guide/` and `website/about/` pages, preserving the
+  founder letter in `docs/product/FOUNDER_LETTER_ZH.md`. Added the frozen IA and
+  release DOM contracts under `docs/website/`.
+- Added a static HTML contract audit to `tools/verify_release_consistency.py`:
+  every page is checked for unique IDs, one H1, image dimensions/alt text,
+  allowed `data-release-*` bindings and hard-coded version/tag leakage.
+- Visual implementation follows the installed frontend-design direction: Source
+  Han Serif-compatible display roles, UI sans body copy, SF Mono utility text and
+  a restrained typeset-grid signature. The web-design-guidelines audit basis was
+  fetched and applied to focus, semantics, keyboard behavior, images, locale and
+  responsive layout.
+- Evidence: 12 focused website tests, 733 full tests, compileall and
+  `packaging/preflight.sh` passed. Playwright verified 390/430/1024/1280/1440 px
+  homepage widths, Guide/About dynamic loading, platform tab keyboard/deep-link
+  behavior, skip-link focus and no console warnings/errors.
 ## 2026-08-08 - Public-release security boundary
 
 - Standard desktop security scan identified seven publication blockers across

@@ -18,26 +18,27 @@
         <span translate="no">ICSTeX</span>
       </a>
       <nav aria-label="主导航">
-        <a href="#formula">公式</a>
-        <a href="#workspace">工作区</a>
+        <a href="#formula">功能</a>
+        <a href="guide/">使用指南</a>
+        <a href="about/">理念</a>
         <a href="#download">下载</a>
       </nav>
-      <a class="header-source" data-release-link="repository" href="#limits">查看源码</a>
+      <a class="header-source" data-release-link="repository" href="#limits">GitHub</a>
     </header>
 
     <main id="main-content">
-      <section class="hero section" aria-labelledby="hero-title">
+      <section class="hero section typeset-grid" aria-labelledby="hero-title">
         <div class="hero-copy">
-          <p class="eyebrow">为课程论文和研究报告准备的 LaTeX 编辑器</p>
+          <p class="eyebrow" translate="no">Formula Intelligence</p>
           <h1 id="hero-title">
             <span class="hero-title-product" translate="no">ICSTeX</span>
             <span class="hero-title-version" data-release="version">current release</span>
           </h1>
-          <p class="release-name" data-release="name">release focus</p>
+          <p class="release-name" data-release="name">正在读取本版重点…</p>
           <p class="hero-lede">在一台电脑里完成 LaTeX 编辑、PDF 预览和提交前检查。文件默认留在本地。</p>
           <div class="hero-actions">
             <a class="button button-primary is-disabled" data-release-download="macos-primary" aria-disabled="true">下载 macOS 版（Apple 芯片）</a>
-            <a class="button button-secondary" data-release-link="releases" href="#limits">其他版本与说明</a>
+            <a class="button button-secondary" data-release-document="RELEASE_NOTES.md" href="#limits">查看版本说明</a>
           </div>
           <p class="availability" data-release-availability aria-live="polite">正在读取 Release 状态…</p>
         </div>
@@ -51,11 +52,13 @@
         </figure>
       </section>
 
-      <section class="release-section" id="download" aria-labelledby="release-title">
+      <section class="release-section typeset-grid" id="download" aria-labelledby="release-title">
         <div class="section release-layout">
           <header class="section-intro">
-            <p class="eyebrow">下载</p>
+            <p class="eyebrow">当前版本</p>
             <h2 id="release-title">选择你的电脑系统</h2>
+            <p class="release-card-kicker"><span data-release="channel">Beta 测试版</span><span aria-hidden="true">·</span><span>macOS Apple Silicon</span><span aria-hidden="true">·</span><span>本地优先</span></p>
+            <p class="release-card-name" data-release="name">正在读取本版重点…</p>
             <dl class="release-meta">
               <div><dt>版本</dt><dd data-release="version">正在读取</dd></div>
               <div><dt>标签</dt><dd data-release="tag">正在读取</dd></div>
@@ -124,9 +127,10 @@
 
       <section class="formula-section section" id="formula" aria-labelledby="formula-title">
         <div class="feature-copy">
-          <p class="eyebrow">公式输入</p>
+          <p class="eyebrow">01 / 公式编辑</p>
           <h2 id="formula-title">边看公式，边改 LaTeX</h2>
           <p>公式编辑器同时显示排版结果和 LaTeX 源码。点“插入”后才会写进文档；如果改错，可以一次撤销。</p>
+          <a class="text-link" href="guide/#formula-editor">查看公式编辑指南 <span aria-hidden="true">→</span></a>
         </div>
         <div class="formula-stage" aria-label="公式结构与 LaTeX 源码示例">
           <span class="formula-display">∫<sub>0</sub><sup>1</sup> x² dx = ⅓</span>
@@ -138,9 +142,10 @@
       <section class="ocr-section" id="ocr" aria-labelledby="ocr-title">
         <div class="section feature-row">
           <div class="feature-copy">
-            <p class="eyebrow">图片转公式（可选）</p>
-            <h2 id="ocr-title">从图片识别公式，确认后再插入</h2>
+            <p class="eyebrow">02 / 本地识别</p>
+            <h2 id="ocr-title">从图片到可编辑公式</h2>
             <p>安装 pix2tex 后，可以框选图片里的公式并转换成 LaTeX。识别在本机完成，结果会先交给你检查，不会直接改动文档。</p>
+            <a class="text-link" href="guide/#formula-recognition">查看图片识别指南 <span aria-hidden="true">→</span></a>
           </div>
           <div class="recognition-flow" aria-label="本地公式识别的三个步骤">
             <span><b>图片</b><small>框选公式</small></span>
@@ -155,11 +160,12 @@
       <section class="workspace-section section" id="workspace" aria-labelledby="workspace-title">
         <div class="section-intro split-intro">
           <div>
-            <p class="eyebrow">项目工作区</p>
+            <p class="eyebrow">03 / 项目工作区</p>
             <h2 id="workspace-title">源码、PDF 和项目结构放在同一个窗口</h2>
           </div>
           <p>写长文档时，可以一边编辑源码、一边看 PDF，并用 Block 控制台管理章节、表格、图片和页面布局。界面可以在 90% 到 150% 之间缩放。</p>
         </div>
+        <a class="text-link section-link" href="guide/#workspace">查看工作区指南 <span aria-hidden="true">→</span></a>
         <figure class="workspace-shot">
           <img src="assets/block-console.png" alt="ICSTeX Block 控制台、源码编辑器、PDF 与属性面板" width="1440" height="900" loading="lazy" decoding="async">
           <figcaption>项目结构 / LaTeX 源码 / PDF / 属性</figcaption>
@@ -181,6 +187,17 @@
       </section>
 
       <section class="limits section" id="limits" aria-labelledby="limits-title">
+        <aside class="beta-notice" aria-labelledby="beta-title">
+          <div>
+            <p class="eyebrow">PUBLIC BETA</p>
+            <h2 id="beta-title">正在真实项目中继续打磨。</h2>
+            <p>重要项目请保留 Git 或其他备份。遇到问题时，最好提供能重复出现的操作步骤。</p>
+          </div>
+          <div class="beta-notice-actions">
+            <a class="button button-primary is-disabled" data-release-download="macos-primary" aria-disabled="true">下载 macOS 版</a>
+            <a class="button button-secondary" data-release-link="issues" href="#limits">报告问题</a>
+          </div>
+        </aside>
         <div class="section-intro split-intro">
           <div>
             <p class="eyebrow">使用前请注意</p>
@@ -194,6 +211,7 @@
         <nav class="document-links" aria-label="发布文档">
           <a data-release-document="INSTALLATION.md" href="#limits">安装说明</a>
           <a data-release-document="RELEASE_NOTES.md" href="#limits">版本说明</a>
+          <a data-release-link="releases" href="#limits">全部 Release</a>
           <a data-release-document="SHA256SUMS.txt" href="#limits">SHA-256 校验</a>
           <a data-release-document="THIRD_PARTY_NOTICES.md" href="#limits">第三方说明</a>
         </nav>
@@ -202,7 +220,12 @@
 
     <footer class="site-footer">
       <div><strong translate="no">ICSTeX</strong><span>面向学生的本地 LaTeX 编辑器。</span></div>
-      <div><span data-release="version">release</span><a data-release-link="repository" href="#limits">GitHub</a></div>
+      <nav aria-label="页脚导航">
+        <a href="guide/">使用指南</a>
+        <a href="about/">理念</a>
+        <a data-release-link="repository" href="#limits">GitHub</a>
+        <span data-release="version">正在读取版本…</span>
+      </nav>
     </footer>
     <script src="config.js"></script>
     <script src="app.js"></script>

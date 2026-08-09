@@ -2,7 +2,11 @@
 
 (function () {
   const config = window.ICSTEX_SITE_CONFIG;
-  const releasePath = "release.json";
+  const releaseScript = document.currentScript;
+  const releasePath = new URL(
+    "release.json",
+    releaseScript ? releaseScript.src : document.baseURI,
+  ).href;
 
   function setText(selector, value) {
     document.querySelectorAll(selector).forEach((node) => { node.textContent = value; });
@@ -104,6 +108,7 @@
 
     if (repositoryPublic) {
       setLink("[data-release-link='repository']", `${config.githubBaseUrl}/${release.repository}`);
+      setLink("[data-release-link='issues']", `${config.githubBaseUrl}/${release.repository}/issues`);
       setLink("[data-release-link='releases']", release.releases_url);
       setLink("[data-release-link='limitations']", `${config.githubBaseUrl}/${release.repository}/blob/${documentRef}/release/KNOWN_LIMITATIONS.md`);
       setLink("[data-release-link='architecture']", `${config.githubBaseUrl}/${release.repository}/blob/${documentRef}/docs/DECISION_LOG.md`);

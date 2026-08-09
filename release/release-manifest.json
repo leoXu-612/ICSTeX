@@ -5,8 +5,8 @@
   "tag": "v2.1.0-beta.1",
   "channel": "beta",
   "release_name": "Formula Intelligence",
-  "github_repository_public": false,
-  "github_release_published": false,
+  "github_repository_public": true,
+  "github_release_published": true,
   "assets": [
     {
       "name": "ICSTeX-2.1.0-beta.1-macos-arm64.dmg",

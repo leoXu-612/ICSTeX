@@ -50,8 +50,8 @@
     "SHA256SUMS.txt",
     "THIRD_PARTY_NOTICES.md"
   ],
-  "github_release_published": false,
-  "github_repository_public": false,
+  "github_release_published": true,
+  "github_repository_public": true,
   "limitations": [
     "macOS package is Apple Silicon only and is not notarized.",
     "Windows x64 ZIP and Setup EXE are not built or validated for this beta.",

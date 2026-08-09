@@ -51,8 +51,16 @@ class ReleaseSiteTests(TestCase):
         self.assertEqual(release["tag"], manifest["tag"])
         self.assertEqual(release["channel"], manifest["channel"])
         self.assertEqual(release["repository"], "leoXu-612/ICSTeX")
-        self.assertFalse(release["github_repository_public"])
-        self.assertFalse(release["github_release_published"])
+        self.assertEqual(
+            release["github_repository_public"],
+            manifest["github_repository_public"],
+        )
+        self.assertEqual(
+            release["github_release_published"],
+            manifest["github_release_published"],
+        )
+        self.assertTrue(release["github_repository_public"])
+        self.assertTrue(release["github_release_published"])
         self.assertTrue(any(item["primary_download"] for item in release["assets"]))
 
         primary = next(item for item in release["assets"] if item["primary_download"])

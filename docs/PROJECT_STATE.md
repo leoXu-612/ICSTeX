@@ -1,6 +1,6 @@
 # ICSTeX Project State
 
-更新时间：2026-08-08（Asia/Taipei）
+更新时间：2026-08-09（Asia/Taipei）
 
 本文件是当前已验证状态的权威来源；历史证据写入 `PROJECT_LOG.md`，未来计划写入
 `docs/ROADMAP.md`，长期约束写入 `docs/DECISION_LOG.md`。
@@ -12,7 +12,8 @@
 - 技术栈：Python 3.11+、PySide6、本机 LaTeX distribution、PyInstaller。
 - 产品边界：中文优先、本地文件与本地编译优先、不静默上传用户内容、不捆绑
   MacTeX、TeX Live 或 MiKTeX。
-- `v2.1.0-beta.1` 标签与 `release/2.1` 尚未推送到远端。
+- `v2.1.0-beta.1` 已作为公开 GitHub prerelease 发布；`release/2.1` 包含后续网站
+  发布态元数据提交，版本制品仍由该标签固定。
 - 公开发布候选已加入默认拒绝的本地执行边界；旧安装包早于该修复，必须重建。
 
 ## Verified Capabilities
@@ -46,8 +47,8 @@
 | Windows x64 ZIP | Pending | 当前构建机和 Python 均为 ARM64 |
 | Windows x64 Setup EXE | Blocked by tools | 需要 x64 构建环境和 Inno Setup |
 | Windows TeX acceptance | Blocked by tool | 构建机尚未安装 MiKTeX/TeX Live |
-| Static release website | Platform installer verified locally; protected Vercel target exists | macOS/Windows 安装工作台、两档浏览器验收、Lighthouse 和 10 项专项测试通过；Private/未发布状态禁止 404 出站链接，GitHub Pages 未部署 |
-| GitHub repository / Release | Private / absent | 本机 `gh` 可读取仓库；Connector 无 Private 权限；远端 Release branch、Tag 和 GitHub Release 尚不存在 |
+| Static release website | Public Vercel production deployment | `website-phi-beryl-92.vercel.app`；production READY，SSO Protection 已关闭；10 项专项测试通过 |
+| GitHub repository / Release | Public / published prerelease | `v2.1.0-beta.1`；9 个资产；公开下载端点已匿名验证为 HTTP 200 |
 
 旧的 `dist/ICSTeX-Windows.zip` 未版本化且早于当前源码，不是 2.1.0-beta.1 制品。
 
@@ -70,15 +71,15 @@
 - Windows x64 ZIP/Setup 仍未生成；不能把 ARM64 包改名或宣称为通用 Windows 包。
 - 构建机缺少 Inno Setup，因此 x64 Setup EXE 不能在未补齐构建环境时生成。
 - Windows 构建机缺少 MiKTeX/TeX Live，因此不能把 source-to-PDF 记为已验证。
-- GitHub 仓库仍为 Private，且远端 Tag/Release 不存在；公开下载 URL 在网页中保持禁用。
-- HEAD 中维护者绝对路径已清理；Git 历史仍含低敏工作区路径，公开前必须选择
-  重写历史、建立干净公开仓库，或明确接受其历史可见性。
-- Codex GitHub Connector 仍无法读取该 Private 仓库；本机 GitHub CLI 认证正常，两者权限相互独立。
+- Git 历史已重写；公开远端的提交信息与可达提交内容扫描均无维护者
+  `/Users/leo.xu` 路径，当前源码 tree 在重写前后保持一致。
+- GitHub Actions 在发布写入期间临时禁用，推送没有运行 CI；发布完成后恢复原配置。
 - macOS 仅验证 Apple Silicon，且未 Developer ID 签名或 notarize。
 - 2.1 是 Beta；公式 OCR 结果必须人工检查，重要项目仍需外部版本备份。
 
-公开发布前仍需补齐 Windows x64 构建机、Inno Setup 和 TeX 工具链验收；GitHub
-Release 与 Pages 部署还需要维护者明确授权。其间不再加入产品功能。
+公开 Beta 已如实排除 Windows x64/Setup，并保留 Windows ARM64 与 macOS 的既有
+限制。后续仍需补齐 Windows x64 构建机、Inno Setup、Windows TeX 验收和 macOS
+notarization；在新的 bounded assignment 前不向该 Release 追加产品功能。
 
 ## Maintenance Rule
 

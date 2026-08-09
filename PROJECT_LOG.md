@@ -757,6 +757,23 @@ must link here instead of repeating old task details.
   两端 Best Practices 与 SEO 均为 100；
 - 10 项官网专项测试、Release 一致性、`compileall`、720 项完整离屏测试与
   `packaging/preflight.sh` 全部通过；未修改仓库可见性，未推送或创建远端 Release。
+
+## 2026-08-09 - Public 2.1 Beta Release and Download Site
+
+- Rewrote the public Git history with explicit leases after a complete backup,
+  full-history maintainer-path scan, unchanged current tree verification, 731
+  passing tests, and preflight; fresh remote history scans contain no
+  `/Users/leo.xu` path.
+- Published `v2.1.0-beta.1` as a public GitHub prerelease with nine retained
+  assets. Anonymous HEAD requests returned HTTP 200 for the macOS DMG/ZIP,
+  Windows ARM64 ZIP, and source ZIP.
+- Enabled the generated website release flags in commit `ef1d0b2`, with GitHub
+  Actions manually disabled before the push; no CI was intentionally run.
+- Deployed `website/` directly to Vercel production as deployment
+  `dpl_2AGNS5Pg6iZv2yMW9XqxLeFowPuf`; state is READY, production aliases are
+  assigned, SSO Protection is disabled, and Git fork protection remains enabled.
+- Release-site consistency, 10 focused website tests, `compileall`, 731-test
+  offscreen suite, and `packaging/preflight.sh` passed before publication.
 ## 2026-08-08 - Public-release security boundary
 
 - Standard desktop security scan identified seven publication blockers across

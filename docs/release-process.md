@@ -47,8 +47,12 @@ bash tools/deploy_release_site.sh --prepare
    说明和限制；
 4. 发布 GitHub Release 后，将 manifest 的 `github_release_published` 设为 `true`，
    重新生成 `website/release.json` 并提交；
-5. 执行受环境变量保护的 `--push`，再在 GitHub Pages 中选择 `gh-pages` / root；
-6. 以无缓存浏览器检查首页、下载链接、移动端和 SHA-256。
+5. 选择一种静态托管路径：执行受环境变量保护的 `--push` 并在 GitHub Pages 中选择
+   `gh-pages` / root，或从 `website/` 直接部署到 Vercel production；Vercel 仅托管
+   静态页面，GitHub Releases 继续作为下载与版本真值；
+6. Vercel 发布必须确认 production deployment 为 `READY`，并关闭阻止匿名访问的
+   SSO/password protection；保留 Git fork protection；
+7. 以无缓存浏览器检查首页、下载链接、移动端和 SHA-256。
 
 在没有明确批准时，禁止 `git push`、`git push --tags`、`gh release create`、
 `gh release publish`、`git push origin gh-pages` 或任何替代性的线上部署。

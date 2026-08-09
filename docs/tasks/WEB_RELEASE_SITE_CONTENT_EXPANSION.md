@@ -50,3 +50,7 @@ Playwright browser evidence:
 The static site can be deployed directly to the existing Vercel production project.
 GitHub Actions workflows must not be triggered for this slice. GitHub Releases
 remains the artifact source of truth.
+
+Deployment evidence: Vercel production `dpl_D71b854e1vvoJa4GAwfAxnEmFAfn` returned
+`READY` and retained `https://website-phi-beryl-92.vercel.app`; Actions were restored
+to `active` after the guarded branch push, with no run created for commit `22ecb00`.

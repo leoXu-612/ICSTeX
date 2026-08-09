@@ -811,6 +811,13 @@ must link here instead of repeating old task details.
   `packaging/preflight.sh` passed. Playwright verified 390/430/1024/1280/1440 px
   homepage widths, Guide/About dynamic loading, platform tab keyboard/deep-link
   behavior, skip-link focus and no console warnings/errors.
+- Committed as `22ecb00 website: add guide and philosophy content architecture` and
+  pushed to `release/2.1` while both GitHub Actions workflows were temporarily
+  disabled; `gh run list` showed no run for the new SHA. Workflows were restored to
+  active immediately afterward.
+- Deployed the committed `website/` to Vercel Production as
+  `dpl_D71b854e1vvoJa4GAwfAxnEmFAfn`; deployment inspection returned `READY`, the
+  existing public alias remained assigned, and SSO Protection remained disabled.
 ## 2026-08-08 - Public-release security boundary
 
 - Standard desktop security scan identified seven publication blockers across

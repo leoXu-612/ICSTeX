@@ -81,5 +81,6 @@ class PackagingDependencyTests(TestCase):
         self.assertIn('WINDOWS_ARCH in x64 arm64', preflight_script)
         self.assertIn('Windows-$WINDOWS_ARCH.zip', preflight_script)
         self.assertIn("app tests packaging tools website docs", source_archive_script)
+        self.assertIn("website docs skills", source_archive_script)
         self.assertIn("--exclude 'release.json'", source_archive_script)
         self.assertIn("release/*.md release/*-verification.txt", source_archive_script)

@@ -12,16 +12,13 @@ from pathlib import Path
 from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtGui import QUndoStack
 
-from app.core.blocks.block_renderer import RenderPolicy, render_block, required_packages_for_block
+from app.core.blocks.assembly import build_latex_files
 from app.core.blocks.layout import LayoutNode
-from app.core.blocks.layout_renderer import render_layout
-from app.core.blocks.layout_solver import solve_layout
 from app.core.blocks.project_repository import save_project
 from app.core.blocks.registry import BlockRegistry
 from app.core.blocks.source_registry import SourceRecord
 from app.core.blocks.table_model import TableData, TableEditorModel
 from app.core.blocks.theme import AppTheme, DocumentTheme
-from app.core.blocks.theme_renderer import render_document_theme_sty
 from app.core.compiler import BuildPurpose, CompileManager
 from app.core.latex_tools import LaTeXEngine, detect_toolchain
 from app.gui.blocks import profile
@@ -182,57 +179,20 @@ class ProjectSession(QObject):
         watch = profile.Stopwatch()
         stats = {"considered": 0, "written": 0, "unchanged": 0, "bytes_written": 0}
         self.sync_table_to_registry()
-        blocks_dir = project / "blocks"
-        blocks_dir.mkdir(parents=True, exist_ok=True)
-        block_latex: dict[str, str] = {}
-        for block in self.registry.blocks():
-            latex = render_block(
-                block,
-                in_box=True,
-                policy=RenderPolicy(
-                    allow_trusted_raw_latex=getattr(self, "_raw_latex_authorized", False),
-                    project_root=project,
-                ),
-            )
-            path = blocks_dir / f"{block.id}.tex"
+        generated = build_latex_files(
+            project,
+            registry=self.registry,
+            layout=self.layout,
+            document_theme=self.document_theme,
+            allow_trusted_raw_latex=getattr(self, "_raw_latex_authorized", False),
+        )
+        for path, text in generated.items():
             stats["considered"] += 1
-            if _write_if_changed(path, latex):
+            if _write_if_changed(path, text):
                 stats["written"] += 1
-                stats["bytes_written"] += len(latex.encode("utf-8"))
+                stats["bytes_written"] += len(text.encode("utf-8"))
             else:
                 stats["unchanged"] += 1
-            block_latex[block.id] = f"\\input{{blocks/{block.id}.tex}}\n"
-        body = render_layout(solve_layout(self.layout, 426.0), block_latex) if self.layout is not None else ""
-        packages = sorted(
-            {"graphicx"}
-            | {package for block in self.registry.blocks() for package in required_packages_for_block(block, in_box=True)}
-        )
-        styles = project / "styles"
-        styles.mkdir(parents=True, exist_ok=True)
-        sty = render_document_theme_sty(self.document_theme)
-        sty_path = styles / "icstex-generated.sty"
-        stats["considered"] += 1
-        if _write_if_changed(sty_path, sty):
-            stats["written"] += 1
-            stats["bytes_written"] += len(sty.encode("utf-8"))
-        else:
-            stats["unchanged"] += 1
-        main = project / "main.tex"
-        main_text = (
-            "\\documentclass{ctexart}\n"
-            + "".join(f"\\usepackage{{{package}}}\n" for package in packages)
-            + "\\input{styles/icstex-generated.sty}\n"
-            + "\\graphicspath{{assets/images/}}\n"
-            + "\\begin{document}\n"
-            + body
-            + "\\end{document}\n"
-        )
-        stats["considered"] += 1
-        if _write_if_changed(main, main_text):
-            stats["written"] += 1
-            stats["bytes_written"] += len(main_text.encode("utf-8"))
-        else:
-            stats["unchanged"] += 1
         self._last_assemble_stats = stats
         profile.log(
             "ASSEMBLE_FINISHED",
@@ -244,7 +204,7 @@ class ProjectSession(QObject):
             bytes_written=stats["bytes_written"],
             elapsed_ms=round(watch.elapsed_ms(), 2),
         )
-        return main
+        return project / "main.tex"
 
     def request_preview(self, reason: str) -> None:
         """Debounced, single-process PREVIEW compile through one CompileManager."""
@@ -340,5 +300,6 @@ def _write_if_changed(path: Path, text: str) -> bool:
             return False
     except OSError:
         pass
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
     return True

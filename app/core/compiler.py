@@ -112,6 +112,7 @@ class CompileManager:
         on_finished: FinishedCallback | None = None,
         preview_preparer: PreviewPreparer | None = None,
         metrics_hook: Callable[[str, str], None] | None = None,
+        restricted_io: bool = False,
     ) -> None:
         self.root_file = normalize_path(root_file)
         self.output_dir = normalize_path(output_dir) if output_dir else build_dir_for(self.root_file)
@@ -122,6 +123,7 @@ class CompileManager:
         self.on_finished = on_finished
         self.preview_preparer = preview_preparer
         self.metrics_hook = metrics_hook
+        self.restricted_io = restricted_io
         self._timer: threading.Timer | None = None
         self._timer_generation = 0
         self._lock = threading.Lock()
@@ -380,7 +382,12 @@ class CompileManager:
                 purpose=purpose,
             )
 
-        command = self.toolchain.compile_command(self.root_file, output_dir, self.engine)
+        command_root = self.root_file
+        command_output = output_dir
+        if self.restricted_io:
+            command_root = Path(os.path.relpath(self.root_file, self.root_file.parent))
+            command_output = Path(os.path.relpath(output_dir, self.root_file.parent))
+        command = self.toolchain.compile_command(command_root, command_output, self.engine)
         self._log("运行命令：" + " ".join(command))
         timed_out = False
         try:
@@ -391,7 +398,7 @@ class CompileManager:
                 "encoding": "utf-8",
                 "errors": "replace",
                 "cwd": self.root_file.parent,
-                "env": latex_subprocess_env(texinputs_prefix=preparation.overlay_dir),
+                "env": self._compile_environment(preparation.overlay_dir),
             }
             if os.name == "nt":
                 # A new process group lets stop/timeout kill latexmk and the
@@ -480,6 +487,17 @@ class CompileManager:
                 preparation.asset_paths if purpose is BuildPurpose.PREVIEW else ()
             ),
         )
+
+    def _compile_environment(self, overlay_dir: Path | None) -> dict[str, str]:
+        environment = latex_subprocess_env(texinputs_prefix=overlay_dir)
+        if self.restricted_io:
+            # TeX's paranoid mode rejects absolute and parent-path document IO
+            # while retaining reads from the working tree and installed TeX
+            # distribution.  This complements -no-shell-escape; it does not
+            # replace project-root validation at the caller boundary.
+            environment["openin_any"] = "p"
+            environment["openout_any"] = "p"
+        return environment
 
     @staticmethod
     def _terminate_process(process: subprocess.Popen[str]) -> None:

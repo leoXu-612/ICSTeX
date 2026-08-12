@@ -1,6 +1,6 @@
 # FORCODEX.md
 
-Timestamp: 2026-08-09 (2.1.0-beta.1 post-release boundary)
+Timestamp: 2026-08-13 (bounded MCP and Agent integration)
 
 This is Codex's current bounded brief. Replace it when the assignment changes;
 do not append completed-task history.
@@ -15,31 +15,33 @@ URLs. Publication history was sanitized before visibility changed.
 
 ## Next Bounded Assignment
 
-Maintain the post-release boundary for 2.1.0-beta.1:
+The local stdio MCP adapter and `icstex-control` Skill are implemented and
+verified on `codex/icstex-mcp`. The next assignment is maintainer acceptance:
 
-1. Keep Windows x64 and Setup marked unavailable unless a real x64/Inno Setup
-   environment becomes available; never relabel ARM64.
-2. Do not replace published assets without a new versioned candidate and full
-   checksum, packaging, and website regeneration.
-3. Preserve GitHub Releases as the artifact authority and Vercel as static
-   hosting only; do not hand-edit `website/release.json`.
-4. Do not manually run or retry GitHub Actions until the maintainer explicitly
-   requests CI diagnosis. Record user-reported post-release failures before
-   changing the published branch or assets.
+1. Review the MCP grant model, project-root boundary, CAS/snapshot behavior and
+   TeX paranoid I/O before merging.
+2. Install the optional SDK with `python3 -m pip install -e '.[agent]'`, register
+   one real project read-only, then explicitly enable only the capabilities that
+   acceptance needs.
+3. If local OCR is part of acceptance, install the existing ICSTeX pix2tex and
+   RapidOCR runtimes through the app and run real formula/text inference; current
+   source tests cover fail-closed and candidate sanitization, not model quality.
+4. Rebuild packages only under a separate explicit release assignment.
 
-Do not add product features or reuse the stale unversioned Windows ZIP.
+Do not trigger GitHub Actions, publish assets, add a remote daemon, or build a
+general plugin system.
 
 ## Required Context
 
 - Operations: `AGENTS.md`
 - Current truth: `docs/PROJECT_STATE.md`
-- Release decision: `docs/DECISION_LOG.md` D008
-- Preview/final build decision: `docs/DECISION_LOG.md` D012
+- Security boundary: `SECURITY.md`
+- Architecture decisions: `docs/DECISION_LOG.md` D003, D006, D007, D014
 - Priorities: `docs/ROADMAP.md`
 - Website release gate: `docs/tasks/WEB_RELEASE_SITE_REFACTOR.md`
 - Memory lifecycle: `docs/MEMORY_MANAGEMENT.md`
 
 ## Handoff Rule
 
-After verified completion, replace this brief with the next bounded assignment.
+After maintainer acceptance, replace this brief with the next bounded assignment.
 Put historical commands, hashes, and results in `PROJECT_LOG.md`, not here.

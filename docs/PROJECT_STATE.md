@@ -1,13 +1,14 @@
 # ICSTeX Project State
 
-更新时间：2026-08-09（Asia/Taipei）
+更新时间：2026-08-13（Asia/Taipei）
 
 本文件是当前已验证状态的权威来源；历史证据写入 `PROJECT_LOG.md`，未来计划写入
 `docs/ROADMAP.md`，长期约束写入 `docs/DECISION_LOG.md`。
 
 ## Product and Source State
 
-- 权威工作区：本仓库根目录；当前 Git 分支 `release/2.1`。
+- 权威工作区：本仓库根目录；当前开发分支 `codex/icstex-mcp`，基于
+  `release/2.1`。
 - 当前版本：`2.1.0-beta.1`；版本来源为 `app/__init__.py`。
 - 技术栈：Python 3.11+、PySide6、本机 LaTeX distribution、PyInstaller。
 - 产品边界：中文优先、本地文件与本地编译优先、不静默上传用户内容、不捆绑
@@ -27,10 +28,14 @@
 - Formula Editor 2.0、显式提交、危险 LaTeX 过滤、可选本地 pix2tex 识别与人工复核。
 - UI Scale 90/100/110/125/150%、响应式欢迎页、标签栏和 PDF 工具栏。
 - RapidOCR 本地运行时和 Text Block 链路保留在源码中，但 2.1 Beta 1 用户入口禁用。
+- 当前工作源码新增项目绑定、默认只读的 stdio MCP adapter 与配套
+  `icstex-control` Skill。文档/Block 写入采用 CAS、项目锁、原子替换和原始字节
+  快照；编译、联网、识别、输入及导出均由 Harness 启动参数显式授权，MCP 编译
+  额外启用 TeX paranoid 文件 I/O 策略。
 
 ## Verification Baseline
 
-2026-08-08 安全边界修复后的当前源码重新验证：
+2026-08-08 安全边界修复后的已发布基线：
 
 - `bash packaging/preflight.sh`：通过。
 - `python3 -m compileall -q app tests packaging/install_build_dependencies.py`：通过。
@@ -38,11 +43,25 @@
 - `bash tools/run_mvp_ci.sh`：72 项模块化子集、716 项完整套件与 Demo 构建通过。
 - macOS arm64 打包应用冷启动与 Demo source-to-PDF：已验证。
 
+2026-08-13 MCP 工作源码验证：
+
+- `python3 -m compileall -q app tests packaging/install_build_dependencies.py`：通过。
+- MCP/编译/安全 focused suite：62 tests passed。
+- 真实 stdio MCP initialize/list/call 握手：通过，11 个语义工具可发现。
+- `QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests`：764 tests passed。
+- 本机 TeX Live 受限 FINAL 编译：通过；项目外 absolute input 被拒绝，项目源文件
+  未被 `openout` 覆盖。
+- Skill 结构官方 `quick_validate.py`：通过（PyYAML 仅安装在临时校验目录，未加入
+  产品依赖）。当前机器的 pix2tex/RapidOCR 隔离 Python 未安装，因此只验证了
+  runtime-missing fail-closed 与 mocked candidate；未进行真实 OCR 推理。
+
+该源码尚未重新打包或发布，不改变 2.1.0-beta.1 制品状态。
+
 ## Release Matrix
 
 | 对象 | 状态 | 说明 |
 | --- | --- | --- |
-| 当前源码 | Verified, release hardening complete | 2.1.0-beta.1；731 tests passed |
+| 当前源码 | Verified, MCP source ahead of release | 2.1.0-beta.1；764 tests passed；未打包 |
 | macOS arm64 DMG/ZIP | Verified, rebuilt | hardened source；ad-hoc signed、未 notarize |
 | clean source ZIP | Verified, rebuilt | hardened source；publication hygiene scan passed |
 | Windows ARM64 ZIP | Verified beta artifact, rebuilt | Windows-local `C:\w3`；无系统 Python 启动通过 |

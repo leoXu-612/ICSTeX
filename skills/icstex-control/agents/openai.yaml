@@ -1,0 +1,4 @@
+interface:
+  display_name: "ICSTeX Control"
+  short_description: "Safely operate one local ICSTeX project through MCP"
+  default_prompt: "Use $icstex-control to inspect and operate this ICSTeX project through its local MCP server."

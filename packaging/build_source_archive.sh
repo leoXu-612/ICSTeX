@@ -13,7 +13,7 @@ cd "$ROOT_DIR"
 rm -rf "$BUILD_DIR"
 mkdir -p "$STAGE_DIR" "$DIST_DIR"
 
-for directory in app tests packaging tools website docs; do
+for directory in app tests packaging tools website docs skills; do
   mkdir -p "$STAGE_DIR/$directory"
   rsync -a \
     --exclude '.DS_Store' \

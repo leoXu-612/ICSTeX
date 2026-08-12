@@ -131,6 +131,15 @@ DeepSeek assignment 只实现纯 core contract；GUI、MathLive/QtWebEngine、pa
 - 在没有明确扩展需求前建设通用插件系统；
 - 为增加功能数量而复制 Overleaf 或大型 IDE 的全部能力。
 
+## Delivered - Agent / Harness MCP Boundary
+
+本地 stdio MCP 已提供项目检查、文档 CAS 读写、搜索/诊断/字数/引用/SyncTeX、
+Block CRUD/布局/主题/来源/组装、受限编译、本地 OCR candidate、DOI/arXiv 元数据和
+受权目录导出。Skill 只描述正确工作流，权限、路径与并发保护由 core 强制。
+
+后续只在真实工作流缺口出现时增加语义能力；不加入 GUI 遥控、后台 daemon、任意
+文件系统访问、Agent 自授权、OCR 自动落盘或通用插件系统。
+
 ## Feature Admission Checklist
 
 进入实现前必须回答：

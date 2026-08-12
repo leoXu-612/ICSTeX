@@ -818,6 +818,31 @@ must link here instead of repeating old task details.
 - Deployed the committed `website/` to Vercel Production as
   `dpl_D71b854e1vvoJa4GAwfAxnEmFAfn`; deployment inspection returned `READY`, the
   existing public alias remained assigned, and SSO Protection remained disabled.
+
+## 2026-08-13 - Project-Scoped MCP and Agent Skill
+
+- Added an optional local stdio MCP adapter with 11 semantic tools covering
+  project inspection, CAS document writes, image import, queries, Block state,
+  compilation, local recognition candidates, reference metadata and export.
+- Bound each process to one canonical root. Traversal, symlink and non-regular
+  inputs fail closed; host startup grants control write, compile, network,
+  recognition, raw-LaTeX, external input and export authority.
+- Added project locking, SHA-256/revision CAS, atomic replacement and verified
+  byte-exact preimage snapshots. Recognition never writes automatically.
+- Extracted deterministic Block LaTeX assembly into `app/core` for GUI/MCP reuse.
+  MCP compilation adds relative entry/output arguments and TeX
+  `openin_any/openout_any=p` to the existing no-rc, no-shell and timeout rules.
+- Added the repository-owned `icstex-control` Skill, optional `mcp>=1.28,<2`
+  dependency, `icstex-mcp` entry point, Codex registration instructions and
+  source-archive inclusion.
+- Verification: compileall passed; 62 focused tests passed; a real stdio MCP
+  initialize/list/call handshake exposed all 11 tools; 764 offscreen tests
+  passed; a real restricted TeX Live FINAL compile succeeded while external
+  absolute input and project-source `openout` overwrite were blocked.
+- The official Skill validator passed after PyYAML was supplied only through a
+  temporary validation directory, without changing product dependencies. Local
+  pix2tex/RapidOCR isolated Python runtimes were absent, so real model inference
+  remains an acceptance item.
 ## 2026-08-08 - Public-release security boundary
 
 - Standard desktop security scan identified seven publication blockers across

@@ -868,3 +868,17 @@ must link here instead of repeating old task details.
 - Release metadata regeneration, all recorded SHA-256 checks, source archive
   integrity/exclusion inspection, Windows PE AArch64 inspection, and 10 website
   release tests passed.
+
+## 2026-08-13 - MCP Interface and Skill Contract Hardening
+
+- Kept the existing 11-tool semantic surface and added standard MCP behavior
+  annotations for read-only, destructive, additive and open-world operations.
+- Replaced free-form protocol parameters for query kind, Block operation,
+  compile action/purpose/engine, recognition kind and export kind with bounded
+  enum schemas; core grant and validation checks remain authoritative.
+- Clarified the `icstex-control` Skill's path rule and mapped each host startup
+  grant to the operations that require it.
+- Verification: official Skill validation passed; the installed `mcp` SDK was
+  1.28.1; 62 focused tests and 764 offscreen tests passed; compileall passed;
+  the real stdio handshake verified all tools, annotations, enum schemas and a
+  read-only `inspect_project` call.

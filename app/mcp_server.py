@@ -7,9 +7,30 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from app.core.agent_workspace import AgentGrants, AgentWorkspace
+
+
+QueryKind = Literal[
+    "search",
+    "history",
+    "environment",
+    "assets",
+    "blocks",
+    "outline",
+    "word-count",
+    "references",
+    "diagnostics",
+    "synctex-source-to-pdf",
+    "synctex-pdf-to-source",
+]
+BlockOperation = Literal["create", "update", "delete", "set-layout", "set-theme", "set-sources", "assemble"]
+CompileAction = Literal["run", "stop"]
+CompilePurpose = Literal["preview", "final"]
+CompileEngine = Literal["auto", "pdflatex", "xelatex", "lualatex"]
+RecognitionKind = Literal["formula", "text"]
+ExportKind = Literal["pdf", "package"]
 
 
 SERVER_INSTRUCTIONS = """Operate one local ICSTeX project.
@@ -27,26 +48,41 @@ same project closed or read-only in the GUI while mutating it through MCP.
 def create_server(workspace: AgentWorkspace):
     try:
         from mcp.server.fastmcp import FastMCP
+        from mcp.types import ToolAnnotations
     except ImportError as exc:  # pragma: no cover - exercised by CLI install guidance
         raise RuntimeError(
             "缺少 MCP SDK；请运行 `python3 -m pip install -e '.[agent]'`。"
         ) from exc
 
     server = FastMCP("ICSTeX", instructions=SERVER_INSTRUCTIONS)
+    read_only = ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False)
+    mutating = ToolAnnotations(
+        readOnlyHint=False,
+        destructiveHint=True,
+        idempotentHint=False,
+        openWorldHint=False,
+    )
+    additive = ToolAnnotations(
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=False,
+    )
+    network = ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=True)
 
-    @server.tool()
+    @server.tool(annotations=read_only)
     def inspect_project() -> dict[str, Any]:
         """Inspect root, files, Block state, toolchain, grants, and interaction limits."""
 
         return workspace.inspect_project()
 
-    @server.tool()
+    @server.tool(annotations=read_only)
     def read_document(path: str, snapshot_id: str = "") -> dict[str, Any]:
         """Read an allowed project text file or a verified preimage snapshot."""
 
         return workspace.read_document(path, snapshot_id=snapshot_id)
 
-    @server.tool()
+    @server.tool(annotations=mutating)
     def write_document(
         path: str,
         text: str,
@@ -62,7 +98,7 @@ def create_server(workspace: AgentWorkspace):
             encoding=encoding,
         )
 
-    @server.tool()
+    @server.tool(annotations=mutating)
     def restore_snapshot(
         path: str,
         snapshot_id: str,
@@ -76,7 +112,7 @@ def create_server(workspace: AgentWorkspace):
             expected_sha256=expected_sha256,
         )
 
-    @server.tool()
+    @server.tool(annotations=mutating)
     def import_asset(
         input_id: str,
         destination_path: str,
@@ -92,9 +128,9 @@ def create_server(workspace: AgentWorkspace):
             expected_sha256=expected_sha256,
         )
 
-    @server.tool()
+    @server.tool(annotations=read_only)
     def query_project(
-        kind: str,
+        kind: QueryKind,
         path: str = "main.tex",
         query: str = "",
         case_sensitive: bool = False,
@@ -118,9 +154,9 @@ def create_server(workspace: AgentWorkspace):
             y=y,
         )
 
-    @server.tool()
+    @server.tool(annotations=mutating)
     def mutate_blocks(
-        operation: str,
+        operation: BlockOperation,
         payload: dict[str, Any],
         expected_project_sha256: str,
     ) -> dict[str, Any]:
@@ -132,12 +168,12 @@ def create_server(workspace: AgentWorkspace):
             expected_project_sha256=expected_project_sha256,
         )
 
-    @server.tool()
+    @server.tool(annotations=mutating)
     def compile_project(
-        action: str = "run",
+        action: CompileAction = "run",
         root_path: str = "main.tex",
-        purpose: str = "preview",
-        engine: str = "auto",
+        purpose: CompilePurpose = "preview",
+        engine: CompileEngine = "auto",
         assemble_blocks: bool = False,
         expected_project_sha256: str = "",
     ) -> dict[str, Any]:
@@ -152,21 +188,21 @@ def create_server(workspace: AgentWorkspace):
             expected_project_sha256=expected_project_sha256,
         )
 
-    @server.tool()
-    def recognize_image(kind: str, image_path: str, temperature: float = 0.01) -> dict[str, Any]:
+    @server.tool(annotations=read_only)
+    def recognize_image(kind: RecognitionKind, image_path: str, temperature: float = 0.01) -> dict[str, Any]:
         """Run installed local OCR and return a review-only candidate without writing."""
 
         return workspace.recognize_image(kind, image_path, temperature=temperature)
 
-    @server.tool()
+    @server.tool(annotations=network)
     def fetch_reference_metadata(raw_text: str) -> dict[str, Any]:
         """Fetch DOI or arXiv BibTeX through ICSTeX's fixed HTTPS allowlist."""
 
         return workspace.fetch_reference_metadata(raw_text)
 
-    @server.tool()
+    @server.tool(annotations=additive)
     def export_artifact(
-        kind: str,
+        kind: ExportKind,
         target_path: str,
         root_path: str = "main.tex",
         assemble_blocks: bool = False,

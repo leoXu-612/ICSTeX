@@ -31,7 +31,8 @@
 - 当前工作源码新增项目绑定、默认只读的 stdio MCP adapter 与配套
   `icstex-control` Skill。文档/Block 写入采用 CAS、项目锁、原子替换和原始字节
   快照；编译、联网、识别、输入及导出均由 Harness 启动参数显式授权，MCP 编译
-  额外启用 TeX paranoid 文件 I/O 策略。
+  额外启用 TeX paranoid 文件 I/O 策略。11 个工具已声明标准 MCP 只读、破坏性与
+  open-world hints；有限选项以枚举 schema 暴露，宿主可在调用前校验参数和风险。
 
 ## Verification Baseline
 
@@ -47,7 +48,8 @@
 
 - `python3 -m compileall -q app tests packaging/install_build_dependencies.py`：通过。
 - MCP/编译/安全 focused suite：62 tests passed。
-- 真实 stdio MCP initialize/list/call 握手：通过，11 个语义工具可发现。
+- 真实 stdio MCP initialize/list/call 握手：通过，11 个语义工具、行为注解与枚举
+  schema 可发现。
 - `QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests`：764 tests passed。
 - 本机 TeX Live 受限 FINAL 编译：通过；项目外 absolute input 被拒绝，项目源文件
   未被 `openout` 覆盖。

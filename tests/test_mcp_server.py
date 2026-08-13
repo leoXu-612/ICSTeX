@@ -27,7 +27,8 @@ class MCPServerProtocolTests(TestCase):
                 async with ClientSession(reader, writer) as session:
                     await session.initialize()
                     tools = await session.list_tools()
-                    names = {tool.name for tool in tools.tools}
+                    by_name = {tool.name: tool for tool in tools.tools}
+                    names = set(by_name)
                     self.assertEqual(
                         names,
                         {
@@ -44,6 +45,37 @@ class MCPServerProtocolTests(TestCase):
                             "export_artifact",
                         },
                     )
+                    for name in ("inspect_project", "read_document", "query_project", "recognize_image"):
+                        annotations = by_name[name].annotations
+                        self.assertIsNotNone(annotations)
+                        self.assertTrue(annotations.readOnlyHint)
+                        self.assertFalse(annotations.openWorldHint)
+                    for name in ("write_document", "restore_snapshot", "import_asset", "mutate_blocks", "compile_project"):
+                        annotations = by_name[name].annotations
+                        self.assertIsNotNone(annotations)
+                        self.assertFalse(annotations.readOnlyHint)
+                        self.assertTrue(annotations.destructiveHint)
+                    self.assertTrue(by_name["fetch_reference_metadata"].annotations.openWorldHint)
+                    self.assertFalse(by_name["export_artifact"].annotations.destructiveHint)
+
+                    enum_contracts = {
+                        ("query_project", "kind"): [
+                            "search", "history", "environment", "assets", "blocks", "outline",
+                            "word-count", "references", "diagnostics", "synctex-source-to-pdf",
+                            "synctex-pdf-to-source",
+                        ],
+                        ("mutate_blocks", "operation"): [
+                            "create", "update", "delete", "set-layout", "set-theme", "set-sources", "assemble",
+                        ],
+                        ("compile_project", "action"): ["run", "stop"],
+                        ("compile_project", "purpose"): ["preview", "final"],
+                        ("compile_project", "engine"): ["auto", "pdflatex", "xelatex", "lualatex"],
+                        ("recognize_image", "kind"): ["formula", "text"],
+                        ("export_artifact", "kind"): ["pdf", "package"],
+                    }
+                    for (tool_name, argument), expected in enum_contracts.items():
+                        properties = by_name[tool_name].inputSchema["properties"]
+                        self.assertEqual(properties[argument]["enum"], expected)
                     response = await session.call_tool("inspect_project", {})
                     self.assertFalse(response.isError)
                     self.assertEqual(response.structuredContent["rootFile"], "main.tex")

@@ -41,8 +41,8 @@ the GUI or bypass MCP safety checks with direct shell writes.
   write authority. Without it, trusted raw-LaTeX Blocks remain inert.
 - MCP compilation forces no rc files, no shell escape, finite timeouts, and
   TeX paranoid file I/O; it is intentionally stricter than ordinary CLI TeX.
-- Paths are POSIX-style and project-relative. Never pass absolute paths, `..`,
-  URLs, drive letters, or symlinks.
+- Tool path arguments are POSIX-style and project-relative. Never pass absolute
+  paths, `..`, URLs, drive letters, or symlinks.
 - Keep the same project closed or read-only in the ICSTeX GUI while using MCP
   mutations. MCP cannot see unsaved GUI buffers or update GUI in-memory state.
 - Network lookup sends only an explicit DOI/arXiv identifier to ICSTeX's fixed
@@ -74,6 +74,16 @@ For bounded write and compile work:
 ```bash
 icstex-mcp --project-root /absolute/path/to/project --allow-write --allow-compile
 ```
+
+Add grants only for the requested operation:
+
+- Editing and Block assembly: `--allow-write`.
+- Compile and SyncTeX: `--allow-compile`.
+- DOI/arXiv lookup: `--allow-network`.
+- Local OCR candidates: `--allow-recognition`.
+- External image import: `--allow-input /approved/file-or-directory` plus write.
+- New PDF/package export: `--export-root /approved/output-directory`; PDF export
+  also needs compile.
 
 Do not install/remove OCR runtimes, change system packages, or expand input or
 export roots through MCP. Those remain explicit host/user setup actions.

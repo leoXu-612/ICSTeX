@@ -1,6 +1,6 @@
 # FORCODEX.md
 
-Timestamp: 2026-08-13 (bounded MCP and Agent integration)
+Timestamp: 2026-08-13 (bounded MCP interface acceptance)
 
 This is Codex's current bounded brief. Replace it when the assignment changes;
 do not append completed-task history.
@@ -16,7 +16,10 @@ URLs. Publication history was sanitized before visibility changed.
 ## Next Bounded Assignment
 
 The local stdio MCP adapter and `icstex-control` Skill are implemented and
-verified on `codex/icstex-mcp`. The next assignment is maintainer acceptance:
+verified on `codex/icstex-mcp`. Tool schemas expose bounded enums and standard
+read-only/destructive/open-world annotations; these remain hints, while core
+grants and validation remain authoritative. The next assignment is maintainer
+acceptance:
 
 1. Review the MCP grant model, project-root boundary, CAS/snapshot behavior and
    TeX paranoid I/O before merging.

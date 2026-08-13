@@ -882,3 +882,18 @@ must link here instead of repeating old task details.
   1.28.1; 62 focused tests and 764 offscreen tests passed; compileall passed;
   the real stdio handshake verified all tools, annotations, enum schemas and a
   read-only `inspect_project` call.
+
+## 2026-08-13 - Audited ICSTeX Control Skill Revision
+
+- Audited the maintainer-provided 638-line Skill candidate against the current
+  11-tool MCP schema, core responses, grants, CAS rules and D015 boundary.
+- Replaced the repository Skill with a 122-line revision that retains the
+  candidate's useful untrusted-content, no-shell-fallback, diagnostic,
+  visual-review and failure-handling guidance without duplicating the existing
+  workflow.
+- Removed unsupported claims about project revisions, transaction IDs, compile
+  profiles, bibliography/job/cache metadata, asset deduplication, `CHECK_SKIPPED`
+  and a nonexistent doctor command.
+- Official Skill validation, an AST-to-Skill tool-contract check and repository
+  to global-symlink comparison passed. Compileall, 62 focused MCP/core tests and
+  all 764 offscreen tests also passed.

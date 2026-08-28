@@ -1,6 +1,6 @@
 # ICSTeX Roadmap
 
-更新时间：2026-08-08（Asia/Taipei）
+更新时间：2026-08-28（Asia/Taipei）
 
 本文件描述产品与技术路线，不是功能愿望清单。每个进入实施的项目都必须
 同时满足用户价值、稳定性、可维护性和可验证性要求。
@@ -135,7 +135,9 @@ DeepSeek assignment 只实现纯 core contract；GUI、MathLive/QtWebEngine、pa
 
 本地 stdio MCP 已提供项目检查、文档 CAS 读写、搜索/诊断/字数/引用/SyncTeX、
 Block CRUD/布局/主题/来源/组装、受限编译、本地 OCR candidate、DOI/arXiv 元数据和
-受权目录导出。Skill 只描述正确工作流，权限、路径与并发保护由 core 强制。
+受权目录导出。协议调度复用官方 MCP SDK 2.x；同项目读取有界并发，修改/编译/导出
+保持 FIFO 独占，不同项目通过独立命名实例并行。Skill 只描述正确工作流，权限、
+路径与并发保护由 core 强制。
 
 后续只在真实工作流缺口出现时增加语义能力；不加入 GUI 遥控、后台 daemon、任意
 文件系统访问、Agent 自授权、OCR 自动落盘或通用插件系统。

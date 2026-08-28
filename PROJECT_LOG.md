@@ -897,3 +897,30 @@ must link here instead of repeating old task details.
 - Official Skill validation, an AST-to-Skill tool-contract check and repository
   to global-symlink comparison passed. Compileall, 62 focused MCP/core tests and
   all 764 offscreen tests also passed.
+
+## 2026-08-28 - MCP 2.x Safe Concurrency
+
+- Migrated the optional adapter from `mcp>=1.28,<2` and `FastMCP` to
+  `mcp>=2.0,<3` and the official `MCPServer`. The verified local environment used
+  `mcp 2.1.1`; the server reports the ICSTeX application version and preserves
+  the existing 11-tool wire schema, annotations, grants and CLI surface.
+- Added a pure-core project concurrency coordinator: at most four ordinary
+  readers, one OCR request and one network request; writer-priority FIFO
+  exclusivity for mutations, compilation and export; and cancellation of queued
+  compile work without blocking `compile_project(action="stop")`.
+- Registered compile intents before queueing, applied the existing preview/final
+  120/300-second bounds to queue plus execution, serialized the full validation,
+  optional Block assembly, build and artifact publication path under a reentrant
+  cross-process project lock, and prevented active CompileManager replacement.
+- Converted anticipated workspace/concurrency failures to MCP 2.x `ToolError`
+  so permission, CAS, path, timeout and cancellation messages remain visible;
+  unexpected exceptions remain redacted by the SDK.
+- Added focused coverage for bounded readers, writer priority, FIFO/cancellation,
+  two-project compile overlap, same-project serialization, active stop, compile
+  deadlines, reentrant export, two-process CAS competition, current/legacy stdio
+  handshakes and synchronous tool thread offload.
+- Verification: `python3 -m compileall -q app tests packaging/install_build_dependencies.py`
+  passed; 77 focused tests passed; `QT_QPA_PLATFORM=offscreen python3 -m unittest
+  discover -s tests` passed all 779 tests; `python3 -m pip check`, `git diff
+  --check`, the official Skill validator and repository/global Skill comparison
+  passed. No package, publish, push or GitHub Actions workflow was run.

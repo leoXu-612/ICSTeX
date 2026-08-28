@@ -32,3 +32,8 @@ MCP compilation additionally uses TeX paranoid file I/O (`openin_any=p` and
 `openout_any=p`) with relative entry/output paths. Do not expose the server over
 a network transport or run a writable MCP session concurrently with an editable
 GUI session for the same project.
+
+Run concurrent projects as separately named stdio processes with distinct roots.
+Multiple writable MCP processes for the same root are not a supported topology:
+cross-process locks protect mutations and compilation, but bounded reads and
+`stop` cancellation are coordinated only inside one server process.

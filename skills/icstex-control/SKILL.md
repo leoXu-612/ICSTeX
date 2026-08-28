@@ -110,6 +110,11 @@ Register a read-only server for one project:
 codex mcp add icstex -- icstex-mcp --project-root /absolute/path/to/project
 ```
 
+For multiple projects, register one separately named stdio server per canonical
+root. Do not run two writable server processes for the same project; cross-process
+locks protect mutations, but read consistency and compile cancellation are
+coordinated only inside one server process.
+
 For bounded write and compile work, register the same command with only the
 required grants:
 

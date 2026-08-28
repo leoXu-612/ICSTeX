@@ -88,6 +88,11 @@ For Codex CLI, register that same read-only command with:
 codex mcp add icstex -- icstex-mcp --project-root /absolute/path/to/project
 ```
 
+To work with multiple projects concurrently, register one separately named
+stdio server per project root. Do not start multiple writable server processes
+for the same root; the supported topology is one process per project, while one
+process can service bounded concurrent reads and safely queue mutations.
+
 Add only the capabilities needed for the current task, for example
 `--allow-write --allow-compile`. External images require one or more
 `--allow-input` paths, and exports require an existing `--export-root`.

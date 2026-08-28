@@ -21,6 +21,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import uuid
 from typing import Iterator
 
@@ -111,6 +112,7 @@ class AgentGrants:
 
 _LOCKS: dict[str, threading.RLock] = {}
 _LOCKS_GUARD = threading.Lock()
+_PROJECT_LOCKS_HELD = threading.local()
 
 
 class AgentWorkspace:
@@ -137,6 +139,8 @@ class AgentWorkspace:
         self._inputs = {f"input_{index}": path for index, path in enumerate(inputs, start=1)}
         self._compile_managers: dict[str, CompileManager] = {}
         self._compile_lock = threading.Lock()
+        self._compile_generation = 0
+        self._compile_requests = 0
 
     # -- public read operations -----------------------------------------
     def inspect_project(self) -> dict:
@@ -556,44 +560,108 @@ class AgentWorkspace:
         engine: str = "auto",
         assemble_blocks: bool = False,
         expected_project_sha256: str = "",
+        deadline_monotonic: float | None = None,
+        request_generation: int | None = None,
     ) -> dict:
         self._require("compile")
         if action == "stop":
-            stopped = False
             with self._compile_lock:
+                self._compile_generation += 1
+                stopped = self._compile_requests > 0
                 managers = list(self._compile_managers.values())
             for manager in managers:
-                stopped = manager.stop_current(timeout=1.5) or stopped
+                stopped = manager.retire(timeout=1.5) or stopped
             return {"action": "stop", "stopped": stopped}
         if action != "run":
             raise AgentWorkspaceError("action 必须是 run 或 stop。")
-        if assemble_blocks:
-            if not expected_project_sha256:
-                raise ConflictError("组装 Block 项目必须提供 expected_project_sha256。")
-            self.mutate_blocks("assemble", {}, expected_project_sha256=expected_project_sha256)
-        root_file = self._root_file(root_path)
-        self._validate_executable_tree()
-        self._validate_tex_closure(root_file)
-        selected_purpose = BuildPurpose(purpose)
-        selected_engine = LaTeXEngine(engine)
-        manager = CompileManager(
-            root_file,
-            toolchain=detect_toolchain(),
-            engine=selected_engine,
-            restricted_io=True,
+        if request_generation is None:
+            with self.compile_request_scope() as generation:
+                return self._compile_project_run(
+                    root_path=root_path,
+                    purpose=purpose,
+                    engine=engine,
+                    assemble_blocks=assemble_blocks,
+                    expected_project_sha256=expected_project_sha256,
+                    deadline_monotonic=deadline_monotonic,
+                    request_generation=generation,
+                )
+        return self._compile_project_run(
+            root_path=root_path,
+            purpose=purpose,
+            engine=engine,
+            assemble_blocks=assemble_blocks,
+            expected_project_sha256=expected_project_sha256,
+            deadline_monotonic=deadline_monotonic,
+            request_generation=request_generation,
         )
-        key = self._relative(root_file)
+
+    @contextmanager
+    def compile_request_scope(self) -> Iterator[int]:
+        """Register one compile intent before it enters the MCP FIFO gate."""
+
+        self._require("compile")
         with self._compile_lock:
-            self._compile_managers[key] = manager
-        timeout = PREVIEW_TIMEOUT_SECONDS if selected_purpose is BuildPurpose.PREVIEW else FINAL_TIMEOUT_SECONDS
+            generation = self._compile_generation
+            self._compile_requests += 1
         try:
-            result = manager.compile_now(selected_purpose, timeout_seconds=timeout)
+            yield generation
         finally:
             with self._compile_lock:
-                self._compile_managers.pop(key, None)
-        if result is None:
-            raise AgentWorkspaceError("编译未启动。")
-        return self._compile_result(result)
+                self._compile_requests = max(0, self._compile_requests - 1)
+
+    def _compile_project_run(
+        self,
+        *,
+        root_path: str,
+        purpose: str,
+        engine: str,
+        assemble_blocks: bool,
+        expected_project_sha256: str,
+        deadline_monotonic: float | None,
+        request_generation: int,
+    ) -> dict:
+        with self._project_lock():
+            if assemble_blocks:
+                if not expected_project_sha256:
+                    raise ConflictError("组装 Block 项目必须提供 expected_project_sha256。")
+                self.mutate_blocks("assemble", {}, expected_project_sha256=expected_project_sha256)
+            root_file = self._root_file(root_path)
+            self._validate_executable_tree()
+            self._validate_tex_closure(root_file)
+            selected_purpose = BuildPurpose(purpose)
+            selected_engine = LaTeXEngine(engine)
+            timeout = PREVIEW_TIMEOUT_SECONDS if selected_purpose is BuildPurpose.PREVIEW else FINAL_TIMEOUT_SECONDS
+            if deadline_monotonic is not None:
+                remaining = deadline_monotonic - time.monotonic()
+                if remaining <= 0:
+                    raise AgentWorkspaceError("编译请求等待超时，未启动编译。")
+                timeout = min(timeout, remaining)
+            manager = CompileManager(
+                root_file,
+                toolchain=detect_toolchain(),
+                engine=selected_engine,
+                restricted_io=True,
+            )
+            key = self._relative(root_file)
+            with self._compile_lock:
+                if request_generation != self._compile_generation:
+                    raise AgentWorkspaceError("编译请求已由 stop 取消，未启动编译。")
+                if key in self._compile_managers:
+                    raise AgentWorkspaceError("同一根文件已有编译正在运行。")
+                self._compile_managers[key] = manager
+            try:
+                result = manager.compile_now(selected_purpose, timeout_seconds=timeout)
+            finally:
+                with self._compile_lock:
+                    if self._compile_managers.get(key) is manager:
+                        self._compile_managers.pop(key, None)
+            if result is None:
+                with self._compile_lock:
+                    cancelled = request_generation != self._compile_generation
+                if cancelled:
+                    raise AgentWorkspaceError("编译请求已由 stop 取消，未启动编译。")
+                raise AgentWorkspaceError("编译未启动。")
+            return self._compile_result(result)
 
     def fetch_reference_metadata(self, raw_text: str) -> dict:
         self._require("network")
@@ -644,43 +712,94 @@ class AgentWorkspace:
         root_path: str = "main.tex",
         assemble_blocks: bool = False,
         expected_project_sha256: str = "",
+        deadline_monotonic: float | None = None,
+        request_generation: int | None = None,
     ) -> dict:
         if self.grants.export_root is None:
             raise CapabilityDenied("未授予导出目录；请由宿主使用 --export-root 启动。")
-        target = self._export_path(target_path)
-        if target.is_relative_to(self.root) or self.root.is_relative_to(target):
-            raise UnsafePathError("导出目标不能与项目目录重叠。")
-        if target.exists() or target.is_symlink():
-            raise ConflictError("导出目标已存在；为避免覆盖，请使用新的目标名称。")
         selected = kind.strip().lower()
-        if selected == "pdf":
-            result = self.compile_project(
-                root_path=root_path,
-                purpose="final",
-                assemble_blocks=assemble_blocks,
-                expected_project_sha256=expected_project_sha256,
-            )
-            if not result["ok"]:
-                raise AgentWorkspaceError("最终编译失败，未导出 PDF。")
-            source = self._project_path(result["pdfFile"], must_exist=True, regular=True)
-            target.parent.mkdir(parents=True, exist_ok=True)
-            self._atomic_copy(source, target)
-            return {"kind": selected, "target": target_path, "sha256": _sha256_file(target), "size": target.stat().st_size}
-        if selected == "package":
-            if assemble_blocks:
-                if not expected_project_sha256:
-                    raise ConflictError("组装 Block 项目必须提供 expected_project_sha256。")
-                self.mutate_blocks("assemble", {}, expected_project_sha256=expected_project_sha256)
-            target.parent.mkdir(parents=True, exist_ok=True)
-            temporary = Path(tempfile.mkdtemp(prefix=f".{target.name}.", dir=target.parent))
-            try:
-                result = export_package(self.root, temporary)
-                os.replace(temporary, target)
-            except BaseException:
-                shutil.rmtree(temporary, ignore_errors=True)
-                raise
-            return {"kind": selected, "target": target_path, "files": list(result.files), "manifest": result.manifest}
-        raise AgentWorkspaceError("kind 必须是 pdf 或 package。")
+        if selected == "pdf" and request_generation is None:
+            with self.compile_request_scope() as generation:
+                return self._export_artifact_locked(
+                    selected,
+                    target_path,
+                    root_path=root_path,
+                    assemble_blocks=assemble_blocks,
+                    expected_project_sha256=expected_project_sha256,
+                    deadline_monotonic=deadline_monotonic,
+                    request_generation=generation,
+                )
+        return self._export_artifact_locked(
+            selected,
+            target_path,
+            root_path=root_path,
+            assemble_blocks=assemble_blocks,
+            expected_project_sha256=expected_project_sha256,
+            deadline_monotonic=deadline_monotonic,
+            request_generation=request_generation,
+        )
+
+    def _export_artifact_locked(
+        self,
+        selected: str,
+        target_path: str,
+        *,
+        root_path: str,
+        assemble_blocks: bool,
+        expected_project_sha256: str,
+        deadline_monotonic: float | None,
+        request_generation: int | None,
+    ) -> dict:
+        with self._project_lock():
+            target = self._export_path(target_path)
+            if target.is_relative_to(self.root) or self.root.is_relative_to(target):
+                raise UnsafePathError("导出目标不能与项目目录重叠。")
+            if target.exists() or target.is_symlink():
+                raise ConflictError("导出目标已存在；为避免覆盖，请使用新的目标名称。")
+            if selected == "pdf":
+                self._require("compile")
+                if request_generation is None:
+                    raise AgentWorkspaceError("PDF 导出缺少编译请求上下文。")
+                result = self._compile_project_run(
+                    root_path=root_path,
+                    purpose="final",
+                    engine="auto",
+                    assemble_blocks=assemble_blocks,
+                    expected_project_sha256=expected_project_sha256,
+                    deadline_monotonic=deadline_monotonic,
+                    request_generation=request_generation,
+                )
+                if not result["ok"]:
+                    raise AgentWorkspaceError("最终编译失败，未导出 PDF。")
+                source = self._project_path(result["pdfFile"], must_exist=True, regular=True)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                self._atomic_copy(source, target)
+                return {
+                    "kind": selected,
+                    "target": target_path,
+                    "sha256": _sha256_file(target),
+                    "size": target.stat().st_size,
+                }
+            if selected == "package":
+                if assemble_blocks:
+                    if not expected_project_sha256:
+                        raise ConflictError("组装 Block 项目必须提供 expected_project_sha256。")
+                    self.mutate_blocks("assemble", {}, expected_project_sha256=expected_project_sha256)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                temporary = Path(tempfile.mkdtemp(prefix=f".{target.name}.", dir=target.parent))
+                try:
+                    result = export_package(self.root, temporary)
+                    os.replace(temporary, target)
+                except BaseException:
+                    shutil.rmtree(temporary, ignore_errors=True)
+                    raise
+                return {
+                    "kind": selected,
+                    "target": target_path,
+                    "files": list(result.files),
+                    "manifest": result.manifest,
+                }
+            raise AgentWorkspaceError("kind 必须是 pdf 或 package。")
 
     # -- Block helpers ---------------------------------------------------
     def block_project_sha256(self) -> str:
@@ -1087,6 +1206,13 @@ class AgentWorkspace:
     @contextmanager
     def _project_lock(self) -> Iterator[None]:
         key = str(self.root)
+        held = getattr(_PROJECT_LOCKS_HELD, "roots", None)
+        if held is None:
+            held = set()
+            _PROJECT_LOCKS_HELD.roots = held
+        if key in held:
+            yield
+            return
         with _LOCKS_GUARD:
             thread_lock = _LOCKS.setdefault(key, threading.RLock())
         with thread_lock:
@@ -1095,9 +1221,11 @@ class AgentWorkspace:
             lock_path = lock_dir / f"{_sha256(key.encode('utf-8'))}.lock"
             with lock_path.open("a+b") as handle:
                 _lock_handle(handle)
+                held.add(key)
                 try:
                     yield
                 finally:
+                    held.remove(key)
                     _unlock_handle(handle)
 
     def _check_expected(self, current: bytes | None, expected: str) -> None:

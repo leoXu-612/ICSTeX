@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import multiprocessing
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import threading
+import time
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
@@ -24,6 +26,17 @@ MAIN_TEX = """\\documentclass{article}
 Hello \\label{sec:a} \\ref{sec:a} \\cite{source}
 \\end{document}
 """
+
+
+def _process_cas_write(root: str, digest: str, text: str, barrier: object, results: object) -> None:
+    workspace = AgentWorkspace(Path(root), grants=AgentGrants(allow_write=True))
+    barrier.wait(timeout=5)  # type: ignore[attr-defined]
+    try:
+        workspace.write_document("main.tex", text, expected_sha256=digest)
+    except ConflictError:
+        results.put(("conflict", text))  # type: ignore[attr-defined]
+    else:
+        results.put(("success", text))  # type: ignore[attr-defined]
 
 
 class AgentWorkspaceTests(TestCase):
@@ -196,6 +209,33 @@ class AgentWorkspaceTests(TestCase):
         self.assertEqual(len(conflicts), 1)
         self.assertEqual((self.root / "main.tex").read_text(encoding="utf-8"), successes[0])
 
+    def test_two_process_writers_with_same_hash_only_one_succeeds(self) -> None:
+        digest = AgentWorkspace(self.root).read_document("main.tex")["sha256"]
+        context = multiprocessing.get_context("spawn")
+        barrier = context.Barrier(2)
+        results = context.Queue()
+        processes = [
+            context.Process(
+                target=_process_cas_write,
+                args=(str(self.root), digest, text, barrier, results),
+            )
+            for text in ("first process", "second process")
+        ]
+        for process in processes:
+            process.start()
+        for process in processes:
+            process.join(10)
+            if process.is_alive():
+                process.terminate()
+                process.join(2)
+                self.fail("cross-process CAS writer did not finish")
+            self.assertEqual(process.exitcode, 0)
+
+        outcomes = [results.get(timeout=2), results.get(timeout=2)]
+        self.assertEqual(sorted(outcome for outcome, _text in outcomes), ["conflict", "success"])
+        successful_text = next(text for outcome, text in outcomes if outcome == "success")
+        self.assertEqual((self.root / "main.tex").read_text(encoding="utf-8"), successful_text)
+
     def test_block_crud_requires_project_etag_and_block_revision(self) -> None:
         workspace = AgentWorkspace(self.root, grants=AgentGrants(allow_write=True))
         etag = workspace.block_project_sha256()
@@ -363,6 +403,173 @@ class AgentWorkspaceTests(TestCase):
                 self.assertTrue(workspace.compile_project()["ok"])
         self.assertTrue(manager_type.call_args.kwargs["restricted_io"])
 
+    def test_different_project_roots_can_compile_concurrently(self) -> None:
+        with TemporaryDirectory() as other_directory:
+            other_root = Path(other_directory).resolve()
+            (other_root / "main.tex").write_text(MAIN_TEX, encoding="utf-8")
+            workspaces = [
+                AgentWorkspace(self.root, grants=AgentGrants(allow_compile=True)),
+                AgentWorkspace(other_root, grants=AgentGrants(allow_compile=True)),
+            ]
+            barrier = threading.Barrier(2)
+            state_lock = threading.Lock()
+            active = 0
+            maximum = 0
+            errors: list[BaseException] = []
+
+            def compile_now(*_args: object, **_kwargs: object) -> object:
+                nonlocal active, maximum
+                with state_lock:
+                    active += 1
+                    maximum = max(maximum, active)
+                barrier.wait(timeout=2)
+                time.sleep(0.02)
+                with state_lock:
+                    active -= 1
+                return object()
+
+            def manager_factory(*_args: object, **_kwargs: object) -> Mock:
+                manager = Mock()
+                manager.compile_now.side_effect = compile_now
+                manager.retire.return_value = True
+                return manager
+
+            def run(workspace: AgentWorkspace) -> None:
+                try:
+                    workspace.compile_project()
+                except BaseException as exc:  # noqa: BLE001 - collected for the parent assertion
+                    errors.append(exc)
+
+            with patch("app.core.agent_workspace.CompileManager", side_effect=manager_factory):
+                with patch.object(workspaces[0], "_compile_result", return_value={"ok": True}), patch.object(
+                    workspaces[1], "_compile_result", return_value={"ok": True}
+                ):
+                    threads = [threading.Thread(target=run, args=(workspace,)) for workspace in workspaces]
+                    for thread in threads:
+                        thread.start()
+                    for thread in threads:
+                        thread.join(4)
+
+            self.assertEqual(errors, [])
+            self.assertEqual(maximum, 2)
+
+    def test_same_project_compile_requests_are_serialized(self) -> None:
+        workspace = AgentWorkspace(self.root, grants=AgentGrants(allow_compile=True))
+        start = threading.Barrier(3)
+        state_lock = threading.Lock()
+        active = 0
+        maximum = 0
+        completed = 0
+        errors: list[BaseException] = []
+
+        def compile_now(*_args: object, **_kwargs: object) -> object:
+            nonlocal active, maximum, completed
+            with state_lock:
+                active += 1
+                maximum = max(maximum, active)
+            time.sleep(0.04)
+            with state_lock:
+                active -= 1
+                completed += 1
+            return object()
+
+        def manager_factory(*_args: object, **_kwargs: object) -> Mock:
+            manager = Mock()
+            manager.compile_now.side_effect = compile_now
+            manager.retire.return_value = True
+            return manager
+
+        def run() -> None:
+            start.wait()
+            try:
+                workspace.compile_project()
+            except BaseException as exc:  # noqa: BLE001 - collected for the parent assertion
+                errors.append(exc)
+
+        with patch("app.core.agent_workspace.CompileManager", side_effect=manager_factory), patch.object(
+            workspace, "_compile_result", return_value={"ok": True}
+        ):
+            threads = [threading.Thread(target=run) for _ in range(2)]
+            for thread in threads:
+                thread.start()
+            start.wait()
+            for thread in threads:
+                thread.join(4)
+
+        self.assertEqual(errors, [])
+        self.assertEqual(completed, 2)
+        self.assertEqual(maximum, 1)
+
+    def test_stop_cancels_waiting_compile_request(self) -> None:
+        workspace = AgentWorkspace(self.root, grants=AgentGrants(allow_compile=True))
+        active_entered = threading.Event()
+        release_active = threading.Event()
+        errors: list[BaseException] = []
+        results: list[dict] = []
+        managers: list[Mock] = []
+
+        def manager_factory(*_args: object, **_kwargs: object) -> Mock:
+            manager = Mock()
+            if not managers:
+                manager.compile_now.side_effect = lambda *_a, **_k: (
+                    active_entered.set(),
+                    release_active.wait(3),
+                    object(),
+                )[-1]
+                manager.retire.side_effect = lambda timeout=1.5: (release_active.set(), True)[-1]
+            else:
+                manager.compile_now.return_value = object()
+                manager.retire.return_value = True
+            managers.append(manager)
+            return manager
+
+        def run() -> None:
+            try:
+                results.append(workspace.compile_project())
+            except BaseException as exc:  # noqa: BLE001 - cancellation is the assertion target
+                errors.append(exc)
+
+        with patch("app.core.agent_workspace.CompileManager", side_effect=manager_factory), patch.object(
+            workspace, "_compile_result", return_value={"ok": True}
+        ):
+            first = threading.Thread(target=run)
+            second = threading.Thread(target=run)
+            first.start()
+            self.assertTrue(active_entered.wait(1))
+            second.start()
+            deadline = time.monotonic() + 1
+            while time.monotonic() < deadline:
+                with workspace._compile_lock:
+                    if workspace._compile_requests == 2:
+                        break
+                time.sleep(0.005)
+            else:
+                self.fail("second compile request was not registered")
+
+            stopped = workspace.compile_project(action="stop")
+            first.join(3)
+            second.join(3)
+
+        self.assertTrue(stopped["stopped"])
+        self.assertEqual(results, [{"ok": True}])
+        self.assertEqual(len(errors), 1)
+        self.assertIsInstance(errors[0], AgentWorkspaceError)
+        self.assertIn("stop 取消", str(errors[0]))
+        managers[0].retire.assert_called_once()
+
+    def test_compile_deadline_includes_validation_time(self) -> None:
+        workspace = AgentWorkspace(self.root, grants=AgentGrants(allow_compile=True))
+
+        def slow_validation(_root: Path) -> None:
+            time.sleep(0.03)
+
+        with patch.object(workspace, "_validate_tex_closure", side_effect=slow_validation), patch(
+            "app.core.agent_workspace.CompileManager"
+        ) as manager:
+            with self.assertRaisesRegex(AgentWorkspaceError, "等待超时"):
+                workspace.compile_project(deadline_monotonic=time.monotonic() + 0.01)
+        manager.assert_not_called()
+
     def test_recognition_returns_review_only_sanitized_candidate_and_never_writes(self) -> None:
         image = self.root / "formula.png"
         image.write_bytes(b"image")
@@ -524,3 +731,35 @@ class AgentWorkspaceExportTests(TestCase):
             workspace = AgentWorkspace(project, grants=AgentGrants(export_root=export))
             with self.assertRaises(UnsafePathError):
                 workspace.export_artifact("package", "package")
+
+    def test_package_export_can_reenter_project_lock_for_block_assembly(self) -> None:
+        with TemporaryDirectory() as project_dir, TemporaryDirectory() as export_dir:
+            project = Path(project_dir).resolve()
+            export = Path(export_dir).resolve()
+            (project / "main.tex").write_text(MAIN_TEX, encoding="utf-8")
+            workspace = AgentWorkspace(
+                project,
+                grants=AgentGrants(allow_write=True, export_root=export),
+            )
+            created = workspace.mutate_blocks(
+                "create",
+                {
+                    "type": "text",
+                    "alias": "intro",
+                    "semantic": {"role": "text"},
+                    "content": {"format": "plain", "text": "hello"},
+                    "references": [],
+                    "provenance": {"kind": "created"},
+                },
+                expected_project_sha256=workspace.block_project_sha256(),
+            )
+
+            result = workspace.export_artifact(
+                "package",
+                "assembled",
+                assemble_blocks=True,
+                expected_project_sha256=created["blockProjectSha256"],
+            )
+
+            self.assertEqual(result["kind"], "package")
+            self.assertTrue((export / "assembled" / "main.tex").is_file())

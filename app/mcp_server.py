@@ -6,10 +6,14 @@ execution decisions live in ``app.core.agent_workspace``.
 from __future__ import annotations
 
 import argparse
+from functools import wraps
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Callable, Literal, ParamSpec, TypeVar
 
-from app.core.agent_workspace import AgentGrants, AgentWorkspace
+from app import __version__
+from app.core.agent_concurrency import AgentConcurrencyError, WorkspaceConcurrency
+from app.core.agent_workspace import AgentGrants, AgentWorkspace, AgentWorkspaceError
+from app.core.compiler import FINAL_TIMEOUT_SECONDS, PREVIEW_TIMEOUT_SECONDS
 
 
 QueryKind = Literal[
@@ -31,6 +35,8 @@ CompilePurpose = Literal["preview", "final"]
 CompileEngine = Literal["auto", "pdflatex", "xelatex", "lualatex"]
 RecognitionKind = Literal["formula", "text"]
 ExportKind = Literal["pdf", "package"]
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 SERVER_INSTRUCTIONS = """Operate one local ICSTeX project.
@@ -47,42 +53,59 @@ same project closed or read-only in the GUI while mutating it through MCP.
 
 def create_server(workspace: AgentWorkspace):
     try:
-        from mcp.server.fastmcp import FastMCP
+        from mcp.server.mcpserver.exceptions import ToolError
+        from mcp.server.mcpserver import MCPServer
         from mcp.types import ToolAnnotations
     except ImportError as exc:  # pragma: no cover - exercised by CLI install guidance
         raise RuntimeError(
             "缺少 MCP SDK；请运行 `python3 -m pip install -e '.[agent]'`。"
         ) from exc
 
-    server = FastMCP("ICSTeX", instructions=SERVER_INSTRUCTIONS)
-    read_only = ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False)
+    server = MCPServer("ICSTeX", instructions=SERVER_INSTRUCTIONS, version=__version__)
+    concurrency = WorkspaceConcurrency()
+    read_only = ToolAnnotations(read_only_hint=True, destructive_hint=False, open_world_hint=False)
     mutating = ToolAnnotations(
-        readOnlyHint=False,
-        destructiveHint=True,
-        idempotentHint=False,
-        openWorldHint=False,
+        read_only_hint=False,
+        destructive_hint=True,
+        idempotent_hint=False,
+        open_world_hint=False,
     )
     additive = ToolAnnotations(
-        readOnlyHint=False,
-        destructiveHint=False,
-        idempotentHint=False,
-        openWorldHint=False,
+        read_only_hint=False,
+        destructive_hint=False,
+        idempotent_hint=False,
+        open_world_hint=False,
     )
-    network = ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=True)
+    network = ToolAnnotations(read_only_hint=True, destructive_hint=False, open_world_hint=True)
+
+    def anticipated_errors(function: Callable[P, R]) -> Callable[P, R]:
+        @wraps(function)
+        def call(*args: P.args, **kwargs: P.kwargs) -> R:
+            try:
+                return function(*args, **kwargs)
+            except (AgentWorkspaceError, AgentConcurrencyError) as exc:
+                raise ToolError(str(exc)) from exc
+
+        return call
 
     @server.tool(annotations=read_only)
+    @anticipated_errors
     def inspect_project() -> dict[str, Any]:
         """Inspect root, files, Block state, toolchain, grants, and interaction limits."""
 
-        return workspace.inspect_project()
+        with concurrency.read():
+            return workspace.inspect_project()
 
     @server.tool(annotations=read_only)
+    @anticipated_errors
     def read_document(path: str, snapshot_id: str = "") -> dict[str, Any]:
         """Read an allowed project text file or a verified preimage snapshot."""
 
-        return workspace.read_document(path, snapshot_id=snapshot_id)
+        with concurrency.read():
+            return workspace.read_document(path, snapshot_id=snapshot_id)
 
     @server.tool(annotations=mutating)
+    @anticipated_errors
     def write_document(
         path: str,
         text: str,
@@ -91,14 +114,16 @@ def create_server(workspace: AgentWorkspace):
     ) -> dict[str, Any]:
         """CAS-write a project text file and retain its byte-exact preimage."""
 
-        return workspace.write_document(
-            path,
-            text,
-            expected_sha256=expected_sha256,
-            encoding=encoding,
-        )
+        with concurrency.exclusive():
+            return workspace.write_document(
+                path,
+                text,
+                expected_sha256=expected_sha256,
+                encoding=encoding,
+            )
 
     @server.tool(annotations=mutating)
+    @anticipated_errors
     def restore_snapshot(
         path: str,
         snapshot_id: str,
@@ -106,13 +131,15 @@ def create_server(workspace: AgentWorkspace):
     ) -> dict[str, Any]:
         """CAS-restore a verified text or image preimage and retain an undo preimage."""
 
-        return workspace.restore_snapshot(
-            path,
-            snapshot_id,
-            expected_sha256=expected_sha256,
-        )
+        with concurrency.exclusive():
+            return workspace.restore_snapshot(
+                path,
+                snapshot_id,
+                expected_sha256=expected_sha256,
+            )
 
     @server.tool(annotations=mutating)
+    @anticipated_errors
     def import_asset(
         input_id: str,
         destination_path: str,
@@ -121,14 +148,16 @@ def create_server(workspace: AgentWorkspace):
     ) -> dict[str, Any]:
         """Copy an image from a host-approved input into figures/ or assets/."""
 
-        return workspace.import_asset(
-            input_id,
-            destination_path,
-            source_path=source_path,
-            expected_sha256=expected_sha256,
-        )
+        with concurrency.exclusive():
+            return workspace.import_asset(
+                input_id,
+                destination_path,
+                source_path=source_path,
+                expected_sha256=expected_sha256,
+            )
 
     @server.tool(annotations=read_only)
+    @anticipated_errors
     def query_project(
         kind: QueryKind,
         path: str = "main.tex",
@@ -142,19 +171,21 @@ def create_server(workspace: AgentWorkspace):
     ) -> dict[str, Any]:
         """Query search, history, diagnostics, counts, references, assets, Blocks, or SyncTeX."""
 
-        return workspace.query_project(
-            kind,
-            path=path,
-            query=query,
-            case_sensitive=case_sensitive,
-            whole_word=whole_word,
-            line=line,
-            page=page,
-            x=x,
-            y=y,
-        )
+        with concurrency.read():
+            return workspace.query_project(
+                kind,
+                path=path,
+                query=query,
+                case_sensitive=case_sensitive,
+                whole_word=whole_word,
+                line=line,
+                page=page,
+                x=x,
+                y=y,
+            )
 
     @server.tool(annotations=mutating)
+    @anticipated_errors
     def mutate_blocks(
         operation: BlockOperation,
         payload: dict[str, Any],
@@ -162,13 +193,15 @@ def create_server(workspace: AgentWorkspace):
     ) -> dict[str, Any]:
         """CAS-mutate Blocks, layout, document theme, sources, or generated LaTeX."""
 
-        return workspace.mutate_blocks(
-            operation,
-            payload,
-            expected_project_sha256=expected_project_sha256,
-        )
+        with concurrency.exclusive():
+            return workspace.mutate_blocks(
+                operation,
+                payload,
+                expected_project_sha256=expected_project_sha256,
+            )
 
     @server.tool(annotations=mutating)
+    @anticipated_errors
     def compile_project(
         action: CompileAction = "run",
         root_path: str = "main.tex",
@@ -179,28 +212,41 @@ def create_server(workspace: AgentWorkspace):
     ) -> dict[str, Any]:
         """Run or stop a bounded preview/final compile; never enables shell escape or rc files."""
 
-        return workspace.compile_project(
-            action=action,
-            root_path=root_path,
-            purpose=purpose,
-            engine=engine,
-            assemble_blocks=assemble_blocks,
-            expected_project_sha256=expected_project_sha256,
-        )
+        if action == "stop":
+            concurrency.cancel_pending_compiles()
+            return workspace.compile_project(action="stop")
+        timeout = PREVIEW_TIMEOUT_SECONDS if purpose == "preview" else FINAL_TIMEOUT_SECONDS
+        with workspace.compile_request_scope() as request_generation:
+            with concurrency.exclusive("compile", timeout_seconds=timeout) as deadline:
+                return workspace.compile_project(
+                    action=action,
+                    root_path=root_path,
+                    purpose=purpose,
+                    engine=engine,
+                    assemble_blocks=assemble_blocks,
+                    expected_project_sha256=expected_project_sha256,
+                    deadline_monotonic=deadline,
+                    request_generation=request_generation,
+                )
 
     @server.tool(annotations=read_only)
+    @anticipated_errors
     def recognize_image(kind: RecognitionKind, image_path: str, temperature: float = 0.01) -> dict[str, Any]:
         """Run installed local OCR and return a review-only candidate without writing."""
 
-        return workspace.recognize_image(kind, image_path, temperature=temperature)
+        with concurrency.recognition():
+            return workspace.recognize_image(kind, image_path, temperature=temperature)
 
     @server.tool(annotations=network)
+    @anticipated_errors
     def fetch_reference_metadata(raw_text: str) -> dict[str, Any]:
         """Fetch DOI or arXiv BibTeX through ICSTeX's fixed HTTPS allowlist."""
 
-        return workspace.fetch_reference_metadata(raw_text)
+        with concurrency.network():
+            return workspace.fetch_reference_metadata(raw_text)
 
     @server.tool(annotations=additive)
+    @anticipated_errors
     def export_artifact(
         kind: ExportKind,
         target_path: str,
@@ -210,13 +256,26 @@ def create_server(workspace: AgentWorkspace):
     ) -> dict[str, Any]:
         """Export a fresh final PDF or portable project into the host-approved export root."""
 
-        return workspace.export_artifact(
-            kind,
-            target_path,
-            root_path=root_path,
-            assemble_blocks=assemble_blocks,
-            expected_project_sha256=expected_project_sha256,
-        )
+        if kind == "pdf":
+            with workspace.compile_request_scope() as request_generation:
+                with concurrency.exclusive("compile", timeout_seconds=FINAL_TIMEOUT_SECONDS) as deadline:
+                    return workspace.export_artifact(
+                        kind,
+                        target_path,
+                        root_path=root_path,
+                        assemble_blocks=assemble_blocks,
+                        expected_project_sha256=expected_project_sha256,
+                        deadline_monotonic=deadline,
+                        request_generation=request_generation,
+                    )
+        with concurrency.exclusive():
+            return workspace.export_artifact(
+                kind,
+                target_path,
+                root_path=root_path,
+                assemble_blocks=assemble_blocks,
+                expected_project_sha256=expected_project_sha256,
+            )
 
     return server
 

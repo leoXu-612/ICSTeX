@@ -924,3 +924,28 @@ must link here instead of repeating old task details.
   discover -s tests` passed all 779 tests; `python3 -m pip check`, `git diff
   --check`, the official Skill validator and repository/global Skill comparison
   passed. No package, publish, push or GitHub Actions workflow was run.
+
+## 2026-08-29 - Word Count Accuracy Repair
+
+- Compared the existing counter with the TeX Live TeXcount source, Overleaf's
+  `texcount -inc` service path and newer syntax-tree/Unicode-segmenter client
+  path, plus pylatexenc's custom parsing model. Reused the architectural ideas
+  only; no third-party source was copied and no dependency was added.
+- Reproduced TeXcount `-chinese` counting U+3002 and U+3001 as Han-script words;
+  ICSTeX now requests `-logograms=Ideographic`, verified with the installed
+  TeXcount 3.1.1 against Chinese punctuation, numbers and U+20000 ideographs.
+- Replaced fragment-by-fragment fallback totals with category-level visible-text
+  tokenization. Accent macros and formatting inside a word now remain one word;
+  standard text-symbol macros, `%TC:ignore`, inline verbatim, optional short
+  headings/captions and footnote classification have focused regression tests.
+- Repeated `input`/`include`/`subfile` expansions are counted each time while an
+  ancestor stack stops true cycles. Unsafe cyclic/over-limit projects bypass
+  external TeXcount instead of waiting for its 15-second timeout.
+- Preserved all `WordCountResult` and MCP fields. The UI now calls the modes
+  `TeXcount 兼容统计` and `ICSTeX 结构化统计`, labels TeXcount's third category as
+  `说明/脚注`, and states that course-specific inclusion rules remain external.
+- Verification: 32 focused Word Count tests and 156 Word Count/Environment
+  Doctor/GUI tests passed; `python3 -m compileall -q app tests
+  packaging/install_build_dependencies.py` passed; full offscreen discovery
+  passed all 787 tests in 214.403 seconds; `git diff --check` passed. No package,
+  publish, push or GitHub Actions workflow was run.

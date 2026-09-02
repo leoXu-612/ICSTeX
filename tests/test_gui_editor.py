@@ -1327,10 +1327,10 @@ class GuiEditorTests(TestCase):
 
         self.assertEqual(window.word_count_labels["effective"].text(), "2")
         self.assertEqual(window.word_count_labels["numbers"].text(), "1")
-        self.assertIn("Python 简化统计", window.word_count_meta.text())
-        self.assertIn("未找到 texcount", window.word_count_meta.text())
+        self.assertIn("ICSTeX 结构化统计", window.word_count_meta.text())
+        self.assertIn("未找到 TeXcount", window.word_count_meta.text())
         self.assertIn("当前编辑器内容", window.word_count_meta.text())
-        self.assertEqual(window.word_count_view.last_mode_label, "Python 简化统计")
+        self.assertEqual(window.word_count_view.last_mode_label, "ICSTeX 结构化统计")
         window.close()
 
     def test_word_count_uses_project_root_and_unsaved_child_buffer(self) -> None:
@@ -1377,7 +1377,7 @@ class GuiEditorTests(TestCase):
             # Set after _add_tab: tab activation now syncs the timer label to
             # the active root's record.
             window.compile_time_label.setText("上次编译 7.25s")
-            window.word_count_view.last_mode_label = "texcount 精确统计"
+            window.word_count_view.last_mode_label = "TeXcount 兼容统计"
 
             context = window._build_feedback_context()
 
@@ -1388,7 +1388,7 @@ class GuiEditorTests(TestCase):
             self.assertEqual(context.metadata.root_source, "magic comment")
             self.assertEqual(context.metadata.selected_engine, "XeLaTeX")
             self.assertEqual(context.metadata.latest_compile_seconds, 7.25)
-            self.assertEqual(context.metadata.word_count_mode, "texcount 精确统计")
+            self.assertEqual(context.metadata.word_count_mode, "TeXcount 兼容统计")
             window.close()
 
     def test_refresh_project_panels_reads_labels_and_bib_keys(self) -> None:

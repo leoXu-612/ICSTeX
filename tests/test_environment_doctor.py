@@ -24,7 +24,7 @@ class EnvironmentDoctorTests(TestCase):
 
         self.assertFalse(report.compile_ready)
         self.assertIn("未找到 LaTeX 编译器", report.as_text())
-        self.assertIn("未找到 texcount", report.as_text())
+        self.assertIn("未找到 TeXcount", report.as_text())
 
     def test_report_lists_available_tools_and_versions(self) -> None:
         toolchain = LaTeXToolchain(
@@ -72,7 +72,7 @@ class FeedbackBundleTests(TestCase):
                 root_file=Path("/Users/student/SuperSecretThesis/main.tex"),
                 root_source="magic comment",
                 latest_compile_seconds=12.345,
-                word_count_mode="Python 简化统计",
+                word_count_mode="ICSTeX 结构化统计",
             ),
         )
 
@@ -80,7 +80,7 @@ class FeedbackBundleTests(TestCase):
         self.assertIn("XeLaTeX", bundle)
         self.assertIn("magic comment", bundle)
         self.assertIn("12.35s", bundle)
-        self.assertIn("Python 简化统计", bundle)
+        self.assertIn("ICSTeX 结构化统计", bundle)
         self.assertNotIn("SuperSecretThesis", bundle)
         self.assertNotIn("/Users/student", bundle)
 

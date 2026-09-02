@@ -1,6 +1,6 @@
 # ICSTeX Project State
 
-更新时间：2026-08-28（Asia/Taipei）
+更新时间：2026-08-29（Asia/Taipei）
 
 本文件是当前已验证状态的权威来源；历史证据写入 `PROJECT_LOG.md`，未来计划写入
 `docs/ROADMAP.md`，长期约束写入 `docs/DECISION_LOG.md`。
@@ -22,7 +22,9 @@
 ## Verified Capabilities
 
 - Source/PDF 双栏、root-scoped 编译与 freshness、SyncTeX、Word Count、诊断、
-  原子保存和正式 PDF 导出。
+  原子保存和正式 PDF 导出。Word Count 的 TeXcount 路径使用 Unicode
+  `Ideographic` 属性避免把中文标点计为汉字；本地结构化路径按可见文本连续分词，
+  支持 `%TC:ignore`、重复 include、循环保护、脚注和扩展区汉字。
 - 隔离的快速图片预览与原图正式构建链；preview 不得成为正式导出源。
 - Block 项目控制台、ProjectSession、统一 Undo/保存/编译、表格与布局 Block。
 - Formula Editor 2.0、显式提交、危险 LaTeX 过滤、可选本地 pix2tex 识别与人工复核。
@@ -59,13 +61,24 @@
 - `icstex-control` 官方 `quick_validate.py` 与 repository/global Skill 内容比较：通过。
 - 当前机器的 pix2tex/RapidOCR 隔离 Python 未安装，因此真实 OCR 推理仍未验证。
 
+2026-08-29 Word Count 准确性修复验证：
+
+- GitHub 上游核对覆盖 TeX Live 的 TeXcount、Overleaf 服务端/本地结构化计数实现及
+  pylatexenc 自定义解析规则；未引入新依赖或复制第三方代码。
+- 真实 TeXcount 3.1.1 验证中文标点、数字和扩展区汉字；TeXcount 与本地结构化路径
+  对重复 `input` 的正文/数字分类一致，循环项目不再等待 TeXcount 超时。
+- Word Count focused suite：32 tests passed；Word Count、Environment Doctor 与 GUI
+  focused suite：156 tests passed。
+- `python3 -m compileall -q app tests packaging/install_build_dependencies.py`：通过。
+- `QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests`：787 tests passed。
+
 该源码尚未重新打包或发布，不改变 2.1.0-beta.1 制品状态。
 
 ## Release Matrix
 
 | 对象 | 状态 | 说明 |
 | --- | --- | --- |
-| 当前源码 | Verified, MCP source ahead of release | 2.1.0-beta.1；779 tests passed；未打包 |
+| 当前源码 | Verified, source ahead of release | 2.1.0-beta.1；787 tests passed；未打包 |
 | macOS arm64 DMG/ZIP | Verified, rebuilt | hardened source；ad-hoc signed、未 notarize |
 | clean source ZIP | Verified, rebuilt | hardened source；publication hygiene scan passed |
 | Windows ARM64 ZIP | Verified beta artifact, rebuilt | Windows-local `C:\w3`；无系统 Python 启动通过 |
@@ -101,6 +114,8 @@
 - GitHub Actions 在发布写入期间临时禁用，推送没有运行 CI；发布完成后恢复原配置。
 - macOS 仅验证 Apple Silicon，且未 Developer ID 签名或 notarize。
 - 2.1 是 Beta；公式 OCR 结果必须人工检查，重要项目仍需外部版本备份。
+- 字数统计是可审计的源码级统计，不等同所有课程的提交口径；标题、说明/脚注、公式
+  和数字已分层显示，最终纳入范围仍须按对应课程要求判断。
 - 多项目并发使用不同名称、不同根目录的 stdio 实例；同一项目同时启动多个可写 MCP
   进程不是受支持拓扑。跨进程锁仍保护写入/编译，但读取一致性与 `stop` 取消只由单个
   server process 内的协调器保证。

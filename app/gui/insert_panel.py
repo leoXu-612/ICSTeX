@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -13,8 +13,11 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QFrame,
+    QGridLayout,
+    QGroupBox,
     QHBoxLayout,
     QInputDialog,
+    QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
@@ -26,7 +29,18 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core.latex_insertions import FigureSpec, HyperlinkSpec, SideBySideFigureSpec, TableSpec, all_templates, parse_delimited, parse_tabular
+from app.core.latex_insertions import (
+    FigureLayout,
+    FigureLayoutItem,
+    FigureLayoutSpec,
+    FigureSpec,
+    HyperlinkSpec,
+    TableSpec,
+    all_templates,
+    figure_layout_snippet,
+    parse_delimited,
+    parse_tabular,
+)
 
 
 class InsertPanel(QWidget):
@@ -49,7 +63,7 @@ class InsertPanel(QWidget):
 
         tools = [
             ("插入图片", self.figureRequested),
-            ("并排图片", self.sideBySideFigureRequested),
+            ("图片布局", self.sideBySideFigureRequested),
             ("插入表格", self.tableRequested),
             ("超链接", self.hyperlinkRequested),
             ("公式", self.equationRequested),
@@ -156,45 +170,150 @@ class FigureDialog(QDialog):
         _browse_into(self, self.image_edit)
 
 
-class SideBySideFigureDialog(QDialog):
+class FigureLayoutDialog(QDialog):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("插入并排图片")
-        self.left_image_edit = QLineEdit()
-        self.right_image_edit = QLineEdit()
-        self.left_caption_edit = QLineEdit()
-        self.right_caption_edit = QLineEdit()
+        self.setWindowTitle("插入图片布局")
+        self.setMinimumWidth(720)
+        self.layout_combo = QComboBox()
+        for layout in FigureLayout:
+            self.layout_combo.addItem(layout.display_name, layout.value)
+        self.image_edits = [QLineEdit() for _ in range(4)]
+        self.caption_edits = [QLineEdit() for _ in range(4)]
+        self.width_spins = [_ratio_spinbox(0.48) for _ in range(4)]
+        self.item_groups: list[QGroupBox] = []
         self.caption_edit = QLineEdit()
         self.label_edit = QLineEdit("fig:")
-        self.width_spin = _ratio_spinbox(0.48)
         self.placement_combo = _placement_combo()
+        self.layout_hint = QLabel()
+        self.layout_hint.setWordWrap(True)
+        self.layout_hint.setObjectName("panelHint")
+        self._layout_widths: dict[FigureLayout, tuple[float, ...]] = {
+            FigureLayout.HORIZONTAL: (0.48, 0.48, 0.48, 0.48),
+            FigureLayout.VERTICAL: (0.80, 0.80, 0.48, 0.48),
+            FigureLayout.GRID_2X2: (0.48, 0.48, 0.48, 0.48),
+        }
+        self._active_layout = FigureLayout.HORIZONTAL
         self._build()
+        self.layout_combo.currentIndexChanged.connect(self._on_layout_changed)
+        for spin in self.width_spins:
+            spin.valueChanged.connect(lambda _value: self._update_layout_hint())
+        self._apply_layout(FigureLayout.HORIZONTAL)
 
-    def values(self) -> SideBySideFigureSpec:
-        return SideBySideFigureSpec(
-            left_image_path=self.left_image_edit.text().strip(),
-            right_image_path=self.right_image_edit.text().strip(),
-            left_caption=self.left_caption_edit.text().strip(),
-            right_caption=self.right_caption_edit.text().strip(),
+    def values(self) -> FigureLayoutSpec:
+        layout = self._selected_layout()
+        count = 4 if layout is FigureLayout.GRID_2X2 else 2
+        return FigureLayoutSpec(
+            layout=layout,
+            items=tuple(
+                FigureLayoutItem(
+                    image_path=self.image_edits[index].text().strip(),
+                    width=self.width_spins[index].value(),
+                    caption=self.caption_edits[index].text().strip(),
+                )
+                for index in range(count)
+            ),
             caption=self.caption_edit.text().strip(),
             label=self.label_edit.text().strip(),
-            width=self.width_spin.value(),
             placement=self.placement_combo.currentText(),
         )
 
     def _build(self) -> None:
         layout = QVBoxLayout(self)
-        form = QFormLayout()
-        form.addRow("左图", _file_row(self.left_image_edit, lambda: _browse_into(self, self.left_image_edit)))
-        form.addRow("右图", _file_row(self.right_image_edit, lambda: _browse_into(self, self.right_image_edit)))
-        form.addRow("左图说明", self.left_caption_edit)
-        form.addRow("右图说明", self.right_caption_edit)
-        form.addRow("总说明", self.caption_edit)
-        form.addRow("标签", self.label_edit)
-        form.addRow("单图宽度", self.width_spin)
-        form.addRow("位置", self.placement_combo)
-        layout.addLayout(form)
+        layout.setSpacing(10)
+
+        layout_form = QFormLayout()
+        layout_form.addRow("排列方式", self.layout_combo)
+        layout.addLayout(layout_form)
+        layout.addWidget(self.layout_hint)
+
+        self.item_container = QWidget()
+        item_grid = QGridLayout(self.item_container)
+        item_grid.setContentsMargins(0, 0, 0, 0)
+        item_grid.setHorizontalSpacing(10)
+        item_grid.setVerticalSpacing(10)
+        for index in range(4):
+            group = QGroupBox()
+            form = QFormLayout(group)
+            image_edit = self.image_edits[index]
+            form.addRow(
+                "图片",
+                _file_row(image_edit, lambda edit=image_edit: _browse_into(self, edit)),
+            )
+            form.addRow("子图说明", self.caption_edits[index])
+            form.addRow("宽度", self.width_spins[index])
+            item_grid.addWidget(group, index // 2, index % 2)
+            self.item_groups.append(group)
+        self.item_scroll = QScrollArea()
+        self.item_scroll.setWidgetResizable(True)
+        self.item_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.item_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.item_scroll.setWidget(self.item_container)
+        layout.addWidget(self.item_scroll)
+
+        figure_form = QFormLayout()
+        figure_form.addRow("总说明", self.caption_edit)
+        figure_form.addRow("标签", self.label_edit)
+        figure_form.addRow("位置", self.placement_combo)
+        layout.addLayout(figure_form)
         layout.addWidget(_buttons(self))
+
+    def accept(self) -> None:
+        try:
+            figure_layout_snippet(self.values())
+        except ValueError as exc:
+            QMessageBox.warning(self, "图片布局不完整", str(exc))
+            return
+        super().accept()
+
+    def _selected_layout(self) -> FigureLayout:
+        return FigureLayout(str(self.layout_combo.currentData()))
+
+    def _on_layout_changed(self, _index: int) -> None:
+        self._layout_widths[self._active_layout] = tuple(spin.value() for spin in self.width_spins)
+        selected = self._selected_layout()
+        for spin, value in zip(self.width_spins, self._layout_widths[selected], strict=True):
+            spin.setValue(value)
+        self._active_layout = selected
+        self._apply_layout(selected)
+
+    def _apply_layout(self, layout: FigureLayout) -> None:
+        titles = {
+            FigureLayout.HORIZONTAL: ("左图", "右图"),
+            FigureLayout.VERTICAL: ("上图", "下图"),
+            FigureLayout.GRID_2X2: ("左上", "右上", "左下", "右下"),
+        }[layout]
+        for index, group in enumerate(self.item_groups):
+            visible = index < len(titles)
+            group.setVisible(visible)
+            if visible:
+                group.setTitle(titles[index])
+        self.item_container.layout().activate()
+        content_width = self.item_container.sizeHint().width()
+        content_height = self.item_container.sizeHint().height() + 4
+        self.setMinimumWidth(max(720, content_width + 48))
+        self.item_scroll.setFixedHeight(min(max(content_height, 170), 300))
+        self._update_layout_hint()
+
+    def _update_layout_hint(self) -> None:
+        layout = self._selected_layout()
+        widths = [spin.value() for spin in self.width_spins]
+        if layout is FigureLayout.HORIZONTAL:
+            detail = f"本行宽度合计 {widths[0] + widths[1]:.2f} / 1.00。"
+        elif layout is FigureLayout.GRID_2X2:
+            detail = (
+                f"上排 {widths[0] + widths[1]:.2f} / 1.00；"
+                f"下排 {widths[2] + widths[3]:.2f} / 1.00。"
+            )
+        else:
+            detail = "上下两图可分别设置宽度。"
+        self.layout_hint.setText(
+            detail + " 仅调整宽度，图片高度自动按原始比例缩放，不会拉伸变形。"
+        )
+
+
+# Compatibility alias for callers that still use the former two-image name.
+SideBySideFigureDialog = FigureLayoutDialog
 
 
 class TableDialog(QDialog):

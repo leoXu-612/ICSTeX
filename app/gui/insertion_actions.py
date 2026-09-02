@@ -22,15 +22,16 @@ from app.core.latex_insertions import (
     HYPERLINK_PACKAGES,
     SIDE_BY_SIDE_FIGURE_PACKAGES,
     TABLE_PACKAGES,
+    FigureLayoutItem,
+    FigureLayoutSpec,
     FigureSpec,
     HyperlinkSpec,
-    SideBySideFigureSpec,
+    figure_layout_snippet,
     figure_snippet,
     hyperlink_snippet,
     latex_relative_path,
     package_update,
     sanitize_asset_filename,
-    side_by_side_figure_snippet,
     table_snippet,
     unique_asset_path,
 )
@@ -48,8 +49,8 @@ from app.gui.formula_dialog import FormulaDialog
 from app.gui.drop_import_worker import DropCopyWorker
 from app.gui.insert_panel import (
     FigureDialog,
+    FigureLayoutDialog,
     HyperlinkDialog,
-    SideBySideFigureDialog,
     TableDialog,
 )
 from app.gui.latex_editor import LaTeXEditor
@@ -270,31 +271,41 @@ class InsertionActions:
         tab = window._require_saved_tab_for_assets()
         if tab is None:
             return
-        dialog = SideBySideFigureDialog(window)
+        dialog = FigureLayoutDialog(window)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         values = dialog.values()
-        left_path = self.copy_image_asset(tab, values.left_image_path)
-        if left_path is None:
+        try:
+            figure_layout_snippet(values)
+        except ValueError as exc:
+            QMessageBox.warning(window, "图片布局无效", str(exc))
             return
-        right_path = self.copy_image_asset(tab, values.right_image_path)
-        if right_path is None:
+        copied_paths = self.copy_image_assets(
+            tab,
+            [item.image_path for item in values.items],
+        )
+        if copied_paths is None:
             return
-        spec = SideBySideFigureSpec(
-            left_image_path=left_path,
-            right_image_path=right_path,
-            left_caption=values.left_caption,
-            right_caption=values.right_caption,
+        spec = FigureLayoutSpec(
+            layout=values.layout,
+            items=tuple(
+                FigureLayoutItem(path, item.width, item.caption)
+                for path, item in zip(copied_paths, values.items, strict=True)
+            ),
             caption=values.caption,
             label=values.label,
-            width=values.width,
             placement=values.placement,
         )
+        try:
+            snippet = figure_layout_snippet(spec)
+        except ValueError as exc:
+            QMessageBox.warning(window, "图片布局无效", str(exc))
+            return
         self.insert_snippet(
             tab,
-            side_by_side_figure_snippet(spec),
+            snippet,
             self._packages_for_placement(SIDE_BY_SIDE_FIGURE_PACKAGES, spec.placement),
-            "已插入并排图片。",
+            f"已插入{spec.layout.display_name}。",
         )
 
     def insert_table(self) -> None:
@@ -574,6 +585,44 @@ class InsertionActions:
                 QMessageBox.warning(window, "图片复制失败", str(exc))
                 return None
         return latex_relative_path(tab.path, destination)
+
+    def copy_image_assets(self, tab: EditorTab, image_names: list[str]) -> tuple[str, ...] | None:
+        """Copy a composite layout as one transaction and roll back partial copies."""
+        window = self.window
+        if tab.path is None:
+            return None
+        sources = [Path(name).expanduser() for name in image_names]
+        missing = next((source for source in sources if not source.is_file()), None)
+        if missing is not None:
+            QMessageBox.warning(window, "找不到图片", f"请选择一个存在的图片文件：\n{missing}")
+            return None
+
+        figures_dir = tab.path.parent / "figures"
+        figures_dir.mkdir(parents=True, exist_ok=True)
+        created: list[Path] = []
+        copied_by_source: dict[Path, str] = {}
+        relative_paths: list[str] = []
+        try:
+            for source in sources:
+                resolved_source = source.resolve()
+                cached = copied_by_source.get(resolved_source)
+                if cached is not None:
+                    relative_paths.append(cached)
+                    continue
+                destination = figures_dir / sanitize_asset_filename(source.name)
+                if resolved_source != destination.resolve():
+                    destination = unique_asset_path(figures_dir, destination.name)
+                    copy_image_atomic(source, destination)
+                    created.append(destination)
+                relative = latex_relative_path(tab.path, destination)
+                copied_by_source[resolved_source] = relative
+                relative_paths.append(relative)
+        except OSError as exc:
+            for path in created:
+                path.unlink(missing_ok=True)
+            QMessageBox.warning(window, "图片复制失败", f"本次布局未插入，已回滚新增图片。\n{exc}")
+            return None
+        return tuple(relative_paths)
 
     def insert_snippet(
         self,

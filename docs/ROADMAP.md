@@ -26,8 +26,8 @@ ICSTeX 要成为 ICC 学生从“建立写作项目”到“提交可靠成果�
 目标：把已验证源码变成可解释、可复现、跨平台一致的下一版本。
 
 - 建立并执行新的项目状态、路线图、决策和记忆管理规范。
-- 冻结已验证的双保真 preview/final、正式导出与图片缩略图 source delta；
-  不再追加新的产品功能。
+- 冻结已验证的双保真 preview/final、正式导出与图片缩略图 source delta；仅收口
+  已确认的编辑阻塞问题与普通模式左右/上下/2×2 图片布局，不继续扩展为自由画布。
 - 确认截至 2026-08-01 的 post-0.2.7 source delta 发布版本；推荐 `0.2.8`。
 - 同步 `app/__init__.py`、`pyproject.toml`、packaging metadata、README 和 CHANGELOG。
 - 重新生成并验证 versioned macOS DMG 与 clean source archive。

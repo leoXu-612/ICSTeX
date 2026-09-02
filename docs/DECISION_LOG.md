@@ -1,6 +1,6 @@
 # ICSTeX Architecture Decision Log
 
-更新时间：2026-08-06（Asia/Taipei）
+更新时间：2026-08-28（Asia/Taipei）
 
 本文件记录已经接受或明确提出的长期技术决策。它是 append-oriented 的决策
 记录，不保存任务过程。需要改变既有决策时，新增一条 Superseding decision，
@@ -30,6 +30,8 @@
 | D012 | Accepted | 自动预览与原图正式输出采用隔离的双保真构建链 |
 | D013 | Proposed | 可视公式编辑保持 LaTeX 源码唯一真值并采用显式提交 |
 | D014 | Accepted | 不受信项目采用默认拒绝的本地执行边界 |
+| D015 | Accepted | Agent/Harness 通过项目绑定、默认只读的 stdio MCP 操作 ICSTeX |
+| D016 | Accepted | MCP 并发复用官方调度，并由项目级协调器保持一致性 |
 
 ## D001 - Local Research Writing Infrastructure
 
@@ -331,3 +333,68 @@ LaTeX 项目可携带 `latexmk` 配置、Magic Root、原始 LaTeX Block、图�
 - 单文件 `chapter -> ../main.tex` 仅在 root 实际引用该 child 时自动接受；其他情况
   要求用户打开项目文件夹确认边界。
 - 修改执行边界后的所有可执行安装包必须从同一 source commit 重新构建与验证。
+
+## D015 - Project-Scoped Agent and Harness MCP
+
+状态：Accepted
+确认日期：2026-08-13
+
+**Context**
+
+Agent 和 Harness 需要操作 ICSTeX 的文档、Block、编译、诊断、识别和导出能力，
+但 Skill 只能提供调用说明，无法强制项目边界、权限、并发冲突或执行安全；直接遥控
+QWidget 也无法稳定处理未保存缓冲区和后台状态。
+
+**Decision**
+
+- 提供薄的本地 stdio MCP adapter；协议层不 import `app/gui`，语义与安全规则复用
+  `app/core`。
+- 一个 server process 固定一个 canonical project root；只接受项目相对路径并拒绝
+  traversal、symlink 和非普通文件。
+- 默认只读；写入、编译、联网、本地识别、raw LaTeX 与外部导入/导出权限只能由
+  Harness 在启动时授予，不能由 tool 参数自我确认。
+- MCP 编译除 `-norc`、`-no-shell-escape` 和有限超时外，还使用 TeX paranoid
+  `openin_any/openout_any=p`，项目入口与输出以工作目录相对路径传入。
+- 文档和 Block 变更使用 SHA-256/revision compare-and-swap、跨进程项目锁、原子替换
+  与 byte-exact、可校验恢复的 preimage snapshot。
+- OCR 只返回 `reviewRequired` candidate；Skill 负责指导调用顺序，不作为权限边界。
+
+**Consequences**
+
+- MCP 不遥控 GUI、不读取未保存 buffer、不提供 GUI Undo/Redo；写入期间同项目 GUI
+  必须关闭或只读。
+- `mcp` SDK 是可选依赖，桌面应用默认运行时不因此增加协议依赖。
+- 未来扩展工具前优先增加现有语义操作，不建设 daemon 或通用插件系统。
+
+## D016 - SDK-Native MCP Dispatch with Project-Level Concurrency
+
+状态：Accepted
+确认日期：2026-08-28
+
+**Context**
+
+MCP SDK 1.x 会在 server event loop 内直接执行同步工具；长时间编译会阻塞其他请求，
+同根并发编译还可能覆盖活动 manager。把协议调度、线程池和取消协议重新实现在产品
+代码中会复制官方 SDK 能力，并扩大长期维护面。
+
+**Decision**
+
+- 可选 Agent 依赖使用官方 MCP SDK 2.x；由 SDK 负责逐请求任务隔离、同步函数线程
+  卸载和 legacy client 兼容，不引入独立 FastMCP 框架或以 provisional middleware
+  承载正确性。
+- 一个 server process 仍只绑定一个 canonical project root。多项目通过不同名称的
+  stdio server 实例并行；工具参数不得切换根目录。
+- 每个实例最多执行 4 个一致性普通读取；OCR 与显式网络查询各限制为 1 个。写入、
+  Block 修改、编译与导出进入写者优先的 FIFO 独占队列，不与项目读取重叠。
+- 编译请求在排队前登记，preview/final 的排队与执行共用既有 120/300 秒总期限。
+  `stop` 绕过独占队列，停止当前 manager 并取消本进程等待中的编译。
+- 编译校验、可选 Block 组装、LaTeX 执行及 artifact 发布全程持有可重入的跨进程
+  项目锁；CAS、快照、原子替换、授权与路径校验继续作为权威安全边界。
+
+**Consequences**
+
+- 多个不同项目可并行工作，同项目读取可安全重叠，所有修改保持确定性顺序。
+- 同一项目启动多个可写 MCP 进程不是支持拓扑；跨进程锁仍保护修改，但进程内读取
+  门控和 `stop` 无法协调另一个 server process。
+- 11 个工具、CLI 参数和 wire schema 保持兼容；SDK 的 Python 对象字段迁移为
+  snake_case，预期 core 错误显式转换为 `ToolError`，未知异常仍由 SDK 隐藏。

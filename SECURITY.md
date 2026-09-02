@@ -20,3 +20,20 @@ screenshot when a reduced synthetic fixture can reproduce the problem.
 Published builds disable project-local latexmk configuration and TeX shell
 escape. Projects that require executable build hooks are outside the supported
 security boundary.
+
+## Agent and Harness boundary
+
+The optional stdio MCP server is bound to one canonical project root and starts
+read-only. Host startup arguments, never tool-call fields, grant write, compile,
+network, recognition, external input, trusted raw-LaTeX, and export authority.
+Project writes require compare-and-swap hashes and retain byte-exact preimages.
+
+MCP compilation additionally uses TeX paranoid file I/O (`openin_any=p` and
+`openout_any=p`) with relative entry/output paths. Do not expose the server over
+a network transport or run a writable MCP session concurrently with an editable
+GUI session for the same project.
+
+Run concurrent projects as separately named stdio processes with distinct roots.
+Multiple writable MCP processes for the same root are not a supported topology:
+cross-process locks protect mutations and compilation, but bounded reads and
+`stop` cancellation are coordinated only inside one server process.

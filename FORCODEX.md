@@ -1,6 +1,6 @@
 # FORCODEX.md
 
-Timestamp: 2026-08-09 (2.1.0-beta.1 post-release boundary)
+Timestamp: 2026-09-03 (bounded editor completion and figure-layout acceptance)
 
 This is Codex's current bounded brief. Replace it when the assignment changes;
 do not append completed-task history.
@@ -8,38 +8,36 @@ do not append completed-task history.
 ## Current State
 
 The verified source/artifact matrix is maintained in `docs/PROJECT_STATE.md`.
-Version 2.1.0-beta.1 is a public GitHub prerelease with nine assets. The
-repository is Public, the Vercel production website is READY and anonymously
-accessible, and generated website metadata enables the verified GitHub download
-URLs. Publication history was sanitized before visibility changed.
+The Word Count accuracy repair is preserved in its own local commit. The current
+working delta fixes popup-selection completion and upgrades the normal source
+mode's two-image insertion to horizontal, vertical and adjustable 2x2 layouts.
+No package or published release contains these source changes yet.
 
 ## Next Bounded Assignment
 
-Maintain the post-release boundary for 2.1.0-beta.1:
+The next assignment is maintainer acceptance of the editor and image-layout repair:
 
-1. Keep Windows x64 and Setup marked unavailable unless a real x64/Inno Setup
-   environment becomes available; never relabel ARM64.
-2. Do not replace published assets without a new versioned candidate and full
-   checksum, packaging, and website regeneration.
-3. Preserve GitHub Releases as the artifact authority and Vercel as static
-   hosting only; do not hand-edit `website/release.json`.
-4. Do not manually run or retry GitHub Actions until the maintainer explicitly
-   requests CI diagnosis. Record user-reported post-release failures before
-   changing the published branch or assets.
+1. Reproduce `\text` completion, move from `\textbf{}` to `\textit{}`, and confirm
+   Enter and Tab insert the highlighted candidate.
+2. Insert horizontal, vertical and 2x2 layouts from the normal source workspace;
+   verify individual widths, captions, copied assets and aspect-ratio preservation.
+3. Confirm row-width overflow and partial asset-copy failures leave no malformed
+   insertion or orphaned newly copied files.
+4. Rebuild or publish packages only under a separate explicit release assignment.
 
-Do not add product features or reuse the stale unversioned Windows ZIP.
+Do not trigger GitHub Actions, publish assets, change the MCP wire contract or
+add a new GUI/runtime dependency during acceptance.
 
 ## Required Context
 
 - Operations: `AGENTS.md`
 - Current truth: `docs/PROJECT_STATE.md`
-- Release decision: `docs/DECISION_LOG.md` D008
-- Preview/final build decision: `docs/DECISION_LOG.md` D012
+- Security boundary: `SECURITY.md`
+- Architecture decisions: `docs/DECISION_LOG.md` D002, D003 and D007
 - Priorities: `docs/ROADMAP.md`
-- Website release gate: `docs/tasks/WEB_RELEASE_SITE_REFACTOR.md`
 - Memory lifecycle: `docs/MEMORY_MANAGEMENT.md`
 
 ## Handoff Rule
 
-After verified completion, replace this brief with the next bounded assignment.
-Put historical commands, hashes, and results in `PROJECT_LOG.md`, not here.
+After maintainer acceptance, replace this brief with the next bounded assignment.
+Put historical commands and results in `PROJECT_LOG.md`, not here.

@@ -818,6 +818,31 @@ must link here instead of repeating old task details.
 - Deployed the committed `website/` to Vercel Production as
   `dpl_D71b854e1vvoJa4GAwfAxnEmFAfn`; deployment inspection returned `READY`, the
   existing public alias remained assigned, and SSO Protection remained disabled.
+
+## 2026-08-13 - Project-Scoped MCP and Agent Skill
+
+- Added an optional local stdio MCP adapter with 11 semantic tools covering
+  project inspection, CAS document writes, image import, queries, Block state,
+  compilation, local recognition candidates, reference metadata and export.
+- Bound each process to one canonical root. Traversal, symlink and non-regular
+  inputs fail closed; host startup grants control write, compile, network,
+  recognition, raw-LaTeX, external input and export authority.
+- Added project locking, SHA-256/revision CAS, atomic replacement and verified
+  byte-exact preimage snapshots. Recognition never writes automatically.
+- Extracted deterministic Block LaTeX assembly into `app/core` for GUI/MCP reuse.
+  MCP compilation adds relative entry/output arguments and TeX
+  `openin_any/openout_any=p` to the existing no-rc, no-shell and timeout rules.
+- Added the repository-owned `icstex-control` Skill, optional `mcp>=1.28,<2`
+  dependency, `icstex-mcp` entry point, Codex registration instructions and
+  source-archive inclusion.
+- Verification: compileall passed; 62 focused tests passed; a real stdio MCP
+  initialize/list/call handshake exposed all 11 tools; 764 offscreen tests
+  passed; a real restricted TeX Live FINAL compile succeeded while external
+  absolute input and project-source `openout` overwrite were blocked.
+- The official Skill validator passed after PyYAML was supplied only through a
+  temporary validation directory, without changing product dependencies. Local
+  pix2tex/RapidOCR isolated Python runtimes were absent, so real model inference
+  remains an acceptance item.
 ## 2026-08-08 - Public-release security boundary
 
 - Standard desktop security scan identified seven publication blockers across
@@ -843,3 +868,106 @@ must link here instead of repeating old task details.
 - Release metadata regeneration, all recorded SHA-256 checks, source archive
   integrity/exclusion inspection, Windows PE AArch64 inspection, and 10 website
   release tests passed.
+
+## 2026-08-13 - MCP Interface and Skill Contract Hardening
+
+- Kept the existing 11-tool semantic surface and added standard MCP behavior
+  annotations for read-only, destructive, additive and open-world operations.
+- Replaced free-form protocol parameters for query kind, Block operation,
+  compile action/purpose/engine, recognition kind and export kind with bounded
+  enum schemas; core grant and validation checks remain authoritative.
+- Clarified the `icstex-control` Skill's path rule and mapped each host startup
+  grant to the operations that require it.
+- Verification: official Skill validation passed; the installed `mcp` SDK was
+  1.28.1; 62 focused tests and 764 offscreen tests passed; compileall passed;
+  the real stdio handshake verified all tools, annotations, enum schemas and a
+  read-only `inspect_project` call.
+
+## 2026-08-13 - Audited ICSTeX Control Skill Revision
+
+- Audited the maintainer-provided 638-line Skill candidate against the current
+  11-tool MCP schema, core responses, grants, CAS rules and D015 boundary.
+- Replaced the repository Skill with a 122-line revision that retains the
+  candidate's useful untrusted-content, no-shell-fallback, diagnostic,
+  visual-review and failure-handling guidance without duplicating the existing
+  workflow.
+- Removed unsupported claims about project revisions, transaction IDs, compile
+  profiles, bibliography/job/cache metadata, asset deduplication, `CHECK_SKIPPED`
+  and a nonexistent doctor command.
+- Official Skill validation, an AST-to-Skill tool-contract check and repository
+  to global-symlink comparison passed. Compileall, 62 focused MCP/core tests and
+  all 764 offscreen tests also passed.
+
+## 2026-08-28 - MCP 2.x Safe Concurrency
+
+- Migrated the optional adapter from `mcp>=1.28,<2` and `FastMCP` to
+  `mcp>=2.0,<3` and the official `MCPServer`. The verified local environment used
+  `mcp 2.1.1`; the server reports the ICSTeX application version and preserves
+  the existing 11-tool wire schema, annotations, grants and CLI surface.
+- Added a pure-core project concurrency coordinator: at most four ordinary
+  readers, one OCR request and one network request; writer-priority FIFO
+  exclusivity for mutations, compilation and export; and cancellation of queued
+  compile work without blocking `compile_project(action="stop")`.
+- Registered compile intents before queueing, applied the existing preview/final
+  120/300-second bounds to queue plus execution, serialized the full validation,
+  optional Block assembly, build and artifact publication path under a reentrant
+  cross-process project lock, and prevented active CompileManager replacement.
+- Converted anticipated workspace/concurrency failures to MCP 2.x `ToolError`
+  so permission, CAS, path, timeout and cancellation messages remain visible;
+  unexpected exceptions remain redacted by the SDK.
+- Added focused coverage for bounded readers, writer priority, FIFO/cancellation,
+  two-project compile overlap, same-project serialization, active stop, compile
+  deadlines, reentrant export, two-process CAS competition, current/legacy stdio
+  handshakes and synchronous tool thread offload.
+- Verification: `python3 -m compileall -q app tests packaging/install_build_dependencies.py`
+  passed; 77 focused tests passed; `QT_QPA_PLATFORM=offscreen python3 -m unittest
+  discover -s tests` passed all 779 tests; `python3 -m pip check`, `git diff
+  --check`, the official Skill validator and repository/global Skill comparison
+  passed. No package, publish, push or GitHub Actions workflow was run.
+
+## 2026-08-29 - Word Count Accuracy Repair
+
+- Compared the existing counter with the TeX Live TeXcount source, Overleaf's
+  `texcount -inc` service path and newer syntax-tree/Unicode-segmenter client
+  path, plus pylatexenc's custom parsing model. Reused the architectural ideas
+  only; no third-party source was copied and no dependency was added.
+- Reproduced TeXcount `-chinese` counting U+3002 and U+3001 as Han-script words;
+  ICSTeX now requests `-logograms=Ideographic`, verified with the installed
+  TeXcount 3.1.1 against Chinese punctuation, numbers and U+20000 ideographs.
+- Replaced fragment-by-fragment fallback totals with category-level visible-text
+  tokenization. Accent macros and formatting inside a word now remain one word;
+  standard text-symbol macros, `%TC:ignore`, inline verbatim, optional short
+  headings/captions and footnote classification have focused regression tests.
+- Repeated `input`/`include`/`subfile` expansions are counted each time while an
+  ancestor stack stops true cycles. Unsafe cyclic/over-limit projects bypass
+  external TeXcount instead of waiting for its 15-second timeout.
+- Preserved all `WordCountResult` and MCP fields. The UI now calls the modes
+  `TeXcount 兼容统计` and `ICSTeX 结构化统计`, labels TeXcount's third category as
+  `说明/脚注`, and states that course-specific inclusion rules remain external.
+- Verification: 32 focused Word Count tests and 156 Word Count/Environment
+  Doctor/GUI tests passed; `python3 -m compileall -q app tests
+  packaging/install_build_dependencies.py` passed; full offscreen discovery
+  passed all 787 tests in 214.403 seconds; `git diff --check` passed. No package,
+  publish, push or GitHub Actions workflow was run.
+
+## 2026-09-03 - Completion Selection and Normal-Mode Image Layouts
+
+- Reproduced the completion mismatch with the popup highlighting `\\textit{}`
+  while `QCompleter.currentCompletion()` remained `\\textbf{}`. Enter and Tab now
+  resolve the popup's current index before falling back to the completer value.
+- Replaced the normal-mode two-image dialog with structured horizontal, vertical
+  and adjustable 2x2 layouts. Each image has an independent width and subcaption;
+  generated LaTeX constrains width only, preserves source aspect ratio and rejects
+  a row total above `1.0\\textwidth`.
+- Made multi-image asset copying transactional: all inputs are checked first,
+  repeated source paths reuse one copy, and partial copy failure removes every new
+  file from that operation before source insertion.
+- Added regression coverage for popup selection, dialog state, layout generation,
+  row validation, normal-mode insertion, asset rollback and a real XeLaTeX compile.
+  Default and 150% offscreen visual checks showed no horizontal control clipping.
+- Verification: `git diff --check` and `python3 -m compileall -q app tests
+  packaging/install_build_dependencies.py` passed; the editor/insertion suite
+  passed 146 tests, and full offscreen discovery passed all 796 tests in 141.204
+  seconds. The Word Count checkpoint is `ea56060`; the editor/layout commit is
+  `9103c31`. The verified line was merged locally into `release/2.1` without any
+  package, publish, push or GitHub Actions workflow.

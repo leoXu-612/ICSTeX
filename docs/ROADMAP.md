@@ -1,6 +1,6 @@
 # ICSTeX Roadmap
 
-更新时间：2026-08-08（Asia/Taipei）
+更新时间：2026-08-28（Asia/Taipei）
 
 本文件描述产品与技术路线，不是功能愿望清单。每个进入实施的项目都必须
 同时满足用户价值、稳定性、可维护性和可验证性要求。
@@ -26,8 +26,8 @@ ICSTeX 要成为 ICC 学生从“建立写作项目”到“提交可靠成果�
 目标：把已验证源码变成可解释、可复现、跨平台一致的下一版本。
 
 - 建立并执行新的项目状态、路线图、决策和记忆管理规范。
-- 冻结已验证的双保真 preview/final、正式导出与图片缩略图 source delta；
-  不再追加新的产品功能。
+- 冻结已验证的双保真 preview/final、正式导出与图片缩略图 source delta；仅收口
+  已确认的编辑阻塞问题与普通模式左右/上下/2×2 图片布局，不继续扩展为自由画布。
 - 确认截至 2026-08-01 的 post-0.2.7 source delta 发布版本；推荐 `0.2.8`。
 - 同步 `app/__init__.py`、`pyproject.toml`、packaging metadata、README 和 CHANGELOG。
 - 重新生成并验证 versioned macOS DMG 与 clean source archive。
@@ -130,6 +130,17 @@ DeepSeek assignment 只实现纯 core contract；GUI、MathLive/QtWebEngine、pa
 - 直接编辑 PDF 或从 PDF 反向生成 LaTeX；
 - 在没有明确扩展需求前建设通用插件系统；
 - 为增加功能数量而复制 Overleaf 或大型 IDE 的全部能力。
+
+## Delivered - Agent / Harness MCP Boundary
+
+本地 stdio MCP 已提供项目检查、文档 CAS 读写、搜索/诊断/字数/引用/SyncTeX、
+Block CRUD/布局/主题/来源/组装、受限编译、本地 OCR candidate、DOI/arXiv 元数据和
+受权目录导出。协议调度复用官方 MCP SDK 2.x；同项目读取有界并发，修改/编译/导出
+保持 FIFO 独占，不同项目通过独立命名实例并行。Skill 只描述正确工作流，权限、
+路径与并发保护由 core 强制。
+
+后续只在真实工作流缺口出现时增加语义能力；不加入 GUI 遥控、后台 daemon、任意
+文件系统访问、Agent 自授权、OCR 自动落盘或通用插件系统。
 
 ## Feature Admission Checklist
 

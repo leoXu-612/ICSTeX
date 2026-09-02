@@ -71,6 +71,39 @@ After installing as a Python package, the console script is:
 icstex
 ```
 
+## Agent / Harness integration
+
+ICSTeX includes an optional local stdio MCP adapter. It is bound to one project
+root and starts read-only; write, compile, network, local recognition, input,
+and export access must be granted by the host at startup.
+
+```bash
+python3 -m pip install -e '.[agent]'
+icstex-mcp --project-root /absolute/path/to/project
+```
+
+For Codex CLI, register that same read-only command with:
+
+```bash
+codex mcp add icstex -- icstex-mcp --project-root /absolute/path/to/project
+```
+
+To work with multiple projects concurrently, register one separately named
+stdio server per project root. Do not start multiple writable server processes
+for the same root; the supported topology is one process per project, while one
+process can service bounded concurrent reads and safely queue mutations.
+
+Add only the capabilities needed for the current task, for example
+`--allow-write --allow-compile`. External images require one or more
+`--allow-input` paths, and exports require an existing `--export-root`.
+Mutations use SHA-256 compare-and-swap checks and byte-exact, restorable
+preimage snapshots.
+The companion Agent instructions live in
+[`skills/icstex-control/SKILL.md`](skills/icstex-control/SKILL.md).
+
+The MCP server does not remote-control the GUI or see unsaved GUI buffers. Keep
+the same project closed or read-only in ICSTeX while an Agent is mutating it.
+
 The app detects `latexmk` or `pdflatex` on `PATH`. It writes build artifacts to
 `.latex_build/` inside the project folder instead of polluting the source folder.
 Fast-preview caches live separately under `.icstex/preview/`; the in-app clean

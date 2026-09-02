@@ -23,7 +23,7 @@ STATS: tuple[tuple[str, str], ...] = (
     ("effective", "有效正文"),
     ("total", "总字数"),
     ("headers", "标题"),
-    ("captions", "图表说明"),
+    ("captions", "说明/脚注"),
     ("formulas", "公式"),
     ("numbers", "数字"),
 )
@@ -31,7 +31,7 @@ STATS: tuple[tuple[str, str], ...] = (
 BREAKDOWN: tuple[tuple[str, str], ...] = (
     ("effective", "有效正文"),
     ("headers", "标题"),
-    ("captions", "图表说明"),
+    ("captions", "说明/脚注"),
     ("math_inline", "行内公式"),
     ("math_display", "行间公式"),
     ("numbers", "数字"),
@@ -40,7 +40,7 @@ BREAKDOWN: tuple[tuple[str, str], ...] = (
 CATEGORY_STYLES: dict[str, tuple[str, str, str]] = {
     "effective": ("有效正文", "#d9ecff", "#174c79"),
     "headers": ("标题", "#eadfff", "#4d3b7a"),
-    "captions": ("图表说明", "#d9f0e7", "#235c48"),
+    "captions": ("说明/脚注", "#d9f0e7", "#235c48"),
     "math_inline": ("行内公式", "#ffe8cc", "#7a4817"),
     "math_display": ("行间公式", "#ffe0e6", "#7a2d3c"),
     "numbers": ("数字", "#dceff4", "#315c68"),
@@ -178,7 +178,7 @@ class WordCountView(QWidget):
 
         title = QLabel("文本分层预览")
         title.setObjectName("wordBreakdownTitle")
-        hint = QLabel("颜色用于解释当前项目中哪些可见文本被计入正文、标题、说明、公式或数字；精确数字仍以上方统计为准。")
+        hint = QLabel("颜色用于解释当前项目中哪些可见文本被计入正文、标题、说明/脚注、公式或数字；上方数值为准。")
         hint.setObjectName("wordBreakdownHint")
         hint.setWordWrap(True)
         legend = QLabel(self._legend_html())
@@ -216,7 +216,7 @@ class WordCountView(QWidget):
             self.category_bars[key].setValue(value)
             self.category_values[key].setText(f"{value:,}")
         state = "当前编辑器内容" if is_modified else "已保存内容"
-        note = "有效正文不包含标题、图表说明、公式和数字。"
+        note = "有效正文不包含标题、图表说明、脚注、公式和数字；具体提交口径仍以课程要求为准。"
         mode = self._mode_label(result)
         self.last_mode_label = mode
         warnings = " ".join(result.warnings)
@@ -238,9 +238,9 @@ class WordCountView(QWidget):
     @staticmethod
     def _mode_label(result: WordCountResult) -> str:
         if result.source.startswith("texcount"):
-            return "texcount 精确统计"
+            return "TeXcount 兼容统计"
         if result.source == "fallback":
-            return "Python 简化统计"
+            return "ICSTeX 结构化统计"
         return result.source
 
     @staticmethod

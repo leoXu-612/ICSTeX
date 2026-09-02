@@ -28,12 +28,17 @@ from app.core.pdf_state import PdfFreshness
 from app.core.preview_state import PreviewFreshness
 from app.core.settings import AppSettings
 from app.core.latex_tools import LaTeXEngine, LaTeXToolchain
-from app.core.latex_insertions import HYPERLINK_PACKAGES
+from app.core.latex_insertions import (
+    HYPERLINK_PACKAGES,
+    FigureLayout,
+    FigureLayoutItem,
+    FigureLayoutSpec,
+)
 from app.gui.diagnostics_panel import DiagnosticsPanel
 from app.gui.environment_doctor_dialog import EnvironmentDoctorDialog
 from app.gui.find_replace import FindReplaceBar
 from app.gui.formula_dialog import FormulaDialog
-from app.gui.insert_panel import FigureDialog, HyperlinkDialog, SideBySideFigureDialog, TableDialog
+from app.gui.insert_panel import FigureDialog, FigureLayoutDialog, HyperlinkDialog, TableDialog
 from app.gui.latex_editor import LaTeXEditor
 from app.gui.main_window import EditorTab, MainWindow
 from app.gui.project_panels import BibEntryDialog, BibImportDialog, ProjectWizardDialog
@@ -234,6 +239,7 @@ class GuiEditorTests(TestCase):
         insert_labels = {button.text() for button in window.insert_panel.findChildren(QPushButton)}
         self.assertIn("章节标题", insert_labels)
         self.assertIn("分段函数", insert_labels)
+        self.assertIn("图片布局", insert_labels)
         self.assertEqual(window.welcome_page.guide_button.text(), "新手导引")
         self.assertTrue(hasattr(window, "auto_compile_toggle"))
         self.assertIsInstance(window.auto_compile_toggle, AutoCompileToggle)
@@ -617,7 +623,7 @@ class GuiEditorTests(TestCase):
     def test_insert_dialogs_smoke(self) -> None:
         dialogs = [
             FigureDialog(),
-            SideBySideFigureDialog(),
+            FigureLayoutDialog(),
             TableDialog(),
             HyperlinkDialog(),
             ProjectWizardDialog(),
@@ -629,6 +635,117 @@ class GuiEditorTests(TestCase):
         for dialog in dialogs:
             self.assertIsNotNone(dialog.windowTitle())
             dialog.close()
+
+    def test_figure_layout_dialog_switches_layout_and_keeps_per_layout_widths(self) -> None:
+        dialog = FigureLayoutDialog()
+
+        vertical_index = dialog.layout_combo.findData(FigureLayout.VERTICAL.value)
+        dialog.layout_combo.setCurrentIndex(vertical_index)
+        self.assertEqual(dialog.values().layout, FigureLayout.VERTICAL)
+        self.assertEqual(len(dialog.values().items), 2)
+        self.assertEqual([item.width for item in dialog.values().items], [0.8, 0.8])
+        self.assertTrue(dialog.item_groups[2].isHidden())
+
+        grid_index = dialog.layout_combo.findData(FigureLayout.GRID_2X2.value)
+        dialog.layout_combo.setCurrentIndex(grid_index)
+        for index, edit in enumerate(dialog.image_edits):
+            edit.setText(f"/tmp/{index}.png")
+        for spin, width in zip(dialog.width_spins, (0.55, 0.40, 0.45, 0.50), strict=True):
+            spin.setValue(width)
+        values = dialog.values()
+
+        self.assertEqual(values.layout, FigureLayout.GRID_2X2)
+        self.assertEqual(len(values.items), 4)
+        self.assertEqual([item.width for item in values.items], [0.55, 0.40, 0.45, 0.50])
+        self.assertFalse(dialog.item_groups[3].isHidden())
+        self.assertIn("上排 0.95", dialog.layout_hint.text())
+        self.assertIn("不会拉伸变形", dialog.layout_hint.text())
+        self.assertGreaterEqual(
+            dialog.minimumWidth(),
+            dialog.item_container.sizeHint().width() + 48,
+        )
+        self.assertLessEqual(dialog.item_scroll.height(), 300)
+        dialog.close()
+
+    def test_normal_mode_inserts_adjustable_grid_figure_layout(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "main.tex"
+            source.write_text(
+                "\\documentclass{article}\n\\begin{document}\n\\end{document}\n",
+                encoding="utf-8",
+            )
+            image_paths = []
+            for name in ("a.png", "b.png", "c.png", "d.png"):
+                image = root / name
+                image.write_bytes(b"image")
+                image_paths.append(image)
+
+            window = MainWindow(settings_store=isolated_settings())
+            window.auto_compile_action.setChecked(False)
+            window._watch_file = lambda _path: None  # type: ignore[method-assign]
+            editor = window._make_editor(source.read_text(encoding="utf-8"))
+            tab = EditorTab(editor=editor, path=source)
+            window._add_tab(tab, source.name)
+            dialog = Mock()
+            dialog.exec.return_value = QDialog.DialogCode.Accepted
+            dialog.values.return_value = FigureLayoutSpec(
+                layout=FigureLayout.GRID_2X2,
+                items=tuple(
+                    FigureLayoutItem(str(path), width, path.stem.upper())
+                    for path, width in zip(
+                        image_paths,
+                        (0.55, 0.40, 0.45, 0.50),
+                        strict=True,
+                    )
+                ),
+                caption="Four panels",
+                label="fig:grid",
+            )
+
+            with patch("app.gui.insertion_actions.FigureLayoutDialog", return_value=dialog):
+                window.insert_side_by_side_figures()
+
+            text = editor.toPlainText()
+            self.assertEqual(text.count("\\begin{subfigure}"), 4)
+            self.assertIn("\\begin{subfigure}{0.55\\textwidth}", text)
+            self.assertIn("\\begin{subfigure}{0.4\\textwidth}", text)
+            self.assertEqual(text.count("\\hfill"), 2)
+            self.assertIn("\\par\\medskip", text)
+            self.assertIn("\\usepackage{subcaption}", text)
+            self.assertIn("\\label{fig:grid}", text)
+            for image in image_paths:
+                self.assertTrue((root / "figures" / image.name).is_file())
+            tab.modified = tab.dirty = False
+            window.close()
+
+    def test_layout_asset_copy_rolls_back_partial_failure(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "main.tex"
+            source.write_text("", encoding="utf-8")
+            first = root / "first.png"
+            second = root / "second.png"
+            first.write_bytes(b"first")
+            second.write_bytes(b"second")
+            window = MainWindow(settings_store=isolated_settings())
+            tab = EditorTab(editor=window._make_editor(""), path=source)
+
+            def copy_then_fail(source_path: Path, destination: Path) -> None:
+                if source_path == second:
+                    raise OSError("simulated copy failure")
+                destination.write_bytes(source_path.read_bytes())
+
+            with (
+                patch("app.gui.insertion_actions.copy_image_atomic", side_effect=copy_then_fail),
+                patch("app.gui.insertion_actions.QMessageBox.warning") as warning,
+            ):
+                result = window.insertions.copy_image_assets(tab, [str(first), str(second)])
+
+            self.assertIsNone(result)
+            self.assertEqual(list((root / "figures").glob("*")), [])
+            self.assertIn("已回滚新增图片", warning.call_args.args[2])
+            window.close()
 
     def test_environment_doctor_dialog_smoke(self) -> None:
         from app.core.environment_doctor import build_environment_report
@@ -1105,6 +1222,33 @@ class GuiEditorTests(TestCase):
 
         self.assertEqual(editor.toPlainText(), "\\begin{equation}\n  \n\\end{equation}")
 
+    def test_completion_enter_uses_popup_highlighted_row(self) -> None:
+        editor = LaTeXEditor(r"\text")
+        cursor = editor.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        editor.setTextCursor(cursor)
+        editor.show()
+        editor._show_completion_if_available()
+        app().processEvents()
+
+        popup = editor._completer.popup()
+        completion_model = editor._completer.completionModel()
+        popup.setCurrentIndex(completion_model.index(1, 0))
+        self.assertEqual(popup.currentIndex().data(), r"\textit{}")
+        self.assertEqual(editor._completer.currentCompletion(), r"\textbf{}")
+
+        editor.keyPressEvent(
+            QKeyEvent(
+                QEvent.Type.KeyPress,
+                Qt.Key.Key_Return,
+                Qt.KeyboardModifier.NoModifier,
+                "\r",
+            )
+        )
+
+        self.assertEqual(editor.toPlainText(), r"\textit{}")
+        editor.close()
+
     def test_tab_expands_snippet(self) -> None:
         editor = LaTeXEditor("fig")
         cursor = editor.textCursor()
@@ -1327,10 +1471,10 @@ class GuiEditorTests(TestCase):
 
         self.assertEqual(window.word_count_labels["effective"].text(), "2")
         self.assertEqual(window.word_count_labels["numbers"].text(), "1")
-        self.assertIn("Python 简化统计", window.word_count_meta.text())
-        self.assertIn("未找到 texcount", window.word_count_meta.text())
+        self.assertIn("ICSTeX 结构化统计", window.word_count_meta.text())
+        self.assertIn("未找到 TeXcount", window.word_count_meta.text())
         self.assertIn("当前编辑器内容", window.word_count_meta.text())
-        self.assertEqual(window.word_count_view.last_mode_label, "Python 简化统计")
+        self.assertEqual(window.word_count_view.last_mode_label, "ICSTeX 结构化统计")
         window.close()
 
     def test_word_count_uses_project_root_and_unsaved_child_buffer(self) -> None:
@@ -1377,7 +1521,7 @@ class GuiEditorTests(TestCase):
             # Set after _add_tab: tab activation now syncs the timer label to
             # the active root's record.
             window.compile_time_label.setText("上次编译 7.25s")
-            window.word_count_view.last_mode_label = "texcount 精确统计"
+            window.word_count_view.last_mode_label = "TeXcount 兼容统计"
 
             context = window._build_feedback_context()
 
@@ -1388,7 +1532,7 @@ class GuiEditorTests(TestCase):
             self.assertEqual(context.metadata.root_source, "magic comment")
             self.assertEqual(context.metadata.selected_engine, "XeLaTeX")
             self.assertEqual(context.metadata.latest_compile_seconds, 7.25)
-            self.assertEqual(context.metadata.word_count_mode, "texcount 精确统计")
+            self.assertEqual(context.metadata.word_count_mode, "TeXcount 兼容统计")
             window.close()
 
     def test_refresh_project_panels_reads_labels_and_bib_keys(self) -> None:

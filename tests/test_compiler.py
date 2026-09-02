@@ -21,6 +21,41 @@ from app.core.latex_tools import LaTeXEngine, LaTeXToolchain
 
 
 class CompileManagerTests(TestCase):
+    def test_restricted_io_uses_relative_arguments_and_paranoid_tex_environment(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            tex = root / "main.tex"
+            tex.write_text("\\documentclass{article}", encoding="utf-8")
+            manager = CompileManager(
+                tex,
+                toolchain=LaTeXToolchain(
+                    latexmk=None,
+                    pdflatex="/bin/pdflatex",
+                    texcount=None,
+                    synctex=None,
+                ),
+                restricted_io=True,
+            )
+
+            class FakeProcess:
+                returncode = 0
+
+                def communicate(self, timeout=None):  # type: ignore[no-untyped-def]  # noqa: ARG002
+                    manager.pdf_file.write_bytes(b"%PDF-1.4 restricted")
+                    return "", ""
+
+            with patch("app.core.compiler.subprocess.Popen", return_value=FakeProcess()) as popen:
+                result = manager.compile_now()
+
+        assert result is not None
+        self.assertEqual(result.outcome, CompileOutcome.SUCCESS)
+        command = popen.call_args.args[0]
+        self.assertIn("main.tex", command)
+        self.assertNotIn(str(tex), command)
+        self.assertIn("-output-directory=.latex_build", command)
+        self.assertEqual(popen.call_args.kwargs["env"]["openin_any"], "p")
+        self.assertEqual(popen.call_args.kwargs["env"]["openout_any"], "p")
+
     def test_preview_uses_separate_output_and_overlay_environment(self) -> None:
         with TemporaryDirectory() as directory:
             root = Path(directory)

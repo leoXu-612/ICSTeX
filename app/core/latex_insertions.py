@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 from dataclasses import dataclass
+from enum import Enum
 import io
 import os
 from pathlib import Path
@@ -41,6 +42,36 @@ class SideBySideFigureSpec:
     caption: str = ""
     label: str = ""
     width: float = 0.48
+    placement: str = "htbp"
+
+
+class FigureLayout(str, Enum):
+    HORIZONTAL = "horizontal"
+    VERTICAL = "vertical"
+    GRID_2X2 = "grid_2x2"
+
+    @property
+    def display_name(self) -> str:
+        return {
+            FigureLayout.HORIZONTAL: "左右拼接",
+            FigureLayout.VERTICAL: "上下拼接",
+            FigureLayout.GRID_2X2: "田字拼接（2×2）",
+        }[self]
+
+
+@dataclass(frozen=True)
+class FigureLayoutItem:
+    image_path: str
+    width: float = 0.48
+    caption: str = ""
+
+
+@dataclass(frozen=True)
+class FigureLayoutSpec:
+    layout: FigureLayout = FigureLayout.HORIZONTAL
+    items: tuple[FigureLayoutItem, ...] = ()
+    caption: str = ""
+    label: str = ""
     placement: str = "htbp"
 
 
@@ -93,34 +124,77 @@ def figure_snippet(spec: FigureSpec) -> str:
 
 
 def side_by_side_figure_snippet(spec: SideBySideFigureSpec) -> str:
-    width = _ratio(spec.width)
+    return figure_layout_snippet(
+        FigureLayoutSpec(
+            layout=FigureLayout.HORIZONTAL,
+            items=(
+                FigureLayoutItem(spec.left_image_path, spec.width, spec.left_caption),
+                FigureLayoutItem(spec.right_image_path, spec.width, spec.right_caption),
+            ),
+            caption=spec.caption,
+            label=spec.label,
+            placement=spec.placement,
+        )
+    )
+
+
+def figure_layout_snippet(spec: FigureLayoutSpec) -> str:
+    layout = FigureLayout(spec.layout)
+    expected = 4 if layout is FigureLayout.GRID_2X2 else 2
+    if len(spec.items) != expected:
+        raise ValueError(f"{layout.display_name}需要选择 {expected} 张图片。")
+    for item in spec.items:
+        if not item.image_path.strip():
+            raise ValueError("图片路径不能为空。")
+        if not 0.05 <= float(item.width) <= 1.0:
+            raise ValueError("单张图片宽度必须在 0.05 到 1.0 之间。")
+
+    rows = _figure_layout_rows(layout, spec.items)
+    for row in rows:
+        if len(row) > 1 and sum(float(item.width) for item in row) > 1.000001:
+            raise ValueError("同一行图片宽度合计不能超过 1.0\\textwidth。")
+
     lines = [
         f"\\begin{{figure}}[{spec.placement}]",
         "  \\centering",
-        f"  \\begin{{subfigure}}{{{width}\\textwidth}}",
-        "    \\centering",
-        f"    \\includegraphics[width=\\linewidth]{{{spec.left_image_path}}}",
     ]
-    if spec.left_caption:
-        lines.append(f"    \\caption{{{spec.left_caption}}}")
-    lines.extend(
-        [
-            "  \\end{subfigure}",
-            "  \\hfill",
-            f"  \\begin{{subfigure}}{{{width}\\textwidth}}",
-            "    \\centering",
-            f"    \\includegraphics[width=\\linewidth]{{{spec.right_image_path}}}",
-        ]
-    )
-    if spec.right_caption:
-        lines.append(f"    \\caption{{{spec.right_caption}}}")
-    lines.append("  \\end{subfigure}")
+    for row_index, row in enumerate(rows):
+        for item_index, item in enumerate(row):
+            lines.extend(_subfigure_lines(item, suppress_trailing_space=item_index < len(row) - 1))
+            if item_index < len(row) - 1:
+                lines.append("  \\hfill")
+        if row_index < len(rows) - 1:
+            lines.append("  \\par\\medskip")
     if spec.caption:
         lines.append(f"  \\caption{{{spec.caption}}}")
     if spec.label:
         lines.append(f"  \\label{{{spec.label}}}")
     lines.append("\\end{figure}")
     return "\n".join(lines)
+
+
+def _figure_layout_rows(
+    layout: FigureLayout,
+    items: tuple[FigureLayoutItem, ...],
+) -> tuple[tuple[FigureLayoutItem, ...], ...]:
+    if layout is FigureLayout.HORIZONTAL:
+        return (items,)
+    if layout is FigureLayout.VERTICAL:
+        return tuple((item,) for item in items)
+    return (items[:2], items[2:])
+
+
+def _subfigure_lines(item: FigureLayoutItem, *, suppress_trailing_space: bool) -> list[str]:
+    lines = [
+        f"  \\begin{{subfigure}}{{{_ratio(item.width)}\\textwidth}}",
+        "    \\centering",
+        f"    \\includegraphics[width=\\linewidth]{{{item.image_path}}}",
+    ]
+    if item.caption:
+        lines.append(f"    \\caption{{{item.caption}}}")
+    ending = "  \\end{subfigure}%" if suppress_trailing_space else "  \\end{subfigure}"
+    lines.append(ending)
+    return lines
 
 
 def table_snippet(spec: TableSpec) -> str:

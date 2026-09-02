@@ -154,7 +154,7 @@ class LaTeXEditor(QPlainTextEdit):
     def keyPressEvent(self, event: QKeyEvent) -> None:
         if self._completer.popup().isVisible():
             if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Tab):
-                completion = self._completer.currentCompletion()
+                completion = self._selected_completion()
                 if completion:
                     self._insert_completion(completion)
                 self._completer.popup().hide()
@@ -354,6 +354,15 @@ class LaTeXEditor(QPlainTextEdit):
         cursor_rect = self.cursorRect()
         cursor_rect.setWidth(max(260, self._completer.popup().sizeHintForColumn(0) + 20))
         self._completer.complete(cursor_rect)
+
+    def _selected_completion(self) -> str:
+        """Return the row highlighted in the popup, not QCompleter's stale row."""
+        index = self._completer.popup().currentIndex()
+        if index.isValid():
+            selected = index.data(Qt.ItemDataRole.DisplayRole)
+            if isinstance(selected, str) and selected:
+                return selected
+        return self._completer.currentCompletion()
 
     def _insert_completion(self, display: str) -> None:
         candidate = self._completion_candidates.get(display)

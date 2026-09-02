@@ -243,7 +243,10 @@ def _recommendations(tools: tuple[ToolStatus, ...]) -> tuple[str, ...]:
         recommendations.append("编译核心可用。若某个项目仍失败，请查看“错误/检查”面板里的具体 LaTeX 信息。")
 
     if "texcount" not in available:
-        recommendations.append("未找到 texcount，字数统计会自动降级为 Python 简化统计，结果可能与 Overleaf 不完全一致。")
+        recommendations.append(
+            "未找到 TeXcount，字数统计会使用 ICSTeX 本地结构化统计；"
+            "结果可能与 TeXcount 或 Overleaf 不完全一致。"
+        )
     if "biber" not in available and "bibtex" not in available:
         recommendations.append("未找到 biber 或 bibtex，复杂参考文献项目可能无法完整编译。")
     if "synctex" not in available:

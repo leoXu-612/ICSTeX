@@ -15,9 +15,11 @@ dependencies = [
 
 [project.optional-dependencies]
 packaging = ["pyinstaller>=6.0"]
+agent = ["mcp>=2.0,<3"]
 
 [project.scripts]
 icstex = "app.__main__:main"
+icstex-mcp = "app.mcp_server:main"
 
 [tool.setuptools.packages.find]
 include = ["app*"]

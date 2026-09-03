@@ -1,6 +1,6 @@
 # FORCODEX.md
 
-Timestamp: 2026-09-03 (bounded editor completion and figure-layout acceptance)
+Timestamp: 2026-09-03 (bounded command-completion catalog acceptance)
 
 This is Codex's current bounded brief. Replace it when the assignment changes;
 do not append completed-task history.
@@ -8,25 +8,29 @@ do not append completed-task history.
 ## Current State
 
 The verified source/artifact matrix is maintained in `docs/PROJECT_STATE.md`.
-The Word Count accuracy repair is preserved in its own local commit. The current
-working delta fixes popup-selection completion and upgrades the normal source
-mode's two-image insertion to horizontal, vertical and adjustable 2x2 layouts.
-No package or published release contains these source changes yet.
+The verified MCP, Word Count, popup-selection and image-layout line is locally
+merged into `release/2.1`. The current `codex/completion-catalog` delta expands
+the static command catalog from 23 to 68 templates, adds `pageref` label lookup,
+and maps color/math completions to the existing missing-package diagnostics. No
+package or published release contains this source delta yet.
 
 ## Next Bounded Assignment
 
-The next assignment is maintainer acceptance of the editor and image-layout repair:
+The next assignment is maintainer acceptance of the command-completion expansion:
 
-1. Reproduce `\text` completion, move from `\textbf{}` to `\textit{}`, and confirm
-   Enter and Tab insert the highlighted candidate.
-2. Insert horizontal, vertical and 2x2 layouts from the normal source workspace;
-   verify individual widths, captions, copied assets and aspect-ratio preservation.
-3. Confirm row-width overflow and partial asset-copy failures leave no malformed
-   insertion or orphaned newly copied files.
-4. Rebuild or publish packages only under a separate explicit release assignment.
+1. Type `\text` and verify the exact `\text{}`, bold, italic, color and remaining
+   text variants are visible within the bounded popup.
+2. Type `\textc`, accept `\textcolor{}{}`, and verify the cursor lands in the
+   first argument; direction-key selection must still insert the highlighted row.
+3. Smoke-test structure, reference, citation, math, unit, project-composition and
+   bibliography prefixes; `\pageref{...}` must suggest known labels.
+4. Verify `\textcolor` without `xcolor` and `\text` without `amsmath` produce the
+   existing one-click package fix, while documents already declaring the package
+   remain warning-free.
+5. Rebuild or publish packages only under a separate explicit release assignment.
 
-Do not trigger GitHub Actions, publish assets, change the MCP wire contract or
-add a new GUI/runtime dependency during acceptance.
+Do not trigger GitHub Actions, publish assets, change the MCP wire contract, add
+a language server or add a new GUI/runtime dependency during acceptance.
 
 ## Required Context
 

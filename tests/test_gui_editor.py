@@ -1233,9 +1233,14 @@ class GuiEditorTests(TestCase):
 
         popup = editor._completer.popup()
         completion_model = editor._completer.completionModel()
-        popup.setCurrentIndex(completion_model.index(1, 0))
+        textit_row = next(
+            row
+            for row in range(completion_model.rowCount())
+            if completion_model.index(row, 0).data() == r"\textit{}"
+        )
+        popup.setCurrentIndex(completion_model.index(textit_row, 0))
         self.assertEqual(popup.currentIndex().data(), r"\textit{}")
-        self.assertEqual(editor._completer.currentCompletion(), r"\textbf{}")
+        self.assertNotEqual(editor._completer.currentCompletion(), r"\textit{}")
 
         editor.keyPressEvent(
             QKeyEvent(
@@ -1247,6 +1252,28 @@ class GuiEditorTests(TestCase):
         )
 
         self.assertEqual(editor.toPlainText(), r"\textit{}")
+        editor.close()
+
+    def test_textcolor_completion_inserts_template_and_focuses_color(self) -> None:
+        editor = LaTeXEditor(r"\textc")
+        cursor = editor.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        editor.setTextCursor(cursor)
+        editor.show()
+        editor._show_completion_if_available()
+        app().processEvents()
+
+        editor.keyPressEvent(
+            QKeyEvent(
+                QEvent.Type.KeyPress,
+                Qt.Key.Key_Return,
+                Qt.KeyboardModifier.NoModifier,
+                "\r",
+            )
+        )
+
+        self.assertEqual(editor.toPlainText(), r"\textcolor{}{}")
+        self.assertEqual(editor.textCursor().position(), len(r"\textcolor{"))
         editor.close()
 
     def test_tab_expands_snippet(self) -> None:

@@ -5,7 +5,7 @@ import re
 
 
 COMMAND_RE = re.compile(r"(\\[A-Za-z]*)$")
-LABEL_RE = re.compile(r"\\(?:ref|autoref|eqref)\{([^{}\\]*)$")
+LABEL_RE = re.compile(r"\\(?:ref|pageref|autoref|eqref)\{([^{}\\]*)$")
 CITE_RE = re.compile(r"\\(?:cite|citep|citet|parencite|textcite)\{([^{}\\]*)$")
 
 
@@ -22,30 +22,90 @@ class CompletionContext:
     candidates: tuple[CompletionCandidate, ...]
 
 
+def _template(value: str) -> CompletionCandidate:
+    """Build a completion from a template containing one ``|`` cursor marker."""
+    if value.count("|") != 1:
+        raise ValueError("completion templates require exactly one cursor marker")
+    cursor_offset = value.index("|")
+    insertion = value.replace("|", "", 1)
+    return CompletionCandidate(insertion.rstrip(), insertion, cursor_offset)
+
+
 COMMANDS: tuple[CompletionCandidate, ...] = (
-    CompletionCandidate("\\begin{}", "\\begin{}", 7),
-    CompletionCandidate("\\end{}", "\\end{}", 5),
-    CompletionCandidate("\\section{}", "\\section{}", 9),
-    CompletionCandidate("\\subsection{}", "\\subsection{}", 12),
-    CompletionCandidate("\\subsubsection{}", "\\subsubsection{}", 15),
-    CompletionCandidate("\\paragraph{}", "\\paragraph{}", 11),
-    CompletionCandidate("\\item", "\\item ", 6),
-    CompletionCandidate("\\label{}", "\\label{}", 7),
-    CompletionCandidate("\\ref{}", "\\ref{}", 5),
-    CompletionCandidate("\\autoref{}", "\\autoref{}", 9),
-    CompletionCandidate("\\eqref{}", "\\eqref{}", 7),
-    CompletionCandidate("\\cite{}", "\\cite{}", 6),
-    CompletionCandidate("\\includegraphics{}", "\\includegraphics{}", 17),
-    CompletionCandidate("\\caption{}", "\\caption{}", 9),
-    CompletionCandidate("\\usepackage{}", "\\usepackage{}", 12),
-    CompletionCandidate("\\textbf{}", "\\textbf{}", 8),
-    CompletionCandidate("\\textit{}", "\\textit{}", 8),
-    CompletionCandidate("\\emph{}", "\\emph{}", 6),
-    CompletionCandidate("\\href{}{}", "\\href{}{}", 6),
-    CompletionCandidate("\\url{}", "\\url{}", 5),
-    CompletionCandidate("\\frac{}{}", "\\frac{}{}", 6),
-    CompletionCandidate("\\sqrt{}", "\\sqrt{}", 6),
-    CompletionCandidate("\\centering", "\\centering\n", 11),
+    # Document structure and project composition.
+    _template("\\begin{|}"),
+    _template("\\end{|}"),
+    _template("\\chapter{|}"),
+    _template("\\section{|}"),
+    _template("\\subsection{|}"),
+    _template("\\subsubsection{|}"),
+    _template("\\paragraph{|}"),
+    _template("\\subparagraph{|}"),
+    _template("\\item |"),
+    _template("\\input{|}"),
+    _template("\\include{|}"),
+    _template("\\includegraphics{|}"),
+    _template("\\caption{|}"),
+    _template("\\usepackage{|}"),
+    # Text and inline formatting. Keep exact \\text first and common variants
+    # within the 12-result popup limit for the broad ``\\text`` prefix.
+    _template("\\text{|}"),
+    _template("\\textbf{|}"),
+    _template("\\textit{|}"),
+    _template("\\textcolor{|}{}"),
+    _template("\\texttt{|}"),
+    _template("\\textsc{|}"),
+    _template("\\textrm{|}"),
+    _template("\\textsf{|}"),
+    _template("\\textnormal{|}"),
+    _template("\\textsuperscript{|}"),
+    _template("\\textsubscript{|}"),
+    _template("\\emph{|}"),
+    _template("\\underline{|}"),
+    _template("\\footnote{|}"),
+    _template("\\colorbox{|}{}"),
+    _template("\\fcolorbox{|}{}{}"),
+    # Labels, citations and links.
+    _template("\\label{|}"),
+    _template("\\ref{|}"),
+    _template("\\pageref{|}"),
+    _template("\\autoref{|}"),
+    _template("\\eqref{|}"),
+    _template("\\cite{|}"),
+    _template("\\citep{|}"),
+    _template("\\citet{|}"),
+    _template("\\parencite{|}"),
+    _template("\\textcite{|}"),
+    _template("\\href{|}{}"),
+    _template("\\url{|}"),
+    # Mathematics and scientific notation.
+    _template("\\frac{|}{}"),
+    _template("\\dfrac{|}{}"),
+    _template("\\sqrt{|}"),
+    _template("\\sum_{|}^{}"),
+    _template("\\prod_{|}^{}"),
+    _template("\\int_{|}^{}"),
+    _template("\\lim_{|}"),
+    _template("\\mathbf{|}"),
+    _template("\\mathrm{|}"),
+    _template("\\mathit{|}"),
+    _template("\\mathcal{|}"),
+    _template("\\operatorname{|}"),
+    _template("\\qty{|}{}"),
+    _template("\\num{|}"),
+    _template("\\unit{|}"),
+    _template("\\SI{|}{}"),
+    _template("\\si{|}"),
+    # Bibliography and layout controls.
+    _template("\\bibliography{|}"),
+    _template("\\bibliographystyle{|}"),
+    _template("\\addbibresource{|}"),
+    _template("\\printbibliography|"),
+    _template("\\centering\n|"),
+    _template("\\toprule\n|"),
+    _template("\\midrule\n|"),
+    _template("\\bottomrule\n|"),
+    _template("\\FloatBarrier\n|"),
 )
 
 

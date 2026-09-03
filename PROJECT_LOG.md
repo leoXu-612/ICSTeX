@@ -952,13 +952,13 @@ must link here instead of repeating old task details.
 
 ## 2026-09-03 - Completion Selection and Normal-Mode Image Layouts
 
-- Reproduced the completion mismatch with the popup highlighting `\\textit{}`
-  while `QCompleter.currentCompletion()` remained `\\textbf{}`. Enter and Tab now
+- Reproduced the completion mismatch with the popup highlighting `\textit{}`
+  while `QCompleter.currentCompletion()` remained `\textbf{}`. Enter and Tab now
   resolve the popup's current index before falling back to the completer value.
 - Replaced the normal-mode two-image dialog with structured horizontal, vertical
   and adjustable 2x2 layouts. Each image has an independent width and subcaption;
   generated LaTeX constrains width only, preserves source aspect ratio and rejects
-  a row total above `1.0\\textwidth`.
+  a row total above `1.0\textwidth`.
 - Made multi-image asset copying transactional: all inputs are checked first,
   repeated source paths reuse one copy, and partial copy failure removes every new
   file from that operation before source insertion.
@@ -971,3 +971,26 @@ must link here instead of repeating old task details.
   seconds. The Word Count checkpoint is `ea56060`; the editor/layout commit is
   `9103c31`. The verified line was merged locally into `release/2.1` without any
   package, publish, push or GitHub Actions workflow.
+
+## 2026-09-03 - High-Frequency LaTeX Completion Catalog
+
+- Expanded the deterministic static catalog from 23 to 68 unique templates for
+  document structure, text styles, labels, citations, links, mathematics,
+  scientific units, project composition, bibliography and layout controls.
+- Replaced hand-counted cursor offsets with a single-marker template builder.
+  Popup labels strip intentional trailing whitespace while insertions and cursor
+  placement retain it, preserving `\item ` trailing-space and `\centering`
+  newline behavior.
+- Added `\text{}` as the exact first result for `\text`, plus
+  `\textcolor{}{}`, font/style variants and `textcite` within the 12-result
+  bound. `\textcolor{}{}` places the cursor in its color argument; `pageref`
+  now uses the existing project-label completion path.
+- Extended deterministic package diagnostics for xcolor commands and amsmath's
+  `text`, `dfrac` and `operatorname`; missing packages offer the existing
+  idempotent fix and declared packages remain warning-free.
+- Verification: completion/diagnostic/GUI focused tests passed all 142 tests;
+  `git diff --check` and `python3 -m compileall -q app tests
+  packaging/install_build_dependencies.py` passed; full offscreen discovery
+  passed all 805 tests in 132.196 seconds. The feature commit is `2af0c90`; it
+  was merged locally into `release/2.1` without new dependencies, packaging,
+  publishing, pushing or triggering GitHub Actions.

@@ -39,6 +39,39 @@ class DiagnosticsTests(TestCase):
         self.assertIn("graphicx", existing_packages(fixed))
         self.assertEqual(fixed, fixed_again)
 
+    def test_textcolor_diagnostic_offers_xcolor_fix(self) -> None:
+        text = (
+            "\\documentclass{article}\n"
+            "\\begin{document}\n"
+            "\\textcolor{red}{Result}\n"
+            "\\end{document}\n"
+        )
+
+        diagnostics = package_diagnostics(text)
+
+        self.assertEqual(len(diagnostics), 1)
+        self.assertEqual(diagnostics[0].title, "缺少 xcolor")
+        self.assertEqual(diagnostics[0].fix.packages, ("xcolor",))  # type: ignore[union-attr]
+
+    def test_textcolor_diagnostic_accepts_existing_xcolor(self) -> None:
+        text = (
+            "\\documentclass{article}\n"
+            "\\usepackage{xcolor}\n"
+            "\\begin{document}\n"
+            "\\textcolor{red}{Result}\n"
+            "\\end{document}\n"
+        )
+
+        self.assertEqual(package_diagnostics(text), [])
+
+    def test_math_text_diagnostic_offers_amsmath_fix(self) -> None:
+        text = "\\documentclass{article}\n\\begin{document}\n$\\text{result}$\n\\end{document}\n"
+
+        diagnostics = package_diagnostics(text)
+
+        self.assertEqual(len(diagnostics), 1)
+        self.assertEqual(diagnostics[0].fix.packages, ("amsmath",))  # type: ignore[union-attr]
+
     def test_image_diagnostics_detect_missing_relative_graphic(self) -> None:
         with TemporaryDirectory() as directory:
             root = Path(directory)

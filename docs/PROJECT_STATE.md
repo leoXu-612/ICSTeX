@@ -26,8 +26,10 @@
   `Ideographic` 属性避免把中文标点计为汉字；本地结构化路径按可见文本连续分词，
   支持 `%TC:ignore`、重复 include、循环保护、脚注和扩展区汉字。
 - 源码编辑器的命令补全以弹窗当前高亮项为准；上下键切换后，Enter 或 Tab 不再错误
-  插入首项。普通源码模式的图片布局支持左右、上下和 2×2 田字排列，每张图可独立
-  设置宽度且只按宽度等比缩放；同排总宽度受限，批量图片复制失败会整体回滚。
+  插入首项。静态命令目录从 23 个扩展到 68 个高频模板，覆盖文本、结构、引用、数学、
+  单位、项目拆分与参考文献命令；`pageref` 复用项目 label 建议，颜色和数学命令接入
+  既有缺包诊断。普通源码模式的图片布局支持左右、上下和 2×2 田字排列，每张图可
+  独立设置宽度且只按宽度等比缩放；同排总宽度受限，批量图片复制失败会整体回滚。
 - 隔离的快速图片预览与原图正式构建链；preview 不得成为正式导出源。
 - Block 项目控制台、ProjectSession、统一 Undo/保存/编译、表格与布局 Block。
 - Formula Editor 2.0、显式提交、危险 LaTeX 过滤、可选本地 pix2tex 识别与人工复核。
@@ -77,8 +79,8 @@
 
 2026-09-03 编辑器补全与普通模式图片布局验证：
 
-- 复现 Qt 补全状态分离：弹窗已高亮 `\\textit{}` 时，旧
-  `QCompleter.currentCompletion()` 仍返回 `\\textbf{}`；修复后 Enter/Tab 从 popup
+- 复现 Qt 补全状态分离：弹窗已高亮 `\textit{}` 时，旧
+  `QCompleter.currentCompletion()` 仍返回 `\textbf{}`；修复后 Enter/Tab 从 popup
   当前索引读取候选。
 - 图片布局覆盖左右、上下和 2×2 田字排列、逐图宽度、行宽上限、等比缩放、资源复制
   回滚及 package 插入；真实 XeLaTeX 2×2 非等宽布局编译通过。
@@ -89,13 +91,26 @@
 - `QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests`：796 tests passed。
 - 未打包、未发布、未推送，也未触发 GitHub Actions。
 
+2026-09-03 高频命令补全扩展验证：
+
+- 静态候选由 23 个扩展为 68 个且 display 唯一；`\text` 前缀在 12 项上限内包含
+  `\text{}`、粗体、斜体、颜色、字体族、上下标与 `textcite`，精确 `\text{}` 排首位。
+- `\textcolor{}{}` 的 GUI 插入与首参数光标落点通过；原有方向键高亮项插入回归继续
+  通过。`pageref` 可按前缀建议已知 label。
+- `textcolor`/`colorbox`/`fcolorbox` 缺少 `xcolor`、数学 `text`/`dfrac`/
+  `operatorname` 缺少 `amsmath` 时使用既有可应用诊断；已声明 package 时不误报。
+- 补全、诊断与 GUI focused suite：142 tests passed。
+- `python3 -m compileall -q app tests packaging/install_build_dependencies.py`：通过。
+- `QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests`：805 tests passed。
+- 未增加依赖、未打包、未发布、未推送，也未触发 GitHub Actions。
+
 该源码尚未重新打包或发布，不改变 2.1.0-beta.1 制品状态。
 
 ## Release Matrix
 
 | 对象 | 状态 | 说明 |
 | --- | --- | --- |
-| 当前源码 | Verified, source ahead of packaged release | 2.1.0-beta.1；796 tests passed；已本地合入 `release/2.1`，未打包/推送 |
+| 当前源码 | Verified, source ahead of packaged release | 2.1.0-beta.1；805 tests passed；已本地合入 `release/2.1`，未打包/推送 |
 | macOS arm64 DMG/ZIP | Verified, rebuilt | hardened source；ad-hoc signed、未 notarize |
 | clean source ZIP | Verified, rebuilt | hardened source；publication hygiene scan passed |
 | Windows ARM64 ZIP | Verified beta artifact, rebuilt | Windows-local `C:\w3`；无系统 Python 启动通过 |

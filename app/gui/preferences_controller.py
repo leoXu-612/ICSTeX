@@ -183,6 +183,7 @@ class PreferencesController:
             self.update_recent_menu()
             QMessageBox.warning(window, "最近文件不可用", f"这个文件已经不存在：\n{path}")
             return
+        window.selected_project_scope = None
         window.open_file(path)
 
     def open_recent_project(self, path: Path) -> None:
@@ -192,8 +193,7 @@ class PreferencesController:
             self.update_recent_menu()
             QMessageBox.warning(window, "最近项目不可用", f"这个项目文件夹已经不存在：\n{path}")
             return
-        window.tree.setRootIndex(window.model.index(str(path)))
-        self.remember_recent_project(path)
+        window.project_files.set_project_root(path, remember=True)
         candidate = find_root_tex(path)
         if candidate:
             window.open_file(candidate)

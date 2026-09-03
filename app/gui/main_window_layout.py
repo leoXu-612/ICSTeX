@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core.project_file_ops import PROJECT_FILE_FILTERS
 from app.gui.diagnostics_panel import DiagnosticsPanel
 from app.gui.find_replace import FindReplaceBar
 from app.gui.icons import icon
@@ -114,8 +115,9 @@ def _install_status_bar(window: "MainWindow") -> None:
 
 def _install_file_tree(window: "MainWindow") -> None:
     window.model = QFileSystemModel(window)
-    window.model.setNameFilters(["*.tex", "*.bib"])
+    window.model.setNameFilters(list(PROJECT_FILE_FILTERS))
     window.model.setNameFilterDisables(False)
+    window.model.setReadOnly(True)
     home_index = window.model.setRootPath(str(Path.home()))
 
     window.tree = QTreeView()
@@ -126,6 +128,12 @@ def _install_file_tree(window: "MainWindow") -> None:
     window.tree.setAlternatingRowColors(True)
     window.tree.setUniformRowHeights(True)
     window.tree.setAnimated(False)
+    window.tree.setDragEnabled(True)
+    window.tree.setAcceptDrops(False)
+    window.tree.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
+    window.tree.setDefaultDropAction(Qt.DropAction.CopyAction)
+    window.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+    window.tree.setToolTip("双击打开 .tex；右键可在新窗口打开、重命名或移动；图片可拖入编辑器。")
     for column in range(1, window.model.columnCount()):
         window.tree.hideColumn(column)
 

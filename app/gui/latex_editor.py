@@ -41,6 +41,7 @@ class LineNumberArea(QWidget):
 
 class LaTeXEditor(QPlainTextEdit):
     imageDropped = Signal(list)
+    texFilesDropped = Signal(list)
 
     def __init__(self, text: str = "") -> None:
         super().__init__()
@@ -221,13 +222,17 @@ class LaTeXEditor(QPlainTextEdit):
             self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
-        if self._image_paths_from_mime(event.mimeData()):
+        if self._image_paths_from_mime(event.mimeData()) or self._tex_paths_from_mime(
+            event.mimeData()
+        ):
             event.acceptProposedAction()
             return
         super().dragEnterEvent(event)
 
     def dragMoveEvent(self, event: QDragMoveEvent) -> None:
-        if self._image_paths_from_mime(event.mimeData()):
+        if self._image_paths_from_mime(event.mimeData()) or self._tex_paths_from_mime(
+            event.mimeData()
+        ):
             event.acceptProposedAction()
             return
         super().dragMoveEvent(event)
@@ -236,6 +241,11 @@ class LaTeXEditor(QPlainTextEdit):
         image_paths = self._image_paths_from_mime(event.mimeData())
         if image_paths:
             self.imageDropped.emit(image_paths)
+            event.acceptProposedAction()
+            return
+        tex_paths = self._tex_paths_from_mime(event.mimeData())
+        if tex_paths:
+            self.texFilesDropped.emit(tex_paths)
             event.acceptProposedAction()
             return
         super().dropEvent(event)
@@ -249,6 +259,18 @@ class LaTeXEditor(QPlainTextEdit):
                 continue
             path = Path(url.toLocalFile())
             if path.suffix.lower() in IMAGE_DROP_EXTENSIONS:
+                paths.append(str(path))
+        return paths
+
+    def _tex_paths_from_mime(self, mime_data) -> list[str]:  # type: ignore[no-untyped-def]
+        paths: list[str] = []
+        if not mime_data.hasUrls():
+            return paths
+        for url in mime_data.urls():
+            if not url.isLocalFile():
+                continue
+            path = Path(url.toLocalFile())
+            if path.is_file() and path.suffix.lower() == ".tex":
                 paths.append(str(path))
         return paths
 

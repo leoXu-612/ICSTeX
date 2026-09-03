@@ -65,6 +65,7 @@ from app.gui.editor_tab_manager import EditorTabManager
 from app.gui.insertion_actions import InsertionActions
 from app.gui.preferences_controller import PreferencesController
 from app.gui.pdf_export_controller import PdfExportController
+from app.gui.project_file_controller import ProjectFileController
 from app.gui.project_panel_controller import ProjectPanelController
 from app.gui.latex_editor import LaTeXEditor
 from app.gui.log_bridge import QtLogBridge
@@ -91,6 +92,25 @@ _SOURCE_ENCODING_CHOICES = (
     ("日文（Shift_JIS）", "shift_jis"),
     ("Mac Roman", "mac_roman"),
 )
+
+
+def _register_app_window(window: "MainWindow") -> None:
+    app = QApplication.instance()
+    if app is None:
+        return
+    windows = getattr(app, "_icstex_windows", None)
+    if not isinstance(windows, list):
+        windows = []
+        app._icstex_windows = windows  # type: ignore[attr-defined]
+    if window not in windows:
+        windows.append(window)
+
+
+def _unregister_app_window(window: "MainWindow") -> None:
+    app = QApplication.instance()
+    windows = getattr(app, "_icstex_windows", None) if app is not None else None
+    if isinstance(windows, list) and window in windows:
+        windows.remove(window)
 
 
 class MainWindow(QMainWindow):
@@ -136,8 +156,10 @@ class MainWindow(QMainWindow):
         self.insertions = InsertionActions(self)
         self.project_panels = ProjectPanelController(self)
         self.preferences_controller = PreferencesController(self)
+        self.project_files = ProjectFileController(self)
 
         self._build_ui()
+        self.project_files.install_drop_targets()
         app = QApplication.instance()
         if app is not None and hasattr(app, "ui_scale_manager"):
             app.ui_scale_manager.register_window(self)
@@ -212,8 +234,7 @@ class MainWindow(QMainWindow):
         except (OSError, ValueError) as exc:
             QMessageBox.warning(self, "项目创建失败", str(exc))
             return
-        self.tree.setRootIndex(self.model.index(str(project.root_dir)))
-        self._remember_recent_project(project.root_dir)
+        self.project_files.set_project_root(project.root_dir, remember=True)
         self.open_file(project.tex_file)
         self.sidebar_tabs.setCurrentIndex(0)
         self.statusBar().showMessage(f"已创建项目：{project.root_dir.name}", 5000)
@@ -367,10 +388,7 @@ class MainWindow(QMainWindow):
         folder = QFileDialog.getExistingDirectory(self, "打开项目文件夹", str(Path.home()))
         if not folder:
             return
-        root = Path(folder)
-        self.selected_project_scope = root.expanduser().resolve()
-        self.tree.setRootIndex(self.model.index(str(root)))
-        self._remember_recent_project(root)
+        root = self.project_files.set_project_root(Path(folder), remember=True)
         candidate = find_root_tex(root)
         if candidate:
             self.open_file(candidate)
@@ -378,9 +396,13 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"已打开文件夹：{root.name}。未自动找到 root .tex。", 5000)
 
     def open_tree_item(self, index: QModelIndex) -> None:
-        path = Path(self.model.filePath(index))
-        if path.is_file() and path.suffix.lower() == ".tex":
-            self.open_file(path)
+        self.project_files.open_tree_item(index)
+
+    def show_file_tree_context_menu(self, position) -> None:  # type: ignore[no-untyped-def]
+        self.project_files.show_context_menu(position)
+
+    def open_dropped_tex_files(self, paths: list[str]) -> None:
+        self.project_files.open_dropped_tex_files(paths)
 
     def open_file(self, path: Path, line: int | None = None) -> None:
         path = path.expanduser().resolve()
@@ -404,7 +426,7 @@ class MainWindow(QMainWindow):
         tab = EditorTab(editor=editor, path=path, encoding=decoded.encoding)
         self._add_tab(tab, path.name)
         self._watch_file(path)
-        self.tree.setRootIndex(self.model.index(str(path.parent)))
+        self.project_files.ensure_project_root_for_file(path)
         self._remember_recent_file(path)
         if line:
             self._jump_to_line(editor, line)
@@ -971,10 +993,12 @@ class MainWindow(QMainWindow):
     def reload_external_change(self, file_name: str) -> None:
         self.documents.reload_external_change(file_name)
 
-    def spawn_window(self) -> None:
+    def spawn_window(self) -> "MainWindow":
         window = MainWindow(settings_store=self.app_settings)
+        _register_app_window(self)
+        _register_app_window(window)
         window.show()
-        QApplication.instance()._icstex_windows.append(window)  # type: ignore[attr-defined]
+        return window
 
     def on_compile_started(self, root_file: str, build_id: int) -> None:
         self.compile.on_started(root_file, build_id)
@@ -1006,7 +1030,9 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         self.tab_manager.handle_close_event(event)
-        self.app_settings.settings.setValue("window/block_console_state", self.saveState())
+        if event.isAccepted():
+            self.app_settings.settings.setValue("window/block_console_state", self.saveState())
+            _unregister_app_window(self)
 
     def current_tab(self) -> EditorTab | None:
         return self.tab_manager.current()
@@ -1157,6 +1183,6 @@ def run(argv: list[str] | None = None) -> int:
     app.aboutToQuit.connect(_shutdown_ocr_workers)
     app._icstex_windows = []  # type: ignore[attr-defined]
     window = MainWindow()
+    _register_app_window(window)
     window.show()
-    app._icstex_windows.append(window)  # type: ignore[attr-defined]
     return app.exec()

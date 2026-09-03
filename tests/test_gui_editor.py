@@ -12,8 +12,16 @@ from unittest.mock import Mock, patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QEvent, QMimeData, QPointF, QSettings, Qt, QUrl
-from PySide6.QtGui import QCloseEvent, QDropEvent, QKeyEvent, QTextCursor
-from PySide6.QtWidgets import QApplication, QDialog, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea
+from PySide6.QtGui import QCloseEvent, QDropEvent, QKeyEvent, QKeySequence, QTextCursor
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QApplication,
+    QDialog,
+    QMessageBox,
+    QPlainTextEdit,
+    QPushButton,
+    QScrollArea,
+)
 
 from app.core.compiler import BuildPurpose, CompileManager, CompileOutcome, CompileResult
 from app.core.formula_input import (
@@ -87,6 +95,252 @@ class GuiEditorTests(TestCase):
         self.assertGreater(editor.line_number_area_width(), 0)
         self.assertIsNotNone(editor.highlighter)
         self.assertEqual(editor.lineWrapMode(), QPlainTextEdit.LineWrapMode.WidgetWidth)
+
+    def test_file_tree_is_read_only_drag_source_with_project_assets(self) -> None:
+        window = MainWindow(settings_store=isolated_settings())
+
+        self.assertTrue(window.model.isReadOnly())
+        self.assertTrue(window.tree.dragEnabled())
+        self.assertFalse(window.tree.acceptDrops())
+        self.assertEqual(
+            window.tree.dragDropMode(),
+            QAbstractItemView.DragDropMode.DragOnly,
+        )
+        self.assertEqual(
+            window.tree.contextMenuPolicy(),
+            Qt.ContextMenuPolicy.CustomContextMenu,
+        )
+        self.assertTrue(
+            {"*.tex", "*.bib", "*.png", "*.jpg", "*.jpeg", "*.pdf", "*.eps", "*.svg"}
+            <= set(window.model.nameFilters())
+        )
+        self.assertEqual(
+            window.new_window_action.shortcut(),
+            QKeySequence("Ctrl+Shift+N"),
+        )
+        window.close()
+
+    def test_opening_child_keeps_selected_project_tree_root(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            chapters = root / "chapters"
+            chapters.mkdir()
+            child = chapters / "one.tex"
+            child.write_text("Child", encoding="utf-8")
+            window = MainWindow(settings_store=isolated_settings())
+            window.project_files.set_project_root(root)
+
+            window.open_file(child)
+
+            tree_root = Path(window.model.filePath(window.tree.rootIndex())).resolve()
+            self.assertEqual(window.selected_project_scope, root)
+            self.assertEqual(tree_root, root)
+            window.close()
+
+    def test_dropped_tex_opens_tab_without_changing_project_root(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            main = root / "main.tex"
+            child = root / "child.tex"
+            main.write_text("Main", encoding="utf-8")
+            child.write_text("Child", encoding="utf-8")
+            window = MainWindow(settings_store=isolated_settings())
+            window.project_files.set_project_root(root)
+            window.open_file(main)
+            tab = window.current_tab()
+            assert tab is not None
+            mime = QMimeData()
+            mime.setUrls([QUrl.fromLocalFile(str(child))])
+            event = QDropEvent(
+                QPointF(1, 1),
+                Qt.DropAction.CopyAction,
+                mime,
+                Qt.MouseButton.LeftButton,
+                Qt.KeyboardModifier.NoModifier,
+            )
+
+            tab.editor.dropEvent(event)
+
+            self.assertEqual(window.editor_tabs.count(), 2)
+            self.assertEqual(window.current_tab().path, child)
+            self.assertEqual(
+                Path(window.model.filePath(window.tree.rootIndex())).resolve(),
+                root,
+            )
+            window.close()
+
+    def test_dropped_tex_opens_from_empty_welcome_surface(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            source = root / "main.tex"
+            source.write_text("Main", encoding="utf-8")
+            window = MainWindow(settings_store=isolated_settings())
+            window.project_files.set_project_root(root)
+            mime = QMimeData()
+            mime.setUrls([QUrl.fromLocalFile(str(source))])
+            event = QDropEvent(
+                QPointF(1, 1),
+                Qt.DropAction.CopyAction,
+                mime,
+                Qt.MouseButton.LeftButton,
+                Qt.KeyboardModifier.NoModifier,
+            )
+
+            handled = window.project_files.eventFilter(window.welcome_page, event)
+
+            self.assertTrue(handled)
+            self.assertTrue(event.isAccepted())
+            self.assertEqual(window.editor_tabs.count(), 1)
+            self.assertEqual(window.current_tab().path, source)
+            window.close()
+
+    def test_tree_image_drag_uses_existing_safe_import_pipeline(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            figures = root / "figures"
+            figures.mkdir()
+            main = root / "main.tex"
+            image = figures / "plot.png"
+            main.write_text("\\documentclass{article}\n", encoding="utf-8")
+            image.write_bytes(b"png")
+            window = MainWindow(settings_store=isolated_settings())
+            window.auto_compile_action.setChecked(False)
+            window.project_files.set_project_root(root)
+            window.open_file(main)
+            tab = window.current_tab()
+            assert tab is not None
+            image_index = window.model.index(str(image))
+            self.assertTrue(image_index.isValid())
+            mime = window.model.mimeData([image_index])
+            self.assertTrue(mime.hasUrls())
+            event = QDropEvent(
+                QPointF(1, 1),
+                Qt.DropAction.CopyAction,
+                mime,
+                Qt.MouseButton.LeftButton,
+                Qt.KeyboardModifier.NoModifier,
+            )
+
+            tab.editor.dropEvent(event)
+
+            self.assertTrue(
+                wait_until(lambda: "\\includegraphics" in tab.editor.toPlainText())
+            )
+            self.assertIn("figures/plot.png", tab.editor.toPlainText())
+            tab.modified = tab.dirty = False
+            window.close()
+
+    def test_safe_rename_updates_open_tab_and_recent_path(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            source = root / "draft.tex"
+            destination = root / "notes.tex"
+            source.write_text("Draft", encoding="utf-8")
+            window = MainWindow(settings_store=isolated_settings())
+            window.auto_compile_action.setChecked(False)
+            window.project_files.set_project_root(root)
+            window.open_file(source)
+
+            moved = window.project_files.perform_move(
+                source,
+                destination,
+                operation_label="重命名",
+            )
+
+            self.assertTrue(moved)
+            self.assertFalse(source.exists())
+            self.assertEqual(destination.read_text(encoding="utf-8"), "Draft")
+            self.assertEqual(window.current_tab().path, destination)
+            self.assertIn(destination, window.app_settings.recent_files())
+            self.assertNotIn(source, window.app_settings.recent_files())
+            window.close()
+
+    def test_safe_rename_blocks_referenced_file_without_mutation(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            main = root / "main.tex"
+            child = root / "child.tex"
+            destination = root / "renamed.tex"
+            main.write_text("\\input{child}\n", encoding="utf-8")
+            child.write_text("Child", encoding="utf-8")
+            window = MainWindow(settings_store=isolated_settings())
+            window.project_files.set_project_root(root)
+
+            with patch("app.gui.project_file_controller.QMessageBox.warning") as warning:
+                moved = window.project_files.perform_move(
+                    child,
+                    destination,
+                    operation_label="重命名",
+                )
+
+            self.assertFalse(moved)
+            self.assertTrue(child.exists())
+            self.assertFalse(destination.exists())
+            self.assertIn("引用失效", warning.call_args.args[2])
+            window.close()
+
+    def test_safe_rename_refuses_to_race_active_compile(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            source = root / "draft.tex"
+            destination = root / "notes.tex"
+            source.write_text("Draft", encoding="utf-8")
+            window = MainWindow(settings_store=isolated_settings())
+            window.project_files.set_project_root(root)
+            window.open_file(source)
+            tab = window.current_tab()
+            assert tab is not None
+            manager = Mock(root_file=source, is_busy=True)
+            tab.manager = manager
+            window.compile_managers[source] = manager
+
+            with patch("app.gui.project_file_controller.QMessageBox.warning") as warning:
+                moved = window.project_files.perform_move(source, destination)
+
+            self.assertFalse(moved)
+            self.assertTrue(source.exists())
+            self.assertFalse(destination.exists())
+            self.assertIn("正在编译", warning.call_args.args[2])
+            tab.manager = None
+            window.compile_managers.clear()
+            window.close()
+
+    def test_spawned_window_is_registered_and_removed_on_close(self) -> None:
+        application = app()
+        existing = list(getattr(application, "_icstex_windows", []))
+        parent = MainWindow(settings_store=isolated_settings())
+
+        child = parent.spawn_window()
+
+        windows = getattr(application, "_icstex_windows")
+        self.assertIn(parent, windows)
+        self.assertIn(child, windows)
+        child.close()
+        QApplication.processEvents()
+        self.assertNotIn(child, windows)
+        self.assertIn(parent, windows)
+        parent.close()
+        QApplication.processEvents()
+        self.assertEqual(windows, existing)
+
+    def test_open_in_new_window_preserves_the_same_project_scope(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            child_path = root / "child.tex"
+            child_path.write_text("Child", encoding="utf-8")
+            parent = MainWindow(settings_store=isolated_settings())
+            parent.project_files.set_project_root(root)
+
+            child = parent.project_files.open_in_new_window(child_path)
+
+            self.assertEqual(child.selected_project_scope, root)
+            self.assertEqual(child.current_tab().path, child_path)
+            self.assertEqual(
+                Path(child.model.filePath(child.tree.rootIndex())).resolve(),
+                root,
+            )
+            child.close()
+            parent.close()
 
     def test_export_and_reveal_pdf(self) -> None:
         window = MainWindow(settings_store=isolated_settings())

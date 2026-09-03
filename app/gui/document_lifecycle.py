@@ -49,6 +49,7 @@ class DocumentLifecycle:
         window.apply_editor_options(editor)
         editor.textChanged.connect(window._on_editor_changed)
         editor.imageDropped.connect(window.insert_dropped_images)
+        editor.texFilesDropped.connect(window.open_dropped_tex_files)
         return editor
 
     def apply_editor_font(self, editor: LaTeXEditor) -> None:

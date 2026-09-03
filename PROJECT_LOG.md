@@ -994,3 +994,24 @@ must link here instead of repeating old task details.
   passed all 805 tests in 132.196 seconds. The feature commit is `2af0c90`; it
   was merged locally into `release/2.1` without new dependencies, packaging,
   publishing, pushing or triggering GitHub Actions.
+
+## 2026-09-03 - Guarded Project File Toolbox and Multi-Window Recovery
+
+- Kept `QFileSystemModel` read-only while expanding the visible project set to
+  `.tex`, `.bib`, common images and directories. Opening a nested source no
+  longer replaces the selected canonical project root.
+- Added `.tex` drag handling for editors and the empty welcome surface, explicit
+  current/new-window routes, a `Ctrl+Shift+N` shortcut and window-registry cleanup
+  after an accepted close.
+- Reused the existing background image-import transaction for file-tree drags;
+  no second copy or insertion path was introduced.
+- Added pure project-path planning, containment/collision/symlink/internal-dir/
+  same-filesystem validation, atomic rename, path remapping and fail-closed LaTeX
+  reference analysis across disk sources and unsaved open buffers.
+- Guarded GUI mutations reject active compiles, then rebind open tabs, watchers,
+  recent files and compile/PDF ownership after success. Referenced paths are not
+  silently rewritten.
+- Verification: `git diff --check` and `python3 -m compileall -q app tests
+  packaging/install_build_dependencies.py` passed; full offscreen discovery
+  passed all 825 tests in 159.766 seconds. No dependency, package, publish, push
+  or GitHub Actions workflow was run.

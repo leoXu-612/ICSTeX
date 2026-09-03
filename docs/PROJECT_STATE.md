@@ -30,6 +30,10 @@
   单位、项目拆分与参考文献命令；`pageref` 复用项目 label 建议，颜色和数学命令接入
   既有缺包诊断。普通源码模式的图片布局支持左右、上下和 2×2 田字排列，每张图可
   独立设置宽度且只按宽度等比缩放；同排总宽度受限，批量图片复制失败会整体回滚。
+- 文件工具箱保持每个窗口的 canonical project root，不因打开子文件而缩小范围；显示
+  `.tex`、`.bib`、常见图片和目录，支持 `.tex` 双击/拖拽、上下文新窗口与图片安全
+  拖入。文件模型仍为只读，项目内重命名/移动经 core 检查越界、重名、符号链接、
+  编译占用及 LaTeX 引用；被引用路径 fail closed，不静默改写学生源码。
 - 隔离的快速图片预览与原图正式构建链；preview 不得成为正式导出源。
 - Block 项目控制台、ProjectSession、统一 Undo/保存/编译、表格与布局 Block。
 - Formula Editor 2.0、显式提交、危险 LaTeX 过滤、可选本地 pix2tex 识别与人工复核。
@@ -104,13 +108,26 @@
 - `QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests`：805 tests passed。
 - 未增加依赖、未打包、未发布、未推送，也未触发 GitHub Actions。
 
+2026-09-03 项目文件工具箱验证：
+
+- 文件树 root 稳定性、只读模型、资源过滤、图片 model MIME 拖拽、空白欢迎页与编辑器
+  `.tex` 拖拽、当前/独立窗口打开及窗口 registry 清理均有 focused GUI 回归。
+- 项目路径规则覆盖越界、重名、符号链接、内部目录、跨文件系统、目录自包含和原子
+  rename；引用扫描覆盖 input/include/subfile、图片、BibTeX、Magic Root、样式文件、
+  未保存 buffer、注释和可识别动态路径。
+- 打开标签、watcher、recent path 与 compile/PDF ownership 在成功移动后重新绑定；
+  活动编译和会失效的引用在任何文件变更前被拒绝。
+- `python3 -m compileall -q app tests packaging/install_build_dependencies.py`：通过。
+- `QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests`：825 tests passed。
+- 未增加依赖、未打包、未发布、未推送，也未触发 GitHub Actions。
+
 该源码尚未重新打包或发布，不改变 2.1.0-beta.1 制品状态。
 
 ## Release Matrix
 
 | 对象 | 状态 | 说明 |
 | --- | --- | --- |
-| 当前源码 | Verified, source ahead of packaged release | 2.1.0-beta.1；805 tests passed；已本地合入 `release/2.1`，未打包/推送 |
+| 当前源码 | Verified, source ahead of packaged release | 2.1.0-beta.1；825 tests passed；已本地合入 `release/2.1`，未打包/推送 |
 | macOS arm64 DMG/ZIP | Verified, rebuilt | hardened source；ad-hoc signed、未 notarize |
 | clean source ZIP | Verified, rebuilt | hardened source；publication hygiene scan passed |
 | Windows ARM64 ZIP | Verified beta artifact, rebuilt | Windows-local `C:\w3`；无系统 Python 启动通过 |
@@ -151,6 +168,8 @@
 - 多项目并发使用不同名称、不同根目录的 stdio 实例；同一项目同时启动多个可写 MCP
   进程不是受支持拓扑。跨进程锁仍保护写入/编译，但读取一致性与 `stop` 取消只由单个
   server process 内的协调器保证。
+- 文件工具箱暂不自动重写 LaTeX 引用；被引用资源需先修改引用再移动。删除、跨项目
+  移动和批量引用重写仍不在当前能力范围。
 
 公开 Beta 已如实排除 Windows x64/Setup，并保留 Windows ARM64 与 macOS 的既有
 限制。后续仍需补齐 Windows x64 构建机、Inno Setup、Windows TeX 验收和 macOS

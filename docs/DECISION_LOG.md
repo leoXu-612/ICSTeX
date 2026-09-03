@@ -1,6 +1,6 @@
 # ICSTeX Architecture Decision Log
 
-更新时间：2026-08-28（Asia/Taipei）
+更新时间：2026-09-03（Asia/Taipei）
 
 本文件记录已经接受或明确提出的长期技术决策。它是 append-oriented 的决策
 记录，不保存任务过程。需要改变既有决策时，新增一条 Superseding decision，
@@ -32,6 +32,7 @@
 | D014 | Accepted | 不受信项目采用默认拒绝的本地执行边界 |
 | D015 | Accepted | Agent/Harness 通过项目绑定、默认只读的 stdio MCP 操作 ICSTeX |
 | D016 | Accepted | MCP 并发复用官方调度，并由项目级协调器保持一致性 |
+| D017 | Accepted | 文件工具箱保持只读模型，文件变更经项目级安全控制器执行 |
 
 ## D001 - Local Research Writing Infrastructure
 
@@ -398,3 +399,39 @@ MCP SDK 1.x 会在 server event loop 内直接执行同步工具；长时间编�
   门控和 `stop` 无法协调另一个 server process。
 - 11 个工具、CLI 参数和 wire schema 保持兼容；SDK 的 Python 对象字段迁移为
   snake_case，预期 core 错误显式转换为 `ToolError`，未知异常仍由 SDK 隐藏。
+
+## D017 - Read-Only File Model with Guarded Project Mutations
+
+状态：Accepted
+确认日期：2026-09-03
+
+**Context**
+
+文件工具箱原先只显示 `.tex`/`.bib`，打开子文件会把树根缩到子目录，且没有拖拽、
+重命名、移动或明确的新窗口入口。直接把 `QFileSystemModel` 改成可写会绕过项目边界、
+文件监视器、打开标签、编译 root 和 LaTeX 引用状态。
+
+**Decision**
+
+- 一个窗口保持一个稳定的 canonical project root；打开该项目的子文件不得改变树根，
+  从项目外显式拖入的 `.tex` 使用独立窗口。
+- `QFileSystemModel` 始终只读，只负责展示 `.tex`、`.bib`、常见图片和目录，并作为
+  drag source；所有重命名和移动由纯 core 规则与 focused GUI controller 执行。
+- 移动必须保持在项目内、不得覆盖、不得穿过符号链接或 ICSTeX 内部构建目录，并仅在
+  同一文件系统内使用原子 rename。
+- 操作前扫描 `.tex`、`.sty`、`.cls` 和 `.ltx` 的常见相对引用及打开编辑器的未保存
+  内容。任何入站引用、会改变目标的出站引用或可识别的动态引用都 fail closed；界面
+  不静默改写学生源码。
+- 相关编译必须处于空闲状态；成功移动后更新打开标签、文件监视器、recent path 和
+  compile/PDF ownership，旧 root 的构建授权与显示状态不迁移。
+- 多窗口是受支持能力，不以性能名义禁用；窗口 registry 在关闭成功后移除对象，
+  `Ctrl+Shift+N` 与文件树上下文菜单提供明确入口。
+
+**Consequences**
+
+- 常见未引用文件和目录可安全整理；被 LaTeX 引用的路径需先由用户修改引用，再执行
+  移动或重命名。
+- 图片拖入编辑器继续复用既有后台复制、冲突命名、相对路径和回滚事务，不增加平行
+  导入实现。
+- 暂不提供删除、批量重写引用、跨项目移动或后台文件索引；这些能力需要独立决策与
+  可回滚事务设计。

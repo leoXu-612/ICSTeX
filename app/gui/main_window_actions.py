@@ -92,6 +92,8 @@ def build_actions(window: "MainWindow") -> None:
     window.find_action.setShortcut(QKeySequence.StandardKey.Find)
     window.replace_action.setShortcut(QKeySequence("Ctrl+H"))
     window.settings_action.setShortcut(QKeySequence("Ctrl+,"))
+    window.new_window_action.setShortcut(QKeySequence("Ctrl+Shift+N"))
+    window.new_window_action.setToolTip("打开独立窗口（Ctrl+Shift+N）")
 
     window.engine_selector = QComboBox()
     window.engine_selector.setObjectName("engineSelector")

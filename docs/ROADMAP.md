@@ -1,6 +1,6 @@
 # ICSTeX Roadmap
 
-更新时间：2026-08-28（Asia/Taipei）
+更新时间：2026-09-03（Asia/Taipei）
 
 本文件描述产品与技术路线，不是功能愿望清单。每个进入实施的项目都必须
 同时满足用户价值、稳定性、可维护性和可验证性要求。
@@ -29,6 +29,8 @@ ICSTeX 要成为 ICC 学生从“建立写作项目”到“提交可靠成果�
 - 冻结已验证的双保真 preview/final、正式导出与图片缩略图 source delta；仅收口
   已确认的编辑阻塞问题、普通模式左右/上下/2×2 图片布局和高频命令补全，不继续
   扩展为自由画布或通用语言服务器。
+- 收口项目文件工具箱：稳定项目树根、展示论文与图片资源、支持 `.tex` 拖拽/新窗口、
+  图片安全拖入，以及项目内受控重命名和移动；不加入删除或静默引用重写。
 - 确认截至 2026-08-01 的 post-0.2.7 source delta 发布版本；推荐 `0.2.8`。
 - 同步 `app/__init__.py`、`pyproject.toml`、packaging metadata、README 和 CHANGELOG。
 - 重新生成并验证 versioned macOS DMG 与 clean source archive。
@@ -142,6 +144,14 @@ Block CRUD/布局/主题/来源/组装、受限编译、本地 OCR candidate、D
 
 后续只在真实工作流缺口出现时增加语义能力；不加入 GUI 遥控、后台 daemon、任意
 文件系统访问、Agent 自授权、OCR 自动落盘或通用插件系统。
+
+## Delivered - Guarded Project File Toolbox
+
+文件树以每个窗口的 canonical project root 为稳定边界，展示 `.tex`、`.bib`、常见
+图片和子目录。`.tex` 可双击或拖拽打开，并可从上下文菜单进入独立窗口；图片拖拽
+复用现有安全导入事务。文件模型保持只读，重命名和移动由项目级控制器检查越界、
+重名、符号链接、编译占用及 LaTeX 相对引用后执行。被引用路径 fail closed，不自动
+改写论文源码。
 
 ## Feature Admission Checklist
 

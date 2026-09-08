@@ -7,9 +7,9 @@
 
 ## Product and Source State
 
-- 权威工作区：本仓库根目录；已验证开发线 `codex/icstex-mcp` 已本地合入
-  `release/2.1`，尚未推送。响应/预览优化、公式/表格交互和默认离线更新入口已生成
-  并安装本机 macOS 开发构建；公开制品尚未包含这些后续更新。
+- 权威工作区：本仓库根目录；当前产品源码已提交并同步至 GitHub 的 `release/2.1`。
+  响应/预览优化、公式/表格交互和默认离线更新入口已生成并安装本机 macOS 开发
+  构建；公开安装制品尚未包含这些后续更新。
 - 当前版本：`2.1.0-beta.1`；版本来源为 `app/__init__.py`。
 - 技术栈：Python 3.11+、PySide6、本机 LaTeX distribution、PyInstaller。
 - 产品边界：中文优先、本地文件与本地编译优先、不静默上传用户内容、不捆绑
@@ -164,7 +164,7 @@
   PDF 内容的观测上界分别约 125/324 ms，暖 preview 修改约 30 ms；不等同显示器
   scanout 时间，也不是普通学生项目性能承诺。详细样本与截图见优化验收报告。
 
-该源码已形成本机开发构建，但尚未对外发布，不改变公开 2.1.0-beta.1 制品状态。
+该源码已形成本机开发构建并同步至远端分支，不改变公开 2.1.0-beta.1 安装制品状态。
 
 2026-09-08 快速预览反向 SyncTeX 验证：
 
@@ -247,7 +247,7 @@
 
 | 对象 | 状态 | 说明 |
 | --- | --- | --- |
-| 当前源码 | Source regression verified; updater activation pending | 2.1.0-beta.1；公式/表格及更新器源码通过集成回归；默认离线本机安装已验证，原生联网升级验收未完成；`release/2.1` 工作树未提交、未推送 |
+| 当前源码 | Verified source synchronized | 2.1.0-beta.1；产品源码提交 `39e315e` 已同步至 `origin/release/2.1`；默认离线本机安装已验证，原生联网升级验收未完成 |
 | 本机 macOS 应用 | Latest local development build installed | `/Applications/ICSTeX.app`；20260908-204029-b002533f；包含响应/预览优化、公式/表格更新及默认离线更新入口；旧应用已保留 |
 | macOS arm64 DMG/ZIP | Verified, rebuilt | hardened source；ad-hoc signed、未 notarize |
 | clean source ZIP | Verified, rebuilt | hardened source；publication hygiene scan passed |
@@ -282,9 +282,11 @@
 - Windows x64 ZIP/Setup 仍未生成；不能把 ARM64 包改名或宣称为通用 Windows 包。
 - 构建机缺少 Inno Setup，因此 x64 Setup EXE 不能在未补齐构建环境时生成。
 - Windows 构建机缺少 MiKTeX/TeX Live，因此不能把 source-to-PDF 记为已验证。
-- Git 历史已重写；公开远端的提交信息与可达提交内容扫描均无维护者
-  `/Users/leo.xu` 路径，当前源码 tree 在重写前后保持一致。
-- GitHub Actions 在发布写入期间临时禁用，推送没有运行 CI；发布完成后恢复原配置。
+- 本轮源码同步保留既有提交历史，不使用强制推送。增量对象检查未发现私钥、常见
+  访问令牌或实际维护者目录路径；不据此宣称全历史或全面安全审计通过。
+- 原始 PDF 性能截图含本机临时路径和编译日志，仅留本地；公开 JSON 测量数据与
+  复现脚本保留。此次提交采用 `[skip ci]`，未改变工作流或仓库设置；GitHub 未生成
+  产品源码提交对应的 Actions run。
 - macOS 仅验证 Apple Silicon，且未 Developer ID 签名或 notarize。
 - 2.1 是 Beta；公式 OCR 结果必须人工检查，重要项目仍需外部版本备份。
 - 字数统计是可审计的源码级统计，不等同所有课程的提交口径；标题、说明/脚注、公式

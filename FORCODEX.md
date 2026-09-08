@@ -1,6 +1,6 @@
 # FORCODEX.md
 
-Timestamp: 2026-09-08 (source repository synchronization)
+Timestamp: 2026-09-08 (source synchronization handoff)
 
 This is Codex's current bounded brief. Replace it when the assignment changes;
 do not append completed-task history.
@@ -11,28 +11,21 @@ The verified source/artifact matrix is maintained in `docs/PROJECT_STATE.md`.
 The local installed application contains the frozen response/preview, formula/
 table and default-offline update-entry source. Its exact local build identity,
 verification boundaries and rollback receipt are recorded in the state and log.
-Public release artifacts remain unchanged. Native online update delivery is not
+The product source is also synchronized to GitHub; public installation artifacts
+remain unchanged. Native online update delivery is not
 activated or accepted; its separate maintainer gates remain in
 `docs/FORCODEX_UPDATES.md` and `packaging/UPDATES.md`.
 
 ## Active Bounded Assignment
 
-The user explicitly authorized appropriate renaming, committing and GitHub
-remote synchronization of the accumulated changes. Inspect names and retain
-them unless a concrete mismatch requires correction. Preserve the existing
-commit history and target the current `release/2.1` upstream without force push.
+The user-requested local installation and source repository synchronization are
+complete. No further implementation, renaming, version change or release work
+is assigned. Preserve the installed app, rollback copy, local-only screenshots
+and existing commit history. Start a new bounded brief only for a new assignment.
 
-Review the tracked and untracked scope, run required source checks, and commit
-only project source, documentation, tests and synthetic verification evidence.
-Exclude local build outputs, backups, credentials and student material. Verify
-the remote branch against the final local commit before reporting completion.
-
-Do not create a release, upload installation packages, change the version or
-activate an updater. Keep GitHub Actions untriggered using the existing
-skip-CI commit convention; do not alter repository security or workflow
-settings. Preserve the installed app, rollback copy and unrelated working-tree
-edits. MCP contracts, student LaTeX, runtime dependencies, Developer ID
-credentials and notarization remain outside this assignment.
+Public installation packages and online updates remain separate release gates.
+Do not activate an updater, access signing credentials, change repository
+security/workflow settings or modify student content under this completed task.
 
 ## Required Context
 

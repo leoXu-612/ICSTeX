@@ -1402,3 +1402,37 @@ must link here instead of repeating old task details.
   No version bump, runtime dependency, student text change, commit, push,
   publication or GitHub Actions trigger occurred. Current state and the bounded
   handoff were updated to the verified installed-build identity.
+
+## 2026-09-08 - Accumulated source committed and synchronized to GitHub
+
+- User authorized appropriate renaming, committing and remote synchronization.
+  No concrete filename or branch mismatch required renaming; retained
+  `release/2.1`, the existing commit history and the application version.
+- Committed 106 reviewed files as
+  `39e315e59748aa87e1b1c8b5dcf3c7b65955a4f2`
+  (`feat: integrate editor and update improvements [skip ci]`). The commit
+  includes response/dependency work, preview reverse SyncTeX, formula/table
+  interactions, the default-offline update client, tests, documentation and
+  synthetic evidence. No product source was changed by this synchronization.
+- Required compileall passed. The complete offscreen unittest discovery passed
+  958 tests in 245.698 seconds. The previously recorded welcome-page scale
+  callback/deleted-QLabel exceptions recurred without failing the suite; no fix
+  or disappearance of that issue is claimed. Source and test input fingerprints
+  remained unchanged throughout the gate; the app Python tree still matches
+  the verified installed build's `b002533f` fingerprint.
+- Checked 202 staged or previously unpushed blob objects for private keys,
+  common GitHub/API/AWS token patterns and actual maintainer/home temporary
+  paths. No match was found; this is a bounded publication check, not a complete
+  security audit. Eleven staged screenshots were inspected as synthetic UI
+  evidence. Three original PDF-performance screenshots contain raw build logs
+  and machine-local temporary paths, so they remain local and are now explicitly
+  ignored by Git. The published JSON measurements were not changed; their
+  README and verification report identify the screenshot-access boundary.
+- Pushed the new source commit and the existing 11 local commits by normal
+  fast-forward update from `bc73a1b` to `39e315e` on `origin/release/2.1`.
+  A fresh `git ls-remote` returned the full source commit hash above. GitHub's
+  Actions API returned zero runs for that commit. No force push, history rewrite,
+  workflow/security setting change, release creation, artifact upload, version
+  bump, updater activation or student-content change was performed.
+- Updated the current source matrix and completed handoffs to distinguish
+  synchronized repository source from unchanged public installation packages.

@@ -91,7 +91,9 @@ class PreviewStateStore:
         record.freshness = PreviewFreshness.DIRTY
         return record
 
-    def begin_build(self, root: str | Path, build_id: int) -> PreviewBuildRecord:
+    def begin_build(
+        self, root: str | Path, build_id: int, *, source_revision: int | None = None,
+    ) -> PreviewBuildRecord:
         record = self.record_for(root)
         if build_id <= record.invalidated_build_id:
             return record
@@ -100,7 +102,7 @@ class PreviewStateStore:
 
         record.latest_build_id = build_id
         record.active_build_id = build_id
-        record.build_revision = record.source_revision
+        record.build_revision = record.source_revision if source_revision is None else source_revision
         record.freshness = PreviewFreshness.COMPILING
         return record
 

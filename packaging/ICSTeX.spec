@@ -3,18 +3,21 @@
 
 from pathlib import Path
 import re
+import runpy
 
 
 ROOT = Path(SPECPATH).parent
 APP_INIT = (ROOT / "app" / "__init__.py").read_text(encoding="utf-8")
 APP_VERSION = re.search(r'__version__\s*=\s*"([^"]+)"', APP_INIT).group(1)
 
+UPDATES = runpy.run_path(str(ROOT / "packaging" / "native_updates.py"))
+UPDATE_RUNTIME, UPDATE_CONFIG = UPDATES["runtime_from_environment"]()
 
 a = Analysis(
     [str(ROOT / "app" / "__main__.py")],
     pathex=[str(ROOT)],
     binaries=[],
-    datas=[(str(ROOT / "app" / "assets"), "app/assets")],
+    datas=[(str(ROOT / "app" / "assets"), "app/assets"), *UPDATES["runtime_datas"](UPDATE_RUNTIME)],
     hiddenimports=[
         "PySide6.QtPdf",
         "PySide6.QtPdfWidgets",
@@ -69,5 +72,9 @@ app = BUNDLE(
         "CFBundleShortVersionString": APP_VERSION,
         "CFBundleVersion": APP_VERSION,
         "NSRequiresAquaSystemAppearance": True,
+        **(UPDATES["sparkle_plist"](UPDATE_CONFIG) if UPDATE_CONFIG else {}),
     },
 )
+
+if UPDATE_RUNTIME:
+    UPDATES["embed_macos_runtime"](Path(app.name), UPDATE_RUNTIME)

@@ -196,7 +196,7 @@ class CompileManagerTests(TestCase):
             with patch("app.core.compiler.threading.Thread") as thread_type:
                 manager.compile_async(BuildPurpose.PREVIEW)
 
-            self.assertEqual(thread_type.call_args.kwargs["args"], (BuildPurpose.FINAL,))
+            self.assertEqual(thread_type.call_args.kwargs["args"][0].key.purpose, BuildPurpose.FINAL)
             self.assertIsNone(manager._scheduled_purpose)
 
     def test_missing_compiler_returns_friendly_result(self) -> None:
@@ -215,6 +215,103 @@ class CompileManagerTests(TestCase):
         assert result is not None
         self.assertEqual(result.returncode, 127)
         self.assertIn("未找到 LaTeX 编译器", result.stderr)
+
+    def test_pending_deadline_keeps_only_unelapsed_debounce(self) -> None:
+        for finished_at, remaining in ((10.4, 0.3), (12.0, 0.0)):
+            with self.subTest(finished_at=finished_at), TemporaryDirectory() as directory:
+                manager = CompileManager(
+                    Path(directory) / "main.tex", debounce_ms=700,
+                    toolchain=LaTeXToolchain(None, None),
+                )
+                with patch("app.core.compiler.time.monotonic", return_value=9.0) as now, \
+                     patch("app.core.compiler.threading.Timer") as timer:
+                    def running(build_id, purpose, **kwargs):
+                        now.return_value = 10.0
+                        manager.set_input_revision(7, 3)
+                        manager.schedule_compile("edit", BuildPurpose.PREVIEW)
+                        now.return_value = finished_at
+                        return manager._simple_result(
+                            build_id, CompileOutcome.LATEX_ERROR, returncode=1,
+                            stderr="test", purpose=purpose,
+                        )
+
+                    with patch.object(manager, "_run_compile", side_effect=running):
+                        manager.compile_now()
+                    self.assertAlmostEqual(timer.call_args.args[0], remaining)
+                    self.assertEqual(manager._scheduled_request.key.source_revision, 7)
+                    self.assertEqual(manager._scheduled_request.key.dependency_generation, 3)
+                    self.assertEqual(manager._scheduled_request.key.purpose, BuildPurpose.PREVIEW)
+                    manager.cancel_pending()
+
+    def test_async_burst_has_one_worker_and_latest_pending_identity(self) -> None:
+        manager = CompileManager("/tmp/main.tex", toolchain=LaTeXToolchain(None, None))
+        with patch("app.core.compiler.threading.Thread") as thread:
+            manager.compile_async(BuildPurpose.PREVIEW)
+            for revision in range(1, 101):
+                manager.set_input_revision(revision, revision // 2)
+                purpose = BuildPurpose.FINAL if revision == 2 else BuildPurpose.PREVIEW
+                manager.compile_async(purpose)
+            self.assertEqual(thread.call_count, 1)
+            self.assertEqual(manager._pending_request.key.source_revision, 100)
+            self.assertEqual(manager._pending_request.key.dependency_generation, 50)
+            self.assertEqual(manager._pending_request.key.purpose, BuildPurpose.FINAL)
+            manager.cancel_pending()
+
+    def test_cancel_invalidates_timer_and_already_launched_request(self) -> None:
+        manager = CompileManager("/tmp/main.tex", toolchain=LaTeXToolchain(None, None))
+        with patch("app.core.compiler.threading.Timer"), \
+             patch("app.core.compiler.threading.Thread") as thread:
+            manager.schedule_compile()
+            stale_generation = manager._timer_generation
+            manager.cancel_pending()
+            manager._fire_scheduled_compile(stale_generation, BuildPurpose.FINAL)
+            thread.assert_not_called()
+            manager.compile_async()
+            request = thread.call_args.kwargs["args"][0]
+            manager.cancel_pending()
+            with patch.object(manager, "_run_compile") as run:
+                manager._run_async(request)
+            run.assert_not_called()
+            self.assertTrue(manager.wait_until_idle(0))
+
+    def test_job_configuration_and_recorder_are_captured_before_callback(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            tex = root / "main.tex"
+            tex.write_text("x")
+            toolchain = LaTeXToolchain(None, "/bin/pdflatex")
+            manager = CompileManager(tex, toolchain=toolchain, restricted_io=True)
+            manager.set_input_revision(4, 2)
+
+            def prepare(_root, _output):
+                manager.engine = LaTeXEngine.XELATEX
+                manager.toolchain = LaTeXToolchain(None, None)
+                manager.restricted_io = False
+                manager.set_input_revision(5, 3)
+                return PreviewPreparation()
+
+            manager.preview_preparer = prepare
+            output = manager.preview_output_dir
+
+            class Process:
+                returncode = 0
+
+                def communicate(self, timeout=None):
+                    (output / "main.pdf").write_bytes(b"%PDF-1.4 test")
+                    (output / "main.fls").write_text("INPUT dynamic.csv\nOUTPUT main.pdf\n")
+                    return "", ""
+
+            manager.on_finished = lambda result: (output / "main.fls").write_text("INPUT changed.csv\n")
+            with patch("app.core.compiler.subprocess.Popen", return_value=Process()) as popen:
+                result = manager.compile_now(BuildPurpose.PREVIEW)
+            self.assertTrue(result.ok)
+            self.assertEqual(result.job_key.source_revision, 4)
+            self.assertEqual(result.job_key.dependency_generation, 2)
+            self.assertEqual(result.job_key.toolchain, toolchain)
+            self.assertEqual(result.command[0], "/bin/pdflatex")
+            self.assertEqual(popen.call_args.kwargs["env"]["openin_any"], "p")
+            self.assertIn(root / "dynamic.csv", result.recorder_inputs)
+            self.assertNotIn(root / "changed.csv", result.recorder_inputs)
 
     def test_missing_root_file_returns_error(self) -> None:
         with TemporaryDirectory() as directory:
@@ -431,6 +528,9 @@ class CompileOutcomeTests(TestCase):
         results: list[CompileResult] = []
         manager.on_finished = results.append
         manager.compile_async()
+        deadline = time.monotonic() + 2
+        while not manager.is_running and time.monotonic() < deadline:
+            time.sleep(0.005)
         if ready_marker is not None:
             deadline = time.monotonic() + 2
             while not ready_marker.exists() and time.monotonic() < deadline:

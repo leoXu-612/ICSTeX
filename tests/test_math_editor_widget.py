@@ -8,6 +8,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeyEvent
+from PySide6.QtTest import QTest
 
 from app.gui.math_editor_widget import MathEditorWidget
 
@@ -22,6 +23,68 @@ def app() -> QApplication:
 class MathEditorWidgetTests(TestCase):
     def setUp(self) -> None:
         app()
+
+    def test_typing_replaces_selection_in_one_undo(self):
+        widget = MathEditorWidget()
+        widget.set_latex("abc")
+        widget.select_all()
+        widget.type_key("x")
+        self.assertEqual(widget.latex(), "x")
+        widget.undo()
+        self.assertEqual(widget.latex(), "abc")
+
+    def test_arrow_motion_does_not_select_or_delete_text(self):
+        widget = MathEditorWidget()
+        widget.set_latex("abc")
+        widget.cursor_home()
+        widget.cursor_right()
+        widget.type_key("x")
+        self.assertEqual(widget.latex(), "axbc")
+
+    def test_shift_selection_copy_and_replacement_preserve_adjacent_text(self):
+        widget = MathEditorWidget()
+        widget.set_latex("abcd")
+        widget.cursor_home()
+        widget.cursor_right()
+        widget.cursor_right(select=True)
+        widget.cursor_right(select=True)
+        self.assertEqual(widget.selected_latex(), "bc")
+        widget.paste_clipboard("X")
+        self.assertEqual(widget.latex(), "aXd")
+        widget.undo()
+        self.assertEqual(widget.latex(), "abcd")
+
+    def test_tab_key_reaches_fraction_denominator(self):
+        widget = MathEditorWidget()
+        widget.insert_structure("fraction")
+        widget.type_key("a")
+        QTest.keyClick(widget, Qt.Key.Key_Tab)
+        widget.type_key("b")
+        self.assertEqual(widget.latex(), r"\frac{a}{b}")
+        QTest.keyClick(widget, Qt.Key.Key_Backtab)
+        self.assertEqual(widget.path[-1][0], "frac_num")
+
+    def test_pending_command_can_be_corrected_and_committed(self):
+        widget = MathEditorWidget()
+        for char in r"\alphx":
+            widget.type_key(char)
+        widget.delete_backspace()
+        widget.type_key("a")
+        self.assertEqual(widget.pending_command, r"\alpha")
+        QTest.keyClick(widget, Qt.Key.Key_Return)
+        self.assertEqual(widget.latex(), r"\alpha")
+        self.assertEqual(widget.pending_command, "")
+
+    def test_mutations_publish_once_and_navigation_does_not_publish_latex(self):
+        widget = MathEditorWidget()
+        changes = []
+        widget.latexChanged.connect(changes.append)
+        widget.type_key("/")
+        self.assertEqual(changes, [r"\frac{}{}"])
+        widget.cursor_right()
+        self.assertEqual(len(changes), 1)
+        widget.undo()
+        self.assertEqual(changes[-1], "")
 
     def test_inline_fraction_no_newline(self) -> None:
         widget = MathEditorWidget()

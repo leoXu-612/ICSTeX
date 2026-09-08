@@ -3,9 +3,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QSignalBlocker
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QCheckBox,
+    QApplication,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -21,9 +23,9 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QPlainTextEdit,
     QScrollArea,
     QSpinBox,
-    QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -40,7 +42,10 @@ from app.core.latex_insertions import (
     figure_layout_snippet,
     parse_delimited,
     parse_tabular,
+    table_snippet,
 )
+from app.core.table_clipboard import parse_grid
+from app.gui.table_grid import TableGrid
 
 
 class InsertPanel(QWidget):
@@ -320,24 +325,55 @@ class TableDialog(QDialog):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("插入表格")
+        self.resize(840, 660)
+        self._loading = True
+        self._undo: list[TableSpec] = []
+        self._redo: list[TableSpec] = []
         self.rows_spin = QSpinBox()
         self.rows_spin.setRange(1, 40)
         self.rows_spin.setValue(3)
+        self.rows_spin.setKeyboardTracking(False)
         self.columns_spin = QSpinBox()
         self.columns_spin.setRange(1, 12)
         self.columns_spin.setValue(3)
+        self.columns_spin.setKeyboardTracking(False)
         self.alignment_combo = QComboBox()
         self.alignment_combo.addItems(["c", "l", "r"])
-        self.booktabs_check = QCheckBox("booktabs")
+        self.alignment_combo.setItemText(0, "居中 (c)")
+        self.alignment_combo.setItemText(1, "左对齐 (l)")
+        self.alignment_combo.setItemText(2, "右对齐 (r)")
+        for index, alignment in enumerate(("c", "l", "r")):
+            self.alignment_combo.setItemData(index, alignment)
+        self.booktabs_check = QCheckBox("三线表 · booktabs")
         self.booktabs_check.setChecked(True)
         self.caption_edit = QLineEdit()
         self.label_edit = QLineEdit("tab:")
         self.placement_combo = _placement_combo()
-        self.preview_table = QTableWidget()
+        self.caption_edit.setPlaceholderText("可选，例如：实验测量结果")
+        self.label_edit.setPlaceholderText("例如 tab:results")
+        self.preview_table = TableGrid()
+        self.status_label = QLabel()
+        self.undo_button = QPushButton("撤销")
+        self.redo_button = QPushButton("重做")
+        self.undo_button.clicked.connect(self.undo)
+        self.redo_button.clicked.connect(self.redo)
+        self.preview_table.pasteRequested.connect(self.paste_clipboard_text)
+        self.preview_table.clearRequested.connect(self.clear_selection)
+        self.preview_table.undoRequested.connect(self.undo)
+        self.preview_table.redoRequested.connect(self.redo)
         self._build()
         self._resize_table()
-        self.rows_spin.valueChanged.connect(lambda _value: self._resize_table())
-        self.columns_spin.valueChanged.connect(lambda _value: self._resize_table())
+        self._loading = False
+        self._last_spec = self.values()
+        self.rows_spin.valueChanged.connect(self._dimensions_changed)
+        self.columns_spin.valueChanged.connect(self._dimensions_changed)
+        self.preview_table.itemChanged.connect(self._record_change)
+        for signal in (self.alignment_combo.currentIndexChanged, self.booktabs_check.toggled,
+                       self.caption_edit.textChanged, self.label_edit.textChanged,
+                       self.placement_combo.currentIndexChanged):
+            signal.connect(self._record_change)
+        self.preview_table.itemSelectionChanged.connect(self._update_status)
+        self._update_status()
 
     def values(self) -> TableSpec:
         headers = tuple(self._cell_text(0, column) for column in range(self.columns_spin.value()))
@@ -348,7 +384,7 @@ class TableDialog(QDialog):
         return TableSpec(
             rows=self.rows_spin.value(),
             columns=self.columns_spin.value(),
-            alignment=self.alignment_combo.currentText(),
+            alignment=self.alignment_combo.currentData(),
             use_booktabs=self.booktabs_check.isChecked(),
             caption=self.caption_edit.text().strip(),
             label=self.label_edit.text().strip(),
@@ -359,26 +395,59 @@ class TableDialog(QDialog):
 
     def _build(self) -> None:
         layout = QVBoxLayout(self)
-        form = QFormLayout()
-        form.addRow("行数", self.rows_spin)
-        form.addRow("列数", self.columns_spin)
-        form.addRow("对齐", self.alignment_combo)
-        form.addRow("样式", self.booktabs_check)
-        form.addRow("说明文字", self.caption_edit)
-        form.addRow("标签", self.label_edit)
-        form.addRow("位置", self.placement_combo)
-        layout.addLayout(form)
+        hint = QLabel("第一行为表头；双击或直接键入编辑。Tab 移动，复制 / 粘贴支持矩形区域。")
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+        sizes = QHBoxLayout()
+        for label, widget in (("数据行", self.rows_spin), ("列", self.columns_spin), ("对齐", self.alignment_combo)):
+            sizes.addWidget(QLabel(label))
+            sizes.addWidget(widget)
+        sizes.addWidget(self.booktabs_check)
+        layout.addLayout(sizes)
+        actions = QHBoxLayout()
+        actions.addWidget(self.undo_button)
+        actions.addWidget(self.redo_button)
+        clear_button = QPushButton("清空所选")
+        clear_button.clicked.connect(self.clear_selection)
+        actions.addWidget(clear_button)
+        actions.addStretch()
         import_button = QPushButton("导入现有表格")
         import_button.setToolTip("粘贴已有的 table/tabular LaTeX 代码，反向填入下面的网格。")
         import_button.clicked.connect(self._import_existing)
-        layout.addWidget(import_button)
+        actions.addWidget(import_button)
         paste_button = QPushButton("粘贴 CSV / Excel")
-        paste_button.setToolTip("从 Excel、Numbers、Google Sheets 复制单元格，或粘贴 CSV，自动填入网格。")
-        paste_button.clicked.connect(self._import_delimited)
-        layout.addWidget(paste_button)
-        self.preview_table.setMinimumSize(460, 220)
-        layout.addWidget(self.preview_table)
-        layout.addWidget(_buttons(self))
+        paste_button.setToolTip("从当前格开始粘贴剪贴板数据；粘贴到表头行时第一行作为表头。")
+        paste_button.clicked.connect(lambda: self.paste_clipboard_text(QApplication.clipboard().text()))
+        actions.addWidget(paste_button)
+        layout.addLayout(actions)
+        self.preview_table.setMinimumSize(600, 220)
+        layout.addWidget(self.preview_table, 1)
+        details = QGridLayout()
+        details.addWidget(QLabel("标题"), 0, 0)
+        details.addWidget(self.caption_edit, 0, 1, 1, 3)
+        details.addWidget(QLabel("标签"), 1, 0)
+        details.addWidget(self.label_edit, 1, 1)
+        details.addWidget(QLabel("浮动位置"), 1, 2)
+        details.addWidget(self.placement_combo, 1, 3)
+        layout.addLayout(details)
+        self.preview_check = QCheckBox("查看将插入的 LaTeX")
+        self.source_preview = QPlainTextEdit()
+        self.source_preview.setReadOnly(True)
+        self.source_preview.setMaximumHeight(140)
+        self.source_preview.setAccessibleName("表格 LaTeX 预览")
+        self.source_preview.hide()
+        self.preview_check.toggled.connect(self.source_preview.setVisible)
+        layout.addWidget(self.preview_check)
+        layout.addWidget(self.source_preview)
+        layout.addWidget(self.status_label)
+        buttons = _buttons(self)
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("插入表格")
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setObjectName("primaryButton")
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("取消")
+        layout.addWidget(buttons)
+        for button in self.findChildren(QPushButton):
+            button.setAutoDefault(False)
+            button.setDefault(False)
 
     def _import_existing(self) -> None:
         text, ok = QInputDialog.getMultiLineText(
@@ -412,13 +481,17 @@ class TableDialog(QDialog):
         self.load_spec(spec)
 
     def load_spec(self, spec: TableSpec) -> None:
+        if spec.rows > self.rows_spin.maximum() or spec.columns > self.columns_spin.maximum():
+            self.status_label.setText("表格超过 40 个数据行或 12 列；未导入，也未修改当前内容。")
+            return
+        self._loading = True
         self.rows_spin.setValue(max(1, spec.rows))
         self.columns_spin.setValue(max(1, spec.columns))
-        alignment_index = self.alignment_combo.findText(spec.alignment)
+        alignment_index = self.alignment_combo.findData(spec.alignment)
         self.alignment_combo.setCurrentIndex(alignment_index if alignment_index >= 0 else 0)
         self.booktabs_check.setChecked(spec.use_booktabs)
         self.caption_edit.setText(spec.caption)
-        self.label_edit.setText(spec.label or "tab:")
+        self.label_edit.setText(spec.label)
         placement_index = self.placement_combo.findText(spec.placement)
         if placement_index >= 0:
             self.placement_combo.setCurrentIndex(placement_index)
@@ -426,14 +499,17 @@ class TableDialog(QDialog):
         columns = self.columns_spin.value()
         for column in range(columns):
             value = spec.headers[column] if column < len(spec.headers) else ""
-            self.preview_table.setItem(0, column, QTableWidgetItem(value))
+            self.preview_table.item(0, column).setText(value)
         for row in range(1, self.rows_spin.value() + 1):
             row_cells = spec.cells[row - 1] if row - 1 < len(spec.cells) else ()
             for column in range(columns):
                 value = row_cells[column] if column < len(row_cells) else ""
-                self.preview_table.setItem(row, column, QTableWidgetItem(value))
+                self.preview_table.item(row, column).setText(value)
+        self._loading = False
+        self._record_change()
 
     def _resize_table(self) -> None:
+        current = (self.preview_table.currentRow(), self.preview_table.currentColumn())
         existing = {
             (row, column): self._cell_text(row, column)
             for row in range(self.preview_table.rowCount())
@@ -441,16 +517,99 @@ class TableDialog(QDialog):
         }
         rows = self.rows_spin.value() + 1
         columns = self.columns_spin.value()
-        self.preview_table.setRowCount(rows)
-        self.preview_table.setColumnCount(columns)
-        self.preview_table.setVerticalHeaderLabels(["表头", *[f"第 {index} 行" for index in range(1, rows)]])
-        self.preview_table.setHorizontalHeaderLabels([f"第 {index} 列" for index in range(1, columns + 1)])
-        for row in range(rows):
-            for column in range(columns):
-                value = existing.get((row, column), "")
-                if not value:
-                    value = f"Header {column + 1}" if row == 0 else f"Cell {row}-{column + 1}"
-                self.preview_table.setItem(row, column, QTableWidgetItem(value))
+        with QSignalBlocker(self.preview_table):
+            self.preview_table.setRowCount(rows)
+            self.preview_table.setColumnCount(columns)
+            self.preview_table.setVerticalHeaderLabels(["表头", *[str(index) for index in range(1, rows)]])
+            self.preview_table.setHorizontalHeaderLabels([str(index) for index in range(1, columns + 1)])
+            for row in range(rows):
+                for column in range(columns):
+                    item = QTableWidgetItem(existing.get((row, column), ""))
+                    if row == 0:
+                        font = QFont(item.font())
+                        font.setBold(True)
+                        item.setFont(font)
+                    self.preview_table.setItem(row, column, item)
+            self.preview_table.setCurrentCell(max(0, min(current[0], rows - 1)), max(0, min(current[1], columns - 1)))
+
+    def _dimensions_changed(self, _value: int) -> None:
+        if self._loading:
+            return
+        rows, columns = self.rows_spin.value() + 1, self.columns_spin.value()
+        removed = any(self._cell_text(row, col) for row in range(self.preview_table.rowCount())
+                      for col in range(self.preview_table.columnCount()) if row >= rows or col >= columns)
+        if removed and QMessageBox.question(self, "缩小表格", "缩小后会移除范围外的数据；可以撤销。是否继续？",
+                                            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                            QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+            with QSignalBlocker(self.rows_spin), QSignalBlocker(self.columns_spin):
+                self.rows_spin.setValue(self.preview_table.rowCount() - 1)
+                self.columns_spin.setValue(self.preview_table.columnCount())
+            return
+        self._resize_table()
+        self._record_change()
+
+    def _record_change(self, *_args) -> None:
+        if self._loading:
+            return
+        spec = self.values()
+        if spec != self._last_spec:
+            self._undo.append(self._last_spec)
+            self._undo = self._undo[-100:]
+            self._redo.clear()
+            self._last_spec = spec
+        self._update_status()
+
+    def _update_status(self) -> None:
+        if self._loading:
+            return
+        self.undo_button.setEnabled(bool(self._undo))
+        self.redo_button.setEnabled(bool(self._redo))
+        preview = table_snippet(self.values())
+        if self.source_preview.toPlainText() != preview:
+            self.source_preview.setPlainText(preview)
+        self.status_label.setText(f"1 行表头 + {self.rows_spin.value()} 行数据 · {self.columns_spin.value()} 列 · 确认前不修改文档")
+
+    def _restore(self, spec: TableSpec) -> None:
+        self._last_spec = spec
+        self.load_spec(spec)
+
+    def undo(self) -> None:
+        if self._undo:
+            self._redo.append(self.values())
+            self._restore(self._undo.pop())
+
+    def redo(self) -> None:
+        if self._redo:
+            self._undo.append(self.values())
+            self._restore(self._redo.pop())
+
+    def clear_selection(self) -> None:
+        with QSignalBlocker(self.preview_table):
+            for item in self.preview_table.selectedItems():
+                item.setText("")
+        self._record_change()
+
+    def paste_clipboard_text(self, text: str) -> None:
+        top, left = max(0, self.preview_table.currentRow()), max(0, self.preview_table.currentColumn())
+        try:
+            grid = parse_grid(text, max_rows=41 - top, max_columns=12 - left)
+        except ValueError:
+            self.status_label.setText("未粘贴：数据格式无效，或超出 40 个数据行 / 12 列；原内容保持不变。")
+            return
+        if not grid:
+            self.status_label.setText("剪贴板没有表格数据。请先复制单元格。")
+            return
+        self._loading = True
+        self.rows_spin.setValue(max(self.rows_spin.value(), top + len(grid) - 1))
+        self.columns_spin.setValue(max(self.columns_spin.value(), left + len(grid[0])))
+        self._resize_table()
+        with QSignalBlocker(self.preview_table):
+            for row, cells in enumerate(grid, top):
+                for col, value in enumerate(cells, left):
+                    self.preview_table.item(row, col).setText(value)
+        self._loading = False
+        self._record_change()
+        self.preview_table.setCurrentCell(top, left)
 
     def _cell_text(self, row: int, column: int) -> str:
         item = self.preview_table.item(row, column)

@@ -8,8 +8,9 @@ from unittest import TestCase
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QSettings
+from PySide6.QtCore import QSettings, Qt, QEvent
 from PySide6.QtGui import QFontDatabase
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QToolBar
 
 from app.core.settings import AppSettings
@@ -44,6 +45,60 @@ def _app() -> QApplication:
 
 
 class WorkbenchVisualSmokeTests(TestCase):
+    def test_formula_and_table_editor_layout_and_keyboard_flow(self) -> None:
+        from app.gui.formula_dialog import FormulaDialog
+        from app.gui.insert_panel import TableDialog
+        from app.gui.math_keyboard import MathKeyButton
+
+        application = _app()
+        formula = FormulaDialog(None, "", 0, 0, seed_text=r"\(x=\)")
+        table = TableDialog()
+        try:
+            for width, height in ((920, 720), (800, 720), (1040, 720), (920, 720)):
+                formula.resize(width, height)
+                formula.show()
+                application.processEvents()
+                self.assertEqual(formula.size().width(), width)
+                self.assertLessEqual(formula.size().height(), height)
+                self.assertTrue(formula._ok_button.isVisible())
+                self.assertGreater(formula.keyboard.stack.width(), 100)
+                self.assertIsNotNone(formula.keyboard.stack.parentWidget())
+                self.assertFalse(formula.grab().isNull())
+            actions = {button.action: button for button in formula.keyboard.findChildren(MathKeyButton)}
+            self.assertNotIn("apply", actions)
+            self.assertTrue(all(button.accessibleName() for button in actions.values()))
+            formula.keyboard._emit("toggle:abc")
+            application.processEvents()
+            self.assertLessEqual(formula.width(), 920)
+            self.assertLessEqual(formula.height(), 720)
+            self.assertEqual(formula.keyboard.stack.currentWidget(), formula.keyboard.letters_row)
+            formula.keyboard._emit("toggle:abc")
+            self.assertEqual(formula.keyboard.stack.currentWidget(), formula.keyboard._base_page)
+            actions["structure:fraction"].click()
+            QTest.keyClicks(formula.visual_edit, "a")
+            QTest.keyClick(formula.visual_edit, Qt.Key.Key_Tab)
+            QTest.keyClicks(formula.visual_edit, "b")
+            QTest.keyClick(formula.visual_edit, Qt.Key.Key_Return)
+            self.assertEqual(formula.preview_edit.toPlainText(), r"\(x=\frac{a}{b}\)")
+            self.assertIsNone(formula.plan())
+            formula.source_mode_check.setChecked(True)
+            self.assertFalse(formula.keyboard.isVisible())
+            formula.source_mode_check.setChecked(False)
+
+            table.resize(840, 660)
+            table.show()
+            table.paste_clipboard_text("Name\tValue\nA\t0\nB\t1")
+            application.processEvents()
+            self.assertLessEqual(table.height(), 660)
+            self.assertEqual(table._cell_text(1, 1), "0")
+            self.assertFalse(table.grab().isNull())
+        finally:
+            formula.close()
+            table.close()
+            formula.deleteLater()
+            table.deleteLater()
+            application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
     def test_font_roles_resolve_expected_latin_and_chinese_families(self) -> None:
         _app()
         available = set(QFontDatabase.families())
@@ -139,3 +194,30 @@ def _relative_luminance(color: str) -> float:
     channels = [int(color[index : index + 2], 16) / 255 for index in (1, 3, 5)]
     linear = [value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4 for value in channels]
     return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+
+class AppUpdateVisualTests(TestCase):
+    def test_update_dialog_chinese_content_and_actions_fit(self) -> None:
+        from app.gui.update_dialog import AppUpdateDialog
+        application = _app()
+        dialog = AppUpdateDialog()
+        try:
+            dialog.set_state(available=False, automatic=False,
+                             message="当前是源码开发模式，未启用应用内更新。请在带更新器的正式安装包中使用。")
+            for width in (480, 600):
+                dialog.resize(width, 360)
+                dialog.show()
+                application.processEvents()
+                self.assertEqual(dialog.width(), width)
+                self.assertTrue(dialog.rect().contains(dialog.check_button.geometry()))
+                self.assertTrue(dialog.rect().contains(dialog.automatic.geometry()))
+                self.assertFalse(dialog.check_button.isEnabled())
+                self.assertFalse(dialog.automatic.isChecked())
+                self.assertFalse(dialog.grab().isNull())
+            dialog.set_state(available=True, automatic=True, message="发现可用更新，请在原生更新窗口查看并确认下载。",
+                             source="更新源：updates.example.org", channel="Beta 通道")
+            self.assertTrue(dialog.check_button.isEnabled())
+            self.assertTrue(dialog.automatic.isChecked())
+        finally:
+            dialog.close()
+            dialog.deleteLater()

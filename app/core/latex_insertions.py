@@ -368,8 +368,9 @@ def _table_placement(text: str) -> str:
 def _table_row_values(values: tuple[str, ...], columns: int, fallback) -> list[str]:  # type: ignore[no-untyped-def]
     row: list[str] = []
     for index in range(1, columns + 1):
-        value = values[index - 1].strip() if index - 1 < len(values) else ""
-        row.append(value or fallback(index))
+        # A supplied empty cell is intentional; only absent template data gets
+        # a placeholder. The grid preview and inserted source must agree.
+        row.append(values[index - 1].strip() if index - 1 < len(values) else fallback(index))
     return row
 
 

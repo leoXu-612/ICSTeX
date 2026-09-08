@@ -1,6 +1,6 @@
 # ICSTeX Project Index
 
-更新时间：2026-08-06（Asia/Taipei）
+更新时间：2026-09-08（Asia/Taipei）
 
 ## 权威工作区
 
@@ -15,12 +15,17 @@
 - `docs/PROJECT_STATE.md`：当前已验证源码、release matrix 与风险。
 - `docs/ROADMAP.md`：产品和技术优先级。
 - `docs/DECISION_LOG.md`：长期架构决策及其原因。
+- `docs/update-delivery-design-2026-09-08.md`：原生更新器实现、信任分工与发布验收边界。
+- `packaging/UPDATES.md`：维护者提供配置、暂存固定 SDK、签名与 appcast 接入步骤。
+- `docs/FORCODEX_UPDATES.md`：与本机安装任务隔离的并行更新器范围及收口 brief。
 - `docs/MEMORY_MANAGEMENT.md`：文档职责、权威顺序和信息生命周期。
 - `DEEPSEEK.md`：DeepSeek 兼容入口，只指向统一规则与任务 brief。
 - `FORCODEX.md` / `FORCLAUDE.md` / `FORDEEPSEEK.md`：当前 bounded
   assignments。
 - `MEMORY.md`：紧凑、跨任务的 durable reminders。
 - `PROJECT_LOG.md`：append-only 已完成工程历史。
+- `docs/response-optimization-verification-2026-09-08.md`：响应优化验收、测量边界与
+  原始/后测样本入口。
 - `CHANGELOG.md`：面向用户的版本变化。
 - `MIGRATION_RECORD.md`：workspace migration、备份和验证证据。
 - `PROJECT_FILE_INDEX.sha256`：迁移时建立的稳定内容索引，不代表后续源码未变化。
@@ -34,10 +39,19 @@ app/
   assets/      App 内置视觉资源
 tests/         unittest 回归与 GUI smoke tests
 packaging/     macOS/Windows 构建脚本、spec、README 和 offline wheel
-tools/         Codex/Claude collaboration watcher
+tools/         开发辅助、协作 watcher、隔离性能与编辑器交互探针
 dist/          已生成 artifacts，不是源码权威来源
 build/         可重建 packaging cache，不是源码权威来源
 ```
+
+公式/表格交互回归：`app/gui/formula_dialog.py`、`app/gui/table_grid.py`、
+`app/gui/insert_panel.py`、`app/gui/blocks/table_editor.py`；剪贴板纯规则位于
+`app/core/table_clipboard.py`。原生合成数据检查入口为 `tools/probe_editor_interactions.py`。
+
+应用更新：`app/core/app_updates.py`、`app/gui/app_update_controller.py`、
+`app/gui/update_dialog.py`、`app/gui/update_backends.py`；原生 SDK 构建接入位于
+`packaging/native_updates.py` 与 `packaging/native_updates/sparkle_bridge.m`。
+默认不配置运行时；离线中文界面探针为 `tools/probe_app_updates.py`。
 
 ## 常用命令
 

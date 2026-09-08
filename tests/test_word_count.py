@@ -6,10 +6,49 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from app.core.latex_tools import LaTeXToolchain
-from app.core.word_count import count_project, count_text, count_words
+from app.core.word_count import count_project, count_project_snapshot, count_text, count_words
 
 
 class WordCountTests(TestCase):
+    def test_snapshot_tracks_missing_and_changed_disk_dependencies(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory) / "main.tex"
+            child = Path(directory) / "child.tex"
+            source = "\\begin{document}Root.\\input{child}\\end{document}"
+            root.write_text(source, encoding="utf-8")
+            tools = LaTeXToolchain(None, None)
+            snapshot = count_project_snapshot(root, {root: source}, tools)
+            self.assertTrue(snapshot.is_current())
+            child.write_text("New child.", encoding="utf-8")
+            self.assertFalse(snapshot.is_current())
+            snapshot = count_project_snapshot(root, {root: source}, tools)
+            self.assertTrue(snapshot.is_current())
+            self.assertEqual(snapshot.result, count_project(root, {root: source}, tools))
+            child.unlink()
+            self.assertFalse(snapshot.is_current())
+
+    def test_snapshot_texcount_uses_captured_sources_and_detects_concurrent_edit(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory) / "main.tex"
+            child = Path(directory) / "child.tex"
+            root.write_text("\\begin{document}Root \\input{child}\\end{document}", encoding="utf-8")
+            child.write_text("old", encoding="utf-8")
+
+            def fake_run(command, **kwargs):
+                shadow = Path(command[-1])
+                self.assertNotEqual(shadow, root)
+                child.write_text("new version", encoding="utf-8")
+                text = shadow.read_text(encoding="utf-8")
+                included = Path(text.split("\\input{", 1)[1].split("}", 1)[0])
+                self.assertEqual(included.read_text(encoding="utf-8"), "old")
+                return type("Result", (), {"returncode": 0,
+                    "stdout": "ICSTEX_WORDCOUNT\t2\t0\t0\t0\t0\t0\t0\t2\n", "stderr": ""})()
+
+            with patch("app.core.word_count.subprocess.run", side_effect=fake_run):
+                snapshot = count_project_snapshot(root, {}, LaTeXToolchain(None, None, texcount="texcount"))
+            self.assertEqual(snapshot.result.effective_words, 2)
+            self.assertFalse(snapshot.is_current())
+
     def test_fallback_counts_text_and_ignores_comments_and_commands(self) -> None:
         with TemporaryDirectory() as directory:
             tex = Path(directory) / "main.tex"

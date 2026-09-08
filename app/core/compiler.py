@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from itertools import count
 import logging
@@ -22,6 +22,7 @@ from app.core.paths import (
     preview_build_dir_for,
 )
 from app.core.process_env import latex_subprocess_env
+from app.core.project_dependencies import read_recorder_dependencies
 
 
 logger = logging.getLogger(__name__)
@@ -51,6 +52,26 @@ class BuildPurpose(str, Enum):
 
 
 @dataclass(frozen=True)
+class CompileJobKey:
+    root_file: Path
+    output_dir: Path
+    purpose: BuildPurpose
+    engine: LaTeXEngine
+    toolchain: LaTeXToolchain
+    restricted_io: bool
+    source_revision: int
+    dependency_generation: int
+
+
+@dataclass(frozen=True)
+class _CompileRequest:
+    key: CompileJobKey
+    deadline: float
+    cancel_generation: int
+    sequence: int
+
+
+@dataclass(frozen=True)
 class PreviewPreparation:
     overlay_dir: Path | None = None
     fidelity: str = "original_fallback"
@@ -77,6 +98,8 @@ class CompileResult:
     preview_fidelity: str | None = None
     preview_manifest_digest: str | None = None
     preview_asset_paths: tuple[Path, ...] = ()
+    job_key: CompileJobKey | None = None
+    recorder_inputs: tuple[Path, ...] | None = None
 
     @property
     def ok(self) -> bool:
@@ -113,6 +136,7 @@ class CompileManager:
         preview_preparer: PreviewPreparer | None = None,
         metrics_hook: Callable[[str, str], None] | None = None,
         restricted_io: bool = False,
+        project_scope: str | Path | None = None,
     ) -> None:
         self.root_file = normalize_path(root_file)
         self.output_dir = normalize_path(output_dir) if output_dir else build_dir_for(self.root_file)
@@ -124,6 +148,7 @@ class CompileManager:
         self.preview_preparer = preview_preparer
         self.metrics_hook = metrics_hook
         self.restricted_io = restricted_io
+        self.project_scope = normalize_path(project_scope) if project_scope else self.root_file.parent
         self._timer: threading.Timer | None = None
         self._timer_generation = 0
         self._lock = threading.Lock()
@@ -137,6 +162,13 @@ class CompileManager:
         self._active_purpose: BuildPurpose | None = None
         self._process: subprocess.Popen[str] | None = None
         self._stop_requested = False
+        self._cancel_generation = 0
+        self._request_sequence = 0
+        self._source_revision = 0
+        self._dependency_generation = 0
+        self._scheduled_request: _CompileRequest | None = None
+        self._pending_request: _CompileRequest | None = None
+        self._active_job_key: CompileJobKey | None = None
 
     @property
     def pdf_file(self) -> Path:
@@ -180,6 +212,78 @@ class CompileManager:
         with self._lock:
             return self._active_purpose or BuildPurpose.FINAL
 
+    @property
+    def active_job_key(self) -> CompileJobKey | None:
+        with self._lock:
+            return self._active_job_key
+
+    def set_input_revision(self, source_revision: int, dependency_generation: int = 0) -> None:
+        with self._lock:
+            self._source_revision = source_revision
+            self._dependency_generation = dependency_generation
+
+    def _request_locked(self, purpose: BuildPurpose, deadline: float) -> _CompileRequest:
+        self._request_sequence += 1
+        return _CompileRequest(
+            CompileJobKey(
+                self.root_file, self.output_dir_for(purpose), purpose, self.engine,
+                self.toolchain, self.restricted_io, self._source_revision,
+                self._dependency_generation,
+            ),
+            deadline, self._cancel_generation, self._request_sequence,
+        )
+
+    def _merge_request_locked(self, request: _CompileRequest) -> _CompileRequest:
+        purpose = request.key.purpose
+        for previous in (self._scheduled_purpose, self._pending_purpose):
+            purpose = self._merge_purpose(previous, purpose)
+        for previous in (self._scheduled_request, self._pending_request):
+            if previous is not None and previous.sequence > request.sequence:
+                request = previous
+        return replace(request, key=replace(
+            request.key, purpose=purpose, output_dir=self.output_dir_for(purpose),
+        ))
+
+    def _clear_timer_locked(self) -> None:
+        if self._timer is not None:
+            self._timer.cancel()
+        self._timer = None
+        self._timer_generation += 1
+        self._scheduled_request = None
+        self._scheduled_purpose = None
+
+    def _queue_locked(self, request: _CompileRequest) -> None:
+        self._pending_request = request
+        self._pending_purpose = request.key.purpose
+
+    def _arm_locked(self, request: _CompileRequest) -> None:
+        self._clear_timer_locked()
+        self._scheduled_request = request
+        self._scheduled_purpose = request.key.purpose
+        generation = self._timer_generation
+        self._timer = threading.Timer(
+            max(0.0, request.deadline - time.monotonic()),
+            lambda: self._fire_scheduled_compile(generation, request.key.purpose),
+        )
+        self._timer.daemon = True
+        self._timer.start()
+
+    def _launch_locked(self, request: _CompileRequest) -> None:
+        self._launch_count += 1
+        self._idle_event.clear()
+        threading.Thread(target=self._run_async, args=(request,), daemon=True).start()
+
+    def _drain_locked(self) -> None:
+        if self._running or self._launch_count:
+            return
+        request = self._pending_request
+        self._pending_request = None
+        self._pending_purpose = None
+        if request is not None and not self._retired and not self._stop_requested:
+            self._arm_locked(request)
+        self._stop_requested = False
+        self._idle_event.set()
+
     def schedule_compile(
         self,
         reason: str = "change",
@@ -189,18 +293,15 @@ class CompileManager:
         with self._lock:
             if self._retired:
                 return
-            selected = self._merge_purpose(self._scheduled_purpose, selected)
-            if self._timer:
-                self._timer.cancel()
-            self._timer_generation += 1
-            generation = self._timer_generation
-            self._scheduled_purpose = selected
-            self._timer = threading.Timer(
-                self.debounce_ms / 1000,
-                lambda: self._fire_scheduled_compile(generation, selected),
-            )
-            self._timer.daemon = True
-            self._timer.start()
+            request = self._merge_request_locked(self._request_locked(
+                selected, time.monotonic() + self.debounce_ms / 1000,
+            ))
+            selected = request.key.purpose
+            if self._running or self._launch_count:
+                self._clear_timer_locked()
+                self._queue_locked(self._merge_request_locked(request))
+            else:
+                self._arm_locked(request)
         self._log(f"已安排{self._purpose_label(selected)}：{reason}")
 
     def compile_async(self, purpose: BuildPurpose | str = BuildPurpose.FINAL) -> None:
@@ -208,55 +309,67 @@ class CompileManager:
         with self._lock:
             if self._retired:
                 return
-            if self._timer:
-                self._timer.cancel()
-                self._timer = None
-                self._timer_generation += 1
-            selected = self._merge_purpose(self._scheduled_purpose, selected)
-            self._scheduled_purpose = None
-            self._launch_count += 1
-            self._idle_event.clear()
-        thread = threading.Thread(target=self._run_async, args=(selected,), daemon=True)
-        thread.start()
+            request = self._merge_request_locked(self._request_locked(selected, time.monotonic()))
+            self._clear_timer_locked()
+            if self._running or self._launch_count:
+                self._queue_locked(request)
+            else:
+                self._launch_locked(request)
 
     def _fire_scheduled_compile(self, generation: int, purpose: BuildPurpose) -> None:
         with self._lock:
             if self._retired or generation != self._timer_generation:
                 return
-            self._timer = None
-        self.compile_async(purpose)
+            request = self._scheduled_request
+            self._clear_timer_locked()
+            if request is None or request.cancel_generation != self._cancel_generation:
+                return
+            if self._running or self._launch_count:
+                self._queue_locked(self._merge_request_locked(request))
+            else:
+                self._launch_locked(request)
 
-    def _run_async(self, purpose: BuildPurpose) -> None:
+    def _run_async(self, request: _CompileRequest) -> None:
+        purpose = request.key.purpose
         if self.metrics_hook is not None:
             self.metrics_hook("start", purpose.value)
         try:
             timeout = PREVIEW_TIMEOUT_SECONDS if purpose is BuildPurpose.PREVIEW else FINAL_TIMEOUT_SECONDS
-            self.compile_now(purpose, timeout_seconds=timeout)
+            self.compile_now(purpose, timeout_seconds=timeout, _request=request)
         finally:
             if self.metrics_hook is not None:
                 self.metrics_hook("finish", purpose.value)
             with self._lock:
                 self._launch_count = max(0, self._launch_count - 1)
-                if self._launch_count == 0 and not self._running:
-                    self._stop_requested = False
-                    self._idle_event.set()
+                self._drain_locked()
 
     def compile_now(
         self,
         purpose: BuildPurpose | str = BuildPurpose.FINAL,
         *,
         timeout_seconds: float | None = FINAL_TIMEOUT_SECONDS,
+        _request: _CompileRequest | None = None,
     ) -> CompileResult | None:
         selected = BuildPurpose(purpose)
         with self._lock:
-            if self._retired or (self._stop_requested and not self._running):
+            request = _request or self._merge_request_locked(
+                self._request_locked(selected, time.monotonic())
+            )
+            if (
+                self._retired or self._stop_requested
+                or request.cancel_generation != self._cancel_generation
+            ):
                 return None
+            selected = request.key.purpose
             if self._running:
-                self._pending_purpose = self._merge_purpose(self._pending_purpose, selected)
+                self._queue_locked(self._merge_request_locked(request))
                 self._log(f"编译正在进行；已排队一次{self._purpose_label(self._pending_purpose)}。")
                 return None
+            if _request is None:
+                self._clear_timer_locked()
             self._running = True
             self._active_purpose = selected
+            self._active_job_key = request.key
             self._stop_requested = False
             self._idle_event.clear()
 
@@ -265,6 +378,16 @@ class CompileManager:
             if self.on_started:
                 self.on_started(self.root_file, build_id)
             result = self._run_compile(build_id, selected, timeout_seconds=timeout_seconds)
+            # Read the recorder before another job can overwrite the same FLS.
+            recorder = None
+            if result.ok:
+                inputs = read_recorder_dependencies(
+                    result.output_dir / f"{self.root_file.stem}.fls",
+                    root=self.root_file, scope=self.project_scope,
+                )
+                if inputs is not None:
+                    recorder = tuple(sorted(inputs.paths))
+            result = replace(result, job_key=request.key, recorder_inputs=recorder)
             if self.on_finished:
                 self.on_finished(result)
             return result
@@ -277,38 +400,32 @@ class CompileManager:
                 stderr=f"ICSTeX 处理编译结果时发生错误：{exc}",
                 purpose=selected,
             )
+            result = replace(result, job_key=request.key)
             if self.on_finished:
                 self.on_finished(result)
             return result
         finally:
-            pending_purpose: BuildPurpose | None = None
             with self._lock:
-                pending_purpose = self._pending_purpose
-                self._pending_purpose = None
                 self._running = False
                 self._active_purpose = None
-                retired = self._retired
-                if self._launch_count == 0:
-                    self._stop_requested = False
-                    self._idle_event.set()
-            if pending_purpose is not None and not retired:
-                self.schedule_compile("排队的修改", pending_purpose)
+                self._active_job_key = None
+                self._drain_locked()
 
     def cancel_pending(self) -> None:
         with self._lock:
-            if self._timer:
-                self._timer.cancel()
-                self._timer = None
-            self._timer_generation += 1
-            self._scheduled_purpose = None
-            self._pending_purpose = None
+            self._cancel_pending_locked()
+
+    def _cancel_pending_locked(self) -> None:
+        self._clear_timer_locked()
+        self._cancel_generation += 1
+        self._pending_request = None
+        self._pending_purpose = None
 
     def stop_current(self, timeout: float = 1.5) -> bool:
         """Request cancellation and wait at most ``timeout`` for worker exit."""
-        self.cancel_pending()
         deadline = time.monotonic() + max(0.0, timeout)
         with self._lock:
-            self._pending_purpose = None
+            self._cancel_pending_locked()
             busy = self._running or self._launch_count > 0
             if not busy:
                 return False
@@ -338,10 +455,14 @@ class CompileManager:
         timeout_seconds: float | None = None,
     ) -> CompileResult:
         start = time.perf_counter()
-        output_dir = self.output_dir_for(purpose)
+        key = self.active_job_key
+        toolchain = key.toolchain if key is not None else self.toolchain
+        engine = key.engine if key is not None else self.engine
+        restricted_io = key.restricted_io if key is not None else self.restricted_io
+        output_dir = key.output_dir if key is not None else self.output_dir_for(purpose)
         output_dir.mkdir(parents=True, exist_ok=True)
-        pdf_file = self.pdf_file_for(purpose)
-        log_file = self.log_file_for(purpose)
+        pdf_file = built_pdf_for(self.root_file, output_dir)
+        log_file = built_log_for(self.root_file, output_dir)
 
         if not self.root_file.exists():
             return self._simple_result(
@@ -352,12 +473,12 @@ class CompileManager:
                 purpose=purpose,
             )
 
-        if not self.toolchain.supports_engine(self.engine):
+        if not toolchain.supports_engine(engine):
             return self._simple_result(
                 build_id,
                 CompileOutcome.TOOLCHAIN_MISSING,
                 returncode=127,
-                stderr=self._missing_engine_message(),
+                stderr=self._missing_engine_message(toolchain, engine),
                 purpose=purpose,
             )
 
@@ -384,10 +505,10 @@ class CompileManager:
 
         command_root = self.root_file
         command_output = output_dir
-        if self.restricted_io:
+        if restricted_io:
             command_root = Path(os.path.relpath(self.root_file, self.root_file.parent))
             command_output = Path(os.path.relpath(output_dir, self.root_file.parent))
-        command = self.toolchain.compile_command(command_root, command_output, self.engine)
+        command = toolchain.compile_command(command_root, command_output, engine)
         self._log("运行命令：" + " ".join(command))
         timed_out = False
         try:
@@ -398,7 +519,7 @@ class CompileManager:
                 "encoding": "utf-8",
                 "errors": "replace",
                 "cwd": self.root_file.parent,
-                "env": self._compile_environment(preparation.overlay_dir),
+                "env": self._compile_environment(preparation.overlay_dir, restricted_io=restricted_io),
             }
             if os.name == "nt":
                 # A new process group lets stop/timeout kill latexmk and the
@@ -488,9 +609,11 @@ class CompileManager:
             ),
         )
 
-    def _compile_environment(self, overlay_dir: Path | None) -> dict[str, str]:
+    def _compile_environment(
+        self, overlay_dir: Path | None, *, restricted_io: bool | None = None,
+    ) -> dict[str, str]:
         environment = latex_subprocess_env(texinputs_prefix=overlay_dir)
-        if self.restricted_io:
+        if self.restricted_io if restricted_io is None else restricted_io:
             # TeX's paranoid mode rejects absolute and parent-path document IO
             # while retaining reads from the working tree and installed TeX
             # distribution.  This complements -no-shell-escape; it does not
@@ -602,10 +725,10 @@ class CompileManager:
     def _log(self, message: str) -> None:
         logger.info(message)
 
-    def _missing_engine_message(self) -> str:
-        if not self.toolchain.is_compile_ready:
-            return self.toolchain.missing_compile_message
+    def _missing_engine_message(self, toolchain: LaTeXToolchain, engine: LaTeXEngine) -> str:
+        if not toolchain.is_compile_ready:
+            return toolchain.missing_compile_message
         return (
-            f"{self.engine.display_name} 不在 PATH 中。"
+            f"{engine.display_name} 不在 PATH 中。"
             "请通过 MacTeX、TeX Live 或 MiKTeX 安装它，或选择其他编译器。"
         )

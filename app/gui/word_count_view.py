@@ -235,6 +235,12 @@ class WordCountView(QWidget):
         self.meta_label.setText(message)
         self.preview_browser.setHtml(self._empty_preview_html(message))
 
+    def set_pending(self, *, keep_result: bool) -> None:
+        if keep_result:
+            self.meta_label.setText("统计待更新；当前显示上次结果，不代表最新编辑内容。")
+        else:
+            self.reset("正在统计当前编辑内容…")
+
     @staticmethod
     def _mode_label(result: WordCountResult) -> str:
         if result.source.startswith("texcount"):

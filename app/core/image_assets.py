@@ -7,6 +7,7 @@ import re
 import shutil
 import tempfile
 
+from app.core.project_scan import iter_project_files
 
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".pdf", ".eps", ".svg"}
 IGNORED_DIRS = {".latex_build", ".icstex", "__pycache__"}
@@ -53,8 +54,8 @@ def scan_image_assets(project_dir: Path, *, current_text: str = "") -> list[Imag
 def _graphics_references(root: Path, *, current_text: str) -> list[str]:
     references: list[str] = []
     references.extend(_graphics_in_text(current_text))
-    for path in root.rglob("*.tex"):
-        if any(part in IGNORED_DIRS for part in path.parts):
+    for path in iter_project_files(root, ignored_dirs=IGNORED_DIRS):
+        if path.suffix.lower() != ".tex":
             continue
         try:
             references.extend(_graphics_in_text(path.read_text(encoding="utf-8", errors="replace")))
@@ -79,9 +80,7 @@ def _usage_count(relative_path: str, references: list[str]) -> int:
 
 def _iter_image_files(root: Path) -> list[Path]:
     files: list[Path] = []
-    for path in root.rglob("*"):
-        if any(part in IGNORED_DIRS for part in path.parts):
-            continue
-        if path.is_file() and path.suffix.lower() in IMAGE_SUFFIXES:
+    for path in iter_project_files(root, ignored_dirs=IGNORED_DIRS):
+        if path.suffix.lower() in IMAGE_SUFFIXES:
             files.append(path)
     return files

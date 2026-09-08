@@ -65,11 +65,13 @@ class EditorTabManager:
 
     def add(self, tab: EditorTab, title: str) -> None:
         window = self.window
+        # The first addTab emits currentChanged immediately.
+        window.tabs[id(tab.editor)] = tab
         index = window.editor_tabs.addTab(tab.editor, title)
         window.editor_tabs.setTabToolTip(index, self._tab_tooltip(tab))
-        window.tabs[id(tab.editor)] = tab
         window.editor_tabs.setCurrentIndex(index)
         window.update_document_view_state()
+        window.dependencies.refresh_memberships()
 
     def set_title(self, tab: EditorTab) -> None:
         window = self.window
@@ -138,6 +140,7 @@ class EditorTabManager:
         window.editor_tabs.removeTab(index)
         window.tabs.pop(tab_id, None)
         window.update_document_view_state()
+        window.dependencies.refresh_memberships()
 
     def handle_close_event(self, event: QCloseEvent) -> None:
         window = self.window
@@ -175,6 +178,9 @@ class EditorTabManager:
             if tab.manager and tab.manager not in retired:
                 retired.add(tab.manager)
                 window.compile.retire_manager(tab.manager)
+        window.word_counts.shutdown()
+        window.project_panels.shutdown()
+        window.dependencies.shutdown()
         window.file_watcher.stop()
         if hasattr(window, "_log_bridge"):
             window._log_bridge.uninstall()

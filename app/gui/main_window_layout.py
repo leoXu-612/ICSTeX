@@ -249,7 +249,7 @@ def _install_log_and_errors(window: "MainWindow") -> None:
 
 def _install_word_count_panel(window: "MainWindow") -> None:
     window.word_count_view = WordCountView()
-    window.word_count_view.refreshRequested.connect(window.update_word_count)
+    window.word_count_view.refreshRequested.connect(lambda: window.update_word_count(force=True))
     window.word_count_labels = window.word_count_view.labels
     window.word_count_meta = window.word_count_view.meta_label
     window.word_count_button = window.word_count_view.refresh_button

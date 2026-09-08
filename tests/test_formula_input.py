@@ -23,6 +23,13 @@ from app.core.formula_input import (
 
 
 class RecognizeFormulaTests(TestCase):
+    def test_matrix_package_is_planned_only_for_real_uncommented_environment(self):
+        for body, packages in ((r"\begin{matrix}a&b\\c&d\end{matrix}", ("amsmath",)),
+                               (r"\begin{cases}x&x>0\end{cases}", ("amsmath",)),
+                               ("x % \\begin{matrix}\n+ y", ())):
+            plan = final_edit_plan("", 0, 0, FormulaDraft(mode=FormulaMode.INLINE_PAREN, body=body))
+            self.assertEqual(plan.packages, packages)
+
     def test_recognizes_every_supported_wrapper(self) -> None:
         cases = (
             (r"$a+b$", FormulaMode.INLINE_DOLLAR, "a+b"),

@@ -21,6 +21,18 @@ images. Preview and final build state are isolated, and export waits for a curre
 final build rather than copying a preview or stale PDF. This dual preview/final
 build path is included in 2.1.0-beta.1.
 
+The newer working source and local development build also support double-clicking a current
+fast-preview PDF to locate its original project source with SyncTeX. Stale or
+rebuilding output cannot drive navigation. The source-to-PDF toolbar action still
+requires a current final PDF, and preview PDFs remain ineligible for export.
+Published release packages have not yet been updated with this follow-up.
+
+The working source also adds “软件更新…” with opt-in daily checks and guarded
+all-window save/exit, using Sparkle on macOS and WinSparkle on Windows. Source
+runs and ordinary builds remain offline and unconfigured; public in-app upgrades
+are not enabled. Maintainer integration and the signed-installation acceptance
+gate are documented in [`packaging/UPDATES.md`](packaging/UPDATES.md).
+
 ICSTeX also understands common LaTeX editor conventions such as
 `% !TEX root = main.tex` and `% !TEX program = xelatex`, and can infer a root
 file from `\input{...}`, `\include{...}`, and `\subfile{...}` relationships in

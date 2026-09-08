@@ -19,6 +19,7 @@ from pylatexenc.latexwalker import (
 )
 
 from app.core.latex_parser import make_walker
+from app.core.file_observation import FileSignature, file_signature
 from app.core.latex_tools import LaTeXToolchain, detect_toolchain
 from app.core.paths import (
     included_tex_files_with_positions_from_text,
@@ -254,6 +255,16 @@ class _ProjectAnalysis:
     texcount_safe: bool = True
 
 
+@dataclass(frozen=True)
+class WordCountSnapshot:
+    result: WordCountResult
+    disk_signatures: tuple[tuple[Path, FileSignature], ...] = ()
+    stable: bool = True
+
+    def is_current(self) -> bool:
+        return self.stable and all(file_signature(path) == value for path, value in self.disk_signatures)
+
+
 def count_words(path: str | Path, toolchain: LaTeXToolchain | None = None) -> WordCountResult:
     tex_file = Path(path)
     return count_project(tex_file, toolchain=toolchain)
@@ -271,6 +282,36 @@ def count_project(
         for path, text in (source_overrides or {}).items()
     }
     analysis = _analyze_project(root, overrides)
+    return _count_project_analysis(root, overrides, analysis, toolchain)
+
+
+def count_project_snapshot(
+    root_path: str | Path,
+    source_overrides: dict[Path, str],
+    toolchain: LaTeXToolchain,
+) -> WordCountSnapshot:
+    """Count immutable buffers and reject disk dependencies changed during work.
+
+    TeXcount consumes the same isolated shadow sources as the structured
+    analysis rather than rereading live files, even for a child-only editor.
+    This envelope is internal; WordCountResult and MCP fields stay unchanged.
+    """
+    root = normalize_path(root_path)
+    overrides = {normalize_path(path): text for path, text in source_overrides.items()}
+    observed: dict[Path, FileSignature] = {}
+    unstable: list[Path] = []
+    analysis = _analyze_project(root, overrides, observed=observed, unstable=unstable)
+    # Force the snapshot/shadow route even if only a child buffer was open.
+    captured = {source.path: source.text for source in analysis.sources}
+    result = _count_project_analysis(root, captured, analysis, toolchain)
+    snapshot = WordCountSnapshot(result, tuple(observed.items()), not unstable)
+    return snapshot
+
+
+def _count_project_analysis(
+    root: Path, overrides: dict[Path, str], analysis: _ProjectAnalysis,
+    toolchain: LaTeXToolchain | None,
+) -> WordCountResult:
     if not analysis.sources:
         details = analysis.warnings[0] if analysis.warnings else "File could not be read."
         return _empty_result("fallback", details, warnings=analysis.warnings)
@@ -618,7 +659,11 @@ class _Accum:
         self.visual_segments.append(WordCountSegment(text, category, self.source_label))
 
 
-def _analyze_project(root: Path, overrides: dict[Path, str]) -> _ProjectAnalysis:
+def _analyze_project(
+    root: Path, overrides: dict[Path, str], *,
+    observed: dict[Path, FileSignature] | None = None,
+    unstable: list[Path] | None = None,
+) -> _ProjectAnalysis:
     sources: list[_ProjectText] = []
     warnings: list[str] = []
     shadow_required_sources: list[Path] = []
@@ -643,6 +688,11 @@ def _analyze_project(root: Path, overrides: dict[Path, str]) -> _ProjectAnalysis
             return
         text = overrides.get(normalized)
         if text is None:
+            before = file_signature(normalized) if observed is not None else None
+            if observed is not None:
+                if normalized in observed and observed[normalized] != before and unstable is not None:
+                    unstable.append(normalized)
+                observed.setdefault(normalized, before)
             try:
                 data = normalized.read_bytes()
             except OSError:
@@ -651,6 +701,8 @@ def _analyze_project(root: Path, overrides: dict[Path, str]) -> _ProjectAnalysis
                     shadow_required_sources.append(normalized)
                     sources.append(_ProjectText(normalized, "", initial_in_document))
                 return
+            if observed is not None and file_signature(normalized) != before and unstable is not None:
+                unstable.append(normalized)
             try:
                 decoded = decode_latex_bytes(data)
                 text = decoded.text

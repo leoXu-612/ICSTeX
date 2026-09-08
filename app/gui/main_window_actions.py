@@ -196,6 +196,11 @@ def build_actions(window: "MainWindow") -> None:
         window.ui_scale_actions[tier] = action
     help_menu = window.menuBar().addMenu("帮助")
     help_menu.addAction(window.user_guide_action)
+    window.app_update_action = QAction("软件更新…", window)
+    window.app_update_action.setMenuRole(QAction.MenuRole.ApplicationSpecificRole)
+    from app.gui.app_update_controller import application_updates
+    window.app_update_action.triggered.connect(lambda: application_updates().show_dialog(window))
+    help_menu.addAction(window.app_update_action)
     help_menu.addAction(window.environment_doctor_action)
     help_menu.addAction(window.feedback_bundle_action)
     help_menu.addAction(window.import_perf_action)

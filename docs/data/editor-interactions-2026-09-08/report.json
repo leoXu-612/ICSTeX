@@ -1,0 +1,42 @@
+{
+  "pid": 38827,
+  "platform": "cocoa",
+  "synthetic_only": true,
+  "windows": {
+    "formula": {
+      "exposed": true,
+      "size": [
+        920,
+        700
+      ],
+      "screenshot": "formula.png"
+    },
+    "table": {
+      "exposed": true,
+      "size": [
+        840,
+        660
+      ],
+      "screenshot": "table.png"
+    },
+    "block-table": {
+      "exposed": true,
+      "size": [
+        920,
+        500
+      ],
+      "screenshot": "block-table.png"
+    }
+  },
+  "keyboard_pages": [
+    "keyboard-base.png",
+    "keyboard-functions.png",
+    "keyboard-greek.png",
+    "keyboard-calculus.png",
+    "keyboard-matrix.png"
+  ],
+  "formula_preview": "\\(v=\\frac{d}{t}\\)",
+  "table_zero_preserved": true,
+  "block_zero_false_visible": true,
+  "unsubmitted": true
+}

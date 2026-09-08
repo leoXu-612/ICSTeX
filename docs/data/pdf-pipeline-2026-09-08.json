@@ -1,0 +1,169 @@
+{
+  "app_python_tree_sha256": "0ad9f48d485483ba88d11200be2b4ee65b44ffcc50e3342e99b1ac34cacb74ef",
+  "platform": "macOS-26.6.1-arm64-arm-64bit",
+  "qt_platform": "cocoa",
+  "display_sampling_interval_ms": 1,
+  "first_visible_definition": "Upper bound: nonblank viewport grab after native Paint; includes observation overhead, not compositor scanout",
+  "fixture": "Two deterministic 24 MP RGB noise images with red region, JPEG quality 93 and PNG; synthetic decode/IO stress, not a typical student project",
+  "original_bytes": {
+    "noise.jpg": 38624187,
+    "noise.png": 54240611
+  },
+  "image_preparation": {
+    "samples": [
+      {
+        "case": "cold",
+        "duration_ms": 636.536,
+        "proxy_count": 2,
+        "fallback_count": 0,
+        "phases": {
+          "hash": {
+            "calls": 6,
+            "ms": 84.42
+          },
+          "decode_scale": {
+            "calls": 2,
+            "ms": 411.99
+          },
+          "proxy_write_including_decode_hash": {
+            "calls": 2,
+            "ms": 592.847
+          }
+        }
+      },
+      {
+        "case": "warm",
+        "duration_ms": 42.916,
+        "proxy_count": 2,
+        "fallback_count": 0,
+        "phases": {
+          "hash": {
+            "calls": 4,
+            "ms": 41.468
+          }
+        }
+      },
+      {
+        "case": "warm",
+        "duration_ms": 42.64,
+        "proxy_count": 2,
+        "fallback_count": 0,
+        "phases": {
+          "hash": {
+            "calls": 4,
+            "ms": 41.332
+          }
+        }
+      },
+      {
+        "case": "warm",
+        "duration_ms": 43.923,
+        "proxy_count": 2,
+        "fallback_count": 0,
+        "phases": {
+          "hash": {
+            "calls": 4,
+            "ms": 42.568
+          }
+        }
+      },
+      {
+        "case": "warm",
+        "duration_ms": 44.632,
+        "proxy_count": 2,
+        "fallback_count": 0,
+        "phases": {
+          "hash": {
+            "calls": 4,
+            "ms": 43.145
+          }
+        }
+      },
+      {
+        "case": "warm",
+        "duration_ms": 44.078,
+        "proxy_count": 2,
+        "fallback_count": 0,
+        "phases": {
+          "hash": {
+            "calls": 4,
+            "ms": 42.797
+          }
+        }
+      }
+    ],
+    "warm_median_ms": 43.923,
+    "proxy_bytes": {
+      "noise.png": 4071111,
+      "noise.jpg": 478804
+    }
+  },
+  "visible_pdf": [
+    {
+      "case": "preview_cold_build",
+      "purpose": "preview",
+      "timeline_from_request_ms": {
+        "process_exit_observed": 1185.766,
+        "worker_result": 1188.637,
+        "artifact_callback": 1188.953,
+        "artifact_accepted": 1192.245,
+        "document_ready": 1197.756,
+        "first_paint_event": 1204.581,
+        "visible_content_observed": 1310.767
+      },
+      "proxy_cache_state": "warm; separate cold preparation measured above",
+      "exit_to_visible_ms": 125.001,
+      "pages": 2,
+      "red_samples": 117,
+      "screenshot": "docs/data/pdf-pipeline-2026-09-08/preview_cold_build.png",
+      "pdf_bytes": 4561272,
+      "displayed_path_matches_result": true,
+      "purpose_output_isolated": true,
+      "native_visible": true
+    },
+    {
+      "case": "final_cold_build",
+      "purpose": "final",
+      "timeline_from_request_ms": {
+        "process_exit_observed": 2204.392,
+        "worker_result": 2207.291,
+        "artifact_callback": 2208.572,
+        "artifact_accepted": 2212.675,
+        "document_ready": 2234.962,
+        "first_paint_event": 2240.368,
+        "visible_content_observed": 2528.322
+      },
+      "proxy_cache_state": "warm; separate cold preparation measured above",
+      "exit_to_visible_ms": 323.93,
+      "pages": 2,
+      "red_samples": 117,
+      "screenshot": "docs/data/pdf-pipeline-2026-09-08/final_cold_build.png",
+      "pdf_bytes": 92785995,
+      "displayed_path_matches_result": true,
+      "purpose_output_isolated": true,
+      "native_visible": true
+    },
+    {
+      "case": "preview_text_edit",
+      "purpose": "preview",
+      "timeline_from_request_ms": {
+        "process_exit_observed": 832.033,
+        "worker_result": 834.576,
+        "artifact_callback": 835.251,
+        "artifact_accepted": 838.174,
+        "document_ready": 841.604,
+        "first_paint_event": 845.409,
+        "visible_content_observed": 862.104
+      },
+      "proxy_cache_state": "warm; separate cold preparation measured above",
+      "exit_to_visible_ms": 30.071,
+      "pages": 2,
+      "red_samples": 117,
+      "screenshot": "docs/data/pdf-pipeline-2026-09-08/preview_text_edit.png",
+      "pdf_bytes": 4561273,
+      "displayed_path_matches_result": true,
+      "purpose_output_isolated": true,
+      "native_visible": true
+    }
+  ]
+}

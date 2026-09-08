@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
 from tempfile import TemporaryDirectory
 from unittest import TestCase
+from unittest.mock import patch
 
 from app.core.asset_index import AssetIndex, AssetRecord
+from app.core.image_assets import _graphics_references
 
 
 def _write_png(path: Path, data: bytes = b"png-bytes") -> None:
@@ -147,3 +150,34 @@ class AssetIndexTests(TestCase):
 
             self.assertEqual(calls, [])
             self.assertEqual(second._records["a.png"].width, 1)
+
+    def test_scan_prunes_before_descent_and_skips_symlinks(self) -> None:
+        with TemporaryDirectory() as directory, TemporaryDirectory() as outside:
+            root = Path(directory).resolve()
+            ignored = root / ".latex_build" / "deep"
+            ignored.mkdir(parents=True)
+            (ignored / "generated.png").write_bytes(b"image")
+            (ignored / "generated.tex").write_text(r"\includegraphics{wrong}")
+            external = Path(outside)
+            (external / "outside.png").write_bytes(b"image")
+            (external / "outside.tex").write_text(r"\includegraphics{outside}")
+            (root / "linked").symlink_to(external, target_is_directory=True)
+            (root / "link.png").symlink_to(external / "outside.png")
+            (root / "link.tex").symlink_to(external / "outside.tex")
+            (root / "real.png").write_bytes(b"image")
+            (root / "main.tex").write_text(r"\includegraphics{real}")
+            visited: list[Path] = []
+            scandir = os.scandir
+
+            def observe(path):
+                visited.append(Path(path))
+                return scandir(path)
+
+            with patch("app.core.project_scan.os.scandir", side_effect=observe):
+                index = AssetIndex(root)
+                index.scan()
+                references = _graphics_references(root, current_text="")
+            self.assertEqual(set(index._records), {"real.png"})
+            self.assertEqual(references, ["real"])
+            self.assertTrue(visited)
+            self.assertTrue(all(path == root for path in visited))

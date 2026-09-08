@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import logging
 from pathlib import Path
 import re
@@ -8,6 +8,7 @@ import subprocess
 
 from app.core.latex_tools import LaTeXToolchain, detect_toolchain
 from app.core.process_env import latex_subprocess_env
+from app.core.project_dependencies import SOURCE_SUFFIXES, safe_project_input
 
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,8 @@ def pdf_to_source(
     x: float,
     y: float,
     toolchain: LaTeXToolchain | None = None,
+    *,
+    source_directory: Path | None = None,
 ) -> SyncPosition | None:
     tools = toolchain or detect_toolchain()
     if not tools.synctex:
@@ -53,7 +56,23 @@ def pdf_to_source(
     output = _run_synctex(tools, ["edit", "-o", f"{page}:{x}:{y}:{pdf_file}"])
     if output is None:
         return None
-    return _parse_synctex_output(output)
+    return _parse_synctex_output(output, source_directory=source_directory)
+
+
+def safe_source_position(position: SyncPosition, project_scope: Path) -> SyncPosition | None:
+    """Limit reverse navigation to existing, non-generated project source files."""
+    try:
+        candidate = safe_project_input(project_scope, position.file)
+        if (
+            candidate is None
+            or candidate.suffix.lower() not in SOURCE_SUFFIXES
+            or not candidate.is_file()
+            or position.line < 1
+        ):
+            return None
+    except (OSError, ValueError, RuntimeError):
+        return None
+    return replace(position, file=candidate)
 
 
 def _run_synctex(tools: LaTeXToolchain, args: list[str]) -> str | None:
@@ -77,6 +96,8 @@ def _parse_synctex_output(
     output: str,
     fallback_file: Path | None = None,
     fallback_line: int | None = None,
+    *,
+    source_directory: Path | None = None,
 ) -> SyncPosition | None:
     values: dict[str, str] = {}
     for line in output.splitlines():
@@ -98,10 +119,25 @@ def _parse_synctex_output(
     try:
         line_number = int(line_value) if line_value else int(fallback_line or 1)
     except ValueError:
+        if source_directory is not None and fallback_line is None:
+            return None
         line_number = int(fallback_line or 1)
 
+    if file_value:
+        source = Path(file_value).expanduser()
+        if source_directory is not None:
+            # A GUI compile runs in the original root directory, not the
+            # isolated preview output directory or the application's cwd.
+            # Preserve symlinks until the caller applies its project boundary.
+            if not source.is_absolute():
+                source = source_directory / source
+        else:
+            source = source.resolve()
+    else:
+        assert fallback_file is not None
+        source = fallback_file.resolve()
     return SyncPosition(
-        file=Path(file_value).expanduser().resolve() if file_value else fallback_file.resolve(),
+        file=source,
         line=line_number,
         page=_int_or_none(page_value),
         x=_float_or_none(x_value),

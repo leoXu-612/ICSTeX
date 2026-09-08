@@ -108,8 +108,10 @@ to the relevant core test module.
 
 ## Repository Cautions
 
-- This directory is not currently a Git repository. Do not assume `git diff` or
-  `git status` is available.
+- Determine repository state from live Git checks. If a check fails, verify the
+  current path and known authoritative repository path before asking for
+  clarification; ask only if the target repository remains ambiguous. Do not
+  initialize or replace a repository to work around a failed check.
 - Preserve unrelated user or agent changes in the shared workspace.
 - Never use destructive reset/checkout workflows without explicit approval.
 - Use ASCII in code unless a file already contains Chinese UI strings.

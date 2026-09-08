@@ -33,6 +33,7 @@
 | D015 | Accepted | Agent/Harness 通过项目绑定、默认只读的 stdio MCP 操作 ICSTeX |
 | D016 | Accepted | MCP 并发复用官方调度，并由项目级协调器保持一致性 |
 | D017 | Accepted | 文件工具箱保持只读模型，文件变更经项目级安全控制器执行 |
+| D020 | Proposed | 用户开启更新检查，验证完整制品并在保存退出后更新应用 |
 
 ## D001 - Local Research Writing Infrastructure
 
@@ -267,7 +268,8 @@ units 会破坏宏、计数器、引用、布局和 SyncTeX 语义。
 - UI 必须明确标识快速预览和原图回退，preview 不得冒充可提交结果。
 - clean cache、root 切换、外部图片 watcher、build id 和 revision guard 必须同时
   覆盖两套状态，但两者不得互相发布 artifact。
-- 当前快速预览不开放 SyncTeX；静态规则不能覆盖的图片语法继续使用原图。
+- 快速预览不开放 SyncTeX 的初始限制已由 D019 的反向定位规则取代；静态规则
+  不能覆盖的图片语法继续使用原图。
 
 ## D013 - Source-First Visual Formula Composer
 
@@ -435,3 +437,102 @@ MCP SDK 1.x 会在 server event loop 内直接执行同步工具；长时间编�
   导入实现。
 - 暂不提供删除、批量重写引用、跨项目移动或后台文件索引；这些能力需要独立决策与
   可回滚事务设计。
+
+## D018 - Bounded Background Analysis and Root-Owned Input Invalidation
+
+状态：Accepted
+确认日期：2026-09-08
+
+**Context**
+
+本地实测显示 Word Count 在 GUI 同步运行、键入时完整刷新面板，以及未打开输入
+缺少监听。编译 driver 的无变化检查本已使用 latexmk 缓存；引擎替换不是证据支持的
+首要优化。
+
+**Decision**
+
+- 自动构建统一要求用户开关和 root 会话授权。静态规则与成功构建 FLS 的输入并集
+  负责依赖归属；越界、链接和内部生成路径不授予读取，删除/重建保留可观测性。
+- GUI 只捕获编辑器快照和呈现结果；Word Count 后台运行，保留一个运行任务和一个
+  最新请求，以 root、revision、磁盘观察与窗口生命期校验结果。缓存有界，旧值明确
+  标注 pending，手动请求绕过已完成缓存。
+- 面板按 dirty domain、可见性和防抖刷新，扫描先剪枝；显式完整刷新及低频复核继续
+  作为可解释的修复路径。外部编辑冲突暂停自动保存，覆盖需明确确认。
+- 一个 root 的编译继续串行，FINAL 不被 PREVIEW 降级；请求保留原截止时间与完整
+  输入/配置身份，stop/cancel 令牌覆盖晚启动。FLS 在 worker 中捕获，Qt 延迟信号
+  不得把旧构建绑定到新 revision。
+- 保留 latexmk 中间产物、preview/final 输出隔离、安全参数和严格正式导出；不增加
+  runtime 依赖或变更 MCP wire contract。
+- 图像缓存继续核验原图与代理内容；真实可见 PDF 内容单独测量，不使用 load 调用
+  耗时或 PDF 哈希替代 freshness、SyncTeX 或可见性证据。
+
+**Consequences**
+
+- 常规输入减少主线程阻塞，但不承诺纯 Python 统计或任意大型依赖图已实时化。
+- 静态规则不解释任意 TeX 宏；追踪有上限，超限/不可读明确提示，成功 FLS 补充
+  动态输入，低频复核补偿可能丢失的文件事件。
+- 不改变学生源文件、既有发布制品或已安装应用；真实项目验收与发布另行授权。
+
+## D019 - Preview Reverse SyncTeX Uses the Displayed Build
+
+状态：Accepted
+确认日期：2026-09-08
+范围：取代 D012 中快速预览不开放反向 SyncTeX 的限制，其余隔离与导出规则不变。
+
+**Decision**
+
+- 图片代理不改写源文件，因此快速预览可复用本地生成的 SyncTeX，直接定位原始
+  项目源码；不创建 shadow `.tex`，不引入路径映射清单或第二套定位数据。
+- PDF 双击绑定实际显示的 purpose、root、revision、build id 与 viewer 路径，
+  并要求对应记录为 CURRENT。查询前后均复核身份；同 purpose 的 worker 已启动但
+  Qt 信号尚未处理时也拒绝跳转。另一 purpose 的构建使用独立输出，不自动作废当前 PDF。
+- 同 revision 的新 build 仍重载 PDF，保证显示内容与该构建的 SyncTeX 一致，
+  同时复用现有 page/zoom/viewport 保留机制。
+- 相对输入路径从原始 compile root 目录解释；打开前拒绝项目外、符号链接、内部
+  生成目录、非源码、缺失文件和无效行号。PDF 页边空白或页间隙不冒充 PDF 坐标。
+- 源码到 PDF 的工具栏动作继续只接受当前 FINAL；正式导出继续只能使用当前
+  revision 的原图 FINAL，preview 的可导航性不构成提交资格。
+
+**Consequences**
+
+- 用户可在当前快速预览中双击正文，定位 root 或 child 的原始源码，不改写文本。
+- 过期、重建中、缺失工具或无可用 SyncTeX 数据时保持原位置并明确提示；任意 TeX
+  宏产生的非源码位置不保证存在一对一映射。
+- 不变更引擎、安全编译参数、MCP wire contract、依赖或已发布安装包。
+
+## D020 - Opt-In Update Discovery and Verified Application Replacement
+
+状态：Accepted
+确认日期：2026-09-08
+
+**Context**
+
+原有桌面程序没有更新器，开发构建与公开制品共用版本标签。发布侧已具备 GitHub
+Release 资产和 manifest 驱动的静态网站，可复用分发入口，但网站普通 JSON
+与 SHA-256 不能独立认证可执行更新。多窗口写作和外部编译不允许直接热替换代码。
+
+**Decision**
+
+- 用户显式开启定期检查，下载与重启安装分别受控；默认离线和本地文件边界不变。
+- 公开版本、单调发布序号和构建身份分离；dev 构建不混入公开更新渠道。
+- macOS 使用 Sparkle，Windows 使用 WinSparkle 与已验收的 EXE 安装器。
+  Qt 只负责中文设置、同意状态、调度和全窗口保存退出；原生库拥有 appcast、下载、
+  验签和安装流程。不再实施早期自定义签名 JSON/下载器提案，不热加载远程代码。
+- 发布信息来自同一已验收记录；先验证完整资产，后发布分平台/架构/渠道 appcast。
+  macOS 要求签名 feed 与解压前验签且不放宽失败策略；Windows 要求 Ed25519
+  payload 签名，不声称同等 feed 元数据认证，不执行 feed 提供的安装参数。
+- 运行时配置和公钥随应用固定；普通源码与未配置包不可更新，默认离线。SDK 固定
+  上游版本和摘要；只允许构建时显式嵌入，不从项目或运行时环境加载更新代码。
+- 更新前处理全部窗口、草稿和工作进程；更新不修改学生项目、TeX distribution
+  或项目格式。恢复路径必须在应用启动失败时仍可使用，不预先承诺自动回滚。
+
+**Consequences and Acceptance Gate**
+
+Velopack 统一跨平台方案因本轮检查到的 macOS 签名验证及失败清理路径而未采用；
+证据与版本范围记录在实现说明中。保留两套薄适配器的维护成本，不自建安装引擎。
+
+实施细则和分阶段验收见
+[`update-delivery-design-2026-09-08.md`](update-delivery-design-2026-09-08.md)。
+各平台须通过签名、唯一制品身份、目标绑定、保存取消、真实安装与失败恢复验证，
+才能开放自动安装。客户端源码完成不等于线上升级已启用；本条不授权发布、
+创建密钥、替换安装版或触发 GitHub Actions。维护者接入见 `packaging/UPDATES.md`。

@@ -66,6 +66,7 @@ class ProjectFileController(QObject):
         window.tree.setRootIndex(root_index)
         if remember:
             window._remember_recent_project(root)
+        window.dependencies.refresh_memberships()
         return root
 
     def ensure_project_root_for_file(self, path: str | Path) -> None:
@@ -285,6 +286,7 @@ class ProjectFileController(QObject):
         self._resume_pending_saves(tab for tab, _new_path in affected_tabs)
         self._remap_recent_files(plan, recent_files)
         window._invalidate_include_cache()
+        window.dependencies.refresh_memberships()
         window._sync_pdf_panel_to_active_root()
         window._sync_compile_indicators_to_active_root()
         window.refresh_project_panels()

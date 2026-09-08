@@ -19,6 +19,7 @@ from PySide6.QtWidgets import QMessageBox, QTableWidgetItem
 from app.core.compile_feedback import headline_for, presentation_for
 from app.core.compiler import (
     BuildPurpose,
+    CompileJobKey,
     CompileManager,
     CompileOutcome,
     CompileResult,
@@ -27,6 +28,7 @@ from app.core.compiler import (
 from app.core.diagnostics import explain_latex_error
 from app.core.latex_tools import LaTeXEngine
 from app.core.magic_comments import magic_engine_for
+from app.core.project_dependencies import safe_project_input
 from app.core.paths import (
     build_dir_for,
     normalize_path,
@@ -49,6 +51,7 @@ class CompileController:
     def __init__(self, window: "MainWindow") -> None:
         self.window = window
         self.image_proxy_cache = ImageProxyCache()
+        self._job_keys: dict[tuple[Path, int], CompileJobKey] = {}
 
     # --- main entry points --------------------------------------------------
 
@@ -66,6 +69,8 @@ class CompileController:
         selected_purpose = purpose or BuildPurpose.FINAL
         tab = window.current_tab()
         if not tab:
+            return
+        if not user_initiated and not window.auto_compile_action.isChecked():
             return
         root = window._compile_root_for_tab(tab)
         if root is not None:
@@ -96,6 +101,9 @@ class CompileController:
                 return
         if tab.path is None:
             return
+        root = window._compile_root_for_tab(tab)
+        if root is not None and not window.documents.flush_root_documents(root):
+            return
         if tab.manager is None:
             tab.manager = self.create_manager(tab.path)
         else:
@@ -103,6 +111,7 @@ class CompileController:
             # "% !TEX program=" in an already-open AUTO-mode document takes
             # effect immediately, instead of only on the next file open.
             tab.manager.engine = self._effective_engine_for(tab.path, tab.manager.root_file)
+        self.sync_input_revision(tab.manager.root_file)
         if immediate:
             tab.manager.cancel_pending()
             tab.manager.compile_async(selected_purpose)
@@ -216,14 +225,17 @@ class CompileController:
         if manager is None or not self._manager_owns_root(manager):
             window.compile_build_owners.pop(key, None)
             window.compile_purposes.pop(key, None)
+            self._job_keys.pop(key, None)
             return
         purpose = window.compile_purposes.get(key, BuildPurpose.FINAL)
+        job_key = self._job_keys.get(key)
+        revision = job_key.source_revision if job_key is not None else None
         window.compile_active_builds[root] = (manager, build_id, purpose)
         window.compile_start_purposes[root] = purpose
         if purpose is BuildPurpose.PREVIEW:
-            window.preview_state.begin_build(root, build_id)
+            window.preview_state.begin_build(root, build_id, source_revision=revision)
         else:
-            window.pdf_state.begin_build(root, build_id)
+            window.pdf_state.begin_build(root, build_id, source_revision=revision)
         if hasattr(window, "pdf_export"):
             window.pdf_export.handle_compile_started(root, build_id, purpose)
         window.compile_start_times[root] = time.perf_counter()
@@ -235,7 +247,7 @@ class CompileController:
             window.compile_timer.start()
             self.update_timer()
             tab = self._tab_for_compile_root(root)
-            engine = tab.manager.engine if tab and tab.manager else window.current_engine
+            engine = job_key.engine if job_key else (tab.manager.engine if tab and tab.manager else window.current_engine)
             window.status_engine_label.setText(engine.display_name)
             set_dynamic_property(window.compile_time_label, "state", "active")
             source_hint = ""
@@ -264,6 +276,7 @@ class CompileController:
             if window.compile_build_owners.get(key) is manager:
                 window.compile_build_owners.pop(key, None)
             window.compile_purposes.pop(key, None)
+            self._job_keys.pop(key, None)
             logger.info("已忽略不再归当前 manager 所有的编译结果：%s", result.root_file)
             return
         window.compile_build_owners.pop(key, None)
@@ -271,6 +284,7 @@ class CompileController:
         window.compile_start_times.pop(root, None)
         window.compile_start_purposes.pop(root, None)
         window.compile_purposes.pop(key, None)
+        job_key = self._job_keys.pop(key, None)
         is_current = self._is_active_root(root)
         if is_current:
             window.compile_timer.stop()
@@ -281,7 +295,9 @@ class CompileController:
             window.compile_time_label.setText(f"{label} {result.duration_seconds:.2f}s")
             set_dynamic_property(window.compile_time_label, "state", "success" if result.ok else "error")
         compiled_tab = self._tab_for_compile_root(result.root_file)
-        engine = compiled_tab.manager.engine if compiled_tab and compiled_tab.manager else window.current_engine
+        engine = job_key.engine if job_key else (
+            compiled_tab.manager.engine if compiled_tab and compiled_tab.manager else window.current_engine
+        )
         if result.purpose is BuildPurpose.PREVIEW:
             if result.preview_manifest_digest is not None:
                 self.register_preview_assets(root, result.preview_asset_paths)
@@ -309,6 +325,7 @@ class CompileController:
             window.append_log(f"已忽略过期的编译结果：{result.root_file.name}")
             window._update_pdf_action_state()
             return
+        window.dependencies.accept_build(result)
         headline = headline_for(result, engine_name=engine.display_name)
         if result.purpose is BuildPurpose.PREVIEW:
             headline = f"快速预览：{headline}"
@@ -399,6 +416,7 @@ class CompileController:
         manager = window.compile_managers.get(root_file)
         if manager is not None:
             manager.engine = engine
+            self.sync_input_revision(root_file)
             return manager
         manager = CompileManager(
             root_file,
@@ -407,11 +425,23 @@ class CompileController:
             debounce_ms=window.compile_debounce_ms,
             preview_preparer=self._prepare_preview,
             metrics_hook=import_metrics.record_compile_event,
+            project_scope=window.selected_project_scope or root_file.parent,
         )
         manager.on_started = lambda root, build_id: self._emit_started(manager, root, build_id)
         manager.on_finished = lambda result: self._emit_finished(manager, result)
         window.compile_managers[root_file] = manager
+        self.sync_input_revision(root_file)
+        window.dependencies.refresh_memberships()
         return manager
+
+    def sync_input_revision(self, root: Path) -> None:
+        window = self.window
+        manager = window.compile_managers.get(root)
+        if manager is not None:
+            manager.set_input_revision(
+                window.pdf_state.record_for(root).source_revision,
+                window.dependencies.generation_for(root),
+            )
 
     def _emit_started(self, manager: CompileManager, root: Path, build_id: int) -> None:
         normalized = normalize_path(root)
@@ -420,6 +450,9 @@ class CompileController:
         key = (normalized, build_id)
         self.window.compile_build_owners[key] = manager
         self.window.compile_purposes[key] = manager.active_purpose
+        job_key = manager.active_job_key
+        if job_key is not None:
+            self._job_keys[key] = job_key
         self.window.signals.started.emit(str(normalized), build_id)
 
     def _emit_finished(self, manager: CompileManager, result: CompileResult) -> None:
@@ -431,6 +464,7 @@ class CompileController:
         ):
             self.window.compile_build_owners.pop(key, None)
             self.window.compile_purposes.pop(key, None)
+            self._job_keys.pop(key, None)
             return
         self.window.signals.finished.emit(result)
 
@@ -468,6 +502,7 @@ class CompileController:
                 invalidated_active_root = invalidated_active_root or self._is_active_root(root)
             window.compile_build_owners.pop(key, None)
             window.compile_purposes.pop(key, None)
+            self._job_keys.pop(key, None)
         if invalidated_active_root:
             window._sync_compile_indicators_to_active_root()
             window._update_pdf_action_state()
@@ -507,7 +542,11 @@ class CompileController:
         window = self.window
         normalized_root = normalize_path(root)
         previous = window.preview_root_assets.get(normalized_root, set())
-        current = {normalize_path(path) for path in paths}
+        scope = window.selected_project_scope or normalized_root.parent
+        current = {
+            safe for path in paths
+            if (safe := safe_project_input(scope, path)) is not None
+        }
         # Keep watching a referenced path after deletion so an atomic save or
         # later recreation is observed. Existing paths disappear from this set
         # when the TeX reference itself is removed; missing paths are released
@@ -520,11 +559,10 @@ class CompileController:
             roots.discard(normalized_root)
             if not roots:
                 window.preview_asset_roots.pop(path, None)
-                window.file_watcher.unwatch(path)
         for path in current - previous:
             window.preview_asset_roots.setdefault(path, set()).add(normalized_root)
-            window.file_watcher.watch(path)
         window.preview_root_assets[normalized_root] = current
+        window.dependencies.register_extra(normalized_root, tuple(current))
 
     def release_preview_assets(self, root: Path) -> None:
         normalized_root = normalize_path(root)
@@ -536,29 +574,10 @@ class CompileController:
             roots.discard(normalized_root)
             if not roots:
                 self.window.preview_asset_roots.pop(path, None)
-                self.window.file_watcher.unwatch(path)
+        self.window.dependencies.register_extra(normalized_root, ())
 
     def handle_external_asset_change(self, path: Path) -> bool:
-        window = self.window
-        normalized = normalize_path(path)
-        roots = tuple(window.preview_asset_roots.get(normalized, ()))
-        if not roots:
-            return False
-        for root in roots:
-            window.pdf_state.mark_edited(root)
-            window.preview_state.mark_edited(root)
-            manager = window.compile_managers.get(root)
-            if manager is not None and window.auto_compile_action.isChecked():
-                purpose = (
-                    BuildPurpose.PREVIEW
-                    if window.preferences.fast_preview
-                    else BuildPurpose.FINAL
-                )
-                manager.schedule_compile("图片资源修改", purpose)
-        if any(self._is_active_root(root) for root in roots):
-            window._update_pdf_action_state()
-        window.statusBar().showMessage(f"检测到图片资源已修改：{normalized.name}", 4000)
-        return True
+        return self.window.dependencies.handle_external_change(path)
 
     def rebuild_managers(self) -> None:
         window = self.window

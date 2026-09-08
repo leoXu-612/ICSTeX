@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import patch
 
@@ -11,6 +12,7 @@ from app.core.synctex import (
     _int_or_none,
     _parse_synctex_output,
     pdf_to_source,
+    safe_source_position,
     source_to_pdf,
 )
 
@@ -52,6 +54,69 @@ class ParseOutputTests(TestCase):
         )
         assert position is not None
         self.assertEqual(position.line, 9)
+
+    def test_reverse_relative_input_uses_original_source_directory(self) -> None:
+        root_dir = Path("/project/paper")
+        with patch("app.core.synctex._run_synctex", return_value="Input:chapters/body.tex\nLine:7\n"):
+            position = pdf_to_source(
+                "/project/paper/.icstex/preview/key/build/main.pdf", 1, 10, 20,
+                _toolchain("synctex"), source_directory=root_dir,
+            )
+        self.assertEqual(position, SyncPosition(root_dir / "chapters/body.tex", 7))
+
+    def test_scoped_reverse_lookup_rejects_malformed_line(self) -> None:
+        self.assertIsNone(_parse_synctex_output(
+            "Input:body.tex\nLine:not-a-line\n", source_directory=Path("/project"),
+        ))
+
+
+class SourceBoundaryTests(TestCase):
+    def setUp(self) -> None:
+        temporary = TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.directory = Path(temporary.name).resolve()
+        self.scope = self.directory / "project"
+        self.scope.mkdir()
+        self.source = self.scope / "body.tex"
+        self.source.write_text("original source", encoding="utf-8")
+
+    def test_existing_project_source_keeps_line_and_metadata(self) -> None:
+        position = SyncPosition(self.source, 7, page=2, x=3, y=4)
+        self.assertEqual(safe_source_position(position, self.scope), position)
+
+    def test_unsafe_missing_generated_and_non_source_targets_are_rejected(self) -> None:
+        outside = self.directory / "other.tex"
+        outside.write_text("outside", encoding="utf-8")
+        generated = self.scope / ".icstex" / "generated.tex"
+        generated.parent.mkdir()
+        generated.write_text("generated", encoding="utf-8")
+        image = self.scope / "image.png"
+        image.write_bytes(b"not a source")
+        directory = self.scope / "directory.tex"
+        directory.mkdir()
+        for source in (outside, generated, image, directory, self.scope / "missing.tex"):
+            with self.subTest(source=source):
+                self.assertIsNone(safe_source_position(SyncPosition(source, 1), self.scope))
+        self.assertIsNone(safe_source_position(SyncPosition(self.source, 0), self.scope))
+        self.assertIsNone(safe_source_position(SyncPosition(self.scope / "invalid\x00.tex", 1), self.scope))
+
+    def test_scoped_parsing_preserves_symlink_for_rejection(self) -> None:
+        link = self.scope / "link.tex"
+        try:
+            link.symlink_to(self.source)
+        except OSError as exc:
+            self.skipTest(f"Symbolic links unavailable: {exc}")
+        position = _parse_synctex_output(
+            f"Input:{link}\nLine:1\n", source_directory=self.scope,
+        )
+        assert position is not None
+        self.assertEqual(position.file, link)
+        self.assertIsNone(safe_source_position(position, self.scope))
+        directory_link = self.scope / "linked"
+        directory_link.symlink_to(self.scope, target_is_directory=True)
+        self.assertIsNone(safe_source_position(
+            SyncPosition(directory_link / "body.tex", 1), self.scope,
+        ))
 
 
 class HelperTests(TestCase):

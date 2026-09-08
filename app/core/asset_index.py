@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 from typing import Callable
 
+from app.core.project_scan import iter_project_files
 from app.core.image_assets import (
     IGNORED_DIRS,
     IMAGE_SUFFIXES,
@@ -94,10 +95,8 @@ class AssetIndex:
         added: list[str] = []
         removed: list[str] = []
         modified: list[str] = []
-        for path in self.project_dir.rglob("*"):
-            if any(part in IGNORED_DIRS for part in path.parts):
-                continue
-            if not (path.is_file() and path.suffix.lower() in IMAGE_SUFFIXES):
+        for path in iter_project_files(self.project_dir, ignored_dirs=IGNORED_DIRS):
+            if path.suffix.lower() not in IMAGE_SUFFIXES:
                 continue
             relative = path.relative_to(self.project_dir).as_posix()
             seen.add(relative)

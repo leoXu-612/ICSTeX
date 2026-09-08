@@ -245,7 +245,7 @@ def final_edit_plan(
     cursor_offset = None
     if body_cursor_offset is not None:
         cursor_offset = len(draft.mode.wrapper_prefix) + body_cursor_offset
-    merged_packages = tuple(dict.fromkeys((*mode_packages(draft.mode), *packages)))
+    merged_packages = tuple(dict.fromkeys((*mode_packages(draft.mode), *_body_packages(draft.body), *packages)))
     return FinalTextEditPlan(
         start=start,
         end=end,
@@ -259,6 +259,19 @@ def final_edit_plan(
 # ---------------------------------------------------------------------------
 # Parsing helpers
 # ---------------------------------------------------------------------------
+
+
+def _body_packages(body: str) -> tuple[str, ...]:
+    """Known matrix/cases templates need amsmath even in an inline wrapper."""
+    for match in re.finditer(r"\\begin\{(?:[pbBvV]?matrix|smallmatrix|cases)\}", body):
+        if _is_escaped_char(body, match.start()):
+            continue
+        start = body.rfind("\n", 0, match.start()) + 1
+        if any(body[index] == "%" and not _is_escaped_char(body, index)
+               for index in range(start, match.start())):
+            continue
+        return ("amsmath",)
+    return ()
 
 
 def _backslashes_before(text: str, index: int) -> int:

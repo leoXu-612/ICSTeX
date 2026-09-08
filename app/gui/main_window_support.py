@@ -40,6 +40,7 @@ class EditorTab:
     manager: CompileManager | None = None
     modified: bool = False
     dirty: bool = False
+    external_conflict: bool = False
     pending_compile_after_save: bool = False
     save_timer: QTimer | None = None
 
@@ -57,6 +58,7 @@ class DisplayedPdf:
     purpose: BuildPurpose
     revision: int
     path: Path
+    build_id: int | None = None
 
 
 def make_panel(

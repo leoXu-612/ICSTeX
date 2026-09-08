@@ -107,12 +107,14 @@ class PdfStateStore:
         record.freshness = PdfFreshness.DIRTY
         return record
 
-    def begin_build(self, root: str | Path, build_id: int) -> PdfBuildRecord:
+    def begin_build(
+        self, root: str | Path, build_id: int, *, source_revision: int | None = None,
+    ) -> PdfBuildRecord:
         record = self.record_for(root)
         if record.latest_build_id is not None and build_id <= record.latest_build_id:
             return record
         record.latest_build_id = build_id
-        record.compile_revision = record.source_revision
+        record.compile_revision = record.source_revision if source_revision is None else source_revision
         record.freshness = PdfFreshness.COMPILING
         return record
 

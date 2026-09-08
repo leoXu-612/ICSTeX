@@ -1,0 +1,30 @@
+{
+  "platform": "cocoa",
+  "main_exposed": true,
+  "dialog_exposed": true,
+  "reason": "development_build",
+  "native_backend_loaded": false,
+  "student_projects_opened": 0,
+  "renders": [
+    {
+      "scale": 1.0,
+      "size": [
+        380,
+        314
+      ],
+      "image": "update-source-100.png",
+      "check_enabled": false,
+      "auto_checked": false
+    },
+    {
+      "scale": 1.5,
+      "size": [
+        444,
+        398
+      ],
+      "image": "update-source-150.png",
+      "check_enabled": false,
+      "auto_checked": false
+    }
+  ]
+}

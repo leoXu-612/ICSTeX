@@ -33,7 +33,6 @@ from app.core.latex_tools import LaTeXEngine, LaTeXToolchain, detect_toolchain
 from app.core.log_parser import LaTeXError
 from app.core.paths import (
     find_root_tex,
-    latex_dependency_closure,
     normalize_path,
     resolve_root_tex,
 )
@@ -51,10 +50,9 @@ from app.core.preview_state import (
     PreviewStateStore,
 )
 from app.core.project_tools import initialize_project
-from app.core.synctex import pdf_to_source, source_to_pdf
+from app.core.synctex import pdf_to_source, safe_source_position, source_to_pdf
 from app.core.settings import AppPreferences, AppSettings
 from app.core.text_encoding import DecodedLatexText, LatexTextDecodeError, decode_latex_bytes
-from app.core.word_count import count_project, count_text
 from app.gui.assets import app_cover_path
 from app.gui.environment_doctor_dialog import EnvironmentDoctorDialog, FeedbackContext
 from app.gui import bib_helpers
@@ -67,6 +65,7 @@ from app.gui.preferences_controller import PreferencesController
 from app.gui.pdf_export_controller import PdfExportController
 from app.gui.project_file_controller import ProjectFileController
 from app.gui.project_panel_controller import ProjectPanelController
+from app.gui.dependency_controller import DependencyController
 from app.gui.latex_editor import LaTeXEditor
 from app.gui.log_bridge import QtLogBridge
 from app.gui.main_window_layout import build_ui
@@ -82,6 +81,7 @@ from app.gui.main_window_support import (
 from app.gui.project_panels import ProjectWizardDialog
 from app.gui.theme import apply_theme
 from app.gui.user_guide import UserGuideDialog
+from app.gui.word_count_controller import WordCountController
 
 
 _SOURCE_ENCODING_CHOICES = (
@@ -143,7 +143,6 @@ class MainWindow(QMainWindow):
         self.compile_purposes: dict[tuple[Path, int], BuildPurpose] = {}
         self.compile_start_times: dict[Path, float] = {}
         self.compile_start_purposes: dict[Path, BuildPurpose] = {}
-        self._include_cache: dict[Path, frozenset[Path]] = {}
         self.file_watcher = ExternalFileWatcher(lambda path: self.signals.external_changed.emit(str(path)))
         self.local_save_contents: dict[Path, str] = {}
         self.save_debounce_ms = self.preferences.save_debounce_ms
@@ -157,6 +156,8 @@ class MainWindow(QMainWindow):
         self.project_panels = ProjectPanelController(self)
         self.preferences_controller = PreferencesController(self)
         self.project_files = ProjectFileController(self)
+        self.word_counts = WordCountController(self)
+        self.dependencies = DependencyController(self)
 
         self._build_ui()
         self.project_files.install_drop_targets()
@@ -223,7 +224,6 @@ class MainWindow(QMainWindow):
     def new_document(self) -> None:
         editor = self._make_editor(SAMPLE_DOCUMENT)
         self._add_tab(EditorTab(editor=editor), "未命名.tex")
-        self.refresh_project_panels()
 
     def new_project(self) -> None:
         dialog = ProjectWizardDialog(self)
@@ -244,7 +244,6 @@ class MainWindow(QMainWindow):
         editor = self._make_editor(template.text)
         self._add_tab(EditorTab(editor=editor), template.filename)
         self.statusBar().showMessage(f"已创建模板：{template.title}", 4000)
-        self.refresh_project_panels()
 
     def save_current_as_template(self) -> None:
         tab = self.current_tab()
@@ -427,6 +426,8 @@ class MainWindow(QMainWindow):
         self._add_tab(tab, path.name)
         self._watch_file(path)
         self.project_files.ensure_project_root_for_file(path)
+        self.dependencies.refresh_memberships()
+        self.dependencies.remember_disk(path, data)
         self._remember_recent_file(path)
         if line:
             self._jump_to_line(editor, line)
@@ -469,7 +470,21 @@ class MainWindow(QMainWindow):
             return False
         if tab.path is None:
             return self.save_current_as()
-        return self.flush_pending_save(tab)
+        resolving_conflict = tab.external_conflict
+        if resolving_conflict:
+            choice = QMessageBox.question(
+                self, "确认覆盖外部修改",
+                "磁盘文件与当前编辑存在冲突。是否用当前编辑覆盖磁盘文件？\n选择“否”后可用“另存为”保留两份。",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if choice != QMessageBox.StandardButton.Yes:
+                return False
+            tab.external_conflict = False
+        saved = self.flush_pending_save(tab)
+        if not saved and resolving_conflict:
+            tab.external_conflict = True
+        return saved
 
     def save_current_as(self) -> bool:
         tab = self.current_tab()
@@ -505,29 +520,20 @@ class MainWindow(QMainWindow):
 
     def _mark_source_edited(self, tab: EditorTab) -> None:
         root = self._compile_root_for_tab(tab)
-        if root is not None:
-            self.pdf_state.mark_edited(root)
-            self.preview_state.mark_edited(root)
-        if tab.path is None:
-            return
-        path = normalize_path(tab.path)
-        for record in self.pdf_state.records():
-            if record.root_file != path and record.root_file != root:
-                if path in self._dependencies_for_root(record.root_file):
-                    self.pdf_state.mark_edited(record.root_file)
-                    self.preview_state.mark_edited(record.root_file)
+        roots = {root} if root is not None else set()
+        if tab.path is not None:
+            path = normalize_path(tab.path)
+            roots.update(self.dependencies.roots_for(path))
+        for affected in roots:
+            self.pdf_state.mark_edited(affected)
+            self.preview_state.mark_edited(affected)
+            self.compile.sync_input_revision(affected)
 
     def _dependencies_for_root(self, root: Path) -> frozenset[Path]:
-        # Recursive include closure, cached per root; the cache is dropped on
-        # every save/external reload because only disk content defines it.
-        deps = self._include_cache.get(root)
-        if deps is None:
-            deps = latex_dependency_closure(root)
-            self._include_cache[root] = deps
-        return deps
+        return self.dependencies.paths_for(root)
 
     def _invalidate_include_cache(self) -> None:
-        self._include_cache.clear()
+        self.dependencies.schedule_membership_refresh()
 
     def _select_displayed_pdf(self, root: Path) -> DisplayedPdf | None:
         canonical = self.pdf_state.record_for(root)
@@ -541,25 +547,37 @@ class MainWindow(QMainWindow):
             and canonical_revision is not None
         ):
             assert canonical.last_successful_pdf is not None
-            return DisplayedPdf(root, BuildPurpose.FINAL, canonical_revision, canonical.last_successful_pdf)
+            return DisplayedPdf(
+                root, BuildPurpose.FINAL, canonical_revision,
+                canonical.last_successful_pdf, canonical.latest_build_id,
+            )
         if (
             preview.has_valid_pdf
             and preview.freshness is PreviewFreshness.CURRENT
             and preview_revision is not None
         ):
             assert preview.last_successful_pdf is not None
-            return DisplayedPdf(root, BuildPurpose.PREVIEW, preview_revision, preview.last_successful_pdf)
+            return DisplayedPdf(
+                root, BuildPurpose.PREVIEW, preview_revision,
+                preview.last_successful_pdf, preview.latest_build_id,
+            )
 
         candidates: list[DisplayedPdf] = []
         if canonical.has_valid_pdf and canonical_revision is not None:
             assert canonical.last_successful_pdf is not None
             candidates.append(
-                DisplayedPdf(root, BuildPurpose.FINAL, canonical_revision, canonical.last_successful_pdf)
+                DisplayedPdf(
+                    root, BuildPurpose.FINAL, canonical_revision,
+                    canonical.last_successful_pdf, canonical.latest_build_id,
+                )
             )
         if preview.has_valid_pdf and preview_revision is not None:
             assert preview.last_successful_pdf is not None
             candidates.append(
-                DisplayedPdf(root, BuildPurpose.PREVIEW, preview_revision, preview.last_successful_pdf)
+                DisplayedPdf(
+                    root, BuildPurpose.PREVIEW, preview_revision,
+                    preview.last_successful_pdf, preview.latest_build_id,
+                )
             )
         if not candidates:
             return None
@@ -720,26 +738,8 @@ class MainWindow(QMainWindow):
     def full_rebuild_current(self) -> None:
         self.compile.full_rebuild()
 
-    def update_word_count(self) -> None:
-        tab = self.current_tab()
-        if not tab:
-            self.word_count_view.reset("未选择文档")
-            return
-        root = self._compile_root_for_tab(tab)
-        if tab.path is not None and root is not None:
-            overrides: dict[Path, str] = {}
-            for candidate in self.tabs.values():
-                if candidate.path is None:
-                    continue
-                if self._compile_root_for_tab(candidate) == root:
-                    overrides[normalize_path(candidate.path)] = candidate.editor.toPlainText()
-            result = count_project(root, overrides, self.toolchain)
-            document_name = root.name
-        else:
-            result = count_text(tab.editor.toPlainText(), tab.path, self.toolchain)
-            document_name = "未保存文档"
-        is_modified = tab.modified or tab.dirty or tab.path is None
-        self.word_count_view.set_result(result, document_name, is_modified)
+    def update_word_count(self, *, force: bool = False) -> None:
+        self.word_counts.request(force=force)
 
     def run_project_check(
         self,
@@ -886,7 +886,7 @@ class MainWindow(QMainWindow):
         self._sync_pdf_panel_to_active_root()
         self._sync_compile_indicators_to_active_root()
         self.update_word_count()
-        self.refresh_project_panels()
+        self.project_panels.context_changed()
 
     def _sync_compile_indicators_to_active_root(self) -> None:
         """Progress bar, timer, and stop button reflect only the active root."""
@@ -957,35 +957,59 @@ class MainWindow(QMainWindow):
         else:
             self.statusBar().showMessage("暂时没有可用的 SyncTeX 源码到 PDF 数据。", 5000)
 
-    def sync_pdf_to_source(self, page: int, x: float, y: float) -> None:
-        # Only the active root's own PDF may drive SyncTeX; never fall back to
-        # a viewer path left behind by another tab.
+    def _current_reverse_sync_pdf(self) -> DisplayedPdf | None:
+        """Bind reverse SyncTeX to the exact current viewer/build snapshot."""
         root = self._compile_root_for_tab(self.current_tab())
         displayed = self.displayed_pdfs.get(root) if root is not None else None
-        record = self._active_pdf_record()
+        is_preview = displayed is not None and displayed.purpose is BuildPurpose.PREVIEW
+        record = self._active_preview_record() if is_preview else self._active_pdf_record()
+        current = PreviewFreshness.CURRENT if is_preview else PdfFreshness.CURRENT
         if (
-            displayed is None
-            or displayed.purpose is not BuildPurpose.FINAL
+            root is None
+            or displayed is None
+            or displayed.root_file != root
             or record is None
-            or record.freshness is not PdfFreshness.CURRENT
+            or record.freshness is not current
             or record.last_successful_revision != record.source_revision
+            or displayed.revision != record.source_revision
+            or displayed.build_id is None
+            or displayed.build_id != record.latest_build_id
+            or displayed.path != record.last_successful_pdf
+            or self.pdf_panel.current_pdf != displayed.path
+            or self.pdf_panel.current_logical_key != root
+            or not record.has_valid_pdf
+            # Worker output can change before Qt delivers its started signal.
+            or any(
+                job_root == root and purpose is displayed.purpose
+                for (job_root, _build_id), purpose in tuple(self.compile_purposes.items())
+            )
         ):
-            self.statusBar().showMessage("SyncTeX 需要当前版本的正式 PDF；请先执行正式编译。", 5000)
-            return
-        pdf_file = (
-            record.last_successful_pdf if record is not None and record.has_valid_pdf else None
-        )
-        if pdf_file is None:
-            self.statusBar().showMessage("当前文档还没有可用的 PDF，无法定位源码。", 5000)
+            return None
+        return displayed
+
+    def sync_pdf_to_source(self, page: int, x: float, y: float) -> None:
+        displayed = self._current_reverse_sync_pdf()
+        if displayed is None:
+            self.statusBar().showMessage("SyncTeX 需要当前版本的 PDF；请先更新快速预览或执行正式编译。", 5000)
             return
         if not self.toolchain.synctex:
             self.statusBar().showMessage("未找到 synctex，暂时无法进行 PDF 到源码同步。", 5000)
             return
-        position = pdf_to_source(pdf_file, page, x, y, self.toolchain)
-        if position:
-            self.open_file(position.file, position.line)
-        else:
+        root = displayed.root_file
+        position = pdf_to_source(
+            displayed.path, page, x, y, self.toolchain, source_directory=root.parent,
+        )
+        if self._current_reverse_sync_pdf() != displayed:
+            self.statusBar().showMessage("PDF 在定位期间已更新，请等待预览完成后再次双击。", 5000)
+            return
+        if position is None:
             self.statusBar().showMessage("该位置没有可用的 SyncTeX PDF 到源码数据。", 5000)
+            return
+        position = safe_source_position(position, self.selected_project_scope or root.parent)
+        if position is None:
+            self.statusBar().showMessage("SyncTeX 返回的源码不在可安全打开的项目文件范围内。", 5000)
+            return
+        self.open_file(position.file, position.line)
 
     def jump_to_error(self, row: int, _column: int) -> None:
         self.project_panels.jump_to_error(row)
@@ -1091,6 +1115,7 @@ class MainWindow(QMainWindow):
         tab.modified = True
         tab.dirty = True
         self._mark_source_edited(tab)
+        self.word_counts.schedule()
         if tab is self.current_tab():
             self._update_pdf_action_state()
         self._set_tab_title(tab)
@@ -1098,8 +1123,8 @@ class MainWindow(QMainWindow):
             self.schedule_save(tab, compile_after_save=self.auto_compile_action.isChecked())
         else:
             self.statusBar().showMessage("未保存文档有待保存修改。", 2000)
-        if self.sidebar_tabs.currentIndex() in (1, 3, 4, 7, 8):
-            self.refresh_project_panels()
+        self.project_panels.source_changed(tab)
+        self.dependencies.schedule_membership_refresh()
 
     def schedule_save(self, tab: EditorTab, *, compile_after_save: bool = False) -> None:
         self.documents.schedule_save(tab, compile_after_save=compile_after_save)
@@ -1185,4 +1210,6 @@ def run(argv: list[str] | None = None) -> int:
     window = MainWindow()
     _register_app_window(window)
     window.show()
+    from app.gui.app_update_controller import application_updates
+    application_updates().start()
     return app.exec()

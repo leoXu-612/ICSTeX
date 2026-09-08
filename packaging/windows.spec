@@ -2,16 +2,19 @@
 #   pyinstaller packaging\windows.spec --noconfirm
 
 from pathlib import Path
+import runpy
 
 
 ROOT = Path(SPECPATH).parent
+UPDATES = runpy.run_path(str(ROOT / "packaging" / "native_updates.py"))
+UPDATE_RUNTIME, UPDATE_CONFIG = UPDATES["runtime_from_environment"]()
 
 
 a = Analysis(
     [str(ROOT / "app" / "__main__.py")],
     pathex=[str(ROOT)],
-    binaries=[],
-    datas=[(str(ROOT / "app" / "assets"), "app/assets")],
+    binaries=[(str(UPDATE_RUNTIME / "updates" / "WinSparkle.dll"), "updates")] if UPDATE_RUNTIME else [],
+    datas=[(str(ROOT / "app" / "assets"), "app/assets"), *UPDATES["runtime_datas"](UPDATE_RUNTIME)],
     hiddenimports=[
         "PySide6.QtPdf",
         "PySide6.QtPdfWidgets",

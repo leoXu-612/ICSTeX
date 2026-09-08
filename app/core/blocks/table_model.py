@@ -7,6 +7,7 @@ table Block's style override, never here.
 from __future__ import annotations
 
 from copy import deepcopy
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 
 
@@ -169,17 +170,66 @@ class TableEditorModel:
         self.data = data
         self._undo: list[TableData] = []
         self._redo: list[TableData] = []
+        self._batch_depth = 0
 
     def _snapshot(self) -> TableData:
         return deepcopy(self.data)
 
     def _push(self) -> None:
+        if self._batch_depth:
+            return
         self._undo.append(self._snapshot())
         if len(self._undo) > 200:
             self._undo.pop(0)
         self._redo.clear()
 
+    @property
+    def can_undo(self) -> bool:
+        return bool(self._undo)
+
+    @property
+    def can_redo(self) -> bool:
+        return bool(self._redo)
+
+    @contextmanager
+    def batch_edit(self):
+        """A rectangle or multi-row operation is one atomic history entry."""
+        outer = self._batch_depth == 0
+        before = self._snapshot() if outer else None
+        self._batch_depth += 1
+        try:
+            yield
+        except Exception:
+            if outer:
+                self.data = before
+            raise
+        else:
+            if outer and before.to_content_dict() != self.data.to_content_dict():
+                self._undo.append(before)
+                self._undo = self._undo[-200:]
+                self._redo.clear()
+        finally:
+            self._batch_depth -= 1
+
+    def next_row_id(self) -> str:
+        existing = {row.id for row in self.data.rows}
+        index = 1
+        while f"row_{index:03d}" in existing:
+            index += 1
+        return f"row_{index:03d}"
+
+    def next_column_id(self) -> str:
+        existing = set(self.data.column_ids())
+        index = 1
+        while f"col_{index}" in existing:
+            index += 1
+        return f"col_{index}"
+
     def set_cell(self, row_id: str, column_id: str, cell: Cell) -> None:
+        if column_id not in self.data.column_ids():
+            raise ValueError("Unknown table column.")
+        if self.data.cell(row_id, column_id) == cell and any(row.id == row_id for row in self.data.rows):
+            return
         self._push()
         row = next((row for row in self.data.rows if row.id == row_id), None)
         if row is None:
@@ -188,22 +238,53 @@ class TableEditorModel:
         row.cells[column_id] = cell
 
     def insert_row(self, index: int, row_id: str) -> None:
+        if any(row.id == row_id for row in self.data.rows):
+            raise ValueError("Duplicate table row id.")
+        index = max(0, min(index, len(self.data.rows)))
         self._push()
-        self.data.rows.insert(max(0, min(index, len(self.data.rows))), TableRow(id=row_id))
+        self.data.rows.insert(index, TableRow(id=row_id))
+        self._shift_merges(0, index, 1)
 
     def delete_row(self, row_id: str) -> None:
+        index = next((index for index, row in enumerate(self.data.rows) if row.id == row_id), None)
+        if index is None:
+            return
         self._push()
         self.data.rows = [row for row in self.data.rows if row.id != row_id]
+        self._shift_merges(0, index, -1)
 
     def insert_column(self, index: int, spec: ColumnSpec) -> None:
+        if spec.id in self.data.column_ids():
+            raise ValueError("Duplicate table column id.")
+        index = max(0, min(index, len(self.data.columns)))
         self._push()
-        self.data.columns.insert(max(0, min(index, len(self.data.columns))), spec)
+        self.data.columns.insert(index, spec)
+        self._shift_merges(2, index, 1)
 
     def delete_column(self, column_id: str) -> None:
+        if column_id not in self.data.column_ids():
+            return
+        index = self.data.column_ids().index(column_id)
         self._push()
         self.data.columns = [column for column in self.data.columns if column.id != column_id]
         for row in self.data.rows:
             row.cells.pop(column_id, None)
+        self._shift_merges(2, index, -1)
+
+    def _shift_merges(self, axis: int, index: int, delta: int) -> None:
+        adjusted = []
+        for original in self.data.merges:
+            merge = list(original)
+            start, end = merge[axis:axis + 2]
+            if delta < 0 and start == end == index:
+                continue
+            if index < start or (delta > 0 and index == start):
+                merge[axis] += delta
+                merge[axis + 1] += delta
+            elif index <= end:
+                merge[axis + 1] += delta
+            adjusted.append(merge)
+        self.data.merges = adjusted
 
     def merge(self, rectangle: list[int]) -> None:
         self._push()

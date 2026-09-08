@@ -10,10 +10,11 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass, field
+from functools import wraps
 import re
 
-from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QFont, QFontMetricsF, QKeyEvent, QPainter, QPen
+from PySide6.QtCore import QEvent, QPointF, QRectF, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QFontMetricsF, QKeyEvent, QKeySequence, QPainter, QPen
 from PySide6.QtWidgets import QApplication, QWidget
 
 from app.core.formula_tree import (
@@ -113,11 +114,35 @@ def _boundaries(slot: MathSequence) -> list[Boundary]:
     return out
 
 
+def _edit_operation(method):
+    """Publish one state update for nested keyboard/template operations."""
+    @wraps(method)
+    def wrapped(self, *args, **kwargs):
+        outer = self._edit_depth == 0
+        if outer:
+            before = self.latex()
+        self._edit_depth += 1
+        try:
+            return method(self, *args, **kwargs)
+        finally:
+            self._edit_depth -= 1
+            if outer:
+                after = self.latex()
+                if after != before:
+                    self.latexChanged.emit(after)
+                self.stateChanged.emit()
+    return wrapped
+
+
 class MathEditorWidget(QWidget):
     """A WYSIWYG math draft editor backed by ``MathSequence`` trees."""
 
+    latexChanged = Signal(str)
+    stateChanged = Signal()
+
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
+        self._edit_depth = 0
         self.root: MathSequence = MathSequence()
         self.path: list[tuple[str, int, int]] = [("root", 0, -1)]
         self.index = 0
@@ -127,11 +152,13 @@ class MathEditorWidget(QWidget):
         self._pending_command = ""
         self.setMinimumHeight(90)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAccessibleName("可视公式编辑区")
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
+    @_edit_operation
     def set_latex(self, text: str) -> None:
         self.root = parse_math_latex(text)
         self.path = [("root", 0, -1)]
@@ -145,6 +172,7 @@ class MathEditorWidget(QWidget):
     def latex(self) -> str:
         return latex_of(self.root)
 
+    @_edit_operation
     def insert_structure(self, key: str) -> None:
         """Insert an empty structure at the cursor (template action)."""
 
@@ -215,7 +243,7 @@ class MathEditorWidget(QWidget):
         else:
             return
 
-        self._push_history()
+        self._prepare_insertion()
         slot, boundary_index = self._current_slot_and_index()
         boundary = self._boundary_at(slot, boundary_index)
         insert_index = self._split_text_at(slot, boundary)
@@ -245,7 +273,7 @@ class MathEditorWidget(QWidget):
     ) -> None:
         """Insert a command (or text) with an attached script slot."""
 
-        self._push_history()
+        self._prepare_insertion()
         slot, boundary_index = self._current_slot_and_index()
         boundary = self._boundary_at(slot, boundary_index)
         insert_index = self._split_text_at(slot, boundary)
@@ -270,10 +298,11 @@ class MathEditorWidget(QWidget):
         self._pending_command = ""
         self.update()
 
+    @_edit_operation
     def insert_command(self, name: str) -> None:
         """Insert a LaTeX command node at the cursor."""
 
-        self._push_history()
+        self._prepare_insertion()
         slot, boundary_index = self._current_slot_and_index()
         boundary = self._boundary_at(slot, boundary_index)
         insert_index = self._split_text_at(slot, boundary)
@@ -288,12 +317,13 @@ class MathEditorWidget(QWidget):
         self._pending_command = ""
         self.update()
 
+    @_edit_operation
     def insert_text(self, text: str) -> None:
         """Insert plain characters at the cursor (one at a time)."""
 
         if not text:
             return
-        self._push_history()
+        self._prepare_insertion()
         slot, boundary_index = self._current_slot_and_index()
         boundary = self._boundary_at(slot, boundary_index)
 
@@ -319,6 +349,7 @@ class MathEditorWidget(QWidget):
         self._pending_command = ""
         self.update()
 
+    @_edit_operation
     def paste_clipboard(self, text: str) -> None:
         """Paste LaTeX or plain text at the cursor.
 
@@ -363,6 +394,7 @@ class MathEditorWidget(QWidget):
         self._pending_command = ""
         self.update()
 
+    @_edit_operation
     def type_key(self, text: str) -> None:
         """Handle a typed character, including shortcut conversions."""
 
@@ -387,38 +419,49 @@ class MathEditorWidget(QWidget):
                 return
         self.insert_text(text)
 
-    def cursor_left(self) -> None:
+    def cursor_left(self, select: bool = False) -> None:
+        self._selection_for_move(select)
         self._move_horizontal(-1)
 
-    def cursor_right(self) -> None:
+    def cursor_right(self, select: bool = False) -> None:
+        self._selection_for_move(select)
         self._move_horizontal(1)
 
-    def cursor_up(self) -> None:
+    def cursor_up(self, select: bool = False) -> None:
+        self._selection_for_move(select)
         self._move_vertical(-1)
 
-    def cursor_down(self) -> None:
+    def cursor_down(self, select: bool = False) -> None:
+        self._selection_for_move(select)
         self._move_vertical(1)
 
-    def cursor_tab(self) -> None:
+    def cursor_tab(self, backwards: bool = False) -> None:
+        self.anchor = None
         slots = self._all_slots()
         current = self._resolve_slot()
         try:
             current_index = slots.index(id(current))
         except ValueError:
             return
-        next_slot = slots[(current_index + 1) % len(slots)]
+        next_slot = slots[(current_index + (-1 if backwards else 1)) % len(slots)]
         self._jump_into_slot(next_slot, 0)
 
-    def cursor_home(self) -> None:
+    def cursor_home(self, select: bool = False) -> None:
+        self._selection_for_move(select)
         self.index = 0
         self.update()
 
-    def cursor_end(self) -> None:
+    def cursor_end(self, select: bool = False) -> None:
+        self._selection_for_move(select)
         slot = self._resolve_slot()
         self.index = len(_boundaries(slot))
         self.update()
 
+    @_edit_operation
     def delete_backspace(self) -> None:
+        if self._pending_command:
+            self._pending_command = self._pending_command[:-1]
+            return
         if self._delete_selection():
             return
         self._push_history()
@@ -459,6 +502,7 @@ class MathEditorWidget(QWidget):
             self._exit_slot(-1)
             self.update()
 
+    @_edit_operation
     def delete_forward(self) -> None:
         if self._delete_selection():
             return
@@ -490,6 +534,7 @@ class MathEditorWidget(QWidget):
             self._exit_slot(1)
             self.update()
 
+    @_edit_operation
     def undo(self) -> None:
         if not self._undo:
             return
@@ -500,6 +545,7 @@ class MathEditorWidget(QWidget):
         self._pending_command = ""
         self.update()
 
+    @_edit_operation
     def redo(self) -> None:
         if not self._redo:
             return
@@ -515,6 +561,22 @@ class MathEditorWidget(QWidget):
         self.path = [("root", 0, -1)]
         self.index = len(_boundaries(self.root))
         self.update()
+
+    @property
+    def pending_command(self) -> str:
+        return self._pending_command
+
+    @property
+    def can_undo(self) -> bool:
+        return bool(self._undo)
+
+    @property
+    def can_redo(self) -> bool:
+        return bool(self._redo)
+
+    @_edit_operation
+    def commit_pending_command(self) -> None:
+        self._finish_pending_command()
 
     # ------------------------------------------------------------------
     # Cursor machinery
@@ -592,7 +654,6 @@ class MathEditorWidget(QWidget):
         self._clamp()
 
     def _move_horizontal(self, direction: int) -> None:
-        self._push_anchor()
         slot, boundary_index = self._current_slot_and_index()
         boundaries = _boundaries(slot)
         if direction > 0:
@@ -633,7 +694,6 @@ class MathEditorWidget(QWidget):
     def _move_vertical(self, direction: int) -> None:
         if len(self.path) < 2:
             return
-        self._push_anchor()
         role = self.path[-1][0]
         if role == "frac_num" and direction > 0:
             self._switch_role("frac_den")
@@ -756,40 +816,60 @@ class MathEditorWidget(QWidget):
         if self.anchor is None:
             self.anchor = (deepcopy(self.path), self.index)
 
-    def _delete_selection(self) -> bool:
-        if self.anchor is None:
-            return False
-        anchor_path, anchor_index = self.anchor
-        if anchor_path != self.path:
+    def _selection_for_move(self, select: bool) -> None:
+        if select:
+            self._push_anchor()
+        else:
             self.anchor = None
-            self.update()
-            return False
-        low, high = sorted((anchor_index, self.index))
-        if low == high:
+
+    def _delete_selection(self) -> bool:
+        parts = self._selection_parts()
+        if parts is None or not parts[1].items:
             self.anchor = None
             return False
         self._push_history()
+        before, _selected, after = parts
         slot = self._resolve_slot()
-        boundaries = _boundaries(slot)
-        if low >= len(boundaries):
-            self.anchor = None
-            return False
-        first = boundaries[low]
-        last = boundaries[high - 1] if high - 1 < len(boundaries) else boundaries[-1]
-        start_item = first.item_index
-        end_item = last.item_index
-        if first.kind == "text" and first.node is not None and first.offset > 0:
-            first.node.text = first.node.text[: first.offset]
-            start_item += 1
-        if last.kind == "text" and last.node is not None and last.offset < len(last.node.text) and last.item_index >= start_item:
-            last.node.text = last.node.text[last.offset :]
-            end_item -= 1
-        del slot.items[start_item : end_item + 1]
-        self.index = low
+        slot.items = before.items + after.items
+        if before.items:
+            last = before.items[-1]
+            self.index = self._boundary_after(slot, len(before.items) - 1, len(last.text) if isinstance(last, Text) else 0)
+        else:
+            self.index = 0
         self.anchor = None
         self._clamp()
         self.update()
         return True
+
+    def _selection_parts(self):
+        if self.anchor is None or self.anchor[0] != self.path:
+            return None
+        slot = self._resolve_slot()
+        boundaries = _boundaries(slot)
+        widths = [len(item.text) if isinstance(item, Text) else 1 for item in slot.items]
+        def offset(index):
+            if index >= len(boundaries):
+                return sum(widths)
+            boundary = boundaries[index]
+            return sum(widths[:boundary.item_index]) + boundary.offset
+        start, end = sorted((offset(self.anchor[1]), offset(self.index)))
+        parts = [MathSequence(), MathSequence(), MathSequence()]
+        position = 0
+        for item, width in zip(slot.items, widths):
+            for target, low, high in ((parts[0], 0, start), (parts[1], start, end), (parts[2], end, sum(widths))):
+                a, b = max(position, low), min(position + width, high)
+                if a < b:
+                    target.items.append(Text(item.text[a - position:b - position]) if isinstance(item, Text) else item)
+            position += width
+        return parts
+
+    def selected_latex(self) -> str:
+        parts = self._selection_parts()
+        return latex_of(parts[1]) if parts is not None else ""
+
+    def _prepare_insertion(self) -> None:
+        if not self._delete_selection():
+            self._push_history()
 
     def _insert_script(self, marker: str) -> None:
         self._push_history()
@@ -846,7 +926,10 @@ class MathEditorWidget(QWidget):
     def _finish_pending_command(self) -> None:
         pending = self._pending_command
         self._pending_command = ""
-        if not pending.startswith("\\") or len(pending) < 2:
+        if not pending:
+            return
+        if len(pending) < 2:
+            self.insert_text(pending)
             return
         name = pending[1:]
         if name == "frac":
@@ -1229,26 +1312,60 @@ class MathEditorWidget(QWidget):
     # Keyboard
     # ------------------------------------------------------------------
 
+    def event(self, event) -> bool:
+        # QWidget otherwise consumes Tab before keyPressEvent can visit slots.
+        if event.type() == QEvent.Type.KeyPress and event.key() in (Qt.Key.Key_Tab, Qt.Key.Key_Backtab):
+            self.commit_pending_command()
+            self.cursor_tab(event.key() == Qt.Key.Key_Backtab or bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier))
+            event.accept()
+            return True
+        return super().event(event)
+
+    @_edit_operation
     def keyPressEvent(self, event: QKeyEvent) -> None:
         key = event.key()
         modifiers = event.modifiers()
+        select = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
+        if event.matches(QKeySequence.StandardKey.Copy):
+            text = self.selected_latex()
+            if text:
+                QApplication.clipboard().setText(text)
+            return
+        if event.matches(QKeySequence.StandardKey.Cut):
+            text = self.selected_latex()
+            if text:
+                QApplication.clipboard().setText(text)
+                self._delete_selection()
+            return
+        if event.matches(QKeySequence.StandardKey.SelectAll):
+            self.select_all()
+            return
+        if event.matches(QKeySequence.StandardKey.Undo):
+            self.undo()
+            return
+        if event.matches(QKeySequence.StandardKey.Redo):
+            self.redo()
+            return
+        if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self.commit_pending_command()
+            return
         if key == Qt.Key.Key_Left:
-            self.cursor_left()
+            self.cursor_left(select)
             return
         if key == Qt.Key.Key_Right:
-            self.cursor_right()
+            self.cursor_right(select)
             return
         if key == Qt.Key.Key_Up:
-            self.cursor_up()
+            self.cursor_up(select)
             return
         if key == Qt.Key.Key_Down:
-            self.cursor_down()
+            self.cursor_down(select)
             return
         if key == Qt.Key.Key_Tab:
             self.cursor_tab()
             return
         if key in (Qt.Key.Key_Home, Qt.Key.Key_End):
-            self.cursor_home() if key == Qt.Key.Key_Home else self.cursor_end()
+            self.cursor_home(select) if key == Qt.Key.Key_Home else self.cursor_end(select)
             return
         if key == Qt.Key.Key_Backspace:
             self.delete_backspace()
@@ -1276,7 +1393,7 @@ class MathEditorWidget(QWidget):
             self.update()
             return
         text = event.text()
-        if text:
+        if text and not (modifiers & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier)):
             self.type_key(text)
 
 

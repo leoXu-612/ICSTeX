@@ -71,6 +71,7 @@ class PdfPanel(QWidget):
             self._view.setPageMode(QPdfView.PageMode.MultiPage)
             self._view.setZoomMode(QPdfView.ZoomMode.FitToWidth)
             self._view.viewport().installEventFilter(self)
+            self._view.viewport().setToolTip("双击 PDF 定位源码；快速预览与正式 PDF 均需为当前版本。")
             self.page_spin.valueChanged.connect(self.jump_to_page)
             self.prev_page_button.clicked.connect(lambda: self.jump_to_page(self.current_page() - 1))
             self.next_page_button.clicked.connect(lambda: self.jump_to_page(self.current_page() + 1))
@@ -276,13 +277,15 @@ class PdfPanel(QWidget):
         if watched is getattr(self, "_toolbar", None) and event.type() == QEvent.Type.Resize:
             self._update_toolbar_mode()
             return False
-        if self._view is not None and watched == self._view.viewport() and event.type() == QEvent.Type.MouseButtonDblClick:
+        if (
+            self._view is not None
+            and watched == self._view.viewport()
+            and event.type() == QEvent.Type.MouseButtonDblClick
+            and event.button() == Qt.MouseButton.LeftButton
+        ):
             mapped = self.pdf_position_for_viewport_point(event.position())
-            if mapped is None:
-                page = self._view.pageNavigator().currentPage() + 1
-                position = event.position()
-                mapped = (page, float(position.x()), float(position.y()))
-            self.sourceRequested.emit(*mapped)
+            if mapped is not None:
+                self.sourceRequested.emit(*mapped)
             return True
         return super().eventFilter(watched, event)
 
@@ -477,7 +480,7 @@ class PdfPanel(QWidget):
             if geometry is None:
                 continue
             left, top, width, height, zoom = geometry
-            if top <= content_y <= top + height:
+            if left <= content_x <= left + width and top <= content_y <= top + height:
                 page_size = self._document.pagePointSize(page_index)
                 x = _clamp((content_x - left) / zoom, 0.0, float(page_size.width()))
                 y = _clamp((content_y - top) / zoom, 0.0, float(page_size.height()))

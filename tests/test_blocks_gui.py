@@ -59,6 +59,86 @@ class TableEditorTests(TestCase):
     def setUp(self) -> None:
         app()
 
+    def test_direct_cell_edit_updates_model_and_zero_false_are_visible(self):
+        model = TableEditorModel(TableData(columns=[ColumnSpec(id="c", name="Value")], rows=[
+            TableRow(id="custom", cells={"c": Cell(kind="number", value=0)}),
+            TableRow(id="other", cells={"c": Cell(kind="boolean", value=False)}),
+        ]))
+        editor = TableEditor(model)
+        self.assertEqual(editor.table.item(0, 0).text(), "0")
+        self.assertEqual(editor.table.item(1, 0).text(), "False")
+        changed = []
+        editor.model_changed.connect(lambda: changed.append(True))
+        editor.table.item(0, 0).setText("7")
+        self.assertEqual(model.data.cell("custom", "c").value, 7)
+        self.assertEqual(len(changed), 1)
+        editor.undo()
+        self.assertEqual(model.data.cell("custom", "c").value, 0)
+        editor.close()
+
+    def test_paste_targets_actual_row_ids_and_is_one_undo(self):
+        model = TableEditorModel(TableData(columns=[ColumnSpec(id="c", name="Value")], rows=[
+            TableRow(id="z", cells={"c": Cell(kind="text", value="first")}),
+            TableRow(id="a", cells={"c": Cell(kind="text", value="second")}),
+        ]))
+        editor = TableEditor(model)
+        before = model.data.to_content_dict()
+        editor.table.setCurrentCell(1, 0)
+        editor.paste_clipboard_text("1\t2\n3\t4")
+        self.assertEqual(model.data.cell("a", "c").value, 1)
+        self.assertEqual(model.data.cell("z", "c").value, "first")
+        self.assertEqual(len(model.data.rows), 3)
+        self.assertEqual(len(model.data.columns), 2)
+        editor.undo()
+        self.assertEqual(model.data.to_content_dict(), before)
+        editor.redo()
+        self.assertEqual(model.data.cell("a", "c").value, 1)
+        editor.close()
+
+    def test_repeated_row_and_column_insertions_keep_unique_ids(self):
+        model = TableEditorModel(TableData(columns=[ColumnSpec(id="col_1", name="A")], rows=[
+            TableRow(id="row_001"), TableRow(id="row_003")]))
+        editor = TableEditor(model)
+        editor.insert_row()
+        editor.insert_row()
+        editor.insert_column()
+        editor.insert_column()
+        self.assertEqual(len({row.id for row in model.data.rows}), 4)
+        self.assertEqual(len(set(model.data.column_ids())), 3)
+        editor.close()
+
+    def test_block_table_paste_limit_keeps_data_and_history(self):
+        model = TableEditorModel(TableData())
+        editor = TableEditor(model)
+        editor.paste_clipboard_text("\t".join(["x"] * 201))
+        self.assertEqual(model.data.columns, [])
+        self.assertFalse(model.can_undo)
+        self.assertIn("未粘贴", editor.detail_label.text())
+        editor.close()
+
+    def test_block_table_keeps_html_paste_support(self):
+        model = TableEditorModel(TableData())
+        editor = TableEditor(model)
+        editor.paste_clipboard_text("<table><tr><td>0</td><td></td></tr><tr><td>2</td><td>3</td></tr></table>")
+        self.assertEqual(editor.table.item(0, 0).text(), "0")
+        self.assertEqual(editor.table.item(0, 1).text(), "")
+        self.assertEqual(editor.table.item(1, 1).text(), "3")
+        editor.undo()
+        self.assertEqual(model.data.rows, [])
+        editor.close()
+
+    def test_clear_rectangle_restores_with_one_undo(self):
+        model = TableEditorModel(TableData())
+        editor = TableEditor(model)
+        editor.paste_clipboard_text("1\t2\n3\t4")
+        before = model.data.to_content_dict()
+        editor.table.selectAll()
+        editor.clear_selection()
+        self.assertEqual(model.data.rows[0].cells[model.data.columns[0].id].kind, "empty")
+        editor.undo()
+        self.assertEqual(model.data.to_content_dict(), before)
+        editor.close()
+
     def test_edit_and_undo_redo(self) -> None:
         model = TableEditorModel(
             TableData(

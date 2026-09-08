@@ -1,14 +1,107 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shutil
+import threading
+import time
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest import TestCase
+from unittest.mock import patch
 
 from app.core.file_watcher import ExternalFileWatcher
 
 
 class ExternalFileWatcherTests(TestCase):
+    def test_stop_cannot_race_registration_and_restart_observer(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory).resolve() / "main.tex"
+            path.write_text("text")
+            watcher = ExternalFileWatcher(lambda _path: None)
+            watcher.watch(path)
+            entered, release, stopped = threading.Event(), threading.Event(), threading.Event()
+            original = watcher._nearest_directory
+            errors = []
+
+            def delayed(candidate):
+                entered.set()
+                release.wait(2)
+                return original(candidate)
+
+            def repair():
+                try:
+                    watcher.reconcile()
+                except Exception as error:
+                    errors.append(error)
+
+            with patch.object(watcher, "_nearest_directory", side_effect=delayed):
+                worker = threading.Thread(target=repair)
+                worker.start()
+                self.assertTrue(entered.wait(1))
+                stopper = threading.Thread(target=lambda: (watcher.stop(), stopped.set()))
+                stopper.start()
+                try:
+                    self.assertFalse(stopped.wait(0.02))
+                finally:
+                    release.set()
+                    worker.join(2)
+                    stopper.join(2)
+            self.assertTrue(stopped.is_set())
+            self.assertFalse(errors)
+            self.assertFalse(watcher._observer.is_alive())
+
+    def test_shared_membership_survives_editor_close(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory).resolve() / "child.tex"
+            path.write_text("text")
+            watcher = ExternalFileWatcher(lambda _path: None)
+            try:
+                watcher.watch(path)
+                watcher.set_paths(("dependency", "main"), {path})
+                watcher.unwatch(path)
+                self.assertIn(path, watcher._files)
+                watcher.set_paths(("dependency", "main"), set())
+                self.assertNotIn(path, watcher._files)
+                self.assertFalse(watcher._dir_watches)
+            finally:
+                watcher.stop()
+
+    def test_missing_nested_parent_and_deleted_directory_recover_with_polling(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            path = root / "chapters" / "nested" / "child.tex"
+            changes: list[Path] = []
+            watcher = ExternalFileWatcher(changes.append)
+
+            def wait_for(predicate) -> bool:
+                deadline = time.monotonic() + 4
+                while time.monotonic() < deadline:
+                    if predicate():
+                        return True
+                    time.sleep(0.02)
+                return predicate()
+
+            try:
+                watcher.watch(path)
+                self.assertIn(root, watcher._dir_watches)
+                path.parent.mkdir(parents=True)
+                path.write_text("created")
+                self.assertTrue(wait_for(lambda: path in changes))
+                self.assertTrue(wait_for(lambda: path.parent in watcher._dir_watches))
+                changes.clear()
+                shutil.rmtree(root / "chapters")
+                self.assertTrue(wait_for(lambda: path in changes))
+                changes.clear()
+                path.parent.mkdir(parents=True)
+                path.write_text("recreated")
+                self.assertTrue(wait_for(lambda: path in changes))
+                self.assertTrue(wait_for(lambda: path.parent in watcher._dir_watches))
+                changes.clear()
+                path.write_text("later edit")
+                self.assertTrue(wait_for(lambda: path in changes))
+            finally:
+                watcher.stop()
+
     def test_ignores_build_artifacts_and_unwatched_files(self) -> None:
         changed: list[Path] = []
         watcher = ExternalFileWatcher(changed.append)

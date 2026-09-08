@@ -17,6 +17,7 @@ import zipfile
 from xml.etree import ElementTree
 
 from app.core.blocks.table_model import Cell, ColumnSpec, TableData, TableRow
+from app.core.table_clipboard import MAX_CLIPBOARD_CELLS, parse_grid
 
 
 ENCODINGS = ("utf-8-sig", "utf-8", "gbk", "latin-1")
@@ -122,6 +123,19 @@ def parse_clipboard(text: str) -> TableData | None:
             return _table_from_grid(rows, header_row=False)
         return None
     return read_csv_text(text, header_row=False)
+
+
+def parse_clipboard_grid(text: str, *, max_rows: int, max_columns: int) -> list[list[str]]:
+    """Editor paste keeps HTML support, but never silently clips a rectangle."""
+    if "<table" not in text.lower():
+        return parse_grid(text, max_rows=max_rows, max_columns=max_columns)
+    if len(text) > 2_000_000:
+        raise ValueError("Clipboard text is too large.")
+    rows = _parse_html_table(text)
+    width = max((len(row) for row in rows), default=0)
+    if len(rows) > max_rows or width > max_columns or len(rows) * width > MAX_CLIPBOARD_CELLS:
+        raise ValueError("Clipboard rectangle exceeds editor limits.")
+    return [row + [""] * (width - len(row)) for row in rows]
 
 
 def _table_from_grid(raw_rows: list[list[str]], *, header_row: bool) -> TableData:

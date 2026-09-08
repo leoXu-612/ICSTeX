@@ -1015,3 +1015,390 @@ must link here instead of repeating old task details.
   packaging/install_build_dependencies.py` passed; full offscreen discovery
   passed all 825 tests in 159.766 seconds. No dependency, package, publish, push
   or GitHub Actions workflow was run.
+
+
+## 2026-09-06 - Clarify Agent Instruction Conflicts
+
+- Replaced the stale non-Git assertion in AGENTS.md with live repository checks,
+  bounded path resolution, and an explicit prohibition on initializing or
+  replacing a repository to work around a failed check.
+- Scoped icstex-control conflict and unsaved-GUI pauses to affected mutations;
+  independent authorized read-only checks may continue, with saved disk state
+  distinguished from unsaved GUI buffers. Synchronized the repository Skill
+  with the global installation.
+- Preserved CAS preconditions, concurrent user edits, GUI save/close requirements,
+  OCR write-back approval, host grants, and destructive Git approval.
+- Verification: compileall and git diff --check passed; full offscreen unittest
+  discovery passed all 825 tests in 198.505 seconds. Repository/global Skill
+  contents match. No application source, package, or release behavior changed.
+
+## 2026-09-08 - Response and Compile Performance Exploration
+
+- Audited current `f0f6935` source and pinned GitHub implementations from LaTeX
+  Workshop, TexLab, TeX Live/latexmk and VimTeX. Kept the existing application,
+  release boundary and unrelated agent-instruction edits unchanged.
+- Added `tools/bench_response_pipeline.py`, an isolated synthetic-project probe,
+  and retained samples in `docs/data/response-pipeline-probe-2026-09-08.json`.
+  It measures synchronous GUI/analysis work, watch registration, external-event
+  decisions and real XeLaTeX/BibTeX builds without using student documents or
+  the normal application settings store.
+- Reproduced an authorized external TeX edit scheduling one automatic compile
+  while the auto-compile toggle is off. The watch set after opening the root
+  omitted its unopened child and bibliography. These are findings, not fixes.
+- Measured about 108 ms synchronous GUI Word Count for a 4,000-word fixture and
+  about 111 ms extra GUI timer delay. The 8-page compile fixture had medians of
+  1,763 ms cold, 59 ms unchanged and 729 ms after a text edit; same-content
+  rewrites did not rerun engine rules. Each compiled PDF was readable with
+  8 pages and the command retained `-norc` and `-no-shell-escape`.
+- Recorded prioritized mechanisms, upstream source links, non-adopted options,
+  scope limits and implementation gates in
+  `docs/response-and-compile-exploration-2026-09-08.md`. No measured application
+  speedup is claimed because no `app/` code was changed.
+- Verification: the complete probe succeeded; compileall for app/tests,
+  packaging dependency helper and the new probe passed; full offscreen
+  unittest discovery passed all 825 tests in 154.578 seconds; git diff --check
+  passed. No dependency installation, packaging, commit, push or release ran.
+
+## 2026-09-08 - Automatic Build Admission and Async Word Count
+
+- Unified automatic-build admission across idle saves, external text reloads,
+  asset changes and non-user compile requests: enabled toggle plus existing
+  root authorization are both required.
+- Moved GUI structural analysis and TeXcount to immutable snapshots in a bounded
+  worker, with latest-request replacement, revision/root/lifetime validation,
+  disk-change checks, bounded result caching and explicit pending labels.
+  TeXcount reads the same shadow snapshot as the structural count; manual refresh
+  bypasses cache. The synchronous core/MCP result contract is unchanged.
+- Updated the synthetic probe to distinguish dispatch from completion. Retained
+  `docs/data/response-pipeline-after-2026-09-08.json` separately: app tree digest
+  `08f8bf40393441d3f6b55c36b07532c0dbbde4c8d8450ee17d25d3411c04dd79`,
+  uncached dispatch median 0.244 ms, completion median 115.910 ms, timer lateness
+  17.544 ms; auto-off external TeX events scheduled zero builds. Engine timings
+  varied upward, so no engine speedup is claimed.
+- Verification: compileall and full offscreen discovery passed all 833 tests
+  in 174.869 seconds. The full implementation goal remains open for dependency
+  watching, dirty panels, pending deadlines and image/PDF visibility measures.
+  No dependency, package, commit, push, publication or installed-app replacement.
+
+## 2026-09-08 - Response Optimization Completion and Native PDF Measurement
+
+- Completed the remaining authorized slices: root-owned static/FLS input
+  watching, unopened/missing dependency observation, content-based event
+  deduplication, conflict-safe saves, dirty/visible panel refresh and early
+  directory pruning. PollingObserver remains; missing-parent recovery and a
+  stop/reconcile registration race have focused regression coverage.
+- Compile requests now capture configuration and input identity, keep one
+  running/latest pending request, preserve FINAL priority and remaining
+  deadlines, and invalidate launched-but-not-entered work on cancellation.
+  FLS inputs are captured before the next worker can overwrite the recorder;
+  queued Qt started signals retain the original request revision.
+- Final synthetic response report:
+  `docs/data/response-pipeline-final-2026-09-08.json`. Uncached Word Count
+  dispatch median 0.203 ms, completion median 114.364 ms, GUI timer lateness
+  18.345 ms; baseline synchronous GUI refresh was 108.052 ms and lateness
+  110.739 ms. The selected-outline edit callback fell from 4.092 to 0.208 ms.
+  A separately visible outline measured 0.236 ms per edit, one refresh after
+  15 edits and zero image-index scans. Ignored 5,000-file subtree scan median
+  fell from 12.572 to 0.021 ms. Unopened child/bibliography are watched and an
+  auto-off external edit schedules zero builds.
+- Added `tools/bench_pdf_pipeline.py`; Cocoa native-window evidence is retained
+  in `docs/data/pdf-pipeline-2026-09-08.json` and three screenshots. Two 24 MP
+  synthetic images totaling 92,864,798 bytes took 636.536 ms cold proxy
+  preparation and 43.923 ms median warm content verification. Preview/final
+  both displayed 2 pages with isolated output paths. Process exit to nonblank
+  viewport observation was 125.001 ms for cold preview, 323.930 ms for cold
+  final, and 30.071 ms for warm preview after a source edit. These are sampled
+  upper bounds after native Paint, not compositor/scanout timestamps; proxy
+  preparation was measured separately and the build runs used warm proxies.
+- Kept full image SHA-256 verification and the existing PDF renderer because
+  the measured warm cost did not justify another invalidation cache. Real
+  8-page latexmk builds retained cache/no-op, bibliography convergence and
+  safety flags; no engine acceleration is claimed.
+- Both final measurement reports and a live source recheck identify app tree
+  SHA-256 `0ad9f48d485483ba88d11200be2b4ee65b44ffcc50e3342e99b1ac34cacb74ef`.
+  Updated Project State, D018, Roadmap, Project Index and the maintainer brief;
+  the six-gate mapping and limits are in
+  `docs/response-optimization-verification-2026-09-08.md`.
+- Final verification: compileall for app/tests/packaging helper and both probes
+  passed; full offscreen unittest discovery passed all 859 tests in 165.474
+  seconds. This includes the final open-child-before-include/flush test and
+  confirmed-save failure retaining conflict protection. git diff --check
+  passed; core has no GUI imports, and the MCP response serializer is unchanged.
+- Preserved original research/baseline/first-slice data and unrelated agent
+  instruction edits. No runtime dependency, package, commit, push, publication,
+  CI trigger, installed-application replacement or student document edit.
+  Preview PDF-to-source SyncTeX remains outside this implemented scope.
+
+## 2026-09-08 - Fast Preview PDF-to-Source SyncTeX
+
+- Implemented the separately authorized reverse-navigation follow-up. PDF
+  double-clicks use the actual displayed PREVIEW or FINAL record, checking
+  root, revision, build id, viewer path and CURRENT freshness before and after
+  the local SyncTeX query. Same-purpose worker starts are rejected even before
+  queued Qt signals arrive; a separate FINAL build does not invalidate a
+  current preview. Same-revision new builds now reload the PDF while retaining
+  the existing logical-document view-state restoration.
+- Relative SyncTeX input paths use the original compile-root directory. Pure
+  core validation rejects out-of-scope, symlink, generated, missing and
+  non-source targets and invalid line numbers before opening. PDF page margins
+  and inter-page gaps no longer fall back to unconverted viewport coordinates.
+  Source-to-PDF remains FINAL-only; export still cannot copy preview output.
+- Real local pdfLaTeX generated a two-page preview with a 2400x1600 PNG proxy
+  and its own SyncTeX sidecar, without generating a FINAL PDF. At PDF zoom
+  factors 0.9 and 1.25, real viewport double-clicks on page 2 opened the original
+  child source at line 2, retaining the compile root and unchanged source text.
+  The same test passed offscreen and with `QT_QPA_PLATFORM=cocoa`; the native
+  window was exposed and its preview banner/source cursor were visually checked.
+  Canonical temporary paths and explicit PDF cleanup keep this fixture aligned
+  with normal file opening and avoid alias/teardown artifacts.
+- Verification: compileall for app/tests/packaging helper passed; the SyncTeX,
+  preview pipeline and PDF panel focused suite passed 37 tests. Final full
+  offscreen discovery passed 875 tests in 216.253 seconds. The standalone native
+  test `tests.test_gui_preview_pipeline.GuiPreviewPipelineTests.test_real_preview_double_click_maps_original_child`
+  passed in 2.023 seconds. `git diff --check` passed.
+- Updated current state, README/user guides, roadmap and the bounded brief;
+  D019 supersedes only D012's initial reverse-SyncTeX restriction. App Python
+  tree SHA-256 (relative POSIX path, NUL, content, NUL per sorted source file):
+  `c01cae5ac60d591033c4f8462bed0ec98a7f6964a4ed54db2ad577cfc1077cd5`.
+  Working branch remains `release/2.1`, HEAD `f0f6935`, with prior changes preserved.
+- No runtime dependency, engine or MCP wire-contract change; no student document
+  edit, packaging, installed-application replacement, commit, push, release or
+  GitHub Actions trigger. Preview source-to-PDF is not part of this assignment.
+
+## 2026-09-08 - Local macOS Update for User Evaluation
+
+- The user explicitly authorized updating the local installed app to the latest
+  working source. Repository root and `release/2.1` HEAD `f0f6935` were rechecked;
+  the app Python tree remained
+  `c01cae5ac60d591033c4f8462bed0ec98a7f6964a4ed54db2ad577cfc1077cd5`.
+- `QT_QPA_PLATFORM=offscreen bash packaging/preflight.sh` passed, including
+  compileall and 875 tests in 214.693 seconds. PyInstaller 6.21.0 with Python
+  3.12.6 generated a separate local app under
+  `dist/local/ICSTeX-2.1.0-beta.1-20260908-184726-c01cae5a/` using the repository
+  spec and a separate build work directory. Existing public DMG/Windows ZIP
+  timestamps and sizes were unchanged.
+- Inspected bundle version `2.1.0-beta.1`, identifier `com.icstex.app`, arm64
+  application/QtCore/Python binaries and a valid ad-hoc deep strict signature.
+  Ten critical embedded modules matched current source bytecode/constants,
+  including background analysis, dependency tracking, PDF display identity and
+  preview reverse SyncTeX. No Developer ID credentials or notarization were used.
+- Copied the candidate to a staging app in `/Applications`, verified its
+  signature, and rechecked that no ICSTeX process was running. Preserved the old
+  app with a same-filesystem rename into
+  `~/Library/Application Support/ICSTeX/Install Backups/20260908-184726/ICSTeX.app`,
+  then moved the staged app to `/Applications/ICSTeX.app` with rollback on failure.
+  The original bundle and executable kept their device/inode identity; their
+  hash and signature were revalidated. A non-following recursive rsync checksum
+  comparison reported no differences between the new build and installed bundle.
+- New installed executable SHA-256:
+  `d0f4a53af225e02ab513f50f76bbf5331e52e584aeff3eb56f9b0952040f8226`.
+  Preserved old executable SHA-256:
+  `1b47139d28d72cbdd78220dc7a7adfa0c0eb4e849991b4b23b82065790e48bf3`.
+  `INSTALL_RECEIPT.md` beside the backup records provenance and rollback guidance.
+- Cold-launched the exact installed app, observed its welcome window and
+  LaTeX-ready status, and confirmed process 32646 was still running from the
+  expected executable path after more than a minute. Dock already targeted that
+  path and was not modified. Left the application open for user evaluation.
+  This installation check did not open a student document or repeat a full
+  project compile inside the packaged application.
+- Updated current state and the handoff brief to distinguish this local build
+  from unchanged public release packages. No application source changes, version
+  bump, student document changes, dependency installation, commit, push, public
+  release or GitHub Actions trigger; final compileall and diff checks passed.
+
+## 2026-09-08 - Update Delivery Mechanism Design
+
+- Completed the requested design for opt-in update discovery, signed release
+  metadata, complete-package delivery, and save/quit/install coordination in
+  `docs/update-delivery-design-2026-09-08.md`. Added Proposed decision D020 and
+  linked the proposal from the roadmap and project index.
+- Rechecked repository root, `release/2.1`, app version, PyInstaller specs,
+  Windows installer template, manifest-to-website generator, and multi-window
+  shutdown seams. The shared worktree already contained application and document
+  changes; they were preserved. The existing formula/table implementation brief
+  was not replaced by this design-only assignment.
+- Verified current upstream documentation for PyInstaller, Sparkle, WinSparkle
+  and MSIX. Platform integration remains a prototype gate, not a tested ICSTeX
+  capability. The design explicitly separates installer failure recovery from
+  post-launch rollback and requires an initial manually installed updater build.
+- Documentation validation passed: relative links, code-fence pairing, and
+  scoped `git diff --check`. No application source or agent-instruction changes
+  were made, so the application test suite was not rerun for this proposal.
+  No installed application changes, package generation, key generation, remote
+  configuration, deployment, commit, push or GitHub Actions workflow was performed.
+
+## 2026-09-08 - Formula and Table Interaction and Key Artwork Improvements
+
+- Implemented the user's formula/table interaction request and subsequent
+  structural-button visual correction in the authoritative `release/2.1`
+  working tree. Existing response/preview work, instruction edits and the
+  separate update-delivery design were preserved.
+- Formula keyboard edits, source mode, wrappers and draft preview now stay in
+  sync. Tab/Shift+Tab navigate slots; Enter does not submit. Source fallback,
+  matrix package planning, revision checks, cancel and single-document Undo
+  remain explicit. The compact keyboard keeps stable layouts and one submission
+  action, with its alphabet view in a separate stack page.
+- Ordinary tables support bounded, blank-preserving rectangular paste/copy,
+  clear, draft Undo/Redo, source preview and confirmation before destructive
+  shrink. Block tables bind edits to stable row/column IDs, retain zero/False,
+  preserve HTML paste and group rectangular mutations into one atomic Undo.
+  Oversize input is rejected without truncation or partial mutation.
+- Replaced heavy solid placeholder blocks with uniform outlined slots and
+  thinner vector artwork. Root bars now contain the radicand slots; script,
+  matrix and cases previews share a normalized canvas. Corrected e/10 exponent
+  and custom-log-base artwork while preserving action mappings. Regression
+  coverage checks empty slot interiors and compact-key drawing bounds.
+- Required compileall passed. Final offscreen discovery passed 912 tests in
+  245.646 seconds. An earlier run had one process-tree timeout fixture error:
+  its one-second deadline elapsed before `grandchild.pid` existed. That test
+  passed alone, and the full suite passed on repeat without compiler changes.
+  Native Cocoa math-keyboard and editor-layout checks passed 9 tests in
+  1.326 seconds.
+- `tools/probe_editor_interactions.py --keyboard-pages` rendered three exposed
+  synthetic-only native windows and all five math-keyboard categories. Screenshots
+  and `report.json` in `docs/data/editor-interactions-2026-09-08/` were inspected;
+  formula drafts remained unsubmitted, table zero/False and rectangular Undo
+  checks passed. Layout coverage includes 800-1040-pixel-wide formula dialogs.
+- System Events could not enumerate the isolated QA process windows, so this
+  is not macOS AX automation acceptance. Windows was not tested. No student
+  document or OCR input was used.
+- Before concurrent updater additions, the app Python tree contained 166 files
+  with path/content SHA-256
+  `d6093bbef62130f82f6f6d58bd21fac8075335708388291cc2340601f878b7f1`.
+  Final recheck detected separate updater files and MainWindow wiring changes
+  made during the test run. They were preserved and are not covered by this
+  editor acceptance; the earlier whole-tree hash is not the current shared tree.
+- Editor-only source scope: `app/core/blocks/table_import.py`,
+  `app/core/blocks/table_model.py`, `app/core/formula_input.py`,
+  `app/core/latex_insertions.py`, `app/core/table_clipboard.py`,
+  `app/gui/blocks/table_editor.py`, `app/gui/formula_dialog.py`,
+  `app/gui/insert_panel.py`, `app/gui/math_editor_widget.py`,
+  `app/gui/math_keyboard.py`, `app/gui/table_grid.py`, `app/gui/user_guide.py`.
+  These 12 files retain path/content SHA-256
+  `0ff367e2189d5cd1314fac9a60c282bc899435171e5a7c54e86d90f8cdf9c7b4`
+  (sorted relative path, NUL, raw bytes, NUL for each file).
+- Installed-app boundary:
+  `/Applications/ICSTeX.app` executable remained
+  `d0f4a53af225e02ab513f50f76bbf5331e52e584aeff3eb56f9b0952040f8226`;
+  it does not contain these later editor changes. No runtime dependency,
+  packaging, installed-app replacement, version bump, commit, push, publication
+  or GitHub Actions trigger by this editor assignment. Current state, user guide and bounded handoff were
+  synchronized with this source-only result.
+
+## 2026-09-08 - Native application update client (source-only)
+
+- Implemented Chinese update settings, default-off daily checks, lazy native
+  initialization and one process-wide Qt controller. The app menu and startup
+  seams are small; unrelated editor/compiler changes and the local-installation
+  task's root brief were preserved.
+- Chose Sparkle 2.9.6 and WinSparkle 0.9.4 after inspecting Velopack 1.2.0's
+  macOS apply/signature and failed-move cleanup paths. Replaced the earlier
+  custom signed-JSON/download proposal with native appcasts and adapters; D020,
+  the implementation document, roadmap and maintainer handoff reflect the choice.
+- Build-bound configuration enforces source version, positive release sequence,
+  target, channel, HTTPS feed and Ed25519 public key. No real configuration is
+  shipped. Native automatic scheduling is disabled; Qt owns explicit consent.
+  Sparkle requires signed feed/payload validation without the feed-failure
+  expiration fallback, and its delegate pins the feed against legacy preferences.
+  Windows ignores remote installer arguments and uses one-use exit authorization
+  before launching only the native-verified local EXE.
+- All-window save/exit guards cover cancellation, later save failure, unnamed
+  files, conflicts, editing dialogs, Block sessions, compilation, PDF/image work,
+  OCR tasks and other installed processes. Windows callback preparation is
+  marshalled to Qt; cancellation/launch failure restores editing. Existing
+  MainWindow close cleanup is retained. The process scan is not an installer lock.
+- Required compileall passed. The final frozen Python source passed 958 tests in
+  484.198 seconds; updater-focused tests passed 46 in 0.715 seconds. The latter
+  include a real MainWindow synthetic save preserving cursor selection and
+  scroll position. No student document was opened by this assignment.
+- Exposed Cocoa source-build settings were inspected at 100% and 150% UI scale,
+  at 380x314 and 444x398 logical pixels respectively. Both showed unavailable
+  source-mode updates with no native backend loaded. Evidence is in
+  `docs/data/app-updates-2026-09-08/`; `tools/probe_app_updates.py` reproduces it.
+- Official SDK archives matched pinned upstream SHA-256 digests and staged for
+  macOS arm64/x86_64 and Windows arm64/x64; native file architectures matched.
+  Both macOS bridge targets compiled with warnings-as-errors. After the final
+  feed delegate change, both targets were restaged and the included Sparkle
+  framework passed deep strict signature verification. The arm64 bridge loaded
+  from its actual Frameworks layout and safely rejected checking before init.
+  A standalone bridge load without its adjacent framework failed to resolve
+  `@rpath/Sparkle.framework`; the staged-layout load passed without source changes.
+- The frozen app Python tree contains 170 files with path/content SHA-256
+  `b002533f20a35533487f6c108c96a49163d05abfc377616a12f16d4cc60a1c7b`
+  (sorted relative POSIX path, NUL, raw contents, NUL per file). In the order
+  `packaging/ICSTeX.spec`, `packaging/windows.spec`, `packaging/native_updates.py`,
+  `packaging/native_updates/sparkle_bridge.m`, the same hash encoding yields
+  `9923f95da34c115c017d6f9f432f95699fa7fb8ba617d4704ac4627bb50d3ce8`.
+  These identities were sent to the separate authorized local-installation task;
+  its no-runtime build does not compile or embed the optional Objective-C bridge.
+- Native Windows execution, configured Sparkle initialization, signed-feed
+  delivery, real two-version installation and recovery remain unverified.
+  Public update activation, signed installers, initial manual bootstrap and
+  recovery gates are documented in `packaging/UPDATES.md`. No automatic rollback
+  or cross-version session restoration is claimed.
+- No app packaging/installation, production key generation, signing credentials,
+  version bump, commit, push, publication or GitHub Actions trigger by this
+  assignment. SDKs were inspected in temporary staging only; default dependencies
+  and the offline ordinary-build behavior remain unchanged.
+
+## 2026-09-08 - Latest local application synchronization
+
+- User explicitly requested synchronizing the installed application to the
+  latest working source. Confirmed the authoritative repository, preserved
+  unrelated changes and coordinated the source freeze with the separate updater
+  task. This local development installation is not a public release.
+- `QT_QPA_PLATFORM=offscreen bash packaging/preflight.sh` passed, including
+  compileall and all 958 tests in 432.518 seconds. The log contained non-fatal
+  `welcome_page.py` scale callbacks accessing deleted QLabel objects; this is
+  recorded separately from unittest success. Required compileall and
+  `git diff --check` were also rechecked during installation handoff.
+- Frozen app Python source: 170 files, path/content SHA-256
+  `b002533f20a35533487f6c108c96a49163d05abfc377616a12f16d4cc60a1c7b`.
+  Final 326-input path/digest manifest SHA-256:
+  `aa412476927228c5c711650eff8e03375efd8da25d2aebf07de4dc9e3f57bcaa`.
+  The only change after the final preflight input snapshot was the optional
+  Objective-C update bridge, independently verified by the updater task; this
+  unconfigured build neither compiles nor embeds it. Both snapshots were kept.
+- Built with the repository PyInstaller spec into the separate versioned path
+  `dist/local/ICSTeX-2.1.0-beta.1-20260908-204029-b002533f/ICSTeX.app`, using
+  `build/local-20260908-204029` as the work path. The package version remains
+  `2.1.0-beta.1`; the local build ID distinguishes this newer source.
+- Bundle identity is `com.icstex.app`; executable, QtCore and Python framework
+  are arm64. Ad-hoc deep strict signature verification passed. No Developer ID
+  signing or notarization was performed. All 157 embedded app modules matched
+  source bytecode/constants; one namespace package and 35 assets also matched.
+- Verified a staged copy before replacement. The previous app had already
+  exited; no force quit, student save or discard action was used. Renamed the
+  original bundle into the user Application Support backup directory
+  `ICSTeX/Install Backups/20260908-204029/ICSTeX.app`, then moved the staged
+  bundle to `/Applications/ICSTeX.app`. Original bundle/executable inodes
+  `223791362` / `223791367`, old SHA-256 and deep strict signature were preserved.
+- Old executable SHA-256:
+  `d0f4a53af225e02ab513f50f76bbf5331e52e584aeff3eb56f9b0952040f8226`.
+  New executable SHA-256:
+  `718e263c89dfce7eb840cddc919c76e75f3e7209ee6f0954628891599ee50d08`.
+  Recursive checksum/symlink comparison between candidate, stage and installed
+  copy showed no differences. `FINAL_SOURCE_SNAPSHOT.tar.gz` matched every
+  manifest input; macOS resource-fork sidecars were retained. The backup also
+  contains `INSTALL_RECEIPT.json`, both manifests and a read-only verifier.
+- Cold launch from the exact installed path was observed as PID 45230; the
+  same process remained alive about ten minutes later. Native screenshots
+  showed the new outlined formula keys, blank table cells with new controls,
+  and the unconfigured update dialog. Actual keypresses produced
+  `\frac{a}{b}` using Tab; Enter did not submit, and Cancel retained the
+  synthetic source unchanged. A rapid initial automation batch ran before the
+  queued button action settled; sequential state-checked keypresses passed.
+  Qt accessibility activation of a navigation toggle only changed its check
+  state, so the visible control was clicked directly to open the panel.
+- Update configuration/runtime is absent, daily checks and the check button
+  are disabled, and no online updater acceptance is claimed. Formula/table
+  drafts were not submitted; the temporary document was closed and the app
+  left on its welcome page with the file toolbox restored. The student file
+  seen before the update remained byte-identical by SHA-256. No new ICSTeX
+  crash report was present after repeated native observations.
+- This installation did not re-run a full project compile, the complete table
+  mutation suite inside the packaged process, or real signed-feed delivery.
+  Existing public DMG/ZIP size and modification-time records were unchanged.
+  No version bump, runtime dependency, student text change, commit, push,
+  publication or GitHub Actions trigger occurred. Current state and the bounded
+  handoff were updated to the verified installed-build identity.

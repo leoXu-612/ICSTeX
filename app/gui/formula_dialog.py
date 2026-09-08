@@ -12,6 +12,8 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING
 
+from PySide6.QtCore import Qt, QSignalBlocker
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import QApplication
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -31,7 +33,6 @@ from app.core.formula_input import (
     FormulaDraft,
     FormulaMode,
     apply_formula_template,
-    change_formula_mode,
     final_edit_plan,
     recognize_formula,
     render_formula,
@@ -45,11 +46,11 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 
 
 MODE_ORDER: tuple[tuple[str, FormulaMode], ...] = (
-    ("$...$", FormulaMode.INLINE_DOLLAR),
-    (r"\(...\)", FormulaMode.INLINE_PAREN),
-    (r"\[...\]", FormulaMode.DISPLAY_BRACKET),
-    ("equation", FormulaMode.EQUATION),
-    ("equation*", FormulaMode.EQUATION_STAR),
+    ("行内 · $…$", FormulaMode.INLINE_DOLLAR),
+    (r"行内 · \(…\)", FormulaMode.INLINE_PAREN),
+    (r"独立 · \[…\]", FormulaMode.DISPLAY_BRACKET),
+    ("独立编号 · equation", FormulaMode.EQUATION),
+    ("独立不编号 · equation*", FormulaMode.EQUATION_STAR),
 )
 
 class FormulaDialog(QDialog):
@@ -65,8 +66,8 @@ class FormulaDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("编辑公式")
-        self.setMinimumWidth(700)
-        self.resize(980, 780)
+        self.setMinimumWidth(800)
+        self.resize(920, 700)
         self._document_text = document_text
         self._start = start
         self._end = end
@@ -85,9 +86,10 @@ class FormulaDialog(QDialog):
         self.visual_edit = MathEditorWidget()
         self.visual_edit.set_latex(self._seed_body)
         self.source_edit = QPlainTextEdit()
+        self.source_edit.setAccessibleName("公式 LaTeX 源码")
         self.source_edit.setPlainText(seed)
         self.source_edit.setStyleSheet(
-            "font-family: 'SF Mono', Menlo, monospace; font-size: 14px;"
+            "font-family: 'SF Mono', Menlo, monospace; font-size: 14px; padding: 6px;"
         )
         self.editor_stack = QStackedWidget()
         self.editor_stack.addWidget(self.visual_edit)
@@ -114,54 +116,86 @@ class FormulaDialog(QDialog):
         self.mode_combo.setCurrentIndex(seed_index)
 
         self.status_label = QLabel()
+        self.status_label.setTextFormat(Qt.TextFormat.PlainText)
         self.status_label.setWordWrap(True)
         self.plan_label = QLabel()
         self.plan_label.setWordWrap(True)
-        self.plan_label.setStyleSheet(
-            "background: #eef6ff; border: 1px solid #9cc3e5; padding: 6px;"
-            "font-family: 'SF Mono', Menlo, monospace;"
-        )
+        self.plan_label.setTextFormat(Qt.TextFormat.PlainText)
+        self.preview_edit = QPlainTextEdit()
+        self.preview_edit.setReadOnly(True)
+        self.preview_edit.setAccessibleName("将应用的 LaTeX")
+        self.preview_edit.setFixedHeight(68)
+        self.preview_edit.setStyleSheet(self.source_edit.styleSheet())
 
         layout = QVBoxLayout(self)
         layout.addWidget(
             QLabel("可视化编辑数学公式；LaTeX 源码是唯一真值，取消不会修改文档。")
         )
-        layout.addWidget(self.editor_stack, stretch=1)
 
         mode_row = QHBoxLayout()
         mode_row.addWidget(QLabel("公式模式："))
         mode_row.addWidget(self.mode_combo)
         mode_row.addWidget(self.source_mode_check)
         mode_row.addStretch()
+        self.undo_button = QPushButton("撤销")
+        self.redo_button = QPushButton("重做")
+        self.undo_button.clicked.connect(lambda: self._active_editor().undo())
+        self.redo_button.clicked.connect(lambda: self._active_editor().redo())
+        mode_row.addWidget(self.undo_button)
+        mode_row.addWidget(self.redo_button)
         mode_row.addWidget(self.ocr_button)
         mode_row.addWidget(self.ocr_status_label)
         layout.addLayout(mode_row)
+        layout.addWidget(self.editor_stack, stretch=1)
 
         self.keyboard = MathKeyboard()
         self.keyboard.actionRequested.connect(self._on_keyboard_action)
         layout.addWidget(self.keyboard)
 
         layout.addWidget(self.status_label)
-        layout.addWidget(QLabel("将应用到编辑器："))
+        layout.addWidget(QLabel("LaTeX 预览（确认后写入，最终效果以本地编译为准）"))
+        layout.addWidget(self.preview_edit)
         layout.addWidget(self.plan_label)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
         cancel_button = buttons.button(QDialogButtonBox.StandardButton.Cancel)
         if ok_button is not None:
-            ok_button.setText("应用")
+            ok_button.setText("插入公式" if start == end else "替换公式")
+            ok_button.setObjectName("primaryButton")
+            ok_button.setAutoDefault(False)
+            ok_button.setDefault(False)
         if cancel_button is not None:
             cancel_button.setText("取消")
         self._ok_button = ok_button
+        for button in self.findChildren(QPushButton):
+            button.setAutoDefault(False)
+        self.apply_shortcut = QShortcut(QKeySequence("Ctrl+Return"), self)
+        self.apply_shortcut.activated.connect(self._on_apply)
+        if ok_button is not None:
+            ok_button.setToolTip("确认写入文档 · " + self.apply_shortcut.key().toString(QKeySequence.SequenceFormat.NativeText))
         buttons.accepted.connect(self._on_apply)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
-        self.visual_edit.set_latex(self._seed_body)
+        # Do not normalize a seed that the visual projection cannot round-trip.
+        if self.visual_edit.latex() != self._seed_body:
+            self.source_mode_check.setChecked(True)
+            self.editor_stack.setCurrentWidget(self.source_edit)
+            self.keyboard.setEnabled(False)
+            self.keyboard.hide()
+        self.visual_edit.latexChanged.connect(self._on_visual_text_changed)
+        self.visual_edit.stateChanged.connect(self._refresh)
         self.source_edit.textChanged.connect(self._on_source_text_changed)
+        self.source_edit.undoAvailable.connect(lambda _available: self._refresh())
+        self.source_edit.redoAvailable.connect(lambda _available: self._refresh())
         self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
         self.source_mode_check.toggled.connect(self._on_source_mode_toggled)
         self._refresh()
+        self._active_editor().setFocus()
+
+    def _active_editor(self):
+        return self.source_edit if self.source_mode_check.isChecked() else self.visual_edit
 
     def _open_batch_ocr(self) -> None:
         if self._ocr_open or time.monotonic() - self._ocr_ts < DIALOG_OPEN_DEBOUNCE_SECONDS:
@@ -206,14 +240,15 @@ class FormulaDialog(QDialog):
     def _seed_editor_latex(self, latex: str) -> None:
         """Seed both source and visual editor without the mode toggle
         re-parsing the previous source over the new formula."""
-        self.source_edit.setPlainText(f"\\({latex}\\)")
-        self.visual_edit.set_latex(latex)
-        self.editor_stack.setCurrentWidget(self.visual_edit)
-        if self.source_mode_check.isChecked():
-            self.source_mode_check.blockSignals(True)
-            self.source_mode_check.setChecked(False)
-            self.source_mode_check.blockSignals(False)
-        self.keyboard.setEnabled(True)
+        with QSignalBlocker(self.visual_edit), QSignalBlocker(self.source_edit), QSignalBlocker(self.source_mode_check):
+            self.source_edit.setPlainText(f"\\({latex}\\)")
+            self.visual_edit.set_latex(latex)
+            source_mode = self.visual_edit.latex() != latex
+            self.source_mode_check.setChecked(source_mode)
+        self.mode_combo.setCurrentIndex(1)
+        self.editor_stack.setCurrentIndex(1 if source_mode else 0)
+        self.keyboard.setEnabled(not source_mode)
+        self.keyboard.setVisible(not source_mode)
         self._refresh()
 
 
@@ -255,7 +290,14 @@ class FormulaDialog(QDialog):
         )
         if index < 0:
             return False
-        self.mode_combo.setCurrentIndex(index)
+        if self.source_mode_check.isChecked():
+            envelope = recognize_formula(self.source_edit.toPlainText())
+            if envelope is None:
+                return False
+            if envelope.mode is not mode:
+                self._replace_source_text(render_formula(FormulaDraft(mode=mode, body=envelope.body)))
+        with QSignalBlocker(self.mode_combo):
+            self.mode_combo.setCurrentIndex(index)
         self._refresh()
         return True
 
@@ -298,13 +340,24 @@ class FormulaDialog(QDialog):
             self._refresh()
 
     def _on_source_text_changed(self) -> None:
+        if self._applying_change:
+            return
         self._template_cursor = None
         self._template_packages = ()
         self._refresh()
 
+    def _on_visual_text_changed(self, _text: str) -> None:
+        if self._applying_change or self.source_mode_check.isChecked():
+            return
+        self._template_cursor = None
+        self._template_packages = ()
+        self._sync_source_from_visual()
+
     def _on_source_mode_toggled(self, checked: bool) -> None:
         self.keyboard.setEnabled(not checked)
+        self.keyboard.setVisible(not checked)
         if checked:
+            self.visual_edit.commit_pending_command()
             self._sync_source_from_visual()
         else:
             text = self.source_edit.toPlainText()
@@ -319,11 +372,23 @@ class FormulaDialog(QDialog):
                 self.source_mode_check.blockSignals(True)
                 self.source_mode_check.setChecked(True)
                 self.source_mode_check.blockSignals(False)
+                self.keyboard.setEnabled(False)
+                self.keyboard.hide()
                 self._refresh()
                 return
-            self.visual_edit.set_latex(envelope.body)
+            if self.visual_edit.latex() != envelope.body:
+                with QSignalBlocker(self.visual_edit):
+                    self.visual_edit.set_latex(envelope.body)
+            if self.visual_edit.latex() != envelope.body:
+                with QSignalBlocker(self.source_mode_check):
+                    self.source_mode_check.setChecked(True)
+                self.keyboard.setEnabled(False)
+                self.keyboard.hide()
+                self.status_label.setText("此公式包含无法无损转换的结构；已保留源码，请继续在源码模式编辑。")
+                return
         self.editor_stack.setCurrentIndex(1 if checked else 0)
         self._refresh()
+        self._active_editor().setFocus()
 
     def _on_keyboard_action(self, action: str) -> None:
         if self.source_mode_check.isChecked():
@@ -339,6 +404,8 @@ class FormulaDialog(QDialog):
             editor.cursor_left()
         elif action == "cursor:right":
             editor.cursor_right()
+        elif action == "cursor:tab":
+            editor.cursor_tab()
         elif action == "delete":
             editor.delete_backspace()
         elif action == "apply":
@@ -346,18 +413,32 @@ class FormulaDialog(QDialog):
             return
         self._sync_source_from_visual()
         self._refresh()
+        if action in ("structure:matrix", "structure:cases", "structure:nth_root"):
+            self.source_mode_check.setChecked(True)
+            self.status_label.setText("已插入结构；请在源码模式填写矩阵、分段条件或根指数。")
+            self.source_edit.setFocus()
+            return
         editor.setFocus()
 
     def _sync_source_from_visual(self) -> None:
         mode = MODE_ORDER[self.mode_combo.currentIndex()][1]
-        self.source_edit.setPlainText(
-            render_formula(FormulaDraft(mode=mode, body=self.visual_edit.latex()))
-        )
+        text = render_formula(FormulaDraft(mode=mode, body=self.visual_edit.latex()))
+        with QSignalBlocker(self.source_edit):
+            if self.source_edit.toPlainText() != text:
+                self.source_edit.setPlainText(text)
+        self._refresh()
 
     def _replace_source_text(self, text: str) -> None:
         self._applying_change = True
         try:
-            self.source_edit.setPlainText(text)
+            cursor = self.source_edit.textCursor()
+            position = cursor.position()
+            cursor.beginEditBlock()
+            cursor.select(cursor.SelectionType.Document)
+            cursor.insertText(text)
+            cursor.endEditBlock()
+            cursor.setPosition(min(position, len(text)))
+            self.source_edit.setTextCursor(cursor)
         finally:
             self._applying_change = False
         self._refresh()
@@ -375,6 +456,14 @@ class FormulaDialog(QDialog):
         self.mode_combo.blockSignals(False)
 
         draft = self.current_draft()
+        source_mode = self.source_mode_check.isChecked()
+        self.undo_button.setEnabled(self.source_edit.document().isUndoAvailable() if source_mode else self.visual_edit.can_undo)
+        self.redo_button.setEnabled(self.source_edit.document().isRedoAvailable() if source_mode else self.visual_edit.can_redo)
+        plan = self.build_plan() if draft is not None else None
+        self._ok_button.setEnabled(plan is not None and not self._submitted)
+        preview = plan.text if plan is not None else ""
+        if self.preview_edit.toPlainText() != preview:
+            self.preview_edit.setPlainText(preview)
         if draft is None:
             self.status_label.setText(
                 "源码不是完整公式（需要 $…$、\\(…\\)、\\[…\\]、equation 或 equation*）。"
@@ -382,7 +471,6 @@ class FormulaDialog(QDialog):
             self.plan_label.setText("（无有效编辑计划）")
             return
 
-        plan = self.build_plan()
         if plan is None:
             self.status_label.setText("公式有效，但无法确认编辑器中的原选区；请在文档中重新选择。")
             self.plan_label.setText("（无有效编辑计划）")
@@ -391,21 +479,24 @@ class FormulaDialog(QDialog):
             self.status_label.setText("源码模式：直接编辑 LaTeX；正文仅按你的操作变换。")
         else:
             self.status_label.setText(
-                "可视化模式：输入 / 生成分式，^ 上标，_ 下标，\\alpha 转为 α，可直接粘贴 LaTeX。"
+                (f"正在输入 {self.visual_edit.pending_command} · 空格或 Enter 转换为符号" if self.visual_edit.pending_command else
+                 "可视编辑 · / 分式 · ^ 上标 · _ 下标 · Tab / Shift+Tab 切换结构 · 可粘贴 LaTeX")
             )
         package_text = "、".join(plan.packages) if plan.packages else "无"
         if plan.start == plan.end:
             self.plan_label.setText(
-                f"在位置 [{plan.start}] 插入：\n{plan.text}\n所需 package：{package_text}"
+                f"插入新公式 · 所需 package：{package_text} · 取消不会修改文档"
             )
         else:
             self.plan_label.setText(
-                f"替换 [{plan.start}:{plan.end}]：\n{plan.text}\n所需 package：{package_text}"
+                f"替换所选公式 · 所需 package：{package_text} · 可在文档中一次撤销"
             )
 
     def _on_apply(self) -> None:
         if self._submitted:
             return
+        if not self.source_mode_check.isChecked():
+            self.visual_edit.commit_pending_command()
         plan = self.build_plan()
         if plan is None:
             QMessageBox.warning(

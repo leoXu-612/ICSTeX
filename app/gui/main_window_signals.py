@@ -45,13 +45,15 @@ def connect_signals(window: "MainWindow") -> None:
     window.import_perf_action.triggered.connect(window.show_import_perf_dialog)
     window.block_project_action.triggered.connect(window.show_block_project_dialog)
     window.user_guide_action.triggered.connect(window.show_user_guide)
-    window.word_count_action.triggered.connect(window.update_word_count)
+    window.word_count_action.triggered.connect(lambda: window.update_word_count(force=True))
     window.sync_pdf_action.triggered.connect(window.sync_current_source_to_pdf)
     window.engine_selector.currentIndexChanged.connect(window.on_engine_selector_changed)
 
     # Toolbox / auto-compile toggles
     window.toolbox_action.toggled.connect(window.set_toolbox_visible)
     window.toolbox_dock.visibilityChanged.connect(window.sync_toolbox_action)
+    window.toolbox_dock.visibilityChanged.connect(window.project_panels.refresh_visible)
+    window.sidebar_tabs.currentChanged.connect(window.project_panels.refresh_visible)
     window.auto_compile_action.toggled.connect(window.sync_auto_compile_toggle)
     window.auto_compile_action.toggled.connect(window._persist_preferences_from_ui)
     window.auto_compile_toggle.toggled.connect(window.sync_auto_compile_action)

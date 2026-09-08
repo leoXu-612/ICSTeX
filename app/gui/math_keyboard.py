@@ -7,8 +7,8 @@ editor widget; the keyboard never inserts raw LaTeX strings by itself.
 """
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPen
+from PySide6.QtCore import QPointF, QRectF, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QAbstractButton,
     QButtonGroup,
@@ -25,13 +25,11 @@ from PySide6.QtWidgets import (
 _BG = QColor(252, 252, 252)
 _BG_NUM = QColor(244, 244, 244)
 _BG_ACTIVE = QColor(210, 228, 250)
-_BORDER = QColor(208, 208, 208)
+_BORDER = QColor(216, 219, 223)
 _TEXT = QColor(38, 38, 38)
-_PLACEHOLDER = QColor(205, 205, 205)
+_PLACEHOLDER = QColor(135, 143, 153)
 _FONT_MAIN = QFont("Menlo", 22)
 _FONT_MAIN.setStyleHint(QFont.StyleHint.Monospace)
-_FONT_SMALL = QFont(_FONT_MAIN)
-_FONT_SMALL.setPointSizeF(14)
 
 
 def _button_specs(label: str, kind: str, action: str, numeric: bool = False) -> tuple[str, str, str, bool]:
@@ -58,7 +56,9 @@ class MathKeyButton(QAbstractButton):
         self._numeric = numeric
         self._emphasized = emphasized
         self.setCheckable(checkable)
-        self.setMinimumHeight(58)
+        self.setMinimumSize(42, 40)
+        self.setAccessibleName(label)
+        self.setToolTip(label)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
     def paintEvent(self, _event) -> None:  # type: ignore[no-untyped-def]
@@ -77,123 +77,120 @@ class MathKeyButton(QAbstractButton):
             background = background.darker(102)
         painter.setPen(QPen(_BORDER, 1))
         painter.setBrush(background)
-        painter.drawRoundedRect(rect, 12, 12)
+        painter.drawRoundedRect(rect, 8, 8)
 
         painter.setPen(QPen(_TEXT))
         self._draw_preview(painter)
 
     def _draw_preview(self, painter: QPainter) -> None:
-        center_x = self.width() / 2
-        center_y = self.height() / 2
-        if self._kind == "text":
-            painter.setFont(_FONT_MAIN)
-            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self._label)
-            return
-        if self._kind == "big":
+        if self._kind in ("text", "big"):
             font = QFont(_FONT_MAIN)
-            font.setPointSizeF(30)
+            if self._kind == "big":
+                font.setPointSizeF(27)
+            metrics = QFontMetricsF(font)
+            fit = min(1.0, (self.width() - 14) / max(1.0, metrics.horizontalAdvance(self._label)),
+                      (self.height() - 10) / max(1.0, metrics.height()))
+            font.setPointSizeF(font.pointSizeF() * fit)
             painter.setFont(font)
             painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self._label)
             return
 
+        # One logical canvas keeps every structure centered and inside a compact
+        # key. Slots are outlines, not filled blocks that resemble drop shadows.
+        painter.save()
+        painter.translate(self.width() / 2, self.height() / 2)
+        scale = min(1.0, (self.width() - 14) / 60, (self.height() - 10) / 34)
+        painter.scale(scale, scale)
+        painter.setPen(QPen(_TEXT, 1.5, Qt.PenStyle.SolidLine,
+                            Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        self._draw_structure(painter)
+        painter.restore()
+
+    @staticmethod
+    def _draw_slot(painter: QPainter, x: float, y: float, width: float, height: float) -> None:
+        painter.save()
+        painter.setPen(QPen(_PLACEHOLDER, 1.2))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(QRectF(x, y, width, height), 1.5, 1.5)
+        painter.restore()
+
+    @staticmethod
+    def _draw_label(painter: QPainter, rect: QRectF, text: str, size: float) -> None:
+        painter.save()
+        font = QFont(_FONT_MAIN)
+        # The structure canvas is in logical pixels, independent of font DPI.
+        font.setPixelSize(round(size))
+        painter.setFont(font)
+        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, text)
+        painter.restore()
+
+    def _draw_structure(self, painter: QPainter) -> None:
         if self._kind == "frac":
-            w, h = self.width(), self.height()
-            box_w = min(30.0, w * 0.26)
-            gap = 9.0
-            top = center_y - gap - 12
-            bottom = center_y + gap
-            painter.setBrush(_PLACEHOLDER)
-            painter.setPen(QPen(_PLACEHOLDER, 1))
-            painter.drawRoundedRect(int(center_x - box_w / 2), int(top), int(box_w), 13, 3, 3)
-            painter.drawRoundedRect(int(center_x - box_w / 2), int(bottom), int(box_w), 13, 3, 3)
-            painter.setPen(QPen(_TEXT, 2))
-            painter.drawLine(int(center_x - box_w / 2 - 4), int(center_y), int(center_x + box_w / 2 + 4), int(center_y))
+            self._draw_slot(painter, -10, -14, 20, 9)
+            self._draw_slot(painter, -10, 5, 20, 9)
+            painter.drawLine(QPointF(-15, 0), QPointF(15, 0))
             return
-        if self._kind == "sqrt":
-            painter.setFont(_FONT_MAIN)
-            painter.drawText(int(center_x - 30), int(center_y + 8), "√")
-            painter.setPen(QPen(_TEXT, 2))
-            painter.drawLine(int(center_x - 22), int(center_y - 13), int(center_x + 20), int(center_y - 13))
-            painter.setBrush(_PLACEHOLDER)
-            painter.setPen(QPen(_PLACEHOLDER, 1))
-            painter.drawRoundedRect(int(center_x + 20), int(center_y - 7), 14, 14, 3, 3)
+        if self._kind in ("sqrt", "nroot"):
+            root = QPainterPath(QPointF(-23, 1))
+            root.lineTo(-18, -1)
+            root.lineTo(-12, 12)
+            root.lineTo(-5, -12)
+            root.lineTo(24, -12)
+            painter.drawPath(root)
+            self._draw_slot(painter, 1, -5, 17, 13)
+            if self._kind == "nroot":
+                self._draw_label(painter, QRectF(-26, -16, 12, 13), "n", 11)
             return
         if self._kind in ("script", "sub"):
-            main = "x"
-            small = "2" if self._kind == "script" else "□"
-            painter.setFont(_FONT_MAIN)
-            painter.drawText(int(center_x - 18), int(center_y + 8), main)
-            painter.setFont(_FONT_SMALL)
-            painter.drawText(
-                int(center_x + 2),
-                int(center_y - 10 if self._kind == "script" else center_y + 14),
-                small,
-            )
+            base = {"structure:exp": "e", "structure:exp10": "10"}.get(self.action, "x")
+            base_width = 27 if base == "10" else 18
+            self._draw_label(painter, QRectF(-base_width, -11, base_width, 28), base, 22)
+            self._draw_slot(painter, 3, -13 if self._kind == "script" else 6, 9, 9)
             return
         if self._kind == "abs":
-            painter.setFont(_FONT_MAIN)
-            painter.drawText(int(center_x - 20), int(center_y + 8), "|")
-            painter.drawText(int(center_x + 12), int(center_y + 8), "|")
-            painter.setBrush(_PLACEHOLDER)
-            painter.setPen(QPen(_PLACEHOLDER, 1))
-            painter.drawRoundedRect(int(center_x - 12), int(center_y - 8), 16, 16, 3, 3)
+            painter.drawLine(QPointF(-13, -12), QPointF(-13, 12))
+            painter.drawLine(QPointF(13, -12), QPointF(13, 12))
+            self._draw_slot(painter, -7, -7, 14, 14)
             return
         if self._kind == "doverdx":
-            painter.setFont(_FONT_SMALL)
-            painter.drawText(int(center_x - 8), int(center_y - 10), "d")
-            painter.drawText(int(center_x - 12), int(center_y + 16), "dx")
-            painter.setPen(QPen(_TEXT, 2))
-            painter.drawLine(int(center_x - 16), int(center_y), int(center_x + 16), int(center_y))
-            return
-        if self._kind == "nroot":
-            painter.setFont(_FONT_SMALL)
-            painter.drawText(int(center_x - 28), int(center_y - 6), "n")
-            painter.setFont(_FONT_MAIN)
-            painter.drawText(int(center_x - 18), int(center_y + 8), "√")
-            painter.setPen(QPen(_TEXT, 2))
-            painter.drawLine(int(center_x - 10), int(center_y - 13), int(center_x + 22), int(center_y - 13))
-            painter.setBrush(_PLACEHOLDER)
-            painter.setPen(QPen(_PLACEHOLDER, 1))
-            painter.drawRoundedRect(int(center_x + 22), int(center_y - 7), 14, 14, 3, 3)
+            self._draw_label(painter, QRectF(-14, -17, 28, 15), "d", 13)
+            self._draw_label(painter, QRectF(-14, 2, 28, 15), "dx", 13)
+            painter.drawLine(QPointF(-14, 0), QPointF(14, 0))
             return
         if self._kind == "matrix":
-            painter.setBrush(_PLACEHOLDER)
-            painter.setPen(QPen(_PLACEHOLDER, 1))
-            size = 10
+            brackets = QPainterPath(QPointF(-14, -14))
+            for point in ((-19, -14), (-19, 14), (-14, 14)):
+                brackets.lineTo(*point)
+            brackets.moveTo(14, -14)
+            for point in ((19, -14), (19, 14), (14, 14)):
+                brackets.lineTo(*point)
+            painter.drawPath(brackets)
             for row in range(2):
                 for column in range(2):
-                    painter.drawRoundedRect(
-                        int(center_x - 15 + column * (size + 5)),
-                        int(center_y - 12 + row * (size + 5)),
-                        size,
-                        size,
-                        2,
-                        2,
-                    )
+                    self._draw_slot(painter, -11 + column * 14, -11 + row * 14, 8, 8)
             return
         if self._kind == "cases":
-            painter.setFont(_FONT_MAIN)
-            painter.drawText(int(center_x - 24), int(center_y + 9), "{")
-            painter.setBrush(_PLACEHOLDER)
-            painter.setPen(QPen(_PLACEHOLDER, 1))
-            painter.drawRoundedRect(int(center_x - 8), int(center_y - 13), 24, 9, 2, 2)
-            painter.drawRoundedRect(int(center_x - 8), int(center_y + 4), 24, 9, 2, 2)
+            brace = QPainterPath(QPointF(-11, -14))
+            brace.cubicTo(-20, -14, -14, -3, -22, 0)
+            brace.cubicTo(-14, 3, -20, 14, -11, 14)
+            painter.drawPath(brace)
+            self._draw_slot(painter, -5, -12, 24, 9)
+            self._draw_slot(painter, -5, 3, 24, 9)
             return
         if self._kind == "log10":
-            painter.setFont(_FONT_MAIN)
-            painter.drawText(int(center_x - 30), int(center_y + 8), "log")
-            painter.setFont(_FONT_SMALL)
-            painter.drawText(int(center_x + 12), int(center_y + 16), "10")
+            self._draw_label(painter, QRectF(-26, -14, 38, 28), "log", 20)
+            if self.action == "structure:logab":
+                self._draw_slot(painter, 14, 5, 9, 9)
+            else:
+                self._draw_label(painter, QRectF(11, 3, 18, 16), "10", 11)
             return
         if self._kind == "invsin":
-            painter.setFont(_FONT_MAIN)
-            painter.drawText(int(center_x - 34), int(center_y + 8), self._label.replace("⁻¹", ""))
-            painter.setFont(_FONT_SMALL)
-            painter.drawText(int(center_x + 6), int(center_y - 8), "⁻¹")
+            self._draw_label(painter, QRectF(-27, -9, 38, 28), self._label.replace("⁻¹", ""), 20)
+            self._draw_label(painter, QRectF(10, -16, 20, 14), "−1", 11)
             return
 
-        painter.setFont(_FONT_MAIN)
-        painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self._label)
+        self._draw_label(painter, QRectF(-30, -17, 60, 34), self._label, 20)
 
 
 CATEGORY_LABELS = {
@@ -207,8 +204,8 @@ CATEGORY_LABELS = {
 BASE_BUTTONS = [
     ("x", "text", "text:x"),
     ("y", "text", "text:y"),
-    ("x²", "script", "structure:superscript"),
-    ("aᵇ", "script", "structure:superscript"),
+    ("上标", "script", "structure:superscript"),
+    ("下标", "sub", "structure:subscript"),
     ("(", "text", "text:("),
     (")", "text", "text:)"),
     ("<", "text", "text:<"),
@@ -313,11 +310,10 @@ NUMBER_BUTTONS = [
 ]
 
 CONTROL_BUTTONS = [
-    ("功能", "text", "category:functions"),
     ("←", "text", "cursor:left"),
     ("→", "text", "cursor:right"),
     ("删除", "text", "delete"),
-    ("确认", "text", "apply"),
+    ("Tab", "text", "cursor:tab"),
 ]
 
 
@@ -341,7 +337,7 @@ class MathKeyboard(QWidget):
             button.setCheckable(True)
             button.setMinimumHeight(34)
             button.setStyleSheet(
-                "QPushButton { border-radius: 10px; border: 1px solid #d0d0d0; background: #f7f7f7; }"
+                "QPushButton { padding: 2px 8px; min-height: 26px; border-radius: 8px; border: 1px solid #d0d0d0; background: #f7f7f7; }"
                 "QPushButton:checked { background: #d2e4fa; border-color: #9cc3e5; }"
             )
             self.category_group.addButton(button)
@@ -358,11 +354,14 @@ class MathKeyboard(QWidget):
         self.stack.addWidget(self._build_grid_page(GREEK_BUTTONS, 4))
         self.stack.addWidget(self._build_grid_page(CALCULUS_BUTTONS, 4))
         self.stack.addWidget(self._build_grid_page(MATRIX_BUTTONS, 4))
+        self.stack.addWidget(self.letters_row)
 
         self.number_pad = self._build_number_pad()
         self.controls = self._build_controls()
-
-        self._apply_layout()
+        self._content_layout = QGridLayout()
+        self._root_layout.addLayout(self._content_layout)
+        self._wide_layout = None
+        self._apply_layout(wide=True)
 
     # ------------------------------------------------------------------
 
@@ -377,13 +376,15 @@ class MathKeyboard(QWidget):
         letters_layout = QGridLayout(self.letters_row)
         letters_layout.setContentsMargins(0, 0, 0, 0)
         letters_layout.setSpacing(4)
+        back_button = QPushButton("返回基础符号")
+        back_button.setAutoDefault(False)
+        back_button.clicked.connect(lambda: self._emit("toggle:abc"))
+        letters_layout.addWidget(back_button, 0, 0, 1, 6)
         for index, letter in enumerate("abcdefghijklmnopqrstuvwxyz"):
             button = MathKeyButton(letter, "text", f"text:{letter}", numeric=False)
-            button.setMinimumHeight(40)
+            button.setMinimumHeight(30)
             button.clicked.connect(lambda _checked=False, b=button: self._emit(b.action))
-            letters_layout.addWidget(button, index // 13, index % 13)
-        self.letters_row.hide()
-        layout.addWidget(self.letters_row)
+            letters_layout.addWidget(button, index // 6 + 1, index % 6)
         return page
 
     def _build_grid_page(self, specs, columns: int) -> QWidget:
@@ -397,7 +398,7 @@ class MathKeyboard(QWidget):
     def _grid_from(specs, columns: int) -> QGridLayout:
         grid = QGridLayout()
         grid.setContentsMargins(0, 0, 0, 0)
-        grid.setSpacing(8)
+        grid.setSpacing(6)
         for index, spec in enumerate(specs):
             label, kind, action = spec[0], spec[1], spec[2]
             numeric = spec[3] if len(spec) > 3 else False
@@ -429,38 +430,40 @@ class MathKeyboard(QWidget):
         return panel
 
     def _switch_category(self, key: str) -> None:
+        self._letters_visible = False
         index = list(CATEGORY_LABELS).index(key)
         self.stack.setCurrentIndex(index)
+        self.category_group.buttons()[index].setChecked(True)
 
-    def _apply_layout(self) -> None:
-        while self._root_layout.count():
-            item = self._root_layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.setParent(None)
-        self._root_layout.addLayout(self.category_bar)
-
-        if self.width() >= 860:
-            wide = QHBoxLayout()
-            wide.addWidget(self.stack, stretch=3)
-            wide.addWidget(self.number_pad, stretch=2)
-            wide.addWidget(self.controls, stretch=1)
-            self._root_layout.addLayout(wide)
+    def _apply_layout(self, *, wide: bool | None = None) -> None:
+        wide = self.width() >= 740 if wide is None else wide
+        if self._wide_layout == wide:
+            return
+        self._wide_layout = wide
+        for widget in (self.stack, self.number_pad, self.controls):
+            self._content_layout.removeWidget(widget)
+        self._content_layout.addWidget(self.stack, 0, 0, 1, 1 if wide else 2)
+        if wide:
+            self._content_layout.addWidget(self.number_pad, 0, 1)
+            self._content_layout.addWidget(self.controls, 0, 2)
         else:
-            self._root_layout.addWidget(self.stack)
-            row = QHBoxLayout()
-            row.addWidget(self.number_pad, stretch=3)
-            row.addWidget(self.controls, stretch=1)
-            self._root_layout.addLayout(row)
+            self._content_layout.addWidget(self.number_pad, 1, 0)
+            self._content_layout.addWidget(self.controls, 1, 1)
+        self._content_layout.setColumnStretch(0, 4)
+        self._content_layout.setColumnStretch(1, 3 if wide else 1)
+        self._content_layout.setColumnStretch(2, 1 if wide else 0)
 
     def resizeEvent(self, event) -> None:  # type: ignore[no-untyped-def]
         super().resizeEvent(event)
         self._apply_layout()
 
     def _emit(self, action: str) -> None:
+        if action.startswith("category:"):
+            self._switch_category(action[9:])
+            return
         if action.startswith("toggle:"):
             self._letters_visible = not self._letters_visible
-            self.letters_row.setVisible(self._letters_visible)
+            self.stack.setCurrentWidget(self.letters_row if self._letters_visible else self._base_page)
             return
         self.actionRequested.emit(action)
 

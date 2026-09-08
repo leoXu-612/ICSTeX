@@ -9,6 +9,8 @@ from unittest.mock import Mock, patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication, QLabel, QLineEdit, QPushButton, QSpinBox
+from PySide6.QtCore import QPoint, QPointF, QSizeF, Qt
+from PySide6.QtTest import QTest
 
 from app.gui.pdf_panel import PdfPanel, PdfViewState
 
@@ -85,6 +87,40 @@ class PdfPanelToolbarTests(TestCase):
         panel = PdfPanel()
         self.assertIsNone(panel.pdf_position_for_viewport_point(QPointF(10.0, 10.0)))
         panel.close()
+
+    def test_double_click_emits_only_mapped_left_button_positions(self) -> None:
+        panel = PdfPanel()
+        self.addCleanup(panel.close)
+        if panel._view is None:
+            self.skipTest("QtPdf is unavailable")
+        requested = Mock()
+        panel.sourceRequested.connect(requested)
+        with patch.object(panel, "pdf_position_for_viewport_point", return_value=(2, 30.0, 40.0)):
+            QTest.mouseDClick(panel._view.viewport(), Qt.MouseButton.LeftButton, pos=QPoint(10, 20))
+        requested.assert_called_once_with(2, 30.0, 40.0)
+        requested.reset_mock()
+        with patch.object(panel, "pdf_position_for_viewport_point", return_value=None):
+            QTest.mouseDClick(panel._view.viewport(), Qt.MouseButton.LeftButton, pos=QPoint(10, 20))
+        requested.assert_not_called()
+        with patch.object(panel, "pdf_position_for_viewport_point", return_value=(2, 30.0, 40.0)):
+            QTest.mouseDClick(panel._view.viewport(), Qt.MouseButton.RightButton, pos=QPoint(10, 20))
+        requested.assert_not_called()
+
+    def test_reverse_mapping_rejects_page_margins_and_inter_page_gaps(self) -> None:
+        panel = PdfPanel()
+        self.addCleanup(panel.close)
+        if panel._view is None:
+            self.skipTest("QtPdf is unavailable")
+        document = Mock()
+        document.pageCount.return_value = 2
+        document.pagePointSize.return_value = QSizeF(100, 200)
+        with (
+            patch.object(panel, "_document", document),
+            patch.object(panel, "_page_geometry", side_effect=lambda page: (10, 20 + page * 210, 100, 200, 1)),
+        ):
+            for point in (QPointF(5, 50), QPointF(115, 50), QPointF(50, 225)):
+                self.assertIsNone(panel.pdf_position_for_viewport_point(point))
+            self.assertEqual(panel.pdf_position_for_viewport_point(QPointF(50, 250)), (2, 40.0, 20.0))
 
     def test_logical_key_preserves_view_state_when_physical_pdf_changes(self) -> None:
         panel = PdfPanel()

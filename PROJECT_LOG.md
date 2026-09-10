@@ -1995,3 +1995,48 @@ must link here instead of repeating old task details.
   `be57a732b6532e3247916530bdc688b7e05b1cd4ec0457b216a5020250140c03`.
   No staging/commit/push/rename, packaging, installed-app replacement, credentials,
   signing, deployment or release action occurred. V1 development stays local.
+
+## 2026-09-11 — User-authorized V1 branch rename and source checkpoint synchronization
+
+- The user explicitly requested the needed rename and submission after asking
+  whether the work had reached GitHub. Renamed the local `release/2.1` branch to
+  `codex/v1-development`, removed its old upstream and pushed the development
+  branch with a new matching upstream. No reset, force push, remote branch
+  deletion, merge, tag or PR creation. This authorization applies only to this
+  checkpoint, not future automatic commits or releases.
+- Source commit `e78c2cda19a89d1c0a90c49255bf9b376350f4f3` contains the existing
+  V1 source, tests, probes, synthetic measurements and documentation (91 files).
+  `git ls-remote` independently matched that SHA on `codex/v1-development`;
+  remote `release/2.1` remains `f03776e87c0f938421a70ff5b085db920f2d01d7`.
+  GitHub API reported zero Actions runs for the source commit using `[skip ci]`.
+- Required compileall and staged whitespace checks passed. The complete verbose
+  offscreen suite passed 1134 tests in 872.176 seconds, exit 0, receipt
+  `/tmp/icstex-v1-source-sync-20260911-tests-r1.log`. App path/content SHA-256 was
+  unchanged before and after:
+  `5acfce28d24ebcb2fe9b87ba56cfc9bb9f47d68e7e26d8b452db3affe599cce5`.
+  Staged app/test files matched the tested working bytes. No traceback,
+  RuntimeError, RuntimeWarning, fatal Python or stale delegate commit warning
+  appeared; offscreen warnings and slow full-suite scale checks remain.
+- The preceding secondary-editor full run is now terminal: 1122 tests passed in
+  996.164 seconds on `caac75122b49f7a0e283cf1a8203a1beaa62d5d458b9c67ad21eb24abc1b1625`,
+  receipt `/tmp/icstex-v1-m2-editor-targets-suite-r2.log`. The prior log's running
+  status described that earlier observation, not the present state.
+- Subsequent image import uses guarded staging/exclusive publication and captured
+  drop targets. Nine core and four navigation checks passed; final focused
+  integration passed 182 tests in 15.752 seconds. Failed copying, observed source/
+  destination changes, internal links, collision winners and closed sessions have
+  explicit regression coverage. Submission-check/navigation fixture disposal is
+  test-only. The new drop fixture's borrowed QMimeData caused one exit 139 before
+  it was retained correctly; this does not resolve older native crash causality.
+- Actual Cocoa image picker cancellation reached zero-mutation assertions, but
+  successful PNG selection/import remained incomplete. Stopped only the owned
+  synthetic probe when the source-sync request arrived; no native image acceptance
+  is claimed. Resume through `docs/V1_IMPLEMENTATION_PLAN.md` and
+  `docs/v1-m2-image-import-verification-2026-09-11.md`. M2-M6, IME/AX/Windows/human
+  acceptance and independent Beta installation gates remain open.
+- No packages, installed apps, versions, workflow settings, website files,
+  credentials or release assets were changed. The signed candidate appcast stays
+  ignored and local with SHA-256
+  `be57a732b6532e3247916530bdc688b7e05b1cd4ec0457b216a5020250140c03`.
+  Live GitHub release listing still showed only the Beta 1 prerelease. Changed
+  files passed a bounded common-key/token/path scan, not a full security audit.

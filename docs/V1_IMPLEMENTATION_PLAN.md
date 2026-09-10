@@ -7,8 +7,10 @@ No automatic commits/pushes, packages, installed-app changes, signing or publica
 Exception for this checkpoint only: on 2026-09-11 the user explicitly requested
 the needed rename and source submission. The local branch was renamed to
 `codex/v1-development`; retain the remote `release/2.1` and all release gates.
-Run full validation, commit the existing V1 work and push only the development
-branch with `[skip ci]`. This is not standing permission for later automatic pushes.
+Full validation passed and the existing V1 checkpoint was committed and pushed
+only to the development branch with `[skip ci]`; the remote SHA was verified.
+The source identity and receipt are in `PROJECT_STATE.md` and `PROJECT_LOG.md`.
+This is not standing permission for later automatic pushes.
 
 Current draft implementation stores only explicit property differences against a
 captured target/base, with session-visible pending state but no automatic model

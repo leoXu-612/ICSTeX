@@ -13,7 +13,8 @@
   和 Block 受保护模型保存/关闭、布局及键盘可达性、属性草稿保护专项；二次编辑器
   目标绑定已通过专项/原生和冻结源码全套；后续图片导入边界修复已通过专项，
   原生导入验收未完成。用户现已授权源码同步，本地分支改名为
-  `codex/v1-development`，保留远端 `release/2.1` 不变；本次完整回归通过，远端同步待完成。
+  `codex/v1-development`；源码检查点 `e78c2cd` 已推送并核对远端哈希。
+  远端 `release/2.1` 仍为 `f03776e`，未改动发布分支或公开版本。
   这不是完整 V1 或发布验收。活动范围和未完成验收见 `docs/V1_IMPLEMENTATION_PLAN.md`。
   签名 appcast 已移至 Git 忽略的本地候选目录，不在网站树或远端提交中。
   响应/预览优化、公式/表格交互和默认离线更新入口已生成并安装本机 macOS 开发
@@ -436,7 +437,7 @@
 
 | 对象 | 状态 | 说明 |
 | --- | --- | --- |
-| 当前源码 | V1 development checkpoint; synchronization pending | 2.1.0-beta.2；V1 源码位于 `codex/v1-development`，保留 Beta 远端 `release/2.1`；本次用户授权同步待完成，不代表完整 V1 验收或发布 |
+| 当前源码 | V1 development checkpoint synchronized | 2.1.0-beta.2；V1 源码提交 `e78c2cd` 已推送至 `codex/v1-development`，保留 Beta 远端 `release/2.1`；不是完整 V1 验收或发布 |
 | Beta 2 macOS arm64 候选 | Signed and replaced in QA; activation held | `dist/ICSTeX-2.1.0-beta.2-macos-arm64-candidate-r2/`；序号 210002；签名、真实替换和冷启动通过，原生安装互斥门槛未建立 |
 | 本机 macOS 应用 | Latest local development build installed | `/Applications/ICSTeX.app`；20260908-204029-b002533f；包含响应/预览优化、公式/表格更新及默认离线更新入口；旧应用已保留 |
 | macOS arm64 DMG/ZIP | Verified, rebuilt | hardened source；ad-hoc signed、未 notarize |
@@ -492,11 +493,12 @@
 - Windows x64 ZIP/Setup 仍未生成；不能把 ARM64 包改名或宣称为通用 Windows 包。
 - 构建机缺少 Inno Setup，因此 x64 Setup EXE 不能在未补齐构建环境时生成。
 - Windows 构建机缺少 MiKTeX/TeX Live，因此不能把 source-to-PDF 记为已验证。
-- 本轮源码同步保留既有提交历史，不使用强制推送。增量对象检查未发现私钥、常见
-  访问令牌或实际维护者目录路径；不据此宣称全历史或全面安全审计通过。
+- 本轮用户授权的源码同步保留既有提交历史，不使用强制推送。提交范围为源码、
+  测试、合成测量和文档；常见模式扫描未发现私钥、访问令牌或实际维护者目录路径。
+  不据此宣称全历史或全面安全审计通过。
 - 原始 PDF 性能截图含本机临时路径和编译日志，仅留本地；公开 JSON 测量数据与
-  复现脚本保留。此次提交采用 `[skip ci]`，未改变工作流或仓库设置；GitHub 未生成
-  产品源码提交对应的 Actions run。
+  复现脚本保留。本次 `e78c2cd` 采用 `[skip ci]`，未改变工作流或仓库设置；
+  推送后 GitHub API 查询该源码提交的 Actions run 数量为 0。
 - macOS 仅验证 Apple Silicon，且未 Developer ID 签名或 notarize。
 - 2.1 是 Beta；公式 OCR 结果必须人工检查，重要项目仍需外部版本备份。
 - 字数统计是可审计的源码级统计，不等同所有课程的提交口径；标题、说明/脚注、公式

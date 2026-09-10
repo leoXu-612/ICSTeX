@@ -3,8 +3,9 @@
 Unlike a full re-scan that re-extracts metadata on every refresh, the index
 caches ``AssetRecord`` entries keyed by relative path and reuses them while
 size/mtime are unchanged. New and modified files are the only ones that need
-metadata extraction. The index persists atomically to
-``.icstex/asset-index.json`` and is written once per refresh that changed it.
+metadata extraction. Explicit callers can load/save
+``.icstex/asset-index.json``; GUI browsing keeps this cache in memory and does
+not persist it merely because the project was opened or refreshed.
 """
 from __future__ import annotations
 
@@ -144,13 +145,13 @@ class AssetIndex:
             self._records.pop(asset_id, None)
         self._dirty = True
 
-    def image_assets(self, *, current_text: str = "") -> list[ImageAsset]:
-        references = _graphics_references(self.project_dir, current_text=current_text)
+    def image_assets(self, *, current_text: str = "", inspect_usage: bool = True) -> list[ImageAsset]:
+        references = _graphics_references(self.project_dir, current_text=current_text) if inspect_usage else []
         assets = [
             ImageAsset(
                 path=self.project_dir / record.asset_id,
                 relative_path=record.asset_id,
-                used_count=_usage_count(record.asset_id, references),
+                used_count=_usage_count(record.asset_id, references) if inspect_usage else None,
             )
             for record in self._records.values()
         ]

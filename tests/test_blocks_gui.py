@@ -307,6 +307,17 @@ class MergeDialogTests(TestCase):
     def setUp(self) -> None:
         app()
 
+    def test_incomplete_preview_cannot_be_confirmed(self):
+        from PySide6.QtWidgets import QDialogButtonBox
+        result = MergeResult(TableData(columns=[ColumnSpec("a", "A")],
+                            rows=[TableRow("r", {"a": Cell("text", "x" * 300000)})]))
+        dialog = MergeDialog(result)
+        self.assertFalse(dialog.buttons.button(QDialogButtonBox.StandardButton.Ok).isEnabled())
+        self.assertIsNone(dialog._candidate)
+        self.assertIn("无法完整显示", dialog.status.text())
+        dialog.reject()
+        dialog.deleteLater()
+
     def test_resolve_remote_and_manual(self) -> None:
         result = MergeResult(
             data=TableData(columns=[ColumnSpec(id="a", name="A")], rows=[]),
@@ -319,11 +330,55 @@ class MergeDialogTests(TestCase):
         dialog = MergeDialog(result)
         dialog._remote_buttons[0].setChecked(True)
         dialog._manual_edits[1].setText("手动值")
-
+        dialog.preview_button.click()
         dialog._resolve()
 
-        self.assertEqual(result.data.cell("r1", "a").value, "外部")
-        self.assertEqual(result.data.cell("r2", "a").value, "手动值")
+        self.assertEqual(dialog.result.data.cell("r1", "a").value, "外部")
+        self.assertEqual(dialog.result.data.cell("r2", "a").value, "手动值")
+        self.assertEqual(result.data.rows, [])
+        self.assertEqual(len(result.conflicts), 2)
+        dialog.deleteLater()
+
+    def test_same_row_conflicts_preserve_siblings_order_inputs_and_exact_manual_text(self):
+        from app.core.blocks.source_merge import merge_three_way
+        from tests.test_source_merge import table
+        base = table({"r1": {"a": "a", "b": "untouched", "c": "c"}, "r2": {"a": "last"}})
+        remote = table({"r1": {"a": "remote", "b": "untouched", "c": "remote2"}, "r2": {"a": "last"}})
+        local = table({"r1": {"a": "local", "b": "untouched", "c": "local2"}, "r2": {"a": "last"}})
+        result = merge_three_way(base, remote, local)
+        before = result.data.to_content_dict()
+        dialog = MergeDialog(result)
+        dialog._remote_buttons[0].setChecked(True)
+        dialog._manual_edits[1].setText("  exact  ")
+        dialog._resolve()
+        self.assertEqual(dialog.result.data.to_content_dict(), before)
+        dialog.preview_button.click()
+        dialog._resolve()
+        self.assertEqual([row.id for row in dialog.result.data.rows], ["r1", "r2"])
+        self.assertEqual(dialog.result.data.cell("r1", "b").value, "untouched")
+        self.assertEqual(dialog.result.data.cell("r1", "c").value, "  exact  ")
+        self.assertEqual(result.data.to_content_dict(), before)
+        dialog.deleteLater()
+
+    def test_cancel_preserves_inputs_and_whole_table_choice_is_visible(self):
+        from app.core.blocks.source_merge import merge_three_way
+        from tests.test_source_merge import table
+        base = table({"r1": {"a": "base"}})
+        local = table({"r1": {"a": "local"}})
+        remote = table({})
+        base.table_id, local.table_id, remote.table_id = "base-id", "local-id", "remote-id"
+        result = merge_three_way(base, remote, local)
+        dialog = MergeDialog(result)
+        self.assertEqual(dialog.preview_tabs.count(), 4)
+        self.assertIn('"tableId": "base-id"', dialog.preview_tabs.widget(1).toPlainText())
+        self.assertIn('"tableId": "remote-id"', dialog.preview_tabs.widget(2).toPlainText())
+        self.assertIn('"tableId": "local-id"', dialog.preview_tabs.widget(3).toPlainText())
+        dialog.table_remote_button.setChecked(True)
+        dialog.preview_button.click()
+        dialog.reject()
+        self.assertEqual(dialog.result.data.to_content_dict(), local.to_content_dict())
+        self.assertEqual(result.data.to_content_dict(), local.to_content_dict())
+        dialog.deleteLater()
 
 
 class ThemeSettingsTests(TestCase):

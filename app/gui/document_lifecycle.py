@@ -203,7 +203,7 @@ class DocumentLifecycle:
         window = self.window
         try:
             snapshot = create_snapshot(path, text, label)
-        except OSError as exc:
+        except (OSError, ValueError) as exc:
             logger.warning("历史快照保存失败：%s", exc)
             return
         current = window.current_tab()

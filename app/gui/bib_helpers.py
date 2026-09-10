@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.core.project_tools import ensure_bibliography
+from app.core.project_dependencies import read_project_source
 from app.core.text_encoding import write_latex_text_atomic
 from app.gui.main_window_support import EditorTab
 
@@ -24,11 +25,14 @@ def bib_file_for_tab(tab: EditorTab, *, create: bool = False) -> Path | None:
 
 def bib_text_for_tab(tab: EditorTab) -> str:
     bib_file = bib_file_for_tab(tab)
-    if bib_file is None or not bib_file.exists():
+    if bib_file is None:
         return ""
     try:
-        return bib_file.read_text(encoding="utf-8", errors="replace")
-    except OSError:
+        # Normalize the selected directory (e.g. macOS /var alias), not the
+        # bibliography leaf or its nested parents; those must reject links.
+        scope = tab.path.parent.resolve()
+        return read_project_source(scope / bib_file.relative_to(tab.path.parent), scope)
+    except (OSError, UnicodeError):
         return ""
 
 

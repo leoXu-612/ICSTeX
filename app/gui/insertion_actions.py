@@ -13,10 +13,12 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import QDialog, QMessageBox
+from shiboken6 import isValid
 
 from app.core.formula_input import FinalTextEditPlan, parse_document_selection
 from app.core.image_assets import copy_image_atomic
 from app.core.import_metrics import import_metrics
+from app.core.history import list_snapshots, read_snapshot
 from app.core.latex_insertions import (
     FIGURE_PACKAGES,
     HYPERLINK_PACKAGES,
@@ -530,37 +532,85 @@ class InsertionActions:
         tab = window.current_tab()
         if tab is None:
             return
-        path = Path(snapshot_path)
-        if not path.exists():
-            QMessageBox.warning(window, "快照不存在", f"找不到这个历史快照：\n{path}")
-            window.refresh_project_panels()
+        if tab.path is None or window.block_mode_action.isChecked():
+            QMessageBox.warning(window, "恢复失败", "请先选择这个文本历史所属的已保存文件；未保存内容保持不变。")
             return
-        choice = QMessageBox.question(
-            window,
-            "恢复历史版本",
-            "将这个历史版本恢复到当前编辑器？当前内容会变为未保存修改。",
-        )
-        if choice != QMessageBox.StandardButton.Yes:
-            return
+        editor, source, scope = tab.editor, tab.path, window.selected_project_scope
+        original, revision = editor.toPlainText(), editor.document().revision()
+        pending = tab.pending_compile_after_save
+        remaining = tab.save_timer.remainingTime() if tab.save_timer is not None else -1
+        window.documents.cancel_save_timer(tab)
+        applied = False
+
+        def alive():
+            return (isValid(window) and isValid(editor) and not window.readiness._closed
+                    and window.tabs.get(id(editor)) is tab and tab.editor is editor)
+
+        def unchanged():
+            return (alive() and tab.path == source and editor.document().revision() == revision
+                    and editor.toPlainText() == original)
+
         try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeError) as exc:
-            QMessageBox.warning(window, "恢复失败", str(exc))
-            return
-        tab.editor.blockSignals(True)
-        try:
-            tab.editor.setPlainText(text)
-        finally:
-            tab.editor.blockSignals(False)
-        window.apply_editor_options(tab.editor)
-        tab.modified = True
-        tab.dirty = True
-        window._mark_source_edited(tab)
-        if tab is window.current_tab():
+            path = Path(snapshot_path).expanduser().absolute()
+            records = [record for record in list_snapshots(source) if record.snapshot_path == path]
+            if not records:
+                raise ValueError("所选路径不是当前文件的登记历史；不能直接读取或应用任意文件。")
+            record = records[0]
+            text = read_snapshot(record, expected_source=source)
+            choice = QMessageBox.question(
+                window, "恢复历史版本",
+                f"文件：{source.name}\n历史时间：{record.created_at.astimezone():%Y-%m-%d %H:%M:%S}\n"
+                f"内容摘要：{record.sha256}\n\n"
+                "将这个已核验历史恢复到当前编辑器？这是一次可撤销的未保存修改，"
+                "不会保存、编译或覆盖磁盘原件；请确认后手动保存。",
+            )
+            if choice != QMessageBox.StandardButton.Yes:
+                return
+            if (not unchanged() or window.current_tab() is not tab or window.block_mode_action.isChecked()
+                    or window.selected_project_scope != scope):
+                raise ValueError("确认期间文件、编辑内容或工作区已变化；当前内容保留，未应用历史。")
+            if read_snapshot(record, expected_source=source) != text:
+                raise ValueError("确认期间历史已变化；当前内容保留。")
+            if text == original:
+                return
+            window.documents.cancel_save_timer(tab)
+            tab.pending_compile_after_save = False
+            view = window._capture_editor_view_state(editor)
+            blocked = editor.blockSignals(True)
+            try:
+                cursor = QTextCursor(editor.document())
+                cursor.beginEditBlock()
+                cursor.select(QTextCursor.SelectionType.Document)
+                cursor.insertText(text)
+                cursor.endEditBlock()
+                cursor.setPosition(min(view.cursor_position, editor.document().characterCount() - 1))
+                editor.setTextCursor(cursor)
+                editor.horizontalScrollBar().setValue(view.horizontal)
+                editor.verticalScrollBar().setValue(view.vertical)
+            finally:
+                editor.blockSignals(blocked)
+            applied = True
+            tab.modified = tab.dirty = True
+            window._mark_source_edited(tab)
+            window.word_counts.schedule()
+            window.readiness.invalidate()
+            window.citations.invalidate()
+            window.materials.invalidate()
             window._update_pdf_action_state()
-        window._set_tab_title(tab)
-        window.refresh_project_panels()
-        window.statusBar().showMessage("已恢复历史版本，请确认后保存。", 5000)
+            window._set_tab_title(tab)
+            window.project_panels.source_changed(tab)
+            window.dependencies.schedule_membership_refresh()
+            window.refresh_project_panels()
+            window.statusBar().showMessage("历史已恢复为可撤销草稿；原文件未保存，请确认后手动保存。", 6000)
+        except (OSError, ValueError) as exc:
+            if alive():
+                QMessageBox.warning(window, "恢复失败", f"历史恢复失败，当前内容已保留：\n{exc}")
+        finally:
+            # Cancel/refusal resumes only the unchanged request paused on entry;
+            # never erase a newer edit's timer or revive a closed document.
+            if not applied and unchanged() and remaining >= 0 and not tab.save_timer.isActive():
+                tab.pending_compile_after_save = pending
+                tab.save_timer.start(max(1, remaining))
 
     # --- internal helpers --------------------------------------------------
 

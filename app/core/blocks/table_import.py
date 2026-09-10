@@ -11,6 +11,8 @@ from datetime import date, datetime
 from html.parser import HTMLParser
 import html as html_lib
 import io
+import os
+import posixpath
 from pathlib import Path
 import re
 import zipfile
@@ -95,10 +97,16 @@ def _delimiter(text: str) -> str:
     return ","
 
 
-def read_csv_text(text: str, *, header_row: bool = True) -> TableData:
-    reader = csv.reader(io.StringIO(text), delimiter=_delimiter(text))
-    raw_rows = [row for row in reader if any(cell.strip() for cell in row)]
-    return _table_from_grid(raw_rows, header_row=header_row)
+def read_csv_text(text: str, *, header_row: bool = True, infer_types: bool = True) -> TableData:
+    if len(text) > MAX_SOURCE_BYTES or len(text.encode("utf-8")) > MAX_SOURCE_BYTES:
+        raise ValueError("CSV text exceeds the source byte limit.")
+    reader = csv.reader(io.StringIO(text), delimiter=_delimiter(text), strict=True)
+    raw_rows = []
+    for row in reader:
+        if len(row) > MAX_COLS or len(raw_rows) >= MAX_ROWS + int(header_row):
+            raise ValueError("CSV row/column limit exceeded; no partial table was imported.")
+        raw_rows.append(row)
+    return _table_from_grid(raw_rows, header_row=header_row, infer_types=infer_types)
 
 
 def read_csv_bytes(
@@ -138,19 +146,20 @@ def parse_clipboard_grid(text: str, *, max_rows: int, max_columns: int) -> list[
     return [row + [""] * (width - len(row)) for row in rows]
 
 
-def _table_from_grid(raw_rows: list[list[str]], *, header_row: bool) -> TableData:
+def _table_from_grid(raw_rows: list[list[str]], *, header_row: bool, infer_types: bool = True) -> TableData:
     if not raw_rows:
         return TableData()
     width = max(len(row) for row in raw_rows)
-    width = min(width, MAX_COLS)
+    if width > MAX_COLS or len(raw_rows) > MAX_ROWS + int(header_row):
+        raise ValueError("Table row/column limit exceeded; no partial table was imported.")
     if header_row:
-        header = [name.strip() or f"Col{index + 1}" for index, name in enumerate(raw_rows[0][:width])]
+        names = list(raw_rows[0]) + [""] * (width - len(raw_rows[0]))
+        header = [name.strip() or f"Col{index + 1}" for index, name in enumerate(names)]
         header = _unique_names(header)
         body = raw_rows[1:]
     else:
         header = [f"Col{index + 1}" for index in range(width)]
         body = raw_rows
-    body = body[:MAX_ROWS]
 
     columns = [
         ColumnSpec(
@@ -166,7 +175,7 @@ def _table_from_grid(raw_rows: list[list[str]], *, header_row: bool) -> TableDat
         padded = list(raw[:width])
         while len(padded) < width:
             padded.append("")
-        cells_grid.append([infer_cell(cell) for cell in padded])
+        cells_grid.append([infer_cell(cell) if infer_types else Cell("text", cell) for cell in padded])
     for column_index, column in enumerate(columns):
         values = [row[column_index] for row in cells_grid]
         inferred = column_spec_from_cells(column.id, column.name, values)
@@ -178,6 +187,9 @@ def _table_from_grid(raw_rows: list[list[str]], *, header_row: bool) -> TableDat
         )
         for index in range(len(cells_grid))
     ]
+    if header_row:
+        rows.insert(0, TableRow("row_000", {column.id: Cell("text", names[index])
+                                           for index, column in enumerate(columns)}))
     return TableData(columns=columns, rows=rows, header_row_count=1 if header_row else 0)
 
 
@@ -239,14 +251,48 @@ class SpreadsheetImportAdapter:
         max_cols: int = MAX_COLS,
         max_bytes: int = MAX_SOURCE_BYTES,
     ) -> None:
+        self._path = Path(path)
+        with self._path.open("rb") as stream:
+            before = os.fstat(stream.fileno())
+            if before.st_size > max_bytes:
+                raise ValueError(f"文件过大（>{max_bytes} 字节），已拒绝导入。")
+            self._bytes = stream.read(max_bytes + 1)
+            after = os.fstat(stream.fileno())
+        if len(self._bytes) > max_bytes or (before.st_size, before.st_mtime_ns, before.st_ctime_ns) != (
+                after.st_size, after.st_mtime_ns, after.st_ctime_ns):
+            raise ValueError("Workbook changed or exceeded the byte limit while reading.")
+        self._load_bytes(self._bytes, max_rows=max_rows, max_cols=max_cols, max_bytes=max_bytes)
+
+    @classmethod
+    def from_bytes(cls, data: bytes, *, max_rows=MAX_ROWS, max_cols=MAX_COLS, max_bytes=MAX_SOURCE_BYTES):
+        """Parse an already authorized immutable capture without reopening a path."""
+        instance = cls.__new__(cls)
+        instance._load_bytes(data, max_rows=max_rows, max_cols=max_cols, max_bytes=max_bytes)
+        return instance
+
+    def _load_bytes(self, data, *, max_rows, max_cols, max_bytes):
         import openpyxl
 
-        self._path = Path(path)
-        if self._path.stat().st_size > max_bytes:
-            raise ValueError(f"文件过大（>{max_bytes} 字节），已拒绝导入。")
-        self._workbook = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
+        if len(data) > max_bytes:
+            raise ValueError("Workbook exceeds the source byte limit.")
+        self._bytes = bytes(data)
+        with zipfile.ZipFile(io.BytesIO(self._bytes)) as archive:
+            members = archive.infolist()
+            if (len(members) > 10000 or len({item.filename for item in members}) != len(members)
+                    or sum(item.file_size for item in members) > max_bytes):
+                raise ValueError("Expanded workbook exceeds the archive limit.")
+        self._workbook = openpyxl.load_workbook(io.BytesIO(self._bytes), read_only=True, data_only=True, keep_links=False)
         self._max_rows = max_rows
         self._max_cols = max_cols
+
+    def close(self) -> None:
+        self._workbook.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        self.close()
 
     def sheet_names(self) -> list[str]:
         return list(self._workbook.sheetnames)
@@ -255,38 +301,50 @@ class SpreadsheetImportAdapter:
         if name not in self._workbook.sheetnames:
             raise ValueError(f"工作表不存在：{name}")
         sheet = self._workbook[name]
+        sheet_xml = _sheet_xml(io.BytesIO(self._bytes), name)
+        observed_row = observed_col = 0
+        cells = []
+        for row in sheet_xml.findall(f".//{{{_MAIN_NS}}}sheetData/{{{_MAIN_NS}}}row"):
+            observed_row = max(observed_row, int(row.get("r", "0")))
+            for cell in row.findall(f"{{{_MAIN_NS}}}c"):
+                reference = cell.get("r", "")
+                match = re.fullmatch(r"([A-Z]+)([1-9]\d*)", reference)
+                if match is None:
+                    raise ValueError("Worksheet cell has no explicit valid coordinate; import refused.")
+                column, number = _column_letters_to_index(match.group(1)), int(match.group(2))
+                observed_row, observed_col = max(observed_row, number), max(observed_col, column)
+                cells.append((number, column, cell))
+        min_row = min_col = 1
         if cell_range:
             min_col, min_row, max_col, max_row = _parse_range(cell_range)
-            max_row = min(max_row, self._max_rows)
-            max_col = min(max_col, self._max_cols)
-            values = list(
-                sheet.iter_rows(
-                    min_row=min_row,
-                    max_row=max_row,
-                    min_col=min_col,
-                    max_col=max_col,
-                    values_only=True,
-                )
-            )
+            if max_row - min_row + 1 > self._max_rows + int(header_row) or max_col - min_col + 1 > self._max_cols:
+                raise ValueError("Selected sheet range exceeds row/column limits; import refused.")
             merge_rows = min_row - 1
             merge_cols = min_col - 1
         else:
-            max_row = min(sheet.max_row or 0, self._max_rows)
-            max_col = min(sheet.max_column or 0, self._max_cols)
-            values = list(
-                sheet.iter_rows(min_row=1, max_row=max_row, min_col=1, max_col=max_col, values_only=True)
-            )
+            max_row = max(sheet.max_row or 0, observed_row)
+            max_col = max(sheet.max_column or 0, observed_col)
+            if max_row > self._max_rows + int(header_row) or max_col > self._max_cols:
+                raise ValueError("Worksheet exceeds row/column limits; no partial table was imported.")
             merge_rows = 0
             merge_cols = 0
-        merges = [
-            [
-                r1 - merge_rows,
-                r2 - merge_rows,
-                c1 - merge_cols,
-                c2 - merge_cols,
-            ]
-            for r1, r2, c1, c2 in _sheet_merges(self._path, name)
-        ]
+        for row, column, cell in cells:
+            if min_row <= row <= max_row and min_col <= column <= max_col:
+                cached = cell.find(f"{{{_MAIN_NS}}}v")
+                if cell.find(f"{{{_MAIN_NS}}}f") is not None and (cached is None or cached.text is None):
+                    raise ValueError("Formula has no cached value; recalculate in the spreadsheet application before import.")
+        # A dishonest/stale <dimension> must not hide actual cells. Explicit
+        # observed/range bounds above remain authoritative for this import.
+        sheet.reset_dimensions()
+        values = list(sheet.iter_rows(min_row=min_row, max_row=max_row, min_col=min_col,
+                                      max_col=max_col, values_only=True)) if max_row and max_col else []
+        merges = []
+        for r1, r2, c1, c2 in _merges_from_xml(sheet_xml):
+            if r2 < min_row - 1 or r1 >= max_row or c2 < min_col - 1 or c1 >= max_col:
+                continue
+            if r1 < min_row - 1 or r2 >= max_row or c1 < min_col - 1 or c2 >= max_col:
+                raise ValueError("Selected range cuts a merged cell; choose the complete merged region.")
+            merges.append([r1 - merge_rows, r2 - merge_rows, c1 - merge_cols, c2 - merge_cols])
         grid = [[value for value in row] for row in values]
         data = _table_from_cells(grid, header_row=header_row)
         data.merges = merges
@@ -301,7 +359,7 @@ def _parse_range(cell_range: str) -> tuple[int, int, int, int]:
     min_row = int(match.group(2))
     max_col = _column_letters_to_index(match.group(3))
     max_row = int(match.group(4))
-    if max_row < min_row or max_col < min_col:
+    if min_row < 1 or min_col < 1 or max_row < min_row or max_col < min_col:
         raise ValueError(f"范围顺序非法：{cell_range}")
     return min_col, min_row, max_col, max_row
 
@@ -315,6 +373,10 @@ def _column_letters_to_index(letters: str) -> int:
 
 def _sheet_merges(path: Path, sheet_name: str) -> list[list[int]]:
     """Read mergeCell ranges directly from the worksheet XML (bounded)."""
+    return _merges_from_xml(_sheet_xml(path, sheet_name))
+
+
+def _sheet_xml(path, sheet_name):
 
     with zipfile.ZipFile(path) as archive:
         workbook_xml = archive.read("xl/workbook.xml")
@@ -327,7 +389,7 @@ def _sheet_merges(path: Path, sheet_name: str) -> list[list[int]]:
             relationship_id = sheet.get(f"{{{_REL_NS}}}id")
             break
     if relationship_id is None:
-        return []
+        raise ValueError("Worksheet relationship is missing.")
     rel_root = ElementTree.fromstring(rels_xml)
     target: str | None = None
     for relationship in rel_root:
@@ -335,13 +397,18 @@ def _sheet_merges(path: Path, sheet_name: str) -> list[list[int]]:
             target = relationship.get("Target")
             break
     if target is None:
-        return []
-    sheet_path = target.lstrip("/")
+        raise ValueError("Worksheet archive target is missing.")
+    sheet_path = target.lstrip("/") if target.startswith("/") else posixpath.normpath(posixpath.join("xl", target))
+    if not sheet_path.startswith("xl/") or ".." in sheet_path.split("/"):
+        raise ValueError("Invalid worksheet archive relationship.")
     with zipfile.ZipFile(path) as archive:
         sheet_xml = archive.read(sheet_path)
-    sheet_root = ElementTree.fromstring(sheet_xml)
+    return ElementTree.fromstring(sheet_xml)
+
+
+def _merges_from_xml(sheet_root):
     merges: list[list[int]] = []
-    for cell in sheet_root.findall(".//m:mergeCell", namespaces):
+    for cell in sheet_root.findall(f".//{{{_MAIN_NS}}}mergeCell"):
         parsed = _parse_cell_reference(str(cell.get("ref", "")))
         if parsed is not None:
             merges.append(parsed)
@@ -353,26 +420,28 @@ def _parse_cell_reference(reference: str) -> list[int] | None:
     if match is None:
         return None
     return [
-        _column_letters_to_index(match.group(1)) - 1,
         int(match.group(2)) - 1,
-        _column_letters_to_index(match.group(3)) - 1,
         int(match.group(4)) - 1,
+        _column_letters_to_index(match.group(1)) - 1,
+        _column_letters_to_index(match.group(3)) - 1,
     ]
 
 
 def _table_from_cells(grid: list[list[object]], *, header_row: bool) -> TableData:
     if not grid:
         return TableData()
-    width = min(max(len(row) for row in grid), MAX_COLS)
+    width = max(len(row) for row in grid)
+    if width > MAX_COLS or len(grid) > MAX_ROWS + int(header_row):
+        raise ValueError("Table row/column limit exceeded; no partial table was imported.")
     if header_row:
+        header_values = list(grid[0]) + [None] * (width - len(grid[0]))
         names = _unique_names(
-            [str(cell).strip() if cell is not None else f"Col{index + 1}" for index, cell in enumerate(grid[0][:width])]
+            [str(cell).strip() if cell is not None else f"Col{index + 1}" for index, cell in enumerate(header_values)]
         )
         body = grid[1:]
     else:
         names = [f"Col{index + 1}" for index in range(width)]
         body = grid
-    body = body[:MAX_ROWS]
     columns = [ColumnSpec(id=f"col_{index + 1}", name=name) for index, name in enumerate(names)]
     cells_grid: list[list[Cell]] = []
     for raw in body:
@@ -390,4 +459,8 @@ def _table_from_cells(grid: list[list[object]], *, header_row: bool) -> TableDat
         )
         for index in range(len(cells_grid))
     ]
+    if header_row:
+        rows.insert(0, TableRow("row_000", {column.id: Cell("text", "" if header_values[index] is None
+                                                          else str(header_values[index]))
+                                           for index, column in enumerate(columns)}))
     return TableData(columns=columns, rows=rows, header_row_count=1 if header_row else 0)

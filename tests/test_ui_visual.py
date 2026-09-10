@@ -45,6 +45,75 @@ def _app() -> QApplication:
 
 
 class WorkbenchVisualSmokeTests(TestCase):
+    def test_source_repair_mapping_controls_and_cancel_remain_reachable(self):
+        from types import SimpleNamespace
+        from app.core.blocks.table_import import read_csv_text
+        from app.gui.blocks.source_repair_dialog import SourceTableMappingDialog
+        from PySide6.QtWidgets import QDialogButtonBox, QScrollArea
+        application = _app()
+        local = read_csv_text("Key,Value\nA,10\n")
+        snapshot = SimpleNamespace(local_tables={"t": local}, blocks={"t": {"alias": "合成来源表格"}})
+        dialog = SourceTableMappingDialog(None, snapshot, "t", None, None)
+        try:
+            for size in (12, 18):
+                font = dialog.font()
+                font.setPointSize(size)
+                dialog.setFont(font)
+                dialog.resize(760, 600)
+                dialog.show()
+                application.processEvents()
+                scroll = dialog.findChild(QScrollArea)
+                scroll.ensureWidgetVisible(dialog.load_button)
+                application.processEvents()
+                self.assertTrue(scroll.viewport().rect().contains(
+                    dialog.load_button.mapTo(scroll.viewport(), dialog.load_button.rect().center())))
+                self.assertTrue(dialog.rect().contains(dialog.preview_button.mapTo(dialog, dialog.preview_button.rect().center())))
+                cancel = dialog.findChild(QDialogButtonBox).button(QDialogButtonBox.StandardButton.Cancel)
+                self.assertTrue(dialog.rect().contains(cancel.mapTo(dialog, cancel.rect().center())))
+            self.assertFalse(dialog.preview_button.isEnabled())
+            dialog.encoding.setCurrentIndex(1)
+            self.assertIsNone(dialog.parsed)
+            self.assertIsNone(dialog.candidate)
+        finally:
+            dialog.close()
+            dialog.deleteLater()
+            application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_merge_preview_controls_are_reachable_and_changes_require_a_fresh_preview(self):
+        from app.core.blocks.source_merge import merge_three_way
+        from app.gui.blocks.merge_dialog import MergeDialog
+        from tests.test_source_merge import table
+        from PySide6.QtWidgets import QDialogButtonBox
+        application = _app()
+        result = merge_three_way(table({"r1": {"a": "base", "b": "keep"}}),
+                                 table({"r1": {"a": "remote", "b": "keep"}}),
+                                 table({"r1": {"a": "local", "b": "keep"}}))
+        before = result.data.to_content_dict()
+        dialog = MergeDialog(result)
+        try:
+            for point_size in (12, 18):
+                font = dialog.font()
+                font.setPointSize(point_size)
+                dialog.setFont(font)
+                dialog.resize(760, 640)
+                dialog.show()
+                application.processEvents()
+                for button in (dialog.preview_button, dialog.buttons.button(QDialogButtonBox.StandardButton.Ok)):
+                    self.assertTrue(dialog.rect().contains(button.mapTo(dialog, button.rect().center())))
+                self.assertTrue(dialog.preview.isReadOnly())
+            dialog._manual_buttons[0].setChecked(True)
+            self.assertFalse(dialog.buttons.button(QDialogButtonBox.StandardButton.Ok).isEnabled())
+            dialog.preview_button.click()
+            self.assertIn('"value": ""', dialog.preview.toPlainText())
+            dialog.buttons.button(QDialogButtonBox.StandardButton.Ok).click()
+            self.assertEqual(dialog.result.data.cell("r1", "a").value, "")
+            self.assertEqual(dialog.result.data.cell("r1", "b").value, "keep")
+            self.assertEqual(result.data.to_content_dict(), before)
+        finally:
+            dialog.close()
+            dialog.deleteLater()
+            application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
     def test_table_draft_controls_are_reachable_in_a_narrow_large_font_workspace(self):
         from app.core.blocks.registry import BlockRegistry, CreateBlockInput
         from app.core.blocks.table_model import Cell, ColumnSpec, TableData, TableRow

@@ -10,6 +10,48 @@ from app.core.project_dependencies import (
 
 
 class ProjectDependencyTests(TestCase):
+    def test_pdf_svg_and_rejected_image_candidates_are_exposed(self) -> None:
+        with TemporaryDirectory() as directory:
+            scope = Path(directory).resolve()
+            root = scope / "main.tex"
+            (scope / "plot.png").symlink_to(scope / "elsewhere.png")
+            result = static_dependencies(root, scope, {root: r"\includesvg{diagram}\includepdf{appendix}\includegraphics{plot}"})
+            self.assertIn(scope / "diagram.svg", result.paths)
+            self.assertIn(scope / "appendix.pdf", result.paths)
+            graphic = next(ref for ref in result.references if ref.command == "includegraphics")
+            self.assertTrue(graphic.rejected_candidates)
+            self.assertNotIn(scope / "plot.png", graphic.candidates)
+
+    def test_custom_reader_preserves_buffers_and_bounds_reference_expansion(self) -> None:
+        with TemporaryDirectory() as directory:
+            scope = Path(directory).resolve()
+            root, child = scope / "main.tex", scope / "child.tex"
+            calls = []
+
+            def reader(path):
+                calls.append(path)
+                if path == child:
+                    return r"\bibliography{catalog,more,extra}"
+                raise FileNotFoundError(path)
+
+            result = static_dependencies(root, scope, {root: r"\input{child}"},
+                                         source_reader=reader, max_references=2)
+            self.assertFalse(result.complete)
+            self.assertEqual(len(result.references), 2)
+            self.assertNotIn(root, calls)
+            self.assertIn(child, calls)
+            self.assertNotIn(scope / "extra.bib", result.paths)
+
+    def test_reference_limit_counts_unparsed_commands(self) -> None:
+        with TemporaryDirectory() as directory:
+            scope = Path(directory).resolve()
+            root = scope / "main.tex"
+            result = static_dependencies(root, scope, {root: r"\input\a\input\b\input\c"},
+                                         max_references=1)
+            self.assertFalse(result.complete)
+            self.assertEqual(len(result.references), 1)
+            self.assertTrue(result.references[0].unresolved)
+
     def test_static_inputs_include_unopened_missing_bib_styles_and_graphics(self) -> None:
         with TemporaryDirectory() as directory:
             scope = Path(directory).resolve()

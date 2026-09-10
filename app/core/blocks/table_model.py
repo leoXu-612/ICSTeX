@@ -156,7 +156,7 @@ class TableData:
                     issues.append(f"合并区域重叠：{a} 与 {b}")
         for column_index, column in enumerate(self.columns):
             if column.dataType == "number":
-                for row in self.rows:
+                for row in self.rows[self.header_row_count:]:
                     cell = row.cells.get(column.id)
                     if cell is not None and cell.kind == "text":
                         issues.append(f"数值列 {column.name} 包含不可解析文本：{cell.value!r}")

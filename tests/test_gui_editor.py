@@ -33,6 +33,7 @@ from app.core.formula_input import (
     parse_document_selection,
 )
 from app.core.log_parser import LaTeXError
+from app.core.history import create_snapshot
 from app.core.pdf_state import PdfFreshness
 from app.core.preview_state import PreviewFreshness
 from app.core.settings import AppSettings
@@ -331,13 +332,17 @@ class GuiEditorTests(TestCase):
             window.toolbox_dock.show()
             window.sidebar_tabs.setCurrentIndex(3)
             QApplication.processEvents()
-            with patch("app.gui.project_panel_controller.AssetIndex.scan", wraps=window.project_panels._asset_indexes[root].scan) as scan:
+            with patch("app.gui.project_panel_controller.AssetIndex.scan", wraps=window.project_panels._asset_indexes[root].scan) as scan, \
+                    patch("app.core.asset_index._graphics_references") as usage_scan:
                 tab.editor.insertPlainText("changed")
                 self.assertTrue(wait_until(lambda: not window.project_panels._timer.isActive()))
                 scan.assert_not_called()
+                usage_scan.assert_not_called()
             (root / "new.png").write_bytes(b"image")
             window.project_panels.reconcile()
             self.assertEqual(window.images_panel.table.rowCount(), 1)
+            self.assertEqual(window.images_panel.table.item(0, 2).text(), "使用待检查")
+            self.assertTrue(window.images_panel.check_detail.isReadOnly())
             tab.modified = False
             tab.dirty = False
             window.close()
@@ -1024,10 +1029,10 @@ class GuiEditorTests(TestCase):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / "main.tex"
-            snapshot = root / "snapshot.tex"
             pdf = root / "main.pdf"
             source.write_text("Current paper", encoding="utf-8")
-            snapshot.write_text("Older paper", encoding="utf-8")
+            saved_history = create_snapshot(source, "Older paper", "saved")
+            snapshot = saved_history.snapshot_path
             pdf.write_bytes(b"%PDF-1.4 current")
             window = MainWindow(settings_store=isolated_settings())
             editor = window._make_editor("Current paper")
@@ -1048,6 +1053,154 @@ class GuiEditorTests(TestCase):
             self.assertEqual(record.freshness, PdfFreshness.DIRTY)
             self.assertEqual(window.pdf_panel.freshness_label.text(), "源码已修改，PDF 待更新")
             self.assertEqual(editor.lineWrapMode(), QPlainTextEdit.LineWrapMode.WidgetWidth)
+            tab.modified = tab.dirty = False
+            window.close()
+
+    def test_history_restore_is_one_undo_and_never_saves_or_compiles(self):
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "main.tex"
+            source.write_text("saved bytes")
+            history = create_snapshot(source, "older history", "saved")
+            window = MainWindow(settings_store=isolated_settings())
+            editor = window._make_editor("unsaved current draft")
+            tab = EditorTab(editor=editor, path=source, modified=True, dirty=True)
+            window._add_tab(tab, source.name)
+            window.documents.schedule_save(tab, compile_after_save=True)
+            with patch("app.gui.insertion_actions.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes):
+                window.restore_history_snapshot(str(history.snapshot_path))
+            self.assertEqual(editor.toPlainText(), "older history")
+            self.assertTrue(editor.document().isUndoAvailable())
+            self.assertFalse(tab.save_timer.isActive())
+            self.assertFalse(tab.pending_compile_after_save)
+            self.assertEqual(source.read_text(), "saved bytes")
+            editor.undo()
+            self.assertEqual(editor.toPlainText(), "unsaved current draft")
+            editor.redo()
+            self.assertEqual(editor.toPlainText(), "older history")
+            window.documents.cancel_save_timer(tab)
+            tab.modified = tab.dirty = False
+            window.close()
+
+    def test_history_restore_rejects_unregistered_path(self):
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "main.tex"
+            source.write_text("saved bytes")
+            outside = Path(directory) / "not-history.tex"
+            outside.write_text("not a registered history")
+            window = MainWindow(settings_store=isolated_settings())
+            editor = window._make_editor("current draft")
+            tab = EditorTab(editor=editor, path=source)
+            window._add_tab(tab, source.name)
+            with patch("app.gui.insertion_actions.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes), patch(
+                    "app.gui.insertion_actions.QMessageBox.warning") as warning:
+                window.restore_history_snapshot(str(outside))
+            self.assertEqual(editor.toPlainText(), "current draft")
+            self.assertTrue(warning.called)
+            tab.modified = tab.dirty = False
+            window.close()
+
+    def test_history_confirmation_cannot_overwrite_newer_editor_or_history(self):
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "main.tex"
+            source.write_text("saved bytes")
+            history = create_snapshot(source, "older history", "saved")
+            window = MainWindow(settings_store=isolated_settings())
+            editor = window._make_editor("current draft")
+            tab = EditorTab(editor=editor, path=source)
+            window._add_tab(tab, source.name)
+            def change_editor(*_args, **_kwargs):
+                editor.setPlainText("newer input during confirmation")
+                return QMessageBox.StandardButton.Yes
+            with patch("app.gui.insertion_actions.QMessageBox.question", side_effect=change_editor), patch(
+                    "app.gui.insertion_actions.QMessageBox.warning"):
+                window.restore_history_snapshot(str(history.snapshot_path))
+            self.assertEqual(editor.toPlainText(), "newer input during confirmation")
+            window.documents.cancel_save_timer(tab)
+            def change_history(*_args, **_kwargs):
+                history.snapshot_path.write_text("changed valid UTF-8 history")
+                return QMessageBox.StandardButton.Yes
+            with patch("app.gui.insertion_actions.QMessageBox.question", side_effect=change_history), patch(
+                    "app.gui.insertion_actions.QMessageBox.warning"):
+                window.restore_history_snapshot(str(history.snapshot_path))
+            self.assertEqual(editor.toPlainText(), "newer input during confirmation")
+            self.assertEqual(source.read_text(), "saved bytes")
+            tab.modified = tab.dirty = False
+            window.close()
+
+    def test_history_cancel_preserves_draft_undo_and_paused_save_request(self):
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "main.tex"
+            source.write_text("disk original")
+            history = create_snapshot(source, "older history", "saved")
+            window = MainWindow(settings_store=isolated_settings())
+            editor = window._make_editor("draft")
+            tab = EditorTab(editor=editor, path=source, modified=True, dirty=True)
+            window._add_tab(tab, source.name)
+            editor.moveCursor(QTextCursor.MoveOperation.End)
+            editor.insertPlainText(" plus edit")
+            def cancel(*_args, **_kwargs):
+                self.assertFalse(tab.save_timer.isActive())
+                self.assertEqual(source.read_text(), "disk original")
+                return QMessageBox.StandardButton.No
+            with patch("app.gui.insertion_actions.QMessageBox.question", side_effect=cancel):
+                window.restore_history_snapshot(str(history.snapshot_path))
+            self.assertEqual(editor.toPlainText(), "draft plus edit")
+            self.assertTrue(tab.save_timer.isActive())
+            editor.undo()
+            self.assertEqual(editor.toPlainText(), "draft")
+            window.documents.cancel_save_timer(tab)
+            tab.modified = tab.dirty = False
+            window.close()
+
+    def test_history_confirmation_rejects_tab_switch_and_window_close(self):
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "main.tex"
+            source.write_text("disk original")
+            history = create_snapshot(source, "older history", "saved")
+            window = MainWindow(settings_store=isolated_settings())
+            editor = window._make_editor("first draft")
+            tab = EditorTab(editor=editor, path=source)
+            window._add_tab(tab, source.name)
+            other = EditorTab(editor=window._make_editor("other draft"))
+            window._add_tab(other, "other")
+            window.editor_tabs.setCurrentWidget(editor)
+            def switch(*_args, **_kwargs):
+                window.editor_tabs.setCurrentWidget(other.editor)
+                return QMessageBox.StandardButton.Yes
+            with patch("app.gui.insertion_actions.QMessageBox.question", side_effect=switch), patch(
+                    "app.gui.insertion_actions.QMessageBox.warning"):
+                window.restore_history_snapshot(str(history.snapshot_path))
+            self.assertEqual(editor.toPlainText(), "first draft")
+            self.assertEqual(other.editor.toPlainText(), "other draft")
+            window.editor_tabs.setCurrentWidget(editor)
+            def close(*_args, **_kwargs):
+                window.close()
+                return QMessageBox.StandardButton.Yes
+            with patch("app.gui.insertion_actions.QMessageBox.question", side_effect=close), patch(
+                    "app.gui.insertion_actions.QMessageBox.warning") as warning:
+                window.restore_history_snapshot(str(history.snapshot_path))
+            self.assertFalse(warning.called)
+            self.assertEqual(editor.toPlainText(), "first draft")
+            self.assertEqual(source.read_text(), "disk original")
+
+    def test_history_index_error_is_visible_and_does_not_break_source_save(self):
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "main.tex"
+            source.write_text("disk original")
+            history = create_snapshot(source, "older history", "saved")
+            manifest = history.snapshot_path.parent / "manifest.json"
+            manifest.write_bytes(b"malformed index")
+            window = MainWindow(settings_store=isolated_settings())
+            editor = window._make_editor("new saved source")
+            tab = EditorTab(editor=editor, path=source)
+            window._add_tab(tab, source.name)
+            window.refresh_project_panels()
+            self.assertIn("历史不可用", window.history_panel.status_label.text())
+            self.assertFalse(window.history_panel.restore_button.isEnabled())
+            with patch.object(window, "_watch_file"), patch.object(window, "create_compile_manager", return_value=None):
+                self.assertTrue(window.documents.save_tab(tab, source))
+            self.assertEqual(source.read_text(), "new saved source")
+            self.assertEqual(manifest.read_bytes(), b"malformed index")
             tab.modified = tab.dirty = False
             window.close()
 
@@ -2386,6 +2539,10 @@ class GuiEditorTests(TestCase):
 
             self.assertEqual(window.labels_panel.table.item(0, 0).text(), "sec:intro")
             self.assertEqual(window.references_panel.table.item(0, 0).text(), "Storm2024")
+            self.assertTrue(window.references_panel.check_detail.isReadOnly())
+            self.assertEqual(window.references_panel.health_table.editTriggers(),
+                             QAbstractItemView.EditTrigger.NoEditTriggers)
+            self.assertIn("快捷库", window.references_panel.status_label.text())
             self.assertEqual(window.outline_panel.table.item(0, 0).text(), "Intro")
             self.assertEqual(window.images_panel.table.item(0, 0).text(), "plot.png")
             self.assertEqual(editor._completion_labels, ["sec:intro"])
@@ -3164,6 +3321,61 @@ class FormulaComposerTests(TestCase):
     def setUp(self) -> None:
         app()
 
+    def test_visual_replacement_cannot_apply_an_ambiguous_new_envelope(self):
+        dialog = FormulaDialog(None, "Before $x$ after", 7, 10)
+        self.addCleanup(dialog.deleteLater)
+        dialog.visual_edit.type_key("$")
+        self.assertIsNone(dialog.build_plan())
+        self.assertFalse(dialog._ok_button.isEnabled())
+        with patch.object(QMessageBox, "warning") as warning:
+            dialog._on_apply()
+        warning.assert_called_once()
+        self.assertIsNone(dialog.plan())
+        self.assertFalse(dialog._submitted)
+        dialog.visual_edit.undo()
+        self.assertEqual(dialog.build_plan().text, "$x$")
+        self.assertTrue(dialog._ok_button.isEnabled())
+        dialog.reject()
+
+    def test_unknown_formula_source_survives_failed_visual_switch_and_cancel(self):
+        body = "\n  " + r"\studentMacro{a}{b} + x_1^2 + \unknown^{2} % keep $ \)" + "\n\t"
+        seed = "\\(" + body + "\\)"
+        document = "Before " + seed + " after"
+        dialog = FormulaDialog(None, document, 7, 7 + len(seed))
+        self.addCleanup(dialog.deleteLater)
+        self.assertTrue(dialog.source_mode_check.isChecked())
+        cursor = dialog.source_edit.textCursor()
+        cursor.setPosition(len(seed) - 2)
+        dialog.source_edit.setTextCursor(cursor)
+        dialog.source_edit.insertPlainText("+z")
+        draft = seed[:-2] + "+z" + seed[-2:]
+        dialog.source_mode_check.setChecked(False)
+        self.assertTrue(dialog.source_mode_check.isChecked())
+        self.assertEqual(dialog.source_edit.toPlainText(), draft)
+        self.assertEqual(dialog.build_plan().text, draft)
+        dialog.undo_button.click()
+        self.assertEqual(dialog.source_edit.toPlainText(), seed)
+        self.assertEqual(dialog.build_plan().text, seed)
+        dialog.reject()
+        self.assertIsNone(dialog.plan())
+        self.assertEqual(dialog._document_text, document)
+
+    def test_visual_paste_preserves_comment_newlines_unknown_macro_and_undo(self):
+        dialog = FormulaDialog(None, "Before $x$ after", 7, 10)
+        self.addCleanup(dialog.deleteLater)
+        pasted = "\n + " + r"\studentMacro{a}{b} % keep $ \)" + "\n\t + z\n"
+        dialog.visual_edit.paste_clipboard("\\(" + pasted + "\\)")
+        self.assertEqual(dialog.visual_edit.latex(), "x" + pasted)
+        self.assertEqual(dialog.build_plan().text, "$x" + pasted + "$")
+        self.assertEqual(dialog.preview_edit.toPlainText(), "$x" + pasted + "$")
+        dialog.source_mode_check.setChecked(True)
+        self.assertEqual(dialog.source_edit.toPlainText(), "$x" + pasted + "$")
+        dialog.source_mode_check.setChecked(False)
+        dialog.undo_button.click()
+        self.assertEqual(dialog.build_plan().text, "$x$")
+        dialog.reject()
+        self.assertIsNone(dialog.plan())
+
     def test_physical_typing_undo_and_paste_refresh_source_preview(self):
         from PySide6.QtTest import QTest
         dialog = FormulaDialog(None, "", 0, 0, seed_text="$x$")
@@ -3679,7 +3891,7 @@ class FormulaComposerTests(TestCase):
         self.assertEqual(editor.toPlainText(), source)
         self._close(window, tab)
 
-    def test_images_refresh_uses_incremental_index(self) -> None:
+    def test_images_refresh_reuses_memory_index_without_project_cache_writes(self) -> None:
         with TemporaryDirectory() as directory:
             root = Path(directory)
             figures = root / "figures"
@@ -3690,21 +3902,41 @@ class FormulaComposerTests(TestCase):
                 "\\documentclass{article}\n\\begin{document}\n\\end{document}\n",
                 encoding="utf-8",
             )
+            before = {path.relative_to(root): path.read_bytes() for path in root.rglob("*") if path.is_file()}
             window = MainWindow(settings_store=isolated_settings())
             window.auto_compile_action.setChecked(False)
             editor = window._make_editor(source.read_text(encoding="utf-8"))
             tab = EditorTab(editor=editor, path=source)
-            window._add_tab(tab, source.name)
-
-            window.refresh_project_panels()
-            self.assertEqual(window.images_panel.table.rowCount(), 1)
-            self.assertTrue((root / ".icstex" / "asset-index.json").exists())
-
-            window.refresh_project_panels()
-            self.assertEqual(window.images_panel.table.rowCount(), 1)
-            tab.modified = False
-            tab.dirty = False
-            window.close()
+            try:
+                with patch("app.gui.project_panel_controller._read_image_size", return_value=(120, 60)) as metadata, \
+                        patch("app.gui.project_panel_controller.import_metrics.record_index_scan") as scans, \
+                        patch("app.core.asset_index.AssetIndex.load") as load, \
+                        patch("app.core.asset_index.AssetIndex.save") as save:
+                    window._add_tab(tab, source.name)
+                    window.refresh_project_panels()
+                    self.assertEqual(window.images_panel.table.rowCount(), 1)
+                    index = next(iter(window.project_panels._asset_indexes.values()))
+                    record = index._records["figures/a.png"]
+                    window.refresh_project_panels()
+                    self.assertIs(next(iter(window.project_panels._asset_indexes.values())), index)
+                    self.assertIs(index._records["figures/a.png"], record)
+                    self.assertEqual(window.images_panel.table.rowCount(), 1)
+                    self.assertIn("使用待检查", window.images_panel.table.item(0, 2).text())
+                    metadata.assert_called_once()
+                    load.assert_not_called()
+                    save.assert_not_called()
+                    self.assertGreaterEqual(scans.call_count, 2)
+                    self.assertTrue(scans.call_args_list[0].kwargs["full"])
+                    self.assertTrue(all(not call.kwargs["full"] for call in scans.call_args_list[1:]))
+                self.assertEqual(before, {path.relative_to(root): path.read_bytes()
+                                          for path in root.rglob("*") if path.is_file()})
+                self.assertFalse((root / ".icstex" / "asset-index.json").exists())
+                self.assertFalse(window.compile_authorized_roots)
+            finally:
+                tab.modified = tab.dirty = False
+                window.close()
+                window.deleteLater()
+                QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
     def test_import_perf_dialog_shows_summaries(self) -> None:
         from app.core.import_metrics import import_metrics

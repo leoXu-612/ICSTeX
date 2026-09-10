@@ -66,6 +66,8 @@ from app.gui.project_file_controller import ProjectFileController
 from app.gui.project_panel_controller import ProjectPanelController
 from app.gui.dependency_controller import DependencyController
 from app.gui.submission_check_controller import SubmissionCheckController
+from app.gui.citation_health_controller import CitationHealthController
+from app.gui.material_usage_controller import MaterialUsageController
 from app.gui.latex_editor import LaTeXEditor
 from app.gui.log_bridge import QtLogBridge
 from app.gui.main_window_layout import build_ui
@@ -162,6 +164,8 @@ class MainWindow(QMainWindow):
 
         self._build_ui()
         self.readiness = SubmissionCheckController(self)
+        self.citations = CitationHealthController(self)
+        self.materials = MaterialUsageController(self)
         self.workspace = WorkspaceController(self)
         self.project_files.install_drop_targets()
         app = QApplication.instance()
@@ -1074,6 +1078,8 @@ class MainWindow(QMainWindow):
         self.tab_manager.handle_close_event(event)
         if event.isAccepted():
             self.readiness.shutdown()
+            self.citations.shutdown()
+            self.materials.shutdown()
             self.app_settings.settings.setValue("window/block_console_state", self.saveState())
             _unregister_app_window(self)
 
@@ -1136,6 +1142,8 @@ class MainWindow(QMainWindow):
         self._mark_source_edited(tab)
         self.word_counts.schedule()
         self.readiness.invalidate()
+        self.citations.invalidate()
+        self.materials.invalidate()
         if tab is self.current_tab():
             self._update_pdf_action_state()
         self._set_tab_title(tab)

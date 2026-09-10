@@ -351,17 +351,21 @@ class BlockWorkspaceWidget(QWidget):
     def _build_sync_tab(self) -> QWidget:
         widget = QWidget()
         box = QVBoxLayout(widget)
-        count = len(self.merge_result.conflicts) if self.merge_result else 0
-        label = QLabel(f"冲突 {count} 处")
+        count = (len(self.merge_result.conflicts) + int(self.merge_result.table_conflict is not None)) if self.merge_result else 0
+        label = QLabel(f"待确认候选：冲突 {count} 处；尚未应用到项目。" if self.merge_result else
+                       "尚无绑定来源基线的合并候选；来源状态检查不会修改表格。")
+        label.setWordWrap(True)
         box.addWidget(label)
-        resolve = QPushButton("解决冲突…")
+        resolve = QPushButton("预览合并候选…")
+        resolve.setEnabled(self.merge_result is not None)
 
         def open_resolver() -> None:
             if self.merge_result is None:
                 return
             dialog = MergeDialog(self.merge_result, self)
             if dialog.exec() == QDialog.DialogCode.Accepted:
-                label.setText("已解决；剩余冲突 0 处")
+                self.merge_result = dialog.result
+                label.setText("候选已确认；尚未应用到项目、保存或推进来源基线。")
 
         resolve.clicked.connect(open_resolver)
         box.addWidget(resolve)

@@ -133,11 +133,20 @@ class TableDataTests(TestCase):
         self.assertTrue(any("重叠" in issue for issue in issues))
 
     def test_numeric_column_text_warning(self) -> None:
-        data = TableData(columns=[ColumnSpec(id="c1", name="C1", dataType="number")], rows=[])
+        data = TableData(columns=[ColumnSpec(id="c1", name="C1", dataType="number")], rows=[], header_row_count=0)
         data.rows.append(
             TableRow(
                 id="r1",
                 cells={"c1": Cell(kind="text", value="abc")},
             )
         )
+        self.assertTrue(any("不可解析文本" in issue for issue in data.validate()))
+
+    def test_numeric_header_text_is_allowed_but_body_text_still_warns(self):
+        data = TableData(columns=[ColumnSpec("c1", "Quantity", dataType="number")], rows=[
+            TableRow("header", {"c1": Cell("text", "Quantity")}),
+            TableRow("body", {"c1": Cell("number", 0)}),
+        ], header_row_count=1)
+        self.assertEqual(data.validate(), [])
+        data.rows[1].cells["c1"] = Cell("text", "bad numeric body")
         self.assertTrue(any("不可解析文本" in issue for issue in data.validate()))

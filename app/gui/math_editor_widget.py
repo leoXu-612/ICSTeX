@@ -356,24 +356,15 @@ class MathEditorWidget(QWidget):
         A pasted text that is exactly one supported formula wrapper (``$...$``,
         ``\\(...\\)``, ``\\[...\\]``, equation, equation*) is inserted with its
         wrapper stripped: the dialog's formula mode owns the outer wrapper.
-        Unsupported or malformed content is preserved losslessly through the
-        math parser. Newlines and tabs are collapsed to spaces (mathematics
-        ignores whitespace, and the visual editor renders single-line).
+        Preserve body whitespace and comment newlines: TeX does not generally
+        ignore them. A projection that cannot round-trip stays as literal text;
+        the dialog's normal source editor remains available for editing it.
         """
 
         if not text:
             return
-        cleaned = (
-            text.replace("\r\n", " ")
-            .replace("\r", " ")
-            .replace("\n", " ")
-            .replace("\t", " ")
-            .strip()
-        )
-        if not cleaned:
-            return
-        envelope = recognize_formula(cleaned)
-        body = envelope.body if envelope is not None else cleaned
+        envelope = recognize_formula(text)
+        body = envelope.body if envelope is not None else text
 
         if self.anchor is not None:
             self._delete_selection()  # pushes history
@@ -384,6 +375,8 @@ class MathEditorWidget(QWidget):
         boundary = self._boundary_at(slot, boundary_index)
         insert_index = self._split_text_at(slot, boundary)
         parsed = parse_math_latex(body)
+        if latex_of(parsed) != body:
+            parsed = MathSequence(items=[Text(body)])
         slot.items[insert_index:insert_index] = parsed.items
         if parsed.items:
             last_index = insert_index + len(parsed.items) - 1

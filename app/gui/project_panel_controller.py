@@ -48,7 +48,7 @@ def _read_image_size(path: Path) -> tuple[int | None, int | None]:
 
 class ProjectPanelController:
     _ALL = frozenset({"outline", "assets", "image_usage", "history", "labels", "references", "completion"})
-    _TEXT = frozenset({"outline", "image_usage", "labels", "references", "completion"})
+    _TEXT = frozenset({"outline", "labels", "references", "completion"})
     _PANEL_DOMAINS = {
         1: {"outline"}, 3: {"assets", "image_usage"}, 4: {"history"},
         7: {"references"}, 8: {"labels"},
@@ -242,6 +242,10 @@ class ProjectPanelController:
         self._reconcile_timer.stop()
 
     def _refresh_domains(self, domains: set[str]) -> None:
+        # Explicit read-only usage checking must not race an inventory/cache
+        # refresh, and typing must not scan every on-disk source for old counts.
+        if self.window.images_panel.material_tabs.currentIndex() == 1:
+            domains = domains - {"assets", "image_usage"}
         if not domains:
             return
         window = self.window
@@ -271,22 +275,24 @@ class ProjectPanelController:
         if tab.path and domains & {"assets", "image_usage"}:
             scope = window.selected_project_scope or tab.path.parent
             index = self._asset_indexes.get(scope)
+            cold_index = index is None
             if index is None:
                 index = AssetIndex(scope)
-                index.load()
                 if len(self._asset_indexes) >= 8:
                     self._asset_indexes.pop(next(iter(self._asset_indexes)))
                 self._asset_indexes[scope] = index
                 domains.add("assets")
             if "assets" in domains:
-                import_metrics.record_index_scan(full=not index.was_cached)
+                import_metrics.record_index_scan(full=cold_index)
                 index.scan(read_metadata=_read_image_size)
-                index.save()
-            window.images_panel.set_assets(index.image_assets(current_text=tex_text))
+            window.images_panel.set_assets(index.image_assets(inspect_usage=False))
         elif domains & {"assets", "image_usage"}:
             window.images_panel.set_assets([])
         if tab.path and "history" in domains:
-            window.history_panel.set_snapshots(list_snapshots(tab.path))
+            try:
+                window.history_panel.set_snapshots(list_snapshots(tab.path))
+            except (OSError, ValueError) as exc:
+                window.history_panel.set_snapshots([], error=str(exc))
         elif "history" in domains:
             window.history_panel.set_snapshots([])
         if "labels" in domains:

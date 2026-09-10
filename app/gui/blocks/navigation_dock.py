@@ -7,14 +7,16 @@ from pathlib import Path
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from app.core.blocks.model import BLOCK_TYPES
 from app.core.blocks.asset_import import import_image, is_image_path
-from app.core.blocks.source_registry import SourceRecord, check_source
+from app.core.blocks.source_registry import SourceCheckLimits
 from app.gui.blocks.project_session import ProjectSession
+from app.gui.blocks.source_status import SourceStatusController
 from app.gui.blocks.workspace_controller import BlockWorkspaceController
 from app.gui.insert_panel import scrollable_panel
 from app.gui.responsive.helpers import ButtonFlowLayout, configure_tab_bar
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QComboBox,
+    QHeaderView,
     QInputDialog,
     QLabel,
     QLineEdit,
@@ -23,6 +25,7 @@ from PySide6.QtWidgets import (
     QMenu,
     QMessageBox,
     QPushButton,
+    QPlainTextEdit,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
@@ -61,12 +64,12 @@ class BlockNavigationWidget(QWidget):
         # --- Blocks tab ---------------------------------------------------
         self.search_edit = QLineEdit()
         self.search_edit.setPlaceholderText("搜索 Block…")
-        self.search_edit.textChanged.connect(self.refresh)
+        self.search_edit.textChanged.connect(self._refresh_blocks)
         self.type_filter = QComboBox()
         self.type_filter.addItem("全部类型", None)
         for block_type in BLOCK_TYPES:
             self.type_filter.addItem(block_type, block_type)
-        self.type_filter.currentIndexChanged.connect(self.refresh)
+        self.type_filter.currentIndexChanged.connect(self._refresh_blocks)
 
         self.block_list = QListWidget()
         self.block_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
@@ -121,26 +124,51 @@ class BlockNavigationWidget(QWidget):
         layout_tab_layout.addLayout(layout_buttons)
 
         # --- Sources tab --------------------------------------------------
-        self.sources_table = QTableWidget(0, 3)
-        self.sources_table.setHorizontalHeaderLabels(["源", "状态", "相对路径"])
+        self.source_status = SourceStatusController(session, self)
+        self.sources_table = QTableWidget(0, 4)
+        self.sources_table.setHorizontalHeaderLabels(["来源", "快照状态", "记录路径", "关联 Block"])
         self.sources_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.sources_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self.sources_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.sources_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        self.sources_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self.sources_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         self.sources_table.cellDoubleClicked.connect(self._on_source_activated)
+        self.sources_table.itemSelectionChanged.connect(self._show_source_details)
+        self.sources_summary = QLabel()
+        self.sources_summary.setWordWrap(True)
         self.refresh_sources_button = QPushButton("刷新状态")
-        self.refresh_sources_button.clicked.connect(self.refresh)
-        self.resync_button = QPushButton("重新同步")
-        self.resync_button.clicked.connect(self._resync_selected_source)
+        self.refresh_sources_button.clicked.connect(self.source_status.request)
+        self.cancel_sources_button = QPushButton("取消检查")
+        self.cancel_sources_button.clicked.connect(self.source_status.cancel)
         sources_buttons = ButtonFlowLayout()
         sources_buttons.addWidget(self.refresh_sources_button)
-        sources_buttons.addWidget(self.resync_button)
+        sources_buttons.addWidget(self.cancel_sources_button)
+        self.repair_source_button = QPushButton("比较并合并来源…")
+        self.repair_source_button.clicked.connect(self._repair_source)
+        sources_buttons.addWidget(self.repair_source_button)
+        self.source_details = QPlainTextEdit()
+        self.source_details.setReadOnly(True)
+        self.source_details.setMinimumHeight(100)
+        self.affected_blocks = QListWidget()
+        self.affected_blocks.itemActivated.connect(self._locate_source_block)
+        self.locate_source_block_button = QPushButton("定位所选关联 Block")
+        self.locate_source_block_button.clicked.connect(self._locate_source_block)
         sources_tab = QWidget()
         sources_layout = QVBoxLayout(sources_tab)
+        sources_layout.addWidget(self.sources_summary)
         sources_layout.addWidget(self.sources_table)
         sources_layout.addLayout(sources_buttons)
+        sources_layout.addWidget(self.source_details)
+        sources_layout.addWidget(QLabel("关联 Block（文件关系不证明数据真实）："))
+        sources_layout.addWidget(self.affected_blocks)
+        sources_layout.addWidget(self.locate_source_block_button)
+        self.source_status.changed.connect(self._refresh_sources)
 
         self.tabs = QTabWidget()
         self.tabs.addTab(scrollable_panel(blocks_tab), "Blocks")
         self.tabs.addTab(scrollable_panel(layout_tab), "Layout")
-        self.tabs.addTab(scrollable_panel(sources_tab), "Sources")
+        self.tabs.addTab(scrollable_panel(sources_tab), "来源")
         configure_tab_bar(self.tabs)
         outer = QVBoxLayout(self)
         outer.addWidget(self.tabs)
@@ -217,7 +245,7 @@ class BlockNavigationWidget(QWidget):
         self._refresh_layout()
         self._refresh_sources()
 
-    def _refresh_blocks(self) -> None:
+    def _refresh_blocks(self, *_args) -> None:
         query = self.search_edit.text().strip().lower()
         filter_type = self.type_filter.currentData()
         used = _slot_block_ids(self.session.layout)
@@ -258,16 +286,96 @@ class BlockNavigationWidget(QWidget):
         return item
 
     def _refresh_sources(self) -> None:
+        selected = self._selected_source_id()
+        self.sources_table.blockSignals(True)
         self.sources_table.setRowCount(0)
-        if self.session.project_dir is None:
-            return
-        for record in self.session.sources:
-            status = check_source(self.session.project_dir, record)
-            row = self.sources_table.rowCount()
+        results = self.source_status.results
+        usage = {}
+        for block in self.session.registry.blocks():
+            source_id = block.provenance.sourceId
+            usage[source_id] = usage.get(source_id, 0) + 1
+        for row, record in enumerate(self.session.sources):
+            status = results[row] if row < len(results) else None
             self.sources_table.insertRow(row)
             self.sources_table.setItem(row, 0, QTableWidgetItem(record.sourceId))
-            self.sources_table.setItem(row, 1, QTableWidgetItem(status.state))
-            self.sources_table.setItem(row, 2, QTableWidgetItem(status.relativePath))
+            label = self._source_state_label(status.state) if status else "未知 / 待检查"
+            self.sources_table.setItem(row, 1, QTableWidgetItem(label))
+            self.sources_table.setItem(row, 2, QTableWidgetItem(record.relativePath))
+            self.sources_table.setItem(row, 3, QTableWidgetItem(str(usage.get(record.sourceId, 0))))
+            if selected == record.sourceId:
+                self.sources_table.selectRow(row)
+        self.sources_table.blockSignals(False)
+        self.sources_summary.setText(self.source_status.message)
+        self.cancel_sources_button.setEnabled(self.source_status.is_busy and not self.session._closed)
+        self.refresh_sources_button.setEnabled(self.session.project_dir is not None and not self.session._closed)
+        self._show_source_details()
+
+    @staticmethod
+    def _source_state_label(state):
+        return {"ok": "与基线一致", "changed": "内容已变化", "missing": "记录路径缺失",
+                "moved": "可能移动 / 同内容候选", "unsafe": "路径不安全", "unknown": "未知"}.get(state, "未知")
+
+    def _selected_source_id(self):
+        row = self.sources_table.currentRow()
+        item = self.sources_table.item(row, 0)
+        return item.text() if item is not None else None
+
+    def _source_blocks(self, source_id):
+        return [block for block in self.session.registry.blocks() if block.provenance.sourceId == source_id]
+
+    def _show_source_details(self):
+        self.affected_blocks.clear()
+        self.locate_source_block_button.setEnabled(False)
+        source_id = self._selected_source_id()
+        self.repair_source_button.setEnabled(source_id is not None and not self.session._closed)
+        index = next((i for i, record in enumerate(self.session.sources) if record.sourceId == source_id), None)
+        if index is None:
+            self.source_details.setPlainText("选择来源查看记录路径、摘要及关联对象；不会自动同步或修改数据。")
+            return
+        record = self.session.sources[index]
+        results = self.source_status.results
+        status = results[index] if index < len(results) else None
+        limits = SourceCheckLimits()
+        lines = [f"来源：{record.sourceId} ({record.kind})", f"记录路径：{record.relativePath}",
+                 f"基线 SHA-256：{record.baseSha256}",
+                 f"检查 SHA-256：{status.currentSha256 if status and status.currentSha256 else '未知'}",
+                 f"状态：{self._source_state_label(status.state) if status else '待检查'}",
+                 status.message if status else self.source_status.message]
+        if status and status.relativePath != record.relativePath:
+            lines.append(f"同内容候选：{status.relativePath}（未更新记录路径）")
+        lines.extend(["仅比较磁盘文件和记录基线，不与表格编辑内容合并；检查记录不是冻结备份。",
+                      "缺失候选仅查同扩展名 CSV/XLSX；排除链接、隐藏/内部目录、构建与依赖缓存。",
+                      f"上限：{limits.max_records} 条来源、{limits.max_entries} 个目录条目、"
+                      f"单文件 {limits.max_file_bytes // (1024 * 1024)} MiB、"
+                      f"累计 {limits.max_total_bytes // (1024 * 1024)} MiB；超限或读取失败为未知。"])
+        self.source_details.setPlainText("\n".join(lines))
+        for block in self._source_blocks(source_id):
+            item = QListWidgetItem(f"{block.alias or block.id} · {block.type} · {block.id}")
+            item.setData(Qt.ItemDataRole.UserRole, block.id)
+            self.affected_blocks.addItem(item)
+        if self.affected_blocks.count():
+            self.affected_blocks.setCurrentRow(0)
+            self.locate_source_block_button.setEnabled(not self.session._closed)
+
+    def _locate_source_block(self, *_args):
+        item = self.affected_blocks.currentItem()
+        if item is None or self.session._closed:
+            return
+        block_id = item.data(Qt.ItemDataRole.UserRole)
+        block = self.session.registry.get(block_id)
+        if block is None or block.provenance.sourceId != self._selected_source_id():
+            self._show_source_details()
+            return
+        self.session.selection.select_block(block_id, source="source-status")
+        self.block_selected.emit(block_id)
+
+    def _repair_source(self):
+        source_id = self._selected_source_id()
+        if source_id is None or self.session._closed:
+            return
+        from app.gui.blocks.source_repair_dialog import run_source_repair
+        if run_source_repair(self, self.session, source_id):
+            self.sources_summary.setText("合并已应用到项目；一次全局 Undo 可撤销。保存状态见工作区；原始数据未改写。")
 
     # --- block actions ----------------------------------------------------
     def _selected_block_ids(self) -> list[str]:
@@ -348,39 +456,13 @@ class BlockNavigationWidget(QWidget):
 
     # --- sources ----------------------------------------------------------
     def _on_source_activated(self, row: int, _column: int) -> None:
-        source_id = self.sources_table.item(row, 0).text()
+        item = self.sources_table.item(row, 0)
+        if item is None or self.session._closed:
+            return
+        source_id = item.text()
         self.session.selection.select_source(source_id, source="navigation")
         self.source_selected.emit(source_id)
-
-    def _resync_selected_source(self) -> None:
-        if self.session.project_dir is None:
-            return
-        selected = self.sources_table.selectedItems()
-        if not selected:
-            return
-        row = selected[0].row()
-        source_id = self.sources_table.item(row, 0).text()
-        record = next((s for s in self.session.sources if s.sourceId == source_id), None)
-        if record is None:
-            return
-        from app.core.blocks.source_registry import hash_file, resolve_source_path
-
-        try:
-            path = resolve_source_path(self.session.project_dir, record)
-        except ValueError:
-            return
-        if not path.is_file():
-            return
-        updated = SourceRecord(
-            sourceId=record.sourceId,
-            kind=record.kind,
-            relativePath=record.relativePath,
-            baseSha256=hash_file(path),
-            createdAt=record.createdAt,
-        )
-        self.session.sources = [updated if s.sourceId == source_id else s for s in self.session.sources]
-        self.session.request_save("source_resynced")
-        self.refresh()
+        self._show_source_details()
 
     # --- session selection sync -------------------------------------------
     def _on_session_selection(self, context, source: str) -> None:

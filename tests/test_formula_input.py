@@ -356,6 +356,25 @@ class TemplateTests(TestCase):
 
 
 class FinalEditPlanTests(TestCase):
+    def test_replacement_rejects_malformed_new_draft_for_every_wrapper(self) -> None:
+        document = "Before $x$ after"
+        for mode in FormulaMode:
+            for body in ("a$b", "x % closing delimiter is commented out", r"x\)y", r"\begin{equation}x"):
+                with self.subTest(mode=mode, body=body):
+                    self.assertIsNone(final_edit_plan(document, 7, 10, FormulaDraft(mode=mode, body=body)))
+        self.assertIsNone(final_edit_plan(document, 7, 10,
+                                         FormulaDraft(mode=FormulaMode.INLINE_DOLLAR, body="")))
+
+    def test_replacement_preserves_unknown_macros_comments_and_body_whitespace(self) -> None:
+        body = "\n  " + r"\studentMacro{a}{b} + \unknown^{2} % keep $ \)" + "\n\t"
+        document = "Before $x$ after"
+        for mode in FormulaMode:
+            with self.subTest(mode=mode):
+                plan = final_edit_plan(document, 7, 10, FormulaDraft(mode=mode, body=body))
+                self.assertIsNotNone(plan)
+                self.assertEqual(plan.source_text, "$x$")
+                self.assertEqual(plan.text, mode.wrapper_prefix + body + mode.wrapper_suffix)
+
     def test_plan_replaces_valid_selection(self) -> None:
         document = "x $a+b$ y"
         start = document.index("$")

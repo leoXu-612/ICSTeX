@@ -79,6 +79,51 @@ Live cell input is included in Save/close decisions, and a changed formula targe
 retains accepted text without overwriting the newer model. Focused/native checks
 and full regression pass. These changes are not complete editor
 acceptance; see [secondary-editor evidence and limits](docs/v1-m2-editor-target-verification-2026-09-11.md).
+The latest local continuation also checks the new formula envelope before replacing
+a selection, and retains pasted comment newlines and body whitespace. Invalid
+drafts remain editable instead of being applied. See
+[formula source-fidelity verification](docs/v1-m2-formula-fidelity-verification-2026-09-11.md)
+for the still-pending native checks; this follow-up is not a published package.
+
+The local Block **来源** tab now offers explicit read-only source checks and
+affected-Block navigation. Select a row to see recorded/observed hashes and any
+same-content CSV/XLSX candidate. Refresh does not import, save or update baselines;
+limits, unreadable files and ambiguous candidates remain unknown. Results are
+dated observations, not a frozen backup or data-authenticity check. See
+[source-status evidence and limits](docs/v1-m3-source-status-verification-2026-09-11.md).
+
+The existing merge candidate dialog now preserves original inputs and sibling
+cells, requires a fresh complete preview, and distinguishes whole-table structural
+conflicts. Table import helpers reject truncation and retain rendered headers and
+XLSX merge coordinates. A separate **来源 → 比较并合并来源…** flow now requires a
+digest-matching original file, explicit import/column/key mapping, review of all
+linked tables and final confirmation before one undoable source/table update.
+Original data stays untouched; retained source versions must be selected again as
+needed, since this is not a persistent backup. Large previews and native acceptance
+remain limited; see [source repair verification](docs/v1-m3-source-repair-verification-2026-09-11.md).
+See [merge/import verification](docs/v1-m3-merge-import-verification-2026-09-11.md).
+
+Ordinary-source projects also have **引用 → 检查项目引用（只读）** in the local
+development source. It follows supported declared BibTeX paths, checks open drafts,
+lists duplicate/missing/unparsed keys and unused suggestions, and locates definitions
+or uses. Checking does not save, compile, import or delete entries. Dynamic or
+incomplete coverage stays unknown; the conventional **快捷库** is separate. See
+[citation-health evidence and limitations](docs/v1-m3-citation-health-verification-2026-09-11.md).
+
+Local ordinary-source **图片 → 检查素材使用（只读）** now reports supported
+file/line uses, missing files, content changes and possible same-content candidates.
+Open drafts replace disk uses; incomplete coverage stays unknown and unused assets
+are suggestions only. Checking does not save, compile, move or rewrite anything.
+The separate **快捷浏览** uses an in-memory metadata cache; previous readable
+digests are window-local observations, not backups or persistent provenance. See
+[material-usage evidence and limits](docs/v1-m3-material-usage-verification-2026-09-11.md).
+
+The development source's text History validates registered source ownership and
+content digests before restoration. Confirmation produces one undoable, unsaved
+editor change; it does not save or compile. Valid legacy histories remain readable
+without automatic migration or deletion. This single-file UTF-8 text history is
+not a byte-exact project backup; the new project-checkpoint core is not yet exposed
+in the GUI. See [history recovery evidence and limits](docs/v1-m4-history-safety-verification-2026-09-11.md).
 
 Block image imports stage bytes before exclusive publication, preserve existing
 assets, and reject observed unsafe paths or source changes. Drag errors leave the

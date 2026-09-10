@@ -8,11 +8,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from contextlib import contextmanager
 import hashlib
+from itertools import islice
 import os
 from pathlib import Path
 import re
 import stat
-from typing import Mapping
+from typing import Callable, Mapping
 
 from app.core.file_observation import file_signature
 from app.core.image_assets import IMAGE_SUFFIXES
@@ -30,7 +31,7 @@ MAX_INPUTS = 2_000
 MAX_SOURCE_BYTES = 4 * 1024 * 1024
 _DYNAMIC = frozenset("\\#$%{}~\x00\r\n")
 _REFERENCE = re.compile(
-    r"\\(?P<command>input|include|subfile|includegraphics|bibliography|addbibresource|"
+    r"\\(?P<command>input|include|subfile|includegraphics|includesvg|includepdf|bibliography|addbibresource|"
     r"bibliographystyle|documentclass|usepackage|RequirePackage|LoadClass)\*?"
     r"\s*(?:\[[^\]]*\]\s*)?\{(?P<target>[^{}]+)\}"
 )
@@ -120,6 +121,7 @@ class InputReference:
     value: str
     candidates: tuple[Path, ...] = ()
     unresolved: bool = False
+    rejected_candidates: bool = False
 
 
 def read_project_bytes(path: Path, scope: Path, *, allow_internal: bool = False,
@@ -144,7 +146,8 @@ class DependencySnapshot:
 
 def static_dependencies(
     root: Path, scope: Path, buffers: Mapping[Path, str] | None = None,
-    *, max_inputs: int = MAX_INPUTS,
+    *, max_inputs: int = MAX_INPUTS, source_reader: Callable[[Path], str] | None = None,
+    max_references: int | None = None,
 ) -> DependencySnapshot:
     """Resolve literal inputs without executing macros or searching a distro."""
     root = safe_project_input(scope, root)
@@ -167,7 +170,8 @@ def static_dependencies(
         text = source_buffers.get(source)
         if text is None:
             try:
-                text = decode_latex_bytes(_read_source_bytes(source, scope)).text
+                text = (source_reader(source) if source_reader is not None
+                        else decode_latex_bytes(_read_source_bytes(source, scope)).text)
             except FileNotFoundError:
                 continue
             except (OSError, LatexTextDecodeError):
@@ -182,18 +186,26 @@ def static_dependencies(
                     directory = safe_project_input(scope, base / raw_dir)
                     if directory is not None:
                         graphics_dirs.add(directory)
+        allowance = max_references - len(found) + 1 if max_references is not None else None
         references = [(match.group("command"), match.group("target"), match.start())
-                      for match in _REFERENCE.finditer(clean)]
-        references.extend(("input", match.group(1), match.start()) for match in _UNBRACED_INPUT.finditer(clean))
+                      for match in islice(_REFERENCE.finditer(clean), allowance)]
+        references.extend(("input", match.group(1), match.start())
+                          for match in islice(_UNBRACED_INPUT.finditer(clean), allowance))
+        if max_references is not None and len(found) + len(references) > max_references:
+            return DependencySnapshot(frozenset(paths), False, tuple(found))
         recognized = {offset for _, _, offset in references}
-        for match in re.finditer(r"\\(?:input|include|subfile|includegraphics|bibliography|addbibresource)\b", clean):
+        for match in re.finditer(r"\\(?:input|include|subfile|includegraphics|includesvg|includepdf|bibliography|addbibresource)\b", clean):
             if match.start() not in recognized:
+                if max_references is not None and len(found) >= max_references:
+                    return DependencySnapshot(frozenset(paths), False, tuple(found))
                 found.append(InputReference(source, clean.count("\n", 0, match.start()) + 1,
                                             match.group()[1:], "dynamic", unresolved=True))
         for command, targets, offset in references:
             line = clean.count("\n", 0, offset) + 1
             values = targets.split(",") if command in {"bibliography", "usepackage", "RequirePackage"} else [targets]
             for value in values:
+                if max_references is not None and len(found) >= max_references:
+                    return DependencySnapshot(frozenset(paths), False, tuple(found))
                 raw = value.strip().strip('"')
                 if not raw or any(char in _DYNAMIC for char in raw):
                     found.append(InputReference(source, line, command, raw, unresolved=True))
@@ -204,12 +216,14 @@ def static_dependencies(
                 if command == "includegraphics":
                     bases.extend(sorted(graphics_dirs))
                 candidates: list[Path] = []
+                rejected = False
                 for base in dict.fromkeys(bases):
                     candidate = literal if literal.is_absolute() else base / literal
                     for suffix in suffixes:
                         expanded = candidate.with_suffix(suffix) if suffix else candidate
                         safe = safe_project_input(scope, expanded)
                         if safe is None:
+                            rejected = True
                             continue
                         if safe not in candidates:
                             candidates.append(safe)
@@ -220,7 +234,7 @@ def static_dependencies(
                         paths.add(safe)
                         if safe.suffix.lower() in SOURCE_SUFFIXES:
                             queue.append(safe)
-                found.append(InputReference(source, line, command, raw, tuple(candidates), not candidates))
+                found.append(InputReference(source, line, command, raw, tuple(candidates), not candidates, rejected))
     return DependencySnapshot(frozenset(paths), complete, tuple(found))
 
 
@@ -229,6 +243,10 @@ def _suffixes_for(command: str, path: Path) -> tuple[str, ...]:
         return ("",)
     if command == "includegraphics":
         return tuple(sorted(IMAGE_SUFFIXES))
+    if command == "includesvg":
+        return (".svg",)
+    if command == "includepdf":
+        return (".pdf",)
     if command in {"bibliography", "addbibresource"}:
         return (".bib",)
     if command in {"usepackage", "RequirePackage"}:

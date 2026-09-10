@@ -154,7 +154,7 @@ def _install_sidebar(window: "MainWindow") -> None:
     sidebar.addTab(window.tree, "文件", "files", SIDEBAR_TAB_TIPS[0])
     sidebar.addTab(window.outline_panel, "大纲", "list-tree", SIDEBAR_TAB_TIPS[1])
     sidebar.addTab(window.search_panel, "搜索", "search", SIDEBAR_TAB_TIPS[2])
-    sidebar.addTab(window.images_panel, "图片", "image", SIDEBAR_TAB_TIPS[3])
+    sidebar.addTab(scrollable_panel(window.images_panel), "图片", "image", SIDEBAR_TAB_TIPS[3])
     sidebar.addTab(window.history_panel, "历史", "history", SIDEBAR_TAB_TIPS[4])
     sidebar.addTab(
         scrollable_panel(window.insert_panel), "插入", "square-plus", SIDEBAR_TAB_TIPS[5], section_break=True

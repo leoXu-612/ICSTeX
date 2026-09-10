@@ -237,6 +237,21 @@ class MathEditorWidgetTests(TestCase):
         widget.paste_clipboard(r"\begin{matrix}a&b\\c&d\end{matrix}")
         self.assertEqual(widget.latex(), r"\begin{matrix}a&b\\c&d\end{matrix}")
 
+    def test_paste_preserves_whitespace_comments_and_non_round_trip_projection(self) -> None:
+        widget = MathEditorWidget()
+        self.addCleanup(widget.deleteLater)
+        for body in ("\n  " + r"\studentMacro{a} % preserve" + "\n\t + y\n",
+                     "x_1^2", " \t ", "a\r\nb", "a\rb"):
+            for wrapped in (False, True):
+                with self.subTest(body=body, wrapped=wrapped):
+                    widget.set_latex("x")
+                    widget.paste_clipboard("\\(" + body + "\\)" if wrapped else body)
+                    self.assertEqual(widget.latex(), "x" + body)
+                    widget.undo()
+                    self.assertEqual(widget.latex(), "x")
+                    widget.redo()
+                    self.assertEqual(widget.latex(), "x" + body)
+
     def test_paste_via_keyboard_shortcut(self) -> None:
         app().clipboard().setText(r"\frac{1}{2}")
         widget = MathEditorWidget()

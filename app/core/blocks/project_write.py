@@ -80,6 +80,16 @@ class BlockWriteGuard:
                 self.expected[path] = current
             self._check(self.expected)
 
+    def check_current(self) -> None:
+        """Read-only observation before an explicit model transaction.
+
+        This does not reserve external files; write() repeats its own checks.
+        The owning session must pause its own writers while this is called.
+        """
+        self._root_check()
+        self._no_pending()
+        self._check(self.expected)
+
     def _relative(self, path):
         try:
             relative = path.relative_to(self.root)

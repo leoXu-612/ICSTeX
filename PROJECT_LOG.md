@@ -2040,3 +2040,401 @@ must link here instead of repeating old task details.
   `be57a732b6532e3247916530bdc688b7e05b1cd4ec0457b216a5020250140c03`.
   Live GitHub release listing still showed only the Beta 1 prerelease. Changed
   files passed a bounded common-key/token/path scan, not a full security audit.
+
+## 2026-09-11 — Local formula replacement and paste fidelity, native held by lock screen
+
+- Reproduced invalid new envelopes accepted when replacing a valid formula, and
+  visual paste folding comment newlines into spaces. The pure edit-plan guard now
+  validates new replacement text; paste keeps exact body text and uses the existing
+  literal fallback when the tree cannot round-trip. No parser or source-format change.
+- App SHA-256 `0c430570de459bea98fd81452a122e3af3a09a24f7f3365c68c0ac0794014ea5`
+  was unchanged before/after verification. Compileall/diff checks passed; focused
+  138 tests passed in 3.669 seconds and full verbose discovery passed 1140 tests
+  in 563.678 seconds, exit 0. Full receipt:
+  `/tmp/icstex-v1-m2-formula-fidelity-suite-r1.log`. No traceback, RuntimeError,
+  RuntimeWarning or fatal Python failure appeared; offscreen warnings remain.
+- A same-source offscreen dialog's actual paste/edit plan compiled through the
+  real pdfLaTeX FINAL path with unchanged synthetic source bytes. Extracted and
+  rendered PDF content visibly includes `x + a + b + z`; PDF SHA-256
+  `33258250942ef69afd8a2b195a9924b901f2c4d7696582e4c84b3526fdc0f008`.
+  Report/PDF/render remain in `/tmp/icstex-v1-formula-final-20260911-r1`.
+  This is actual compile evidence, not native screen/clipboard/IME acceptance.
+- The desktop tool reported a locked Mac and required manual unlock. No bypass
+  was attempted. Image native r3 was stopped at the first picker when the app
+  source changed; it is not accepted. M2 native image/formula, IME/AX/Windows/human
+  checks remain open. Details: `docs/v1-m2-formula-fidelity-verification-2026-09-11.md`.
+- Independent synthetic M3 orientation confirmed the old missing-source search
+  hashes a project-external file through a link and hashes internal `.git/config`,
+  reporting both as moved candidates. Receipt:
+  `/tmp/icstex-v1-m3-source-boundary-red-r1.log`. This remains the next bounded
+  fix, not a completed M3 implementation or an incident involving real user data.
+- No staging, commit/push/rename, packaging, installed-app replacement, credentials,
+  signing, deployment or publication. The earlier one-time sync permission is spent.
+
+## 2026-09-11 — Local bounded source status and affected-Block navigation
+
+- Replaced unbounded synchronous source hashing/search with explicit background
+  observations, one active/latest pending request and cooperative cancellation.
+  Source paths reject observed links/internal paths; POSIX directory enumeration
+  is descriptor-anchored. Shared candidate search covers same-extension CSV/XLSX
+  only, with 2000-record/entry, 64 MiB file and 256 MiB batch limits. Ambiguity,
+  errors, changed reads and limit exhaustion remain unknown, not a safe-merge claim.
+- The Sources tab is now labelled 来源, read-only and dated. It shows baseline/
+  observed digests and candidate paths, and navigates existing provenance-linked
+  Blocks. Removed the old resync action that only advanced a digest; no data
+  import, baseline update or technical merge is implied. Filtering does not rebuild
+  source/layout panels; model refresh never launches source I/O.
+- Core red tests and synthetic probes reproduced the old outside-link/internal
+  reads and false moved/ambiguous/error behavior. Follow-up reappearance during
+  search also reproduced a false moved result. GUI/probe fixture setup errors were
+  corrected without weakening the guarded writer or source checks; exact scope is
+  in `docs/v1-m3-source-status-verification-2026-09-11.md`.
+- Frozen app SHA-256
+  `6c87ebcf98f88c87f1ae43a89ee79f34310ea69ee45fb4bcee3508fc4765e020`
+  remained unchanged after compileall/whitespace checks, 82 focused tests
+  (2.311 seconds, exit 0) and 1168 full verbose tests (477.939 seconds, exit 0).
+  Receipts: `/tmp/icstex-v1-m3-source-focused-r2.log` and
+  `/tmp/icstex-v1-m3-source-suite-r1.log`. Exec 70944/PID 84015 are terminal.
+  No traceback, RuntimeError, RuntimeWarning, fatal Python or failed test appeared;
+  offscreen/font-alias warnings and broader M6 performance/lifecycle gaps remain.
+- Final-source synthetic offscreen refresh actually distinguished unchanged,
+  changed, same-content candidate and missing sources, selected the linked table,
+  and left every project byte, source baseline, table content and Undo count
+  unchanged. Reloading preserved them. Report/render:
+  `/tmp/icstex-v1-source-status-20260911-r3/`, product log
+  `/tmp/icstex-v1-m3-source-product-r3.log`, exit 0. Render inspected; not native
+  acceptance. The last desktop state still requires manual unlock; no bypass.
+- Read-only orientation for the next citation slice reproduced duplicate-key
+  collapse, optional-citation misses, commented-citation false positives and
+  ignored nondefault bibliography paths in existing helpers. Receipt:
+  `/tmp/icstex-v1-m3-citation-orientation-red-r1.log`; exit 0 confirms existing
+  failures, not a fix. Citation code was not changed during this frozen full run.
+- Live remote development HEAD remains `e5cd13273ee6de326bc629e65c0752a9f474848e`;
+  release/2.1 remains `f03776e87c0f938421a70ff5b085db920f2d01d7`. No staging,
+  commit/push/rename, packaging, installed-app replacement, credentials, signing,
+  deployment or publication. Ignored signed feed SHA-256 is still
+  `be57a732b6532e3247916530bdc688b7e05b1cd4ec0457b216a5020250140c03`.
+
+## 2026-09-11 — Local read-only citation health and usage navigation
+
+- Added bounded ordinary-source citation/BibTeX syntax and health checks, a focused
+  background controller and the ReferencesPanel health tab. Explicit checks use
+  declared static libraries and captured editor buffers, retain key definitions/
+  uses with file/line locations, distinguish duplicate/missing/unparsed states and
+  unused suggestions, and recheck content before navigation. One active/latest
+  request, cancel, edits, external events, mode/tab changes and close guard results.
+  No check-induced save, compile, import, network lookup, normalization or deletion.
+- The conventional shortcut library is now labelled separately and uses bounded
+  strict safe reads. Regressions reproduced and fixed missing distro-input
+  misclassification, empty-file recheck errors, false complete manual/scoped/alias
+  coverage, link reads, replacement decoding and macOS selected-directory aliases.
+  Field/use/relation limits and nonstandard source-suffix uncertainty remain visible.
+  Technical repair, arbitrary macro execution and M1 rule replacement are not implied.
+- Frozen app SHA-256
+  `a12ade12f6d5573f99a03e83f8ef9e3b784538b5c0cfc4cbe520ba0ad9a84baf`
+  remained unchanged after compileall, 36 focused tests (1.434 seconds, exit 0),
+  80 integrated tests (9.495 seconds, exit 0) and 1200 full verbose tests
+  (559.206 seconds, exit 0). Full exec `33298` / PID `88960` are terminal, receipt
+  `/tmp/icstex-v1-m3-citation-suite-r1.log`. No test failure or Python exception
+  appeared. Scale-phase sampling still shows QApplication stylesheet work and
+  about 2.0 GiB process footprint; substantial system swap and full-suite fixture
+  retention prevent attributing that observation to this patch alone.
+- Final-source actual offscreen window probe checked duplicate/missing/unused
+  entries, jumped to `chapters/child.tex:2`, checked unsaved BibTeX, and cancelled
+  with zero source-byte changes and no compile authorization. Five scale tiers
+  and two requested sizes retained button access via scrolling; the smaller request
+  clamped to existing 1080x720 minimum. This is not native/narrow-screen acceptance.
+  Separate explicit BibTeX 0.99d / TeX Live 2025 FINAL used four entries and produced
+  one visually inspected page, including strings/concatenation, crossref and nocite.
+  PDF SHA-256 `d9a5d659c8a3c4c5a39d9126bf67dd29154c6ba433774c2e715595728b52a811`.
+  Evidence `/tmp/icstex-v1-citation-20260911-r3/`, product log
+  `/tmp/icstex-v1-m3-citation-product-r3.log`, exit 0. Probe fixture corrections and
+  primary grammar reference are documented in
+  `docs/v1-m3-citation-health-verification-2026-09-11.md`.
+- Next material slice orientation reproduced saved-buffer double counting,
+  comment use, graphicspath misses and stale disk use after an unsaved removal.
+  Synthetic receipt `/tmp/icstex-v1-m3-material-orientation-red-r1.log`, exit 0
+  confirms old behavior, not a fix. No material code changed during the full run.
+- Native M2/M3 waits for manual Mac unlock; IME/AX/Windows/human checks, material
+  tracking, separately confirmed repair, M4/M5 and M6 remain incomplete. No staging,
+  commit/push/rename, packaging, installed-app replacement, credential, CI, signing,
+  deployment or publication. Remote development remains `e5cd132`, release remains
+  `f03776e`; ignored signed feed retains SHA-256
+  `be57a732b6532e3247916530bdc688b7e05b1cd4ec0457b216a5020250140c03`.
+
+## 2026-09-11 — Local read-only material usage and content observations
+
+- Added bounded ordinary-source material usage/content checking, a focused
+  background controller and the ImagesPanel health tab. Supported literal image,
+  SVG/PDF and graphicspath locations use captured root/buffer ownership; comments
+  and duplicate saved-buffer reads no longer create uses in the new check. Missing,
+  changed, same-content candidate, ambiguous and unused-suggestion states remain
+  distinct. Unsupported/incomplete static coverage stays unknown. Rereads and
+  late-event invalidation prevent observed changed inputs from passing as current.
+- Previous readable digests are bounded window/root-local observations, not stored
+  provenance or backups. The shortcut inventory now displays usage pending and
+  reuses an in-memory metadata index without loading/saving project cache files.
+  Typing and the health tab do not launch the old source-usage scanner. The new
+  check does not decode thumbnails, save, compile, import, rename or rewrite files.
+- First full discovery failed one old disk-cache assertion: 1223 tests in 368.431
+  seconds, exit 1, exec `15407` terminal, receipt
+  `/tmp/icstex-v1-m3-material-suite-r1.log`. Its replacement verifies same-index/
+  record reuse, one metadata read, no load/save or project-byte changes and no
+  compile authority. The stronger test exposed warm scans incorrectly counted as
+  cold; the corresponding red receipt is
+  `/tmp/icstex-v1-m3-material-memory-index-red-r1.log`. That metric is now corrected.
+- Final app SHA-256
+  `cc506a5a59b3f4e187937ed4283650b53f6b7de817c7f249f7896b3f7e5fa61e`
+  passed compileall, whitespace checks, 109 focused integration tests (9.786 seconds,
+  exit 0) and 1223 full verbose tests (364.943 seconds, exit 0). Full exec `96648` /
+  PID `96374` are terminal and the app hash was rechecked unchanged. Receipts:
+  `/tmp/icstex-v1-m3-material-focused-r3.log` and
+  `/tmp/icstex-v1-m3-material-suite-r2.log`. No failed test or Python exception was
+  found; offscreen/font warnings and native lifecycle/performance gaps remain.
+- Final-source actual offscreen product r4 used five real synthetic PNGs, root/child
+  graphicspath sources and isolated settings. It verified changed/missing/candidate
+  distinctions, child line-4 navigation with PDF view preserved, noncurrent draft
+  precedence and cancellation with zero source/asset/cache writes. A separate
+  explicit pdfLaTeX FINAL produced one visually inspected page, PDF SHA-256
+  `ddb60095102d50de0b549316052306243bddf050f37afc84e080cd193845aed7`.
+  That compile created its existing history records without changing original
+  input bytes; later read-only checks did not recompile the stale PDF. Product
+  exec `3179` exited 0, log `/tmp/icstex-v1-m3-material-product-r4.log`, evidence
+  `/tmp/icstex-v1-material-20260911-r4/`.
+- Actual queued watcher events invalidate results, including during this fixture;
+  the probe observed them and explicitly retried (1, 4 and 1 attempts), without
+  suppressing invalidation. The 621.71 ms five-asset measurement includes a 600 ms
+  settle wait and is not worker latency. Five scales/two requested sizes retained
+  scroll access to control centers; high-scale text/columns still require scrolling
+  and the smaller request clamps to 1080x720. Captures were inspected, not accepted
+  as native/IME/AX/Windows/human proof. Details and earlier probe corrections are in
+  `docs/v1-m3-material-usage-verification-2026-09-11.md`.
+- Next-slice synthetic orientation reproduced MergeDialog accepting one conflict
+  dropping an untouched sibling cell (`/tmp/icstex-v1-m3-merge-orientation-red-r1.log`).
+  CSV import also returned 5000 of 5001 body rows without a truncation error
+  (`/tmp/icstex-v1-m3-import-limit-orientation-r1.log`). These are memory-only
+  reproductions, not fixes. The current label-only merge UI, missing genuine table
+  baseline and positional IDs must be resolved before preview/confirmed/CAS/Undo
+  repair is called functional. No merge/import application source changed here.
+- Live remote development remains `e5cd13273ee6de326bc629e65c0752a9f474848e` and
+  release/2.1 remains `f03776e87c0f938421a70ff5b085db920f2d01d7`. Nothing is staged;
+  no commit/push/rename, packaging, installed-app replacement, credentials, CI,
+  signing, website, deployment or publication. The earlier checkpoint permission
+  remains one-time only. Ignored signed feed SHA-256 remains
+  `be57a732b6532e3247916530bdc688b7e05b1cd4ec0457b216a5020250140c03`.
+
+## 2026-09-11 — Independent merge candidates and table import fidelity
+
+- Repaired the reproduced same-row conflict data loss. The pure resolver preserves
+  siblings, sparse cells, value types, exact manual text, row order and chosen table
+  metadata without mutating Base/Remote/Local or the original comparison. Results
+  do not alias mutable input rows/notes/merges. Duplicate identities/unknown columns
+  are refused. Two-sided structural or order changes require an explicit whole-table
+  choice, not guessed positional merging or silent row resurrection.
+- The real dialog now requires a fresh complete candidate preview after choices
+  change. It displays table identity and full original conflict values, retains
+  Cancel zero-application behavior and bounds controls/preview output. It returns a
+  detached candidate, not a project edit. The existing workspace no longer reports
+  synchronization merely from confirmation, and disables its previously empty/no-op
+  entry. Actual source baseline/mapping, target/source CAS and one Undo remain open.
+- CSV/XLSX import rejects row/column/range overflow instead of returning partial
+  tables, preserves blank rows and short-header extra cells, and retains actual
+  header rows for the existing renderer. XLSX merge coordinates and range translation
+  are corrected; cutting a merged region is refused. New headers are row_000;
+  existing persisted tables are not migrated. Numeric header text is allowed while
+  invalid body text still warns. Spreadsheet values and merge XML use the same
+  bounded captured bytes; archive member/declared-expanded-size limits and explicit
+  close support were added. This is not project-path or source-to-apply authorization.
+- Red receipts `/tmp/icstex-v1-m3-merge-import-red-r1.log`,
+  `/tmp/icstex-v1-m3-merge-import-red-r2.log` and
+  `/tmp/icstex-v1-m3-import-fidelity-red-r1.log` cover the original merge/input-loss,
+  truncation, missing header and wrong merge-coordinate behavior. The numeric warning
+  fixture now declares a body row explicitly and separately tests allowed header/
+  rejected body text. The first full run passed on app hash 35ac5133; a later red
+  test found omitted preview table identity, prompting the final display correction
+  and Chinese Cancel label. That red receipt is
+  `/tmp/icstex-v1-m3-merge-preview-identity-red-r1.log`.
+- Final app SHA-256
+  `39f26a52093da449f06ddf32bf5610808b1e126616298c6a96b3abdb042c6cee`
+  passed compileall, whitespace checks, 113 focused integration tests (4.720 seconds,
+  exit 0) and 1242 full verbose tests (360.894 seconds, exit 0). The app hash was
+  rechecked unchanged after completion. Full exec `96245` / PID `1534` are terminal;
+  receipts `/tmp/icstex-v1-m3-merge-import-focused-r5.log` and
+  `/tmp/icstex-v1-m3-merge-import-suite-r2.log`. No failed test or Python exception
+  appeared. The earlier full exec `51161` / PID `99944` is also terminal, not a
+  running blocker or a substitute for final-source verification.
+- Actual offscreen product r4 used real dialog mouse/key events, selected two
+  conflicts in one row, retained sibling key/False values and exact manual spaces,
+  cancelled a second dialog with original models unchanged, imported a synthetic
+  XLSX header/body and refused oversize CSV. Five UI scales rendered with reachable
+  preview/confirmation control centers; the final 150% capture was inspected.
+  JSON/detail scrolling remains technical, not full student/native/IME/AX acceptance.
+  Probe r1/r2 clicked the radio widget's empty center and failed; r3/r4 click and
+  verify its actual indicator. No failed choice was accepted as success.
+- A separate explicit disposable LaTeX fixture from the candidate/imported table
+  compiled through MainWindow FINAL into one page. It visibly contains both table
+  headers, A=11/B=21, reviewed note, false/true and both imported 20/30 data rows.
+  PDF text/render were inspected; original fixture source bytes stayed unchanged.
+  PDF SHA-256 `7fc0a9d6e7a711b2a63e6c5101c3b080f6e740ddd565e5a2bc903ea86e2b0ad0`.
+  Product exec `36337` exited 0, log `/tmp/icstex-v1-m3-merge-import-product-r4.log`,
+  evidence `/tmp/icstex-v1-merge-import-20260911-r4/`. This fixture generation is not
+  linked-source application. Details: `docs/v1-m3-merge-import-verification-2026-09-11.md`.
+- Next work must use a genuine digest-matching source baseline, explicit stable
+  mapping and existing raw-content-preserving table draft/command seams. SourceRecord
+  and document authority formats are unchanged; positional IDs are not stable data
+  identity. Native M2/M3 still waits for manual unlock; M3 application, M4/M5,
+  IME/AX/Windows/human acceptance and M6/M7 closeout remain incomplete.
+- No staging, commit/push/rename, package, installed-app replacement, credentials,
+  CI, signing, website, deployment or release mutation. Live remote development
+  remains `e5cd13273ee6de326bc629e65c0752a9f474848e`, release/2.1 remains
+  `f03776e87c0f938421a70ff5b085db920f2d01d7`, and ignored signed feed SHA-256 remains
+  `be57a732b6532e3247916530bdc688b7e05b1cd4ec0457b216a5020250140c03`.
+
+## 2026-09-11 — Explicit source repair with real baseline and all-target Undo
+
+- Added the real Block Sources repair entry, backed by immutable project-local
+  source captures, a digest-matching original version and explicitly selected
+  import/column/key mappings. Actual stable keys, not importer position IDs, bind
+  rows. All linked objects must be supported tables, and every table must be
+  reviewed before advancing the shared source record. Whole-table replacement is
+  an explicit alternative; no undocumented source baseline is invented.
+- Separate candidate and final raw-content previews precede source-byte rechecks,
+  exact model/draft/source ownership checks and one Undo command. The command
+  preserves unchanged opaque fields, restores consumed local drafts on Undo and
+  does not erase newer input. Cancel, changed inputs, unsupported formats and
+  partial candidate sets do not apply. Original CSV/XLSX files are never rewritten;
+  existing guarded persistence and compile authorization remain in force.
+- CSV repair text retains raw whitespace/identifiers before explicit target-type
+  conversion. Synthetic red tests reproduced dishonest XLSX dimensions hiding
+  actual body rows and uncached formulas accepted as empty values; both now refuse
+  data loss without executing formulas. A GUI fixture's unsupported root opaque
+  field was moved to supported header/cell locations without relaxing the schema.
+- Actual mapping screenshots exposed overlapping combo rows and unused width;
+  `/tmp/icstex-v1-m3-source-mapping-geometry-red-r1.log` reproduced it. Row heights
+  now fit the real controls and columns stretch. A cancellation stress test then
+  reproduced overlapping retries while an old parser remained active; receipt
+  `/tmp/icstex-v1-m3-source-repair-worker-red-r1.log`. One session-owned active-read
+  token now refuses a second read until prior work finishes, with no pending queue.
+- Final app SHA-256
+  `aebdfa7b7c9183a6485d1e7934e7c0bbe9452369879dd6e47386adc9dd2fb4cd`
+  passed compileall, whitespace checks, 120 focused integration tests (3.018 seconds,
+  exit 0) and 1264 full verbose tests (361.082 seconds, exit 0). App hash was rechecked
+  unchanged. Final full exec `53595` / PID `7114` are terminal; receipt
+  `/tmp/icstex-v1-m3-source-repair-suite-r3.log`. No failed test, traceback,
+  RuntimeError, RuntimeWarning or fatal Python failure appeared; offscreen/font
+  warnings remain separate from native acceptance.
+- First full exec `12034` / PID `5200` passed but became obsolete during the geometry
+  fix. Second full exec `51781` / PID `6246` was deliberately stopped after the
+  active-read fix: SIGINT landed in a Qt callback without ending the process, then
+  SIGTERM ended that same verified PID with exit 143. It is not a pass or an
+  unexplained application crash. No obsolete run was substituted for the final run.
+- Final-source product r5 exercised actual navigation/modal widgets, keyboard column
+  mappings, worker reads and final confirmation on two synthetic linked tables.
+  Cancel left all project bytes/models/drafts unchanged; a source mutation at final
+  confirmation was refused. Apply/Undo/Redo, restored pending draft, guarded save
+  and reload matched. Explicit MainWindow Block FINAL generated one page containing
+  A=12/B=21 and A=11/B=21; original source bytes remained unchanged. R1 failed only
+  at the probe's nonexistent pdf_path attribute, then r2-r5 repeated the workflow
+  with the actual pdf_file field; final exec `99975` exited 0.
+- Product receipt `/tmp/icstex-v1-m3-source-repair-product-r5.log`, retained project,
+  JSON, captures and PDF under `/tmp/icstex-v1-source-repair-20260911-r5/`. PDF SHA-256
+  `488eba5ae42a5c5bba4ae1d150396d745d6eb70134788de07a47017833ae36d9`.
+  Text was checked; the rendered PNG is byte-identical to the inspected r4 image.
+  Details: `docs/v1-m3-source-repair-verification-2026-09-11.md`.
+- No persistent baseline-byte store or project-format migration was introduced;
+  source versions must be retained separately. Large JSON-preview limits, native
+  IME/AX, Windows, human usability and broader M6 remain open. M4 byte-consistent
+  checkpoints/restore-to-new-directory and M5 frozen delivery are the next required
+  work. No staging, commit/push/rename, package, installed-app replacement, credentials,
+  signing, CI, deployment or release mutation; all earlier local changes remain.
+
+## 2026-09-11 — Byte-exact checkpoint core and legacy history boundary audit
+
+- Implemented a bounded selected-file checkpoint core with raw saved bytes,
+  relative-path/version/hash manifests and separate supplied UTF-8 drafts. Two
+  content passes and final observations precede exclusive checkpoint publication.
+  Restore validates all objects, writes/readbacks an explicitly incomplete staging
+  tree, rechecks its bytes/inventory and atomically publishes only a NEW directory.
+  Original projects and existing targets remain untouched; no draft is applied,
+  project switched, compiler launched or network authority granted by these APIs.
+- New core regression tests reproduced and then fixed substituted archive/directory
+  handling, cleanup of foreign directories, changed earlier restore files and extra
+  unlisted output. Additional cases cover corrupt/unknown/duplicate/compressed input,
+  links/traversal/case collisions, limits, I/O failure, cancellation and an actual
+  child process killed during restore. Hard interruption leaves an incomplete name,
+  not a successful target. Native macOS no-replace rename also refused an empty
+  target created immediately before publication; Linux/Windows remain unverified.
+- Final app Python path/content SHA-256:
+  `71ff39885c237665a25cf801947aa20dc58194b489c8ab7283a5a67e7d4ea933`.
+  Required compileall and `git diff --check` passed. Focused 25 tests passed in
+  0.139 seconds, exit 0, `/tmp/icstex-v1-m4-checkpoint-focused-r5.log`.
+  Full verbose discovery passed 1289 tests in 366.453 seconds, exit 0; exec `1766` /
+  PID `10802` terminal, `/tmp/icstex-v1-m4-checkpoint-suite-r2.log`, with app hash
+  rechecked unchanged. Earlier full exec `72702` / PID `10326` was intentionally
+  stopped (exit 143) before clarifying incomplete-directory README semantics; it
+  is not accepted final-source evidence or an unexplained application crash.
+- Final synthetic filesystem probe r3 passed, exec `59850` terminal exit 0:
+  `/tmp/icstex-v1-m4-checkpoint-probe-r3.log`, retained artifacts/result JSON under
+  `/tmp/icstex-v1-checkpoint-20260911-r3/`. Six-file ordinary and nine-file Block
+  projects retain all raw bytes, including GBK/CRLF, Chinese paths, images and empty
+  files; 2/3 drafts remain separate. Block registry/layout reopen matches, and each
+  restored project produced an explicitly requested FINAL without changing selected
+  originals/restored inputs. Actual PDF hashes are in the verification report.
+  No GUI/native workflow, power-loss, iCloud or large-project performance is implied.
+- The required legacy history audit reproduced two existing faults using synthetic
+  files only: changed UTF-8 history bypasses the recorded digest, and a forged
+  absolute snapshot_path in retention deletes a sentinel outside the project.
+  `/tmp/icstex-v1-m4-history-boundary-orientation-r1.log` records reproduction,
+  not a safety pass. Original synthetic source stayed unchanged; no real user data
+  was read/modified. Existing GUI restore also reads the path directly after
+  confirmation. Next bounded slice must repair source-bucket/read/delete/confirmation
+  ownership before GUI checkpoint/draft recovery. New checkpoint APIs do not reuse
+  that unsafe path trust; M4 as a whole is not complete.
+- Details: `docs/v1-m4-checkpoint-core-verification-2026-09-11.md`. No staging,
+  commit/push/rename, application packaging, installed-app replacement, credentials,
+  signing, CI, deployment or release action. HEAD/upstream remain `e5cd132`; index
+  empty, held feed hash unchanged, earlier shared source changes preserved. Native
+  M2/M3 unlock, IME/AX/Windows/human, M4 GUI/migration and M5/M6 acceptance remain.
+
+## 2026-09-11 — M4 owned text history and authorized source checkpoint preparation
+
+- Repaired the synthetic audit's manifest-path deletion and unchecked-content
+  faults. New source-specific buckets, strict records, bounded owned reads,
+  content hashes, anchored POSIX operations and guarded retention replace absolute
+  path trust. Valid old buckets remain read-only; unknown/changed objects are
+  preserved. Failed history creation does not invalidate a successful source save.
+- GUI recovery rechecks registered source/history and the captured editor through
+  confirmation. Acceptance is one undoable unsaved change, without Save or compile
+  authorization. Cancellation, corruption, switching and close preserve newer work;
+  corrupt metadata is explicit in the History panel.
+- Final app path/content SHA-256:
+  `b2a8297c88089ac76925a8d55378b50d299694180bb7aa93641a263260392802`.
+  Required compileall passed. Focused 33 tests passed in 1.101
+  seconds; final full discovery passed 1312 tests in 371.893 seconds, exit 0,
+  exec `74919` / PID `15672` terminal, app digest rechecked unchanged. Receipts:
+  `/tmp/icstex-v1-m4-history-focused-r5.log` and
+  `/tmp/icstex-v1-m4-history-suite-r2.log`. Earlier app `cf83e36b` passed 1311 tests
+  before the final pre-open leaf-link guard; it is not substituted for this result.
+- Final product r8 result, real confirmation and visible FINAL screenshots were
+  checked in `/tmp/icstex-v1-history-restore-20260911-r8/`. Synthetic Cancel is
+  byte-preserving, tamper is refused, Undo/Redo restores both drafts, and separately
+  explicit Save/reopen/FINAL succeeds. One-page PDF SHA-256:
+  `d1e9790b2448395adcd9f928bfa88ba33ba4208d3b2458c4971487fefa183040`.
+  Product probe title/pixel-sampling/paint-timing corrections and native limits are
+  recorded in `docs/v1-m4-history-safety-verification-2026-09-11.md`.
+- The latest user request explicitly authorizes rename/submission of the local
+  increments since `e5cd132`. The existing `codex/v1-development` branch name is
+  already correct. Prepare source/tests/synthetic probes/documentation only; keep
+  local screenshots, PDFs, test logs and the ignored signed appcast out of Git.
+  Push verification will be recorded separately after it occurs. No package,
+  installed-app replacement, version change, release-branch update or publication.
+  The held feed still hashes to
+  `be57a732b6532e3247916530bdc688b7e05b1cd4ec0457b216a5020250140c03`.
+  M4 project-checkpoint GUI and the wider M2-M6/native/platform gates remain open.
+- Staging the full 74-file source/test/probe/documentation batch exposed only two
+  blank-at-EOF warnings, in `app/gui/blocks/source_status.py` and
+  `tests/test_gui_material_usage.py`; preserve the tested source bytes. The prior
+  unstaged diff check did not cover these newly added files. Added-line scans found
+  no common private-key/token/credential-URL or maintainer-home patterns. No release,
+  website, workflow, binary artifact, screenshot, PDF or test log is staged; this
+  limited hygiene check is not a whole-repository security audit.

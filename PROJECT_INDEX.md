@@ -36,6 +36,22 @@
   活跃单元格草稿、显式保存/撤销、原生冲突与实际 PDF；区分专项和全套结果。
 - `docs/v1-m2-image-import-verification-2026-09-11.md`：图片暂存/独占发布、路径与
   拖入目标边界、测试夹具修正；真实 picker 成功导入仍待验收。
+- `docs/v1-m2-formula-fidelity-verification-2026-09-11.md`：公式替换的新输入校验、
+  粘贴注释与空白保真；区分本地专项/完整回归和待解锁的原生验收。
+- `docs/v1-m3-citation-health-verification-2026-09-11.md`：普通源码只读引用健康、
+  跨文件/草稿位置、解析未知边界、合成窗口与真实 BibTeX/FINAL；完整与原生验收分别记录。
+- `docs/v1-m3-source-status-verification-2026-09-11.md`：来源有界后台检查、
+  关联 Block 定位和不推进基线；区分专项、全套和待解锁的原生验收。
+- `docs/v1-m3-material-usage-verification-2026-09-11.md`：素材静态使用位置、内容变化、
+  同内容候选与只读内存缓存；记录专项、实际图片 FINAL、全套及旧合并器丢单元格缺陷。
+- `docs/v1-m3-merge-import-verification-2026-09-11.md`：独立合并候选保全、结构冲突、
+  导入拒绝截断/保留表头/正确合并区域；后续真实来源应用见下一项。
+- `docs/v1-m3-source-repair-verification-2026-09-11.md`：真实摘要匹配基线、显式行键映射、
+  全部关联表格一次确认/Undo、取消与冲突拒绝、保存重开和实际 FINAL；保留原生及快照缺口。
+- `docs/v1-m4-checkpoint-core-verification-2026-09-11.md`：选定文件原始字节检查点、
+  独立草稿、恢复到新目录、损坏/竞争/中断验证；尚未接入 GUI，并记录旧历史路径信任风险。
+- `docs/v1-m4-history-safety-verification-2026-09-11.md`：文本历史来源/路径/摘要保护、
+  合法旧记录只读兼容、确认后一次 Undo、保存重开/FINAL 验证与剩余平台边界。
 - `docs/DECISION_LOG.md`：长期架构决策及其原因。
 - `docs/update-delivery-design-2026-09-08.md`：原生更新器实现、信任分工与发布验收边界。
 - `packaging/UPDATES.md`：维护者提供配置、暂存固定 SDK、签名与 appcast 接入步骤。

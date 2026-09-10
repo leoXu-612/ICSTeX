@@ -1,6 +1,6 @@
 # macOS arm64 Beta activation handoff
 
-Date: 2026-09-09. Status: signed candidate verified; public activation on hold.
+Updated: 2026-09-10. Status: source synchronized; public activation on hold.
 
 Keychain authorization is complete. No additional signing action is currently
 needed from the maintainer. The dedicated `com.icstex.app.beta` key remains in
@@ -81,4 +81,7 @@ change, rebuild and re-sign if application bytes change, and repeat the relevant
 native gates. Only then publish immutable GitHub prerelease assets, verify their
 public bytes, deploy the signed appcast, and verify the actual client over HTTPS.
 Keep Windows activation, GitHub Actions, Developer ID signing and notarization
-outside this task. Current changes remain uncommitted and unpushed.
+outside this task. Source and handoff changes were synchronized to
+`origin/release/2.1` at `fef3731` on 2026-09-10 under separate user authorization;
+the signed appcast and application archives were excluded. This source push
+does not authorize public update activation or new release assets.

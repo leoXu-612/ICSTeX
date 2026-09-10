@@ -1,6 +1,6 @@
 # FORCODEX.md
 
-Timestamp: 2026-09-09 (macOS arm64 Beta update activation)
+Timestamp: 2026-09-10 (source synchronized; Beta activation remains held)
 
 This is Codex's current bounded brief. Replace it when the assignment changes;
 do not append completed-task history.
@@ -11,8 +11,9 @@ The verified source/artifact matrix is maintained in `docs/PROJECT_STATE.md`.
 The local installed application contains the frozen response/preview, formula/
 table and default-offline update-entry source. Its exact local build identity,
 verification boundaries and rollback receipt are recorded in the state and log.
-The prior product source is synchronized to GitHub; the current Beta 2 changes
-remain local and uncommitted. Native online delivery is not activated or accepted.
+The Beta 2 source and development handoffs are synchronized to GitHub. The signed
+appcast remains local-only, outside the website tree; see the project state for
+the verified source identity. Native online delivery is not activated or accepted.
 Human Keychain authorization is complete. Candidate r2 has independently verified
 archive/feed signatures and has passed a real isolated native replacement and
 cold launch. Activation is held because the late-starting-instance/native

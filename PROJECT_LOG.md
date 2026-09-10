@@ -1589,3 +1589,36 @@ must link here instead of repeating old task details.
   instructions, the index entry and this appended record; no product source,
   version metadata or student documents were edited. No commit, push, packaging,
   installation, signing, deployment or release was performed.
+
+## 2026-09-10 - User-authorized source synchronization with held feed isolation
+
+- User requested necessary renaming and submission after asking whether changes
+  were synchronized to the GitHub remote. Live checks found `release/2.1` and
+  its remote at `4d15bdd`, with Beta 2 source and the V1 development handoff still
+  uncommitted. Preserved all existing source and historical records.
+- Moved the unpublished signed appcast from the website tree to local-only
+  `release/updates/candidates/macos-arm64-beta-r2.appcast.xml` and added a narrow
+  Git ignore rule. SHA-256 before and after was
+  `be57a732b6532e3247916530bdc688b7e05b1cd4ec0457b216a5020250140c03`.
+  No signed bytes, old artifact names, release tags or branch names were changed.
+  Replaced machine-specific paths in the new development instructions with
+  repository-root discovery; development and publication permissions are unchanged.
+- Required compileall exited 0. Full offscreen unittest discovery passed
+  965 tests in 196.352 seconds, exit 0, on macOS with Python 3.12.6. The existing
+  welcome-page deleted-QLabel RuntimeError remains; no fix or fresh native GUI
+  acceptance is claimed. Local test output is retained outside the repository.
+- Whitespace, generated website metadata and published-release consistency
+  checks passed. The strict source-version gate correctly rejected the Beta 1
+  published manifest against Beta 2 source. A bounded scan of the selected files
+  found no private-key blocks or common access-token patterns; this was not a
+  full-history security audit. Only public update configuration was included.
+- Committed 32 source/test/document/configuration files as
+  `fef37316a2ffff74bee0309e2bb052628f1cfc97` with `[skip ci]`, then pushed normally
+  to `origin/release/2.1`. `git ls-remote` returned the exact same SHA. No force
+  push, tag, GitHub Release, asset upload, packaging, installation or signing
+  occurred. The signed feed and all application archives remain local.
+- Post-push GitHub checks showed no Actions run for the source commit and only
+  `v2.1.0-beta.1` with nine assets. Vercel's latest deployment stayed
+  `dpl_7KCFhWRVwYtSdbS2WdUyavEFqobJ`; no deployment was requested. Updated current
+  state and handoffs in the follow-up documentation commit without weakening
+  installation-lifetime exclusion, late-instance or interruption acceptance gates.

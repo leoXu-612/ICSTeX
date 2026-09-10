@@ -1,14 +1,15 @@
 # ICSTeX Project State
 
-更新时间：2026-09-09（Asia/Taipei）
+更新时间：2026-09-10（Asia/Taipei）
 
 本文件是当前已验证状态的权威来源；历史证据写入 `PROJECT_LOG.md`，未来计划写入
 `docs/ROADMAP.md`，长期约束写入 `docs/DECISION_LOG.md`。
 
 ## Product and Source State
 
-- 权威工作区：本仓库根目录；此前产品源码已同步至 GitHub 的 `release/2.1`。
-  当前本地正在准备 Beta 2 macOS arm64 更新通道，新增变更尚未提交或推送。
+- 权威工作区：本仓库根目录；Beta 2 源码与下一代开发说明已于 2026-09-10
+  同步至 GitHub 的 `release/2.1`，源码提交为 `fef3731`。
+  签名 appcast 已移至 Git 忽略的本地候选目录，不在网站树或远端提交中。
   响应/预览优化、公式/表格交互和默认离线更新入口已生成并安装本机 macOS 开发
   构建；公开安装制品尚未包含这些后续更新。
 - 当前源码版本：`2.1.0-beta.2`；版本来源为 `app/__init__.py`。
@@ -278,13 +279,25 @@
 - Vercel 原项目预览 `dpl_7KCFhWRVwYtSdbS2WdUyavEFqobJ` 为 READY，只有现有网站
   和缓存配置，没有 appcast；正式部署、GitHub Beta 1 资产与本机主应用未改动。
   详细矩阵见 `docs/beta-update-verification-2026-09-09.md`，当前候选/剩余决策见
-  `docs/BETA_ACTIVATION_HANDOFF.md`。当前变更未提交/推送，不触发 GitHub Actions。
+  `docs/BETA_ACTIVATION_HANDOFF.md`。源码同步状态见下，不改变这些发布门槛。
+
+2026-09-10 用户授权的源码同步验证：
+
+- 必需 compileall 通过；offscreen 完整回归 965 项通过（196.352 秒），退出码 0。
+  既有 `welcome_page.py` 的 deleted-QLabel 异常仍出现，本轮未修复或新增原生验收。
+- `git diff --check`、网站元数据和已发布制品一致性检查通过；严格源码版本发布检查
+  仍因 Beta 1 manifest 与 Beta 2 源码不一致而正确拒绝，不将旧制品改名为 Beta 2。
+- `fef3731` 已推送并通过 `git ls-remote` 核对；使用 `[skip ci]`，查询未见该提交的
+  Actions run。Vercel 最新部署身份未改变，GitHub 仍只有 Beta 1 prerelease。
+- appcast 移至 `release/updates/candidates/macos-arm64-beta-r2.appcast.xml`，
+  移动前后 SHA-256 均为 `be57a732b6532e3247916530bdc688b7e05b1cd4ec0457b216a5020250140c03`。
+  未打包、安装、签名、部署或发布；下一代开发说明入库不代表 M1–M6 已实现。
 
 ## Release Matrix
 
 | 对象 | 状态 | 说明 |
 | --- | --- | --- |
-| 当前源码 | Beta 2 signed local candidate | 2.1.0-beta.2；新增变更未提交/推送；此前产品源码 `39e315e` 已同步，公开激活仍受验收门槛限制 |
+| 当前源码 | Beta 2 source synchronized | 2.1.0-beta.2；源码与开发说明提交 `fef3731` 已推送至 `release/2.1`；公开激活仍受验收门槛限制 |
 | Beta 2 macOS arm64 候选 | Signed and replaced in QA; activation held | `dist/ICSTeX-2.1.0-beta.2-macos-arm64-candidate-r2/`；序号 210002；签名、真实替换和冷启动通过，原生安装互斥门槛未建立 |
 | 本机 macOS 应用 | Latest local development build installed | `/Applications/ICSTeX.app`；20260908-204029-b002533f；包含响应/预览优化、公式/表格更新及默认离线更新入口；旧应用已保留 |
 | macOS arm64 DMG/ZIP | Verified, rebuilt | hardened source；ad-hoc signed、未 notarize |

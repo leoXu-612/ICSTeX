@@ -2438,3 +2438,21 @@ must link here instead of repeating old task details.
   no common private-key/token/credential-URL or maintainer-home patterns. No release,
   website, workflow, binary artifact, screenshot, PDF or test log is staged; this
   limited hygiene check is not a whole-repository security audit.
+
+## 2026-09-11 — Authorized V1 increment push verified
+
+- The requested source checkpoint was committed as
+  `c521041cb2b44740405abf4c513be5fbfca4acd3`
+  (`feat: add V1 source checks and guarded recovery [skip ci]`) and pushed with the
+  explicit refspec `HEAD:refs/heads/codex/v1-development`, without force or tags.
+  `git ls-remote --heads origin` returned that exact development-branch hash.
+  Existing `codex/v1-development` already matched the scope, so no further rename.
+- All 74 prepared source/test/probe/documentation files are in this checkpoint;
+  app digest remains `b2a8297c88089ac76925a8d55378b50d299694180bb7aa93641a263260392802`,
+  matching the completed 1312-test run above. Worktree and index were clean after
+  the source push; this receipt updates documentation only.
+- Remote `release/2.1` remains
+  `f03776e87c0f938421a70ff5b085db920f2d01d7`. No package, installed-app replacement,
+  version/workflow/website/feed edit, signing, tag or release was performed. The
+  source checkpoint's skip marker preserves the existing no-CI-request boundary;
+  all outstanding native/platform/product acceptance and Beta gates remain open.

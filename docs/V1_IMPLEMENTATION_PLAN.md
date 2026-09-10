@@ -1,7 +1,7 @@
 # V1 local implementation and acceptance
 
 Updated: 2026-09-11. M0/M1 complete; M2 property-draft slice verified locally; full M2-M6 incomplete.
-Active slice: authorized source synchronization of the completed local increments, including the bounded M4 legacy-history repair. Project-checkpoint GUI selection, real source/Block draft capture and reviewed restore-to-new-directory remain the next implementation slice. Native M2/M3 acceptance still waits for manual Mac unlock.
+Active slice: M4 project-checkpoint GUI selection, real source/Block draft capture and reviewed restore-to-new-directory. The preceding local increments, including the bounded legacy-history repair, were synchronized by explicit user request as c521041; this is not complete M4 acceptance. Native M2/M3 acceptance still waits for manual Mac unlock.
 Full scope: `CODEX_V1_DEVELOPMENT_INSTRUCTIONS.md`, M1-M6 plus M7 readiness handoff.
 No automatic commits/pushes, packages, installed-app changes, signing or publication.
 Exception for this checkpoint only: on 2026-09-11 the user explicitly requested
@@ -11,9 +11,10 @@ Full validation passed and the existing V1 checkpoint was committed and pushed
 only to the development branch with `[skip ci]`; the remote SHA was verified.
 The source identity and receipt are in `PROJECT_STATE.md` and `PROJECT_LOG.md`.
 This is not standing permission for later automatic pushes.
-The user's renewed request to rename and submit authorizes this later local batch
-as another explicit synchronization checkpoint. The branch name already matches
-its V1 scope; do not rename the product, old artifacts or the release branch.
+The user's renewed request to rename and submit was fulfilled for the later local
+batch as source checkpoint `c521041`, with the remote hash verified. The branch
+name already matches its V1 scope; no product, artifact or release-branch rename
+was needed. This second checkpoint also grants no standing automatic-push authority.
 
 Current draft implementation stores only explicit property differences against a
 captured target/base, with session-visible pending state but no automatic model
@@ -464,7 +465,7 @@ Cancel, tamper refusal, Undo/Redo, explicit Save, reopen and visible FINAL passe
 See `v1-m4-history-safety-verification-2026-09-11.md` and the current state for final
 source-identified regression receipts and remaining race/platform limits.
 
-After this authorized source synchronization, the next UI integration must explicitly select
+The next UI integration must explicitly select
 the project and files, pause only this app's own write entrances, capture source
 and Block drafts separately with ownership/revision guards, and offer reviewed
 restore to a new directory without applying drafts or switching projects implicitly.

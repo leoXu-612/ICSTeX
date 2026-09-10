@@ -45,6 +45,7 @@ def build_actions(window: "MainWindow") -> None:
     window.addToolBar(toolbar)
 
     window.new_project_action = QAction(icon("folder-plus"), "新建项目", window)
+    window.project_profile_action = QAction("项目配置…", window)
     window.new_action = QAction(icon("file-plus-2"), "新建文档", window)
     window.open_file_action = QAction(icon("folder-open"), "打开文件", window)
     window.open_folder_action = QAction(icon("folder"), "打开文件夹", window)
@@ -71,6 +72,9 @@ def build_actions(window: "MainWindow") -> None:
     window.clean_build_action = QAction(icon("trash-2"), "清理编译缓存", window)
     window.full_rebuild_action = QAction(icon("refresh-cw"), "完整编译", window)
     window.health_check_action = QAction(icon("circle-check"), "检查项目", window)
+    window.submission_check_action = QAction("提交检查", window)
+    window.submission_check_action.setShortcut(QKeySequence("Ctrl+Shift+J"))
+    window.submission_check_action.setToolTip("只读检查保存、FINAL PDF、引用、资源与字数；不自动编译。")
     window.environment_doctor_action = QAction(icon("stethoscope"), "环境医生", window)
     window.feedback_bundle_action = QAction(icon("info"), "复制反馈包", window)
     window.feedback_bundle_action.setToolTip("复制环境、编译与项目诊断摘要，不包含论文正文。")
@@ -110,8 +114,8 @@ def build_actions(window: "MainWindow") -> None:
     toolbar.addSeparator()
     toolbar.addAction(window.compile_action)
     toolbar.addAction(window.stop_compile_action)
-    toolbar.addWidget(window.auto_compile_toggle)
-    toolbar.addWidget(window.engine_selector)
+    window.auto_compile_toolbar_action = toolbar.addWidget(window.auto_compile_toggle)
+    window.engine_toolbar_action = toolbar.addWidget(window.engine_selector)
     toolbar.addSeparator()
     for action in (window.health_check_action, window.word_count_action, window.sync_pdf_action):
         toolbar.addAction(action)
@@ -128,6 +132,7 @@ def build_actions(window: "MainWindow") -> None:
         window.new_action,
         window.open_file_action,
         window.open_folder_action,
+        window.project_profile_action,
         window.save_action,
         window.save_as_action,
         window.export_pdf_action,
@@ -145,6 +150,7 @@ def build_actions(window: "MainWindow") -> None:
     build_menu.addAction(window.clean_build_action)
     build_menu.addAction(window.full_rebuild_action)
     build_menu.addAction(window.health_check_action)
+    build_menu.addAction(window.submission_check_action)
     build_menu.addAction(window.environment_doctor_action)
     build_menu.addSeparator()
     build_menu.addAction(window.auto_compile_action)

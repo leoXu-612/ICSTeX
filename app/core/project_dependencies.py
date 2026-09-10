@@ -103,18 +103,43 @@ def _open_safe_input(scope: Path, path: Path, *, allow_internal: bool = False):
             os.close(handle)
 
 
-def _read_source_bytes(path: Path, scope: Path, *, allow_internal: bool = False) -> bytes:
+def _read_source_bytes(path: Path, scope: Path, *, allow_internal: bool = False,
+                       max_bytes: int = MAX_SOURCE_BYTES) -> bytes:
     with _open_safe_input(scope, path, allow_internal=allow_internal) as stream:
-        data = stream.read(MAX_SOURCE_BYTES + 1)
-    if len(data) > MAX_SOURCE_BYTES:
+        data = stream.read(max_bytes + 1)
+    if len(data) > max_bytes:
         raise OSError("Dependency source exceeds the bounded parser size")
     return data
+
+
+@dataclass(frozen=True)
+class InputReference:
+    source: Path
+    line: int
+    command: str
+    value: str
+    candidates: tuple[Path, ...] = ()
+    unresolved: bool = False
+
+
+def read_project_bytes(path: Path, scope: Path, *, allow_internal: bool = False,
+                       max_bytes: int = MAX_SOURCE_BYTES) -> bytes:
+    """Read one bounded regular file without following links or leaving scope."""
+    if not 0 < max_bytes <= MAX_SOURCE_BYTES:
+        raise ValueError("Read limit must remain within the bounded parser size")
+    return _read_source_bytes(path, scope, allow_internal=allow_internal, max_bytes=max_bytes)
+
+
+def read_project_source(path: Path, scope: Path) -> str:
+    """Read bounded source with the same strict path/encoding rules as tracking."""
+    return decode_latex_bytes(_read_source_bytes(path, scope)).text
 
 
 @dataclass(frozen=True)
 class DependencySnapshot:
     paths: frozenset[Path]
     complete: bool = True
+    references: tuple[InputReference, ...] = ()
 
 
 def static_dependencies(
@@ -130,6 +155,7 @@ def static_dependencies(
     visited: set[Path] = set()
     queue = [root]
     graphics_dirs: set[Path] = set()
+    found: list[InputReference] = []
     complete = True
     while queue:
         source = queue.pop(0)
@@ -156,32 +182,46 @@ def static_dependencies(
                     directory = safe_project_input(scope, base / raw_dir)
                     if directory is not None:
                         graphics_dirs.add(directory)
-        references = [(match.group("command"), match.group("target")) for match in _REFERENCE.finditer(clean)]
-        references.extend(("input", match.group(1)) for match in _UNBRACED_INPUT.finditer(clean))
-        for command, targets in references:
+        references = [(match.group("command"), match.group("target"), match.start())
+                      for match in _REFERENCE.finditer(clean)]
+        references.extend(("input", match.group(1), match.start()) for match in _UNBRACED_INPUT.finditer(clean))
+        recognized = {offset for _, _, offset in references}
+        for match in re.finditer(r"\\(?:input|include|subfile|includegraphics|bibliography|addbibresource)\b", clean):
+            if match.start() not in recognized:
+                found.append(InputReference(source, clean.count("\n", 0, match.start()) + 1,
+                                            match.group()[1:], "dynamic", unresolved=True))
+        for command, targets, offset in references:
+            line = clean.count("\n", 0, offset) + 1
             values = targets.split(",") if command in {"bibliography", "usepackage", "RequirePackage"} else [targets]
             for value in values:
                 raw = value.strip().strip('"')
                 if not raw or any(char in _DYNAMIC for char in raw):
+                    found.append(InputReference(source, line, command, raw, unresolved=True))
                     continue
                 literal = Path(raw)
                 suffixes = _suffixes_for(command, literal)
                 bases = [root.parent, source.parent]
                 if command == "includegraphics":
                     bases.extend(sorted(graphics_dirs))
+                candidates: list[Path] = []
                 for base in dict.fromkeys(bases):
                     candidate = literal if literal.is_absolute() else base / literal
                     for suffix in suffixes:
                         expanded = candidate.with_suffix(suffix) if suffix else candidate
                         safe = safe_project_input(scope, expanded)
-                        if safe is None or safe in paths:
+                        if safe is None:
+                            continue
+                        if safe not in candidates:
+                            candidates.append(safe)
+                        if safe in paths:
                             continue
                         if len(paths) >= max_inputs:
-                            return DependencySnapshot(frozenset(paths), False)
+                            return DependencySnapshot(frozenset(paths), False, tuple(found))
                         paths.add(safe)
                         if safe.suffix.lower() in SOURCE_SUFFIXES:
                             queue.append(safe)
-    return DependencySnapshot(frozenset(paths), complete)
+                found.append(InputReference(source, line, command, raw, tuple(candidates), not candidates))
+    return DependencySnapshot(frozenset(paths), complete, tuple(found))
 
 
 def _suffixes_for(command: str, path: Path) -> tuple[str, ...]:
@@ -243,19 +283,20 @@ class InputObservation:
     readable: bool = True
 
 
-def observe_input(path: Path, scope: Path) -> InputObservation:
+def observe_input(path: Path, scope: Path, *, allow_internal: bool = False) -> InputObservation:
     """Hash only safe inputs; callers run this I/O outside the GUI thread."""
-    if safe_project_input(scope, path) is None:
+    if safe_project_input(scope, path, allow_internal=allow_internal) is None:
         return InputObservation(None, True, False)
     before = file_signature(path)
     if before is None:
         return InputObservation(None, True)
     digest = hashlib.sha256()
     try:
-        with _open_safe_input(scope, path) as stream:
+        with _open_safe_input(scope, path, allow_internal=allow_internal) as stream:
             for chunk in iter(lambda: stream.read(1024 * 1024), b""):
                 digest.update(chunk)
     except OSError:
         return InputObservation(None, False, False)
-    stable = before == file_signature(path) and safe_project_input(scope, path) is not None
+    stable = (before == file_signature(path)
+              and safe_project_input(scope, path, allow_internal=allow_internal) is not None)
     return InputObservation(digest.hexdigest(), stable)

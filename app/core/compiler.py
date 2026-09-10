@@ -13,7 +13,8 @@ import time
 from typing import Callable
 
 from app.core.latex_tools import LaTeXEngine, LaTeXToolchain, detect_toolchain
-from app.core.log_parser import LaTeXError, parse_latex_errors, parse_log_file
+from app.core.log_parser import LaTeXError, parse_latex_errors, parse_log_file, parse_reference_warnings
+from app.core.build_evidence import BuildInputEvidence, capture_compile_inputs, finish_compile_inputs
 from app.core.paths import (
     build_dir_for,
     built_log_for,
@@ -22,7 +23,7 @@ from app.core.paths import (
     preview_build_dir_for,
 )
 from app.core.process_env import latex_subprocess_env
-from app.core.project_dependencies import read_recorder_dependencies
+from app.core.project_dependencies import read_project_bytes, read_recorder_dependencies
 
 
 logger = logging.getLogger(__name__)
@@ -100,6 +101,9 @@ class CompileResult:
     preview_asset_paths: tuple[Path, ...] = ()
     job_key: CompileJobKey | None = None
     recorder_inputs: tuple[Path, ...] | None = None
+    input_evidence: BuildInputEvidence | None = None
+    warnings: tuple[LaTeXError, ...] = ()
+    log_complete: bool = False
 
     @property
     def ok(self) -> bool:
@@ -377,6 +381,14 @@ class CompileManager:
         try:
             if self.on_started:
                 self.on_started(self.root_file, build_id)
+            before = None
+            if selected is BuildPurpose.FINAL:
+                previous = read_recorder_dependencies(
+                    request.key.output_dir / f"{self.root_file.stem}.fls",
+                    root=self.root_file, scope=self.project_scope,
+                )
+                before = capture_compile_inputs(self.root_file, self.project_scope,
+                                                tuple(previous.paths) if previous else ())
             result = self._run_compile(build_id, selected, timeout_seconds=timeout_seconds)
             # Read the recorder before another job can overwrite the same FLS.
             recorder = None
@@ -387,7 +399,10 @@ class CompileManager:
                 )
                 if inputs is not None:
                     recorder = tuple(sorted(inputs.paths))
-            result = replace(result, job_key=request.key, recorder_inputs=recorder)
+            evidence = (finish_compile_inputs(before, self.root_file, self.project_scope,
+                                              recorder or (), result.pdf_file if result.ok else None)
+                        if before is not None else None)
+            result = replace(result, job_key=request.key, recorder_inputs=recorder, input_evidence=evidence)
             if self.on_finished:
                 self.on_finished(result)
             return result
@@ -573,6 +588,11 @@ class CompileManager:
         duration = time.perf_counter() - start
         combined = "\n".join(part for part in (stdout, stderr) if part)
         errors = parse_log_file(log_file, self.root_file.parent) or parse_latex_errors(combined, self.root_file.parent)
+        try:
+            log_text = read_project_bytes(log_file, self.project_scope, allow_internal=True).decode("utf-8", errors="replace")
+            log_complete = True
+        except (OSError, ValueError):
+            log_text, log_complete = combined, False
 
         if timed_out:
             stderr = "\n".join(part for part in (stderr, "编译超时，已终止进程。") if part)
@@ -600,6 +620,8 @@ class CompileManager:
             errors=errors,
             build_id=build_id,
             purpose=purpose,
+            warnings=parse_reference_warnings(log_text),
+            log_complete=log_complete,
             preview_fidelity=preparation.fidelity if purpose is BuildPurpose.PREVIEW else None,
             preview_manifest_digest=(
                 preparation.manifest_digest if purpose is BuildPurpose.PREVIEW else None

@@ -62,6 +62,7 @@ class DependencyController(QObject):
         self.window = window
         self._scopes: dict[Path, Path] = {}
         self._root_paths: dict[Path, frozenset[Path]] = {}
+        self._tab_roots: dict[int, Path] = {}
         self._recorded: dict[Path, frozenset[Path]] = {}
         self._extra: dict[Path, frozenset[Path]] = {}
         self._path_roots: dict[Path, set[Path]] = {}
@@ -98,8 +99,21 @@ class DependencyController(QObject):
     def paths_for(self, root: Path) -> frozenset[Path]:
         return self._root_paths.get(root, frozenset())
 
+    def root_for_tab(self, tab) -> Path | None:
+        """Last resolved root for presentation; never scan or create a manager."""
+        if tab is None:
+            return None
+        if tab.manager is not None:
+            return tab.manager.root_file
+        return self._tab_roots.get(id(tab.editor))
+
     def generation_for(self, root: Path) -> int:
         return self._generations.get(root, 0)
+
+    def observations_for(self, root: Path) -> tuple[tuple[Path, InputObservation], ...]:
+        """Immutable view for read-only checks; no scan or state mutation."""
+        return tuple((path, self._observed[path]) for path in sorted(self.paths_for(root))
+                     if path in self._observed)
 
     def schedule_membership_refresh(self) -> None:
         if not self._closed.is_set():
@@ -110,10 +124,9 @@ class DependencyController(QObject):
             return
         self._membership_timer.stop()
         window = self.window
-        roots = {
-            root for tab in window.tabs.values()
-            if (root := window._compile_root_for_tab(tab)) is not None
-        }
+        self._tab_roots = {id(tab.editor): root for tab in window.tabs.values()
+                           if (root := window._compile_root_for_tab(tab)) is not None}
+        roots = set(self._tab_roots.values())
         for root in self._scopes.keys() - roots:
             # Once observation stops, an old PDF cannot remain certified fresh
             # across an arbitrary closed/reopened interval.
@@ -172,6 +185,8 @@ class DependencyController(QObject):
             self._queue(path, changed=False)
         if self._queued and self._active is None and not self._timer.isActive():
             self._timer.start(0)
+        if hasattr(window, "workspace"):
+            window.workspace.schedule()
 
     def register_extra(self, root: Path, paths: tuple[Path, ...]) -> None:
         scope = self._scopes.get(root, root.parent)
@@ -285,6 +300,8 @@ class DependencyController(QObject):
         window._invalidate_include_cache()
         if window._compile_root_for_tab(window.current_tab()) in roots:
             window._update_pdf_action_state()
+            if hasattr(window, "readiness"):
+                window.readiness.invalidate()
         for root in automatic_roots or ():
             self.schedule_root(root)
 

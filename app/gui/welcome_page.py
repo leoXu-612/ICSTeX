@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtCore import QSize, Qt, Signal, Slot
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -100,7 +100,7 @@ class WelcomePage(QWidget):
 
         self.action_grid = QGridLayout()
         self.action_grid.setSpacing(10)
-        self.new_project_button = QPushButton("新建 IA 项目")
+        self.new_project_button = QPushButton("新建项目")
         self.new_project_button.setObjectName("primaryButton")
         self.open_file_button = QPushButton("打开 .tex")
         self.open_folder_button = QPushButton("打开项目文件夹")
@@ -158,10 +158,11 @@ class WelcomePage(QWidget):
         app = QApplication.instance()
         manager = getattr(app, "ui_scale_manager", None)
         if manager is not None:
-            manager.scale_changed.connect(lambda _scale: self._apply_metrics())
+            manager.scale_changed.connect(self._apply_metrics)
         self._apply_metrics()
         self._apply_layout_mode(resolve_layout_mode(self.contentsRect().width()))
 
+    @Slot()
     def _apply_metrics(self) -> None:
         app = QApplication.instance()
         manager = getattr(app, "ui_scale_manager", None)

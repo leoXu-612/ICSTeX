@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
+    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
     QTextEdit,
@@ -27,9 +28,13 @@ from PySide6.QtWidgets import (
 from app.core.history import HistorySnapshot
 from app.core.image_assets import ImageAsset
 from app.core.latex_insertions import all_templates
+from app.core.latex_tools import LaTeXEngine
+from app.core.magic_comments import parse_magic_comments
+from app.core.project_profile import ProjectProfile
 from app.core.latex_outline import OutlineItem
 from app.core.project_search import ProjectSearchResult
-from app.core.project_tools import BibEntrySpec, LabelInfo, ProjectInitSpec
+from app.core.project_tools import (BibEntrySpec, LabelInfo, ProjectInitSpec,
+                                    initialize_project, sanitize_project_name)
 
 
 _IMAGE_THUMBNAIL_SIZE = QSize(44, 44)
@@ -97,31 +102,117 @@ class ProjectWizardDialog(QDialog):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("新建 LaTeX 项目")
+        self.resize(600, 600)
+        self.created_project = None
+        self._templates = {template.key: template for template in all_templates()}
         self.parent_edit = QLineEdit(str(Path.home()))
         self.name_edit = QLineEdit("LaTeX 项目")
         self.template_combo = QComboBox()
-        for template in all_templates():
+        for template in self._templates.values():
             self.template_combo.addItem(template.title, template.key)
+        self.engine_combo = QComboBox()
+        for engine in LaTeXEngine:
+            self.engine_combo.addItem(engine.display_name, engine.value)
+        self.engine_combo.setCurrentIndex(self.engine_combo.findData(LaTeXEngine.AUTO.value))
+        self.profile_enabled = QCheckBox("保存可编辑的项目配置（不设课程字数限制）")
+        self.profile_enabled.setChecked(True)
+        self.open_new_window = QCheckBox("在新窗口打开（保留当前工作区）")
+        self.open_new_window.setChecked(bool(parent and hasattr(parent, "current_tab") and
+                                            (parent.current_tab() or getattr(parent, "block_session", None))))
+        self.destination = QLabel()
+        self.destination.setTextFormat(Qt.TextFormat.PlainText)
+        self.destination.setWordWrap(True)
+        self.template_hint = QLabel()
+        self.template_hint.setWordWrap(True)
+        self.template_hint.setTextFormat(Qt.TextFormat.PlainText)
+        self.preview = QTextEdit()
+        self.preview.setReadOnly(True)
+        self.preview.setAccessibleName("新项目模板源码预览")
+        self.preview.setMaximumHeight(160)
+        self.error = QLabel()
+        self.error.setWordWrap(True)
+        self.error.setTextFormat(Qt.TextFormat.PlainText)
         self._build()
+        self.parent_edit.textChanged.connect(self._update_destination)
+        self.name_edit.textChanged.connect(self._update_destination)
+        self.template_combo.currentIndexChanged.connect(self._update_template)
+        self.engine_combo.currentIndexChanged.connect(self._update_template)
+        self._update_destination()
+        self._update_template()
 
     def values(self) -> ProjectInitSpec:
+        key = str(self.template_combo.currentData())
+        suggested = parse_magic_comments(self._templates[key].text).program
+        engine = self.selected_engine()
+        profile = ProjectProfile(template=key, engine=(suggested.value if suggested else "")
+                                 if engine is LaTeXEngine.AUTO else engine.value)
         return ProjectInitSpec(
             parent_dir=Path(self.parent_edit.text().strip() or str(Path.home())),
             project_name=self.name_edit.text().strip(),
-            template_key=str(self.template_combo.currentData()),
+            template_key=key,
+            profile=profile if self.profile_enabled.isChecked() else None,
         )
+
+    def selected_engine(self):
+        return LaTeXEngine(self.engine_combo.currentData())
+
+    def _update_destination(self):
+        name = sanitize_project_name(self.name_edit.text())
+        parent = Path(self.parent_edit.text().strip() or str(Path.home())).expanduser()
+        changed = name != self.name_edit.text().strip()
+        self.destination.setText(f"创建位置：{parent / name}\n"
+                                 + (f"名称将调整为：{name}。" if changed else "")
+                                 + "目标必须是新目录；已有文件夹不会覆盖。")
+
+    def _update_template(self):
+        template = self._templates[str(self.template_combo.currentData())]
+        self.preview.setPlainText(template.text)
+        suggested = parse_magic_comments(template.text).program
+        engine = self.selected_engine()
+        effective = suggested if engine is LaTeXEngine.AUTO and suggested else engine
+        tools = getattr(self.parentWidget(), "toolchain", None)
+        ready = tools.supports_engine(effective) if tools else False
+        self.template_hint.setText(
+            f"引擎选择：{engine.display_name}；模板声明：{suggested.display_name if suggested else '无'}。\n"
+            + ("本机已检测到可用工具。" if ready else "工具尚未就绪也可创建和编辑；之后通过环境医生查看安装指引。")
+            + "创建不会运行编译器。首次编译由你主动触发。")
+
+    def accept(self):
+        try:
+            self.created_project = initialize_project(self.values())
+        except (OSError, ValueError) as exc:
+            self.error.setText(str(exc))
+            return
+        super().accept()
 
     def _build(self) -> None:
         layout = QVBoxLayout(self)
-        form = QFormLayout()
+        intro = QLabel("选择模板 → 创建项目 → 编辑图表与引用 → 正式编译 → 提交检查与导出。")
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        body = QWidget()
+        form = QFormLayout(body)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         form.addRow("父文件夹", self._folder_row())
         form.addRow("项目名称", self.name_edit)
         form.addRow("模板", self.template_combo)
-        layout.addLayout(form)
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+        form.addRow("编译器", self.engine_combo)
+        form.addRow(self.template_hint)
+        form.addRow(self.profile_enabled)
+        form.addRow(self.open_new_window)
+        form.addRow(self.destination)
+        form.addRow("模板预览", self.preview)
+        scroll.setWidget(body)
+        layout.addWidget(scroll)
+        layout.addWidget(self.error)
+        self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        self.buttons.button(QDialogButtonBox.StandardButton.Ok).setText("创建项目")
+        self.buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("取消")
+        self.buttons.accepted.connect(self.accept)
+        self.buttons.rejected.connect(self.reject)
+        layout.addWidget(self.buttons)
 
     def _folder_row(self) -> QWidget:
         row = QWidget()

@@ -49,7 +49,6 @@ from app.core.preview_state import (
     PreviewFreshness,
     PreviewStateStore,
 )
-from app.core.project_tools import initialize_project
 from app.core.synctex import pdf_to_source, safe_source_position, source_to_pdf
 from app.core.settings import AppPreferences, AppSettings
 from app.core.text_encoding import DecodedLatexText, LatexTextDecodeError, decode_latex_bytes
@@ -66,6 +65,7 @@ from app.gui.pdf_export_controller import PdfExportController
 from app.gui.project_file_controller import ProjectFileController
 from app.gui.project_panel_controller import ProjectPanelController
 from app.gui.dependency_controller import DependencyController
+from app.gui.submission_check_controller import SubmissionCheckController
 from app.gui.latex_editor import LaTeXEditor
 from app.gui.log_bridge import QtLogBridge
 from app.gui.main_window_layout import build_ui
@@ -82,6 +82,7 @@ from app.gui.project_panels import ProjectWizardDialog
 from app.gui.theme import apply_theme
 from app.gui.user_guide import UserGuideDialog
 from app.gui.word_count_controller import WordCountController
+from app.gui.workspace_controller import WorkspaceController
 
 
 _SOURCE_ENCODING_CHOICES = (
@@ -160,6 +161,8 @@ class MainWindow(QMainWindow):
         self.dependencies = DependencyController(self)
 
         self._build_ui()
+        self.readiness = SubmissionCheckController(self)
+        self.workspace = WorkspaceController(self)
         self.project_files.install_drop_targets()
         app = QApplication.instance()
         if app is not None and hasattr(app, "ui_scale_manager"):
@@ -182,6 +185,7 @@ class MainWindow(QMainWindow):
             return
         if not hasattr(app, "ui_scale_manager"):
             app.ui_scale_manager = UiScaleManager(app)
+        app.ui_scale_manager.register_window(self)
         app.ui_scale_manager.apply_scale(self.preferences.ui_scale)
         self._sync_ui_scale_actions()
 
@@ -229,15 +233,18 @@ class MainWindow(QMainWindow):
         dialog = ProjectWizardDialog(self)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
-        try:
-            project = initialize_project(dialog.values())
-        except (OSError, ValueError) as exc:
-            QMessageBox.warning(self, "项目创建失败", str(exc))
+        project = dialog.created_project
+        if project is None:
             return
-        self.project_files.set_project_root(project.root_dir, remember=True)
-        self.open_file(project.tex_file)
-        self.sidebar_tabs.setCurrentIndex(0)
-        self.statusBar().showMessage(f"已创建项目：{project.root_dir.name}", 5000)
+        target = self.spawn_window() if dialog.open_new_window.isChecked() else self
+        if getattr(target, "block_session", None) and target.block_mode_action.isChecked():
+            from app.gui.block_mode import _set_block_mode
+            _set_block_mode(target, False)
+        target.compile.set_engine(dialog.selected_engine(), compile_after=False)
+        target.project_files.set_project_root(project.root_dir, remember=True)
+        target.open_file(project.tex_file)
+        target.sidebar_tabs.setCurrentIndex(0)
+        target.statusBar().showMessage(f"已创建项目：{project.root_dir.name}；尚未编译。", 5000)
 
     def new_document_from_template(self, key: str) -> None:
         template = template_for_key(key)
@@ -587,6 +594,10 @@ class MainWindow(QMainWindow):
         )
 
     def _sync_pdf_panel_to_active_root(self) -> None:
+        if getattr(self, "block_session", None) is not None and self.block_mode_action.isChecked():
+            from app.gui.block_mode import sync_block_pdf
+            sync_block_pdf(self)
+            return
         root = self._compile_root_for_tab(self.current_tab())
         displayed = self._select_displayed_pdf(root) if root is not None else None
         if displayed is not None:
@@ -613,6 +624,10 @@ class MainWindow(QMainWindow):
         return None
 
     def _update_pdf_action_state(self) -> None:
+        if getattr(self, "block_session", None) is not None and self.block_mode_action.isChecked():
+            from app.gui.block_mode import sync_block_pdf
+            sync_block_pdf(self)
+            return
         root = self._compile_root_for_tab(self.current_tab())
         record = self._active_pdf_record()
         preview = self._active_preview_record()
@@ -822,6 +837,7 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "source_stack"):
             return
         has_documents = self.editor_tabs.count() > 0
+        source_active = not (getattr(self, "block_session", None) and self.block_mode_action.isChecked())
         self.source_stack.setCurrentWidget(self.editor_tabs if has_documents else self.welcome_page)
         for action in (
             self.save_action,
@@ -834,11 +850,13 @@ class MainWindow(QMainWindow):
             self.find_action,
             self.replace_action,
         ):
-            action.setEnabled(has_documents)
+            action.setEnabled(has_documents and source_active)
         self._update_pdf_action_state()
         if not has_documents:
             self.find_replace_bar.close_bar()
             self.update_welcome_page()
+        if hasattr(self, "workspace"):
+            self.workspace.schedule()
 
     def update_welcome_page(self) -> None:
         self.preferences_controller.update_welcome_page()
@@ -1055,6 +1073,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent) -> None:
         self.tab_manager.handle_close_event(event)
         if event.isAccepted():
+            self.readiness.shutdown()
             self.app_settings.settings.setValue("window/block_console_state", self.saveState())
             _unregister_app_window(self)
 
@@ -1116,6 +1135,7 @@ class MainWindow(QMainWindow):
         tab.dirty = True
         self._mark_source_edited(tab)
         self.word_counts.schedule()
+        self.readiness.invalidate()
         if tab is self.current_tab():
             self._update_pdf_action_state()
         self._set_tab_title(tab)

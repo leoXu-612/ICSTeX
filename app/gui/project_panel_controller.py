@@ -102,9 +102,9 @@ class ProjectPanelController:
         if switch_to_panel:
             window.bottom_tabs.setCurrentWidget(window.diagnostic_panel)
         if diagnostics:
-            window.statusBar().showMessage(f"检查完成：发现 {len(diagnostics)} 个项目提示。", 4000)
+            window.statusBar().showMessage(f"当前源码静态检查：{len(diagnostics)} 项提示；不代表完整提交检查。", 4000)
         else:
-            window.statusBar().showMessage("检查完成：未发现明显问题。", 4000)
+            window.statusBar().showMessage("当前源码静态检查未发现提示；完整提交状态请查看提交检查。", 4000)
         return diagnostics
 
     def fix_diagnostic(self, index: int) -> None:
@@ -156,13 +156,14 @@ class ProjectPanelController:
         if tab is None or tab.path is None:
             window.search_panel.status_label.setText("请先打开或保存一个项目文件")
             return
+        scope = window.selected_project_scope or tab.path.parent
         results = search_project(
-            tab.path.parent,
+            scope,
             query,
             case_sensitive=case_sensitive,
             whole_word=whole_word,
         )
-        window.search_panel.set_results(tab.path.parent, results)
+        window.search_panel.set_results(scope, results)
         window.statusBar().showMessage(f"项目搜索完成：{len(results)} 个结果。", 3000)
 
     def jump_to_project_search_result(self, path: str, line: int, column: int) -> None:
@@ -268,13 +269,14 @@ class ProjectPanelController:
         if "outline" in domains:
             window.outline_panel.set_outline(scan_outline(tex_text))
         if tab.path and domains & {"assets", "image_usage"}:
-            index = self._asset_indexes.get(tab.path.parent)
+            scope = window.selected_project_scope or tab.path.parent
+            index = self._asset_indexes.get(scope)
             if index is None:
-                index = AssetIndex(tab.path.parent)
+                index = AssetIndex(scope)
                 index.load()
                 if len(self._asset_indexes) >= 8:
                     self._asset_indexes.pop(next(iter(self._asset_indexes)))
-                self._asset_indexes[tab.path.parent] = index
+                self._asset_indexes[scope] = index
                 domains.add("assets")
             if "assets" in domains:
                 import_metrics.record_index_scan(full=not index.was_cached)

@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
 
 from app.core.project_file_ops import PROJECT_FILE_FILTERS
 from app.gui.diagnostics_panel import DiagnosticsPanel
+from app.gui.submission_check_panel import SubmissionCheckPanel
 from app.gui.find_replace import FindReplaceBar
 from app.gui.icons import icon
 from app.gui.insert_panel import InsertPanel, TemplatesPanel, scrollable_panel
@@ -265,6 +266,8 @@ def _install_bottom_tabs(window: "MainWindow") -> None:
     tabs.addTab(window.word_count_panel, "字数")
     window.diagnostic_panel = DiagnosticsPanel()
     tabs.addTab(window.diagnostic_panel, "检查")
+    window.submission_panel = SubmissionCheckPanel()
+    tabs.addTab(window.submission_panel, "提交检查")
     window.bottom_tabs = tabs
 
 

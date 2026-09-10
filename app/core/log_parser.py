@@ -56,6 +56,18 @@ def parse_log_file(log_file: str | Path, project_dir: str | Path | None = None) 
     return parse_latex_errors(path.read_text(encoding="utf-8", errors="replace"), project_dir)
 
 
+def parse_reference_warnings(output: str) -> tuple[LaTeXError, ...]:
+    """Common TeX rerun/unresolved-reference warnings; no arbitrary log diagnosis."""
+    warnings = []
+    for match in re.finditer(r"(?:LaTeX|Package [\w-]+) Warning:\s*([^\n]*(?:\n(?!\s*$|.*Warning:)[^\n]*)?)", output):
+        message = " ".join(match.group(1).split())
+        if re.search(r"undefined|multiply[- ]defined|Label\(s\) may have changed|Rerun to get cross-references", message, re.I):
+            line = re.search(r"on input line (\d+)", message)
+            # A log line alone does not identify which included source owns it.
+            warnings.append(LaTeXError(message, line=int(line.group(1)) if line else None))
+    return tuple(_dedupe_errors(warnings))
+
+
 def _line_number_near(lines: list[str], index: int) -> int | None:
     for nearby in lines[index : index + 4]:
         match = re.search(r"l\.(\d+)", nearby)

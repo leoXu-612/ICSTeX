@@ -50,6 +50,7 @@ from app.core.latex_tools import LaTeXEngine, LaTeXToolchain, detect_toolchain
 from app.core.log_parser import parse_log_file
 from app.core.magic_comments import parse_magic_comments
 from app.core.paths import ROOT_CANDIDATES, strip_latex_comments
+from app.core.project_lock import project_write_lock
 from app.core.project_tools import (
     bib_keys,
     duplicate_labels,
@@ -110,9 +111,6 @@ class AgentGrants:
     allowed_inputs: tuple[Path, ...] = ()
 
 
-_LOCKS: dict[str, threading.RLock] = {}
-_LOCKS_GUARD = threading.Lock()
-_PROJECT_LOCKS_HELD = threading.local()
 
 
 class AgentWorkspace:
@@ -1205,28 +1203,8 @@ class AgentWorkspace:
 
     @contextmanager
     def _project_lock(self) -> Iterator[None]:
-        key = str(self.root)
-        held = getattr(_PROJECT_LOCKS_HELD, "roots", None)
-        if held is None:
-            held = set()
-            _PROJECT_LOCKS_HELD.roots = held
-        if key in held:
+        with project_write_lock(self.root):
             yield
-            return
-        with _LOCKS_GUARD:
-            thread_lock = _LOCKS.setdefault(key, threading.RLock())
-        with thread_lock:
-            lock_dir = Path(tempfile.gettempdir()).resolve() / "icstex-agent-locks"
-            lock_dir.mkdir(parents=True, exist_ok=True)
-            lock_path = lock_dir / f"{_sha256(key.encode('utf-8'))}.lock"
-            with lock_path.open("a+b") as handle:
-                _lock_handle(handle)
-                held.add(key)
-                try:
-                    yield
-                finally:
-                    held.remove(key)
-                    _unlock_handle(handle)
 
     def _check_expected(self, current: bytes | None, expected: str) -> None:
         normalized = expected.strip().lower()
@@ -1668,31 +1646,3 @@ def _plain(value: object) -> object:
     if isinstance(value, (list, tuple, set, frozenset)):
         return [_plain(item) for item in value]
     return value
-
-
-def _lock_handle(handle: object) -> None:
-    if os.name == "nt":
-        import msvcrt
-
-        handle.seek(0)  # type: ignore[attr-defined]
-        if handle.read(1) == b"":  # type: ignore[attr-defined]
-            handle.write(b"\0")  # type: ignore[attr-defined]
-            handle.flush()  # type: ignore[attr-defined]
-        handle.seek(0)  # type: ignore[attr-defined]
-        msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)  # type: ignore[attr-defined]
-    else:
-        import fcntl
-
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)  # type: ignore[attr-defined]
-
-
-def _unlock_handle(handle: object) -> None:
-    if os.name == "nt":
-        import msvcrt
-
-        handle.seek(0)  # type: ignore[attr-defined]
-        msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)  # type: ignore[attr-defined]
-    else:
-        import fcntl
-
-        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)  # type: ignore[attr-defined]

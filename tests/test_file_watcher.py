@@ -13,6 +13,53 @@ from app.core.file_watcher import ExternalFileWatcher
 
 
 class ExternalFileWatcherTests(TestCase):
+    def test_profile_opt_in_does_not_enable_other_metadata_or_outputs(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            profile = root / ".icstex" / "project-profile.json"
+            other = root / ".icstex" / "sources.json"
+            output = root / ".icstex" / "preview" / "main.tex"
+            output.parent.mkdir(parents=True)
+            changed = []
+            watcher = ExternalFileWatcher(changed.append)
+            try:
+                watcher.set_paths("profile", {profile, other, output}, canonical=True)
+                watcher.handle_event_path(profile)
+                self.assertFalse(changed)
+                watcher.set_paths("profile", {profile, other, output}, canonical=True, project_profile=True)
+                for path in (profile, other, output):
+                    watcher.handle_event_path(path)
+                self.assertEqual(changed, [profile])
+                watcher.set_paths("profile", set(), canonical=True)
+                self.assertNotIn("profile", watcher._profile_metadata_owners)
+            finally:
+                watcher.stop()
+
+    def test_block_metadata_is_opt_in_and_never_enables_preview_outputs(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            metadata = root / ".icstex" / "sources.json"
+            preview = root / ".icstex" / "preview" / "main.tex"
+            preview.parent.mkdir(parents=True)
+            metadata.write_text('{"sources":[]}')
+            preview.write_text("preview")
+            changed = []
+            watcher = ExternalFileWatcher(changed.append)
+            try:
+                watcher.set_paths("source", {metadata, preview}, canonical=True)
+                watcher.handle_event_path(metadata)
+                self.assertEqual(changed, [])
+                watcher.set_paths("check", {metadata, preview}, canonical=True, block_metadata=True)
+                watcher.handle_event_path(metadata)
+                watcher.handle_event_path(preview)
+                self.assertEqual(changed, [metadata])
+                watcher.set_paths("check", set(), canonical=True)
+                watcher.handle_event_path(metadata)
+                self.assertEqual(changed, [metadata])
+                self.assertIn(metadata, watcher._files, "another owner still holds membership")
+            finally:
+                watcher.stop()
+
     def test_stop_cannot_race_registration_and_restart_observer(self) -> None:
         with TemporaryDirectory() as directory:
             path = Path(directory).resolve() / "main.tex"

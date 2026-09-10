@@ -1,6 +1,6 @@
 # ICSTeX Project Index
 
-更新时间：2026-09-08（Asia/Taipei）
+更新时间：2026-09-11（Asia/Taipei）
 
 ## 权威工作区
 
@@ -16,6 +16,26 @@
 - `docs/ROADMAP.md`：产品和技术优先级。
 - `docs/CODEX_V1_DEVELOPMENT_INSTRUCTIONS.md`：下一代正式版的待执行开发总纲、
   分阶段验收与授权边界；不自动替换现有 active brief。
+- `docs/V1_IMPLEMENTATION_PLAN.md`：已启动的下一代本地开发范围、差额、验收账本、
+  当前唯一 slice 与下一步；与独立 Beta 发布 brief 分离。
+- `docs/v1-m0-m1-verification-2026-09-10.md`：M0/部分 M1 的合成数据、原生验证、
+  复现入口和未完成边界；不代表完整 V1 或发布验收。
+- `docs/v1-m1-final-evidence-2026-09-10.md`：后续实际 FINAL 身份、输入/产物摘要、
+  Block 归属与只读检查验收；与 M2–M6 和发布验收分开。
+- `docs/v1-m2-profile-verification-2026-09-10.md`：本地声明式配置、冲突保护、
+  字数目标和检查联动的原生证据；不是完整 M2 工作台验收。
+- `docs/v1-m2-workspace-verification-2026-09-10.md`：中文项目创建、只读工作区状态、
+  原生 FINAL/检查/导出/重开与干净 Block 关闭；保留待保存/冲突和布局门槛。
+- `docs/v1-m2-block-close-verification-2026-09-10.md`：后续受保护模型/生成源码保存、
+  关闭选择、外部冲突、异步 FINAL 与原生重开；不是完整 checkpoint 或布局验收。
+- `docs/v1-m2-block-layout-verification-2026-09-10.md`：窄窗口/五档缩放、键盘/Undo、
+  布局属性与同源码原生复跑；记录当时的属性草稿和性能复核缺口。
+- `docs/v1-m2-property-draft-verification-2026-09-11.md`：后续内存属性草稿、
+  选择/刷新保留、显式应用/关闭、冲突和原生证据；记录当时的二次编辑器缺口。
+- `docs/v1-m2-editor-target-verification-2026-09-11.md`：多表格/公式目标绑定、
+  活跃单元格草稿、显式保存/撤销、原生冲突与实际 PDF；区分专项和全套结果。
+- `docs/v1-m2-image-import-verification-2026-09-11.md`：图片暂存/独占发布、路径与
+  拖入目标边界、测试夹具修正；真实 picker 成功导入仍待验收。
 - `docs/DECISION_LOG.md`：长期架构决策及其原因。
 - `docs/update-delivery-design-2026-09-08.md`：原生更新器实现、信任分工与发布验收边界。
 - `packaging/UPDATES.md`：维护者提供配置、暂存固定 SDK、签名与 appcast 接入步骤。

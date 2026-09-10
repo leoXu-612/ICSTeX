@@ -17,6 +17,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMessageBox, QTableWidgetItem
 
 from app.core.compile_feedback import headline_for, presentation_for
+from app.core.build_evidence import final_build_evidence
 from app.core.compiler import (
     BuildPurpose,
     CompileJobKey,
@@ -52,6 +53,10 @@ class CompileController:
         self.window = window
         self.image_proxy_cache = ImageProxyCache()
         self._job_keys: dict[tuple[Path, int], CompileJobKey] = {}
+        self._final_evidence = {}
+
+    def final_evidence_for(self, root):
+        return self._final_evidence.get(root)
 
     # --- main entry points --------------------------------------------------
 
@@ -325,6 +330,12 @@ class CompileController:
             window.append_log(f"已忽略过期的编译结果：{result.root_file.name}")
             window._update_pdf_action_state()
             return
+        evidence = final_build_evidence(result)
+        if evidence is not None:
+            self._final_evidence.pop(root, None)
+            self._final_evidence[root] = evidence
+            while len(self._final_evidence) > 32:
+                self._final_evidence.pop(next(iter(self._final_evidence)))
         window.dependencies.accept_build(result)
         headline = headline_for(result, engine_name=engine.display_name)
         if result.purpose is BuildPurpose.PREVIEW:
@@ -594,7 +605,8 @@ class CompileController:
         if engine_value:
             self.set_engine(LaTeXEngine(engine_value), from_selector=True)
 
-    def set_engine(self, engine: LaTeXEngine, *, from_selector: bool = False) -> None:
+    def set_engine(self, engine: LaTeXEngine, *, from_selector: bool = False,
+                   compile_after: bool = True) -> None:
         window = self.window
         if window.current_engine == engine:
             return
@@ -615,8 +627,9 @@ class CompileController:
         self.rebuild_managers()
         window.update_welcome_page()
         window.statusBar().showMessage(f"编译引擎已切换为 {engine.display_name}。", 4000)
+        window.workspace.schedule()
         current = window.current_tab()
-        if current and current.path:
+        if compile_after and current and current.path:
             self.compile_current(immediate=True)
 
     # --- magic comments ----------------------------------------------------

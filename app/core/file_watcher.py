@@ -40,6 +40,8 @@ class ExternalFileWatcher:
         self._on_change = on_change
         self._files: set[Path] = set()
         self._owners: dict[Path, set[object]] = {}
+        self._block_metadata_owners: set[object] = set()
+        self._profile_metadata_owners: set[object] = set()
         self._dir_watches: dict[Path, object] = {}
         self._known_signatures: dict[Path, FileSignature] = {}
         self._lock = threading.RLock()
@@ -86,11 +88,20 @@ class ExternalFileWatcher:
             self._known_signatures.pop(file_path, None)
             self._reconcile_watches()
 
-    def set_paths(self, owner: object, paths: set[Path], *, canonical: bool = False) -> None:
+    def set_paths(self, owner: object, paths: set[Path], *, canonical: bool = False,
+                  block_metadata: bool = False, project_profile: bool = False) -> None:
         """Atomically replace one owner's membership, preserving other owners."""
         with self._lock:
             if self._closed:
                 return
+            if block_metadata:
+                self._block_metadata_owners.add(owner)
+            else:
+                self._block_metadata_owners.discard(owner)
+            if project_profile:
+                self._profile_metadata_owners.add(owner)
+            else:
+                self._profile_metadata_owners.discard(owner)
             desired = {Path(path).absolute() if canonical else self._path(path) for path in paths}
             for path, owners in tuple(self._owners.items()):
                 if owner in owners and path not in desired:
@@ -216,9 +227,15 @@ class ExternalFileWatcher:
         if self._closed or file_path not in self._files:
             return
         self._known_signatures[file_path] = self._signature(file_path)
+        metadata_requested = (file_path.parent.name == ".icstex"
+                              and file_path.name in {"blocks.json", "layouts.json", "sources.json"}
+                              and bool(self._owners.get(file_path, set()) & self._block_metadata_owners))
+        metadata_requested = metadata_requested or (file_path.parent.name == ".icstex"
+                              and file_path.name == "project-profile.json"
+                              and bool(self._owners.get(file_path, set()) & self._profile_metadata_owners))
         if (
             ".latex_build" in file_path.parts
-            or ".icstex" in file_path.parts
+            or (".icstex" in file_path.parts and not metadata_requested)
             or file_path.suffix.lower() in IGNORED_SUFFIXES
         ):
             return

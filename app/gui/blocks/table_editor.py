@@ -7,13 +7,15 @@ from SourceStatus.
 """
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QCoreApplication, QEvent, QPersistentModelIndex, Qt, Signal
 from PySide6.QtWidgets import (
+    QAbstractItemDelegate,
     QApplication,
-    QHBoxLayout,
+    QLineEdit,
     QLabel,
     QPushButton,
     QTableWidgetItem,
+    QStyledItemDelegate,
     QVBoxLayout,
     QWidget,
 )
@@ -21,15 +23,33 @@ from PySide6.QtWidgets import (
 from app.core.blocks.table_import import infer_cell, parse_clipboard_grid
 from app.core.blocks.table_model import Cell, ColumnSpec, TableEditorModel
 from app.gui.table_grid import TableGrid
+from app.gui.responsive.helpers import ButtonFlowLayout
+
+
+class _CellDelegate(QStyledItemDelegate):
+    editor_opened = Signal(object, object)
+
+    def createEditor(self, parent, option, index):
+        editor = super().createEditor(parent, option, index)
+        if isinstance(editor, QLineEdit):
+            self.editor_opened.emit(editor, QPersistentModelIndex(index))
+        return editor
 
 
 class TableEditor(QWidget):
     model_changed = Signal()
+    live_cell_changed = Signal(object)
 
     def __init__(self, model: TableEditorModel, parent=None) -> None:
         super().__init__(parent)
         self.model = model
         self.table = TableGrid()
+        self._cell_editor = None
+        self._committing_cell = False
+        self._cell_delegate = _CellDelegate(self.table)
+        self.table.setItemDelegate(self._cell_delegate)
+        self._cell_delegate.editor_opened.connect(self._begin_cell_edit)
+        self._cell_delegate.closeEditor.connect(self._delegate_closed)
         self.table.itemChanged.connect(self._cell_changed)
         self.table.itemSelectionChanged.connect(self._update_actions)
         self.table.pasteRequested.connect(self.paste_clipboard_text)
@@ -59,7 +79,7 @@ class TableEditor(QWidget):
         self.clear_button = QPushButton("清空所选")
         self.clear_button.clicked.connect(self.clear_selection)
 
-        buttons = QHBoxLayout()
+        buttons = ButtonFlowLayout()
         for widget in (
             self.undo_button,
             self.redo_button,
@@ -71,7 +91,6 @@ class TableEditor(QWidget):
             self.delete_column_button,
         ):
             buttons.addWidget(widget)
-        buttons.addStretch()
 
         layout = QVBoxLayout(self)
         hint = QLabel("直接编辑单元格；Tab 移动，复制 / 粘贴支持矩形区域。行列操作与整块粘贴均可撤销。")
@@ -83,7 +102,48 @@ class TableEditor(QWidget):
         layout.addWidget(self.detail_label)
         self.refresh()
 
+    def _begin_cell_edit(self, editor, index):
+        self._cell_editor = editor
+        row = self.model.data.rows[index.row()].id
+        column = self.model.data.columns[index.column()].id
+        initial = str(index.data(Qt.ItemDataRole.EditRole) or "")
+        self._cell_payload = {"row": row, "column": column, "initial": initial}
+        editor.textEdited.connect(self._live_text_edited)
+
+    def _live_text_edited(self, text):
+        if self.sender() is self._cell_editor:
+            self.live_cell_changed.emit({**self._cell_payload, "text": text})
+
+    def _delegate_closed(self, editor, _hint):
+        self._end_cell_edit(editor)
+
+    def _end_cell_edit(self, editor):
+        if self._cell_editor is editor:
+            self._cell_editor = None
+            self.live_cell_changed.emit(None)
+
+    def commit_pending_edit(self):
+        """Finish the existing delegate before Save, Apply or target replacement."""
+        if self._cell_editor is None or self._committing_cell:
+            return
+        self._committing_cell = True
+        try:
+            # Return queues the delegate's normal commit/close. Finish that
+            # existing request before an immediate Save or target switch closes
+            # the editor manually; otherwise the queued call uses a stale view.
+            # Only this delegate's queued calls are delivered, not GUI events.
+            QCoreApplication.sendPostedEvents(self._cell_delegate, QEvent.Type.MetaCall)
+            editor = self._cell_editor
+            if editor is None:
+                return
+            self.table.commitData(editor)
+            self.table.closeEditor(editor, QAbstractItemDelegate.EndEditHint.NoHint)
+            self._end_cell_edit(editor)
+        finally:
+            self._committing_cell = False
+
     def refresh(self) -> None:
+        self.commit_pending_edit()
         data = self.model.data
         current = (self.table.currentRow(), self.table.currentColumn())
         scroll = (self.table.horizontalScrollBar().value(), self.table.verticalScrollBar().value())
@@ -135,6 +195,7 @@ class TableEditor(QWidget):
         self.status_label.setText({None: "本地表格（未链接外部数据）", "ok": "已同步", "changed": "源已变化", "missing": "源缺失"}.get(state, state))
 
     def undo(self) -> None:
+        self.commit_pending_edit()
         if not self.model.can_undo:
             return
         self.model.undo()
@@ -142,6 +203,7 @@ class TableEditor(QWidget):
         self.model_changed.emit()
 
     def redo(self) -> None:
+        self.commit_pending_edit()
         if not self.model.can_redo:
             return
         self.model.redo()
@@ -149,6 +211,7 @@ class TableEditor(QWidget):
         self.model_changed.emit()
 
     def insert_row(self) -> None:
+        self.commit_pending_edit()
         index = max(0, self.table.currentRow())
         row_id = self.model.next_row_id()
         self.model.insert_row(index, row_id)
@@ -158,6 +221,7 @@ class TableEditor(QWidget):
         self.model_changed.emit()
 
     def delete_row(self) -> None:
+        self.commit_pending_edit()
         rows = sorted({item.row() for item in self.table.selectedItems()}, reverse=True)
         if not rows and self.table.currentRow() >= 0:
             rows = [self.table.currentRow()]
@@ -169,6 +233,7 @@ class TableEditor(QWidget):
             self.model_changed.emit()
 
     def insert_column(self) -> None:
+        self.commit_pending_edit()
         index = max(0, self.table.currentColumn())
         column_id = self.model.next_column_id()
         self.model.insert_column(index, ColumnSpec(id=column_id, name=f"列{column_id.removeprefix('col_')}"))
@@ -178,6 +243,7 @@ class TableEditor(QWidget):
         self.model_changed.emit()
 
     def delete_column(self) -> None:
+        self.commit_pending_edit()
         columns = sorted({item.column() for item in self.table.selectedItems()}, reverse=True)
         if not columns and self.table.currentColumn() >= 0:
             columns = [self.table.currentColumn()]
@@ -189,6 +255,7 @@ class TableEditor(QWidget):
             self.model_changed.emit()
 
     def paste_clipboard_text(self, text: str) -> None:
+        self.commit_pending_edit()
         top = max(0, self.table.currentRow())
         left = max(0, self.table.currentColumn())
         try:
@@ -214,6 +281,7 @@ class TableEditor(QWidget):
         self.model_changed.emit()
 
     def clear_selection(self) -> None:
+        self.commit_pending_edit()
         if not self.table.selectedItems():
             return
         with self.model.batch_edit():

@@ -67,6 +67,8 @@ class ProjectFileController(QObject):
         if remember:
             window._remember_recent_project(root)
         window.dependencies.refresh_memberships()
+        if hasattr(window, "workspace"):
+            window.workspace.schedule()
         return root
 
     def ensure_project_root_for_file(self, path: str | Path) -> None:

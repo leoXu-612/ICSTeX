@@ -89,6 +89,187 @@ class GuiEditorTests(TestCase):
     def setUp(self) -> None:
         app()
 
+    def test_window_close_block_cancel_preserves_both_controllers_and_draft(self):
+        from app.core.blocks.project_repository import load_project
+        from app.core.blocks.model import content_for_text
+        from app.gui.blocks.project_session import ProjectSession
+        from app.gui.block_mode import _install_session, _set_block_mode
+        from tests.v1_fixtures import create_project
+        with TemporaryDirectory() as directory:
+            sample = create_project(Path(directory).resolve(), "block")
+            loaded = load_project(sample.root.parent)
+            session = ProjectSession(**{key: loaded[key] for key in
+                ("registry", "layout", "sources", "document_theme", "project_dir")})
+            window = MainWindow(settings_store=isolated_settings())
+            try:
+                _install_session(window, session)
+                _set_block_mode(window, True)
+                block = session.registry.blocks()[0]
+                before = {p: p.read_bytes() for p in sample.root.parent.rglob("*") if p.is_file()}
+                session.registry.update(block.id, {"content": content_for_text("Pending close draft")})
+                session.notify_model_changed("qa")
+                with patch("app.gui.blocks.close_guard.QMessageBox.warning", return_value=QMessageBox.StandardButton.Cancel):
+                    event = QCloseEvent()
+                    window.closeEvent(event)
+                self.assertFalse(event.isAccepted())
+                self.assertIs(window.block_session, session)
+                self.assertFalse(session._closed)
+                self.assertTrue(session._save_timer.isActive())
+                self.assertFalse(window.workspace._closed)
+                self.assertEqual({p: p.read_bytes() for p in before}, before)
+                self.assertIn("Pending close draft", str(block.content))
+            finally:
+                session.shutdown()
+                window.close()
+
+    def test_source_close_cancel_keeps_pending_block_save_paused_until_decision(self):
+        from app.gui.blocks.project_session import ProjectSession
+        from app.gui.block_mode import _install_session
+        with TemporaryDirectory() as directory:
+            session = ProjectSession(project_dir=Path(directory).resolve())
+            window = MainWindow(settings_store=isolated_settings())
+            try:
+                _install_session(window, session)
+                session.notify_model_changed("pending Block change")
+                window.new_document()
+                tab = window.current_tab()
+                tab.editor.insertPlainText("Unsaved source")
+                def cancel(_tab):
+                    self.assertFalse(session._save_timer.isActive())
+                    return QMessageBox.StandardButton.Cancel
+                with patch.object(window.tab_manager, "_ask_unsaved_choice", side_effect=cancel):
+                    event = QCloseEvent()
+                    window.closeEvent(event)
+                self.assertFalse(event.isAccepted())
+                self.assertTrue(session._save_timer.isActive())
+                self.assertFalse(session._closed)
+            finally:
+                session.shutdown()
+                for item in window.tabs.values():
+                    window.documents.cancel_save_timer(item)
+                    item.modified = item.dirty = False
+                window.close()
+
+    def test_project_wizard_cancel_and_conflict_preserve_destination_and_fields(self):
+        with TemporaryDirectory() as directory:
+            dialog = ProjectWizardDialog()
+            dialog.parent_edit.setText(directory)
+            dialog.name_edit.setText("中文 项目")
+            self.assertIn("中文 项目", dialog.destination.text())
+            dialog.reject()
+            self.assertEqual(list(Path(directory).iterdir()), [])
+            existing = Path(directory) / "中文 项目"
+            existing.mkdir()
+            dialog.accept()
+            self.assertIsNone(dialog.created_project)
+            self.assertIn("目标已存在", dialog.error.text())
+            self.assertEqual(dialog.name_edit.text(), "中文 项目")
+            self.assertEqual(list(existing.iterdir()), [])
+
+    def test_create_project_opens_verified_files_without_compiling(self):
+        from app.core.project_profile import load_profile
+        with TemporaryDirectory() as directory:
+            window = MainWindow(settings_store=isolated_settings())
+            self.addCleanup(window.close)
+            dialog = ProjectWizardDialog(window)
+            dialog.parent_edit.setText(directory)
+            dialog.name_edit.setText("中文 项目")
+            dialog.template_combo.setCurrentIndex(dialog.template_combo.findData("chinese_xelatex_article"))
+            dialog.open_new_window.setChecked(False)
+            dialog.accept()
+            self.assertIsNotNone(dialog.created_project, dialog.error.text())
+            with patch("app.gui.main_window.ProjectWizardDialog", return_value=dialog), \
+                 patch.object(dialog, "exec", return_value=QDialog.DialogCode.Accepted), \
+                 patch.object(window.compile, "compile_current") as compile_, \
+                 patch.object(CompileManager, "compile_async") as compiler:
+                window.new_project()
+                compile_.assert_not_called()
+                compiler.assert_not_called()
+            project = dialog.created_project
+            self.assertEqual(window.current_tab().path, project.tex_file)
+            self.assertEqual(window.current_engine, LaTeXEngine.AUTO)
+            self.assertEqual(load_profile(project.root_dir).profile.engine, "xelatex")
+            self.assertEqual(window.compile_authorized_roots, set())
+            window.workspace.refresh()
+            self.assertIn("中文 项目", window.workspace.title.full_text)
+            self.assertIn("main.tex", window.workspace.details.full_text)
+            window.close()
+
+    def test_project_wizard_defaults_to_new_window_when_source_is_open(self):
+        window = MainWindow(settings_store=isolated_settings())
+        window.new_document()
+        dialog = ProjectWizardDialog(window)
+        self.assertTrue(dialog.open_new_window.isChecked())
+        dialog.reject()
+        window.current_tab().modified = window.current_tab().dirty = False
+        window.close()
+
+    def test_workspace_header_reads_cached_state_and_does_not_compile_or_scan(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            path = root / "main.tex"
+            path.write_text("\\documentclass{article}\n\\begin{document}A\\end{document}")
+            window = MainWindow(settings_store=isolated_settings())
+            window.auto_compile_action.setChecked(False)
+            window.project_files.set_project_root(root)
+            window.open_file(path)
+            with patch("app.core.project_dependencies.static_dependencies", side_effect=AssertionError("scan")), \
+                 patch.object(window, "_compile_root_for_tab", side_effect=AssertionError("resolve")), \
+                 patch.object(window, "create_compile_manager", side_effect=AssertionError("manager")), \
+                 patch.object(window.compile, "compile_current") as compile_:
+                window.workspace.refresh()
+                compile_.assert_not_called()
+            self.assertIn("入口：main.tex", window.workspace.details.full_text)
+            self.assertIn("已保存", window.workspace.details.full_text)
+            window.toolchain = LaTeXToolchain(None, None)
+            window.workspace.refresh()
+            self.assertIs(window.workspace.next_button.defaultAction(), window.environment_doctor_action)
+            window.close()
+            window.workspace.schedule()
+            self.assertFalse(window.workspace._timer.isActive())
+
+    def test_workspace_saves_current_root_and_preserves_cursor(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            path = root / "main.tex"
+            path.write_text("\\documentclass{article}\n\\begin{document}A\\end{document}")
+            window = MainWindow(settings_store=isolated_settings())
+            window.auto_compile_action.setChecked(False)
+            window.open_file(path)
+            tab = window.current_tab()
+            with patch.object(window.documents, "schedule_save"):
+                tab.editor.insertPlainText("% changed\n")
+            position = tab.editor.textCursor().position()
+            window.workspace.refresh()
+            self.assertIs(window.workspace.next_button.defaultAction(), window.workspace.save_action)
+            with patch.object(CompileManager, "compile_async") as compile_:
+                window.workspace.next_button.click()
+                compile_.assert_not_called()
+            self.assertFalse(tab.modified)
+            self.assertEqual(tab.editor.textCursor().position(), position)
+            self.assertEqual(path.read_text(), tab.editor.toPlainText())
+            window.close()
+
+    def test_workspace_root_child_navigation_keeps_project_asset_and_search_scope(self):
+        with TemporaryDirectory() as directory:
+            from tests.v1_fixtures import create_project
+            sample = create_project(Path(directory).resolve())
+            window = MainWindow(settings_store=isolated_settings())
+            window.project_files.set_project_root(sample.root.parent)
+            window.open_file(sample.draft_path)
+            self.addCleanup(window.close)
+            window.show()
+            QApplication.processEvents()
+            window.workspace.refresh()
+            self.assertIn("入口：main.tex", window.workspace.details.full_text)
+            with patch("app.gui.project_panel_controller.search_project", return_value=[]) as search:
+                window.project_panels.run_project_search("sample", False, False)
+                self.assertEqual(search.call_args.args[0], sample.root.parent)
+            window.workspace._source_navigation(3)
+            self.assertIn(sample.root.parent, window.project_panels._asset_indexes)
+            self.assertNotIn(sample.draft_path.parent, window.project_panels._asset_indexes)
+            window.close()
+
     def test_panel_edit_burst_refreshes_only_visible_dirty_domain(self) -> None:
         window = MainWindow(settings_store=isolated_settings())
         window.new_document()

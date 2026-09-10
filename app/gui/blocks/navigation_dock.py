@@ -1,6 +1,7 @@
 """Blocks / Layout / Sources navigation dock for the main console."""
 from __future__ import annotations
 
+from copy import deepcopy
 from pathlib import Path
 
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
@@ -9,16 +10,18 @@ from app.core.blocks.asset_import import import_image, is_image_path
 from app.core.blocks.source_registry import SourceRecord, check_source
 from app.gui.blocks.project_session import ProjectSession
 from app.gui.blocks.workspace_controller import BlockWorkspaceController
+from app.gui.insert_panel import scrollable_panel
+from app.gui.responsive.helpers import ButtonFlowLayout, configure_tab_bar
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QComboBox,
-    QHBoxLayout,
     QInputDialog,
     QLabel,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
     QMenu,
+    QMessageBox,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -88,10 +91,9 @@ class BlockNavigationWidget(QWidget):
         self.rename_button = QPushButton("重命名")
         self.rename_button.clicked.connect(self._rename_selected)
 
-        blocks_buttons = QHBoxLayout()
+        blocks_buttons = ButtonFlowLayout()
         for button in (self.new_button, self.text_ocr_button, self.duplicate_button, self.rename_button, self.delete_button):
             blocks_buttons.addWidget(button)
-        blocks_buttons.addStretch()
 
         blocks_tab = QWidget()
         blocks_layout = QVBoxLayout(blocks_tab)
@@ -110,10 +112,9 @@ class BlockNavigationWidget(QWidget):
         self.add_grid_button.clicked.connect(lambda: self._add_container("grid"))
         self.delete_node_button = QPushButton("删除容器/槽位")
         self.delete_node_button.clicked.connect(self._delete_layout_node)
-        layout_buttons = QHBoxLayout()
+        layout_buttons = ButtonFlowLayout()
         for button in (self.add_row_button, self.add_grid_button, self.delete_node_button):
             layout_buttons.addWidget(button)
-        layout_buttons.addStretch()
         layout_tab = QWidget()
         layout_tab_layout = QVBoxLayout(layout_tab)
         layout_tab_layout.addWidget(self.layout_tree)
@@ -128,19 +129,19 @@ class BlockNavigationWidget(QWidget):
         self.refresh_sources_button.clicked.connect(self.refresh)
         self.resync_button = QPushButton("重新同步")
         self.resync_button.clicked.connect(self._resync_selected_source)
-        sources_buttons = QHBoxLayout()
+        sources_buttons = ButtonFlowLayout()
         sources_buttons.addWidget(self.refresh_sources_button)
         sources_buttons.addWidget(self.resync_button)
-        sources_buttons.addStretch()
         sources_tab = QWidget()
         sources_layout = QVBoxLayout(sources_tab)
         sources_layout.addWidget(self.sources_table)
         sources_layout.addLayout(sources_buttons)
 
         self.tabs = QTabWidget()
-        self.tabs.addTab(blocks_tab, "Blocks")
-        self.tabs.addTab(layout_tab, "Layout")
-        self.tabs.addTab(sources_tab, "Sources")
+        self.tabs.addTab(scrollable_panel(blocks_tab), "Blocks")
+        self.tabs.addTab(scrollable_panel(layout_tab), "Layout")
+        self.tabs.addTab(scrollable_panel(sources_tab), "Sources")
+        configure_tab_bar(self.tabs)
         outer = QVBoxLayout(self)
         outer.addWidget(self.tabs)
 
@@ -163,31 +164,52 @@ class BlockNavigationWidget(QWidget):
         super().dragEnterEvent(event)
 
     def dropEvent(self, event: QDropEvent) -> None:
-        if self.session.project_dir is None or not event.mimeData().hasUrls():
+        if self.session._closed or self.session.project_dir is None or not event.mimeData().hasUrls():
             event.ignore()
             return
-        accepted = False
+        project = self.session.project_dir
+        point = self.block_list.viewport().mapFrom(self, event.position().toPoint())
+        item = self.block_list.itemAt(point)
+        block_id = item.data(256) if item is not None else None
+        block = self.session.registry.get(block_id) if block_id else None
+        target_id = block_id if block is not None and block.type == "image" else None
+        accepted = 0
+        error = ""
         for url in event.mimeData().urls():
             path = Path(url.toLocalFile())
             if not is_image_path(path):
                 continue
-            relative = import_image(self.session.project_dir, path)
-            item = self.block_list.itemAt(event.position().toPoint())
-            block_id = item.data(256) if item is not None else None
-            block = self.session.registry.get(block_id) if block_id else None
-            if block is not None and block.type == "image":
+            block = self.session.registry.get(target_id) if target_id else None
+            base = deepcopy(block.to_dict()) if block is not None else None
+            if self.session._closed or self.session.project_dir != project or (target_id and base is None):
+                error = "原项目或图片对象已变化；未继续导入。"
+                break
+            try:
+                relative = import_image(project, path)
+            except (OSError, ValueError) as exc:
+                error = f"{path.name} 导入失败，模型未修改：{exc}"
+                break
+            current = self.session.registry.get(target_id) if target_id else None
+            if (self.session._closed or self.session.project_dir != project
+                    or (target_id and (current is None or current.to_dict() != base))):
+                error = "图片已复制，但原项目或对象已变化；保留导入文件，未覆盖模型。"
+                break
+            if target_id is not None:
                 self.controller.update_block(
-                    block.id,
-                    {"content": {**block.content, "source": relative}},
+                    target_id,
+                    {"content": {**base["content"], "source": relative}},
                     text="替换图片",
                 )
             else:
                 self.controller.add_block("image", alias=path.stem, content={"source": relative})
-            accepted = True
+            accepted += 1
         if accepted:
             event.acceptProposedAction()
         else:
             event.ignore()
+        if error and not self.session._closed:
+            prefix = f"已导入 {accepted} 张；这些模型修改与素材保留。\n" if accepted else ""
+            QMessageBox.warning(self, "图片导入未完成", prefix + error)
 
     # --- refresh ----------------------------------------------------------
     def refresh(self, *_args: object) -> None:

@@ -4,6 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest import TestCase
+from unittest.mock import patch
 
 from app.core.project_tools import (
     BIBLIOGRAPHY_LINE,
@@ -29,6 +30,64 @@ from app.core.project_tools import (
 
 
 class ProjectToolsTests(TestCase):
+    def test_new_project_preserves_chinese_name_and_selected_profile(self):
+        from app.core.project_profile import ProjectProfile, load_profile
+        with TemporaryDirectory() as directory:
+            profile = ProjectProfile(template="chinese_xelatex_article", engine="xelatex")
+            project = initialize_project(ProjectInitSpec(Path(directory), "中文 论文", "chinese_xelatex_article", profile))
+            self.assertEqual(project.root_dir.name, "中文 论文")
+            self.assertEqual(load_profile(project.root_dir).profile, profile)
+            self.assertIn("ctexart", project.tex_file.read_text())
+
+    def test_invalid_template_or_profile_creates_nothing(self):
+        from app.core.project_profile import ProjectProfile
+        with TemporaryDirectory() as directory:
+            parent = Path(directory)
+            for spec in (ProjectInitSpec(parent, "New", "not-a-template"),
+                         ProjectInitSpec(parent, "New", profile=ProjectProfile(word_min=-2))):
+                with self.assertRaises(ValueError):
+                    initialize_project(spec)
+                self.assertEqual(list(parent.iterdir()), [])
+
+    def test_existing_empty_nonempty_and_symlink_destinations_are_not_modified(self):
+        with TemporaryDirectory() as directory:
+            parent = Path(directory)
+            empty = parent / "Empty"
+            empty.mkdir()
+            full = parent / "Full"
+            full.mkdir()
+            (full / "main.tex").write_bytes(b"original")
+            link = parent / "Link"
+            link.symlink_to(empty, target_is_directory=True)
+            for path in (empty, full, link):
+                with self.subTest(path=path), self.assertRaises(FileExistsError):
+                    initialize_project(ProjectInitSpec(parent, path.name))
+            self.assertEqual(list(empty.iterdir()), [])
+            self.assertEqual((full / "main.tex").read_bytes(), b"original")
+            self.assertTrue(link.is_symlink())
+
+    def test_partial_creation_failure_is_explicit_and_preserves_foreign_file(self):
+        from app.core import project_tools
+        with TemporaryDirectory() as directory:
+            parent = Path(directory)
+            original = project_tools._write_new_project_file
+            def concurrent(path, root, payload):
+                path.write_bytes(b"external winner")
+                return original(path, root, payload)
+            with patch.object(project_tools, "_write_new_project_file", side_effect=concurrent):
+                with self.assertRaisesRegex(OSError, "未完成"):
+                    initialize_project(ProjectInitSpec(parent, "New"))
+            self.assertEqual((parent / "New" / "main.tex").read_bytes(), b"external winner")
+
+    def test_sanitized_names_are_single_components_and_not_windows_devices(self):
+        self.assertEqual(sanitize_project_name("中文 项目"), "中文 项目")
+        for name in ("CON", "nul.tex", "LPT1", "COM3.log", "..", "a/b\\c", "bad\0name"):
+            clean = sanitize_project_name(name)
+            self.assertNotIn("/", clean)
+            self.assertNotIn("\\", clean)
+            self.assertNotIn("\0", clean)
+            self.assertNotIn(clean.split(".")[0].upper(), {"CON", "NUL", "LPT1", "COM3"})
+
     def test_initialize_project_creates_main_assets_and_bib(self) -> None:
         with TemporaryDirectory() as directory:
             project = initialize_project(ProjectInitSpec(Path(directory), "Physics IA", "ib_ia_report"))

@@ -45,6 +45,54 @@ atomic replace so an encoding error cannot truncate the original paper.
 
 ## Project documentation
 
+The V1 development source on `codex/v1-development` adds **编译 → 提交检查** (or `Ctrl+Shift+J`) for
+read-only checks of saved inputs, actual FINAL/PDF evidence, references,
+resources and Word Count. Refresh never saves, compiles or uploads. Unknown
+coverage is not a pass, and this is not academic or course certification.
+
+Use **文件 → 项目配置…** to edit optional local preferences: a reference template,
+engine recommendation, relative directory suggestions, word targets and static
+check visibility. No course limits are supplied. Saving writes only
+`.icstex/project-profile.json`; it does not replace source, create suggested
+directories or change the active engine. Disabling retains the configuration.
+External conflicts and unknown formats preserve the original; cancel and reopen
+before retrying. These local source features are not in the published packages.
+
+The local project wizard now previews Chinese-name destinations and templates,
+offers an explicit engine choice, and creates only new directories. First
+compilation remains an explicit action. A workspace row shows the current project,
+compile root, save/PDF state and next step, with links to existing project tools.
+The Block menu/header provides guarded Save, explicit FINAL and Stop. Save keeps
+metadata and managed TeX together without compiling; external/unknown-file
+conflicts retain the draft and refuse replacement. Close asks Save/Discard/Cancel;
+Stop does not close the project. Unresolved `.icstex/block-write.pending` evidence
+blocks further writes and is not an automatic recovery feature. Unapplied
+Inspector properties now survive refresh/selection changes in memory and appear
+in the pending-draft list. **应用修改** validates the captured object before one
+Undo command; Discard, Save, close and FINAL require explicit draft handling.
+Conflicts retain the draft, and pending properties cannot pass saved/FINAL checks.
+This is not process-crash recovery or frozen delivery; see the
+[property-draft evidence and remaining editor risks](docs/v1-m2-property-draft-verification-2026-09-11.md).
+Multi-table and formula dialogs now preserve captured targets and pending edits;
+table navigation/read-only checks no longer overwrite the first registry table.
+Live cell input is included in Save/close decisions, and a changed formula target
+retains accepted text without overwriting the newer model. Focused/native checks
+and full regression pass. These changes are not complete editor
+acceptance; see [secondary-editor evidence and limits](docs/v1-m2-editor-target-verification-2026-09-11.md).
+
+Block image imports stage bytes before exclusive publication, preserve existing
+assets, and reject observed unsafe paths or source changes. Drag errors leave the
+failed item's model unchanged. Focused checks pass; native picker-to-FINAL and
+Windows race acceptance remain incomplete. See the
+[image-import evidence and limits](docs/v1-m2-image-import-verification-2026-09-11.md).
+
+Block controls now wrap and scroll at small/high-scale sizes; narrow center areas
+switch between **编辑 Block** and **查看 PDF**, keeping the same PDF and zoom.
+The selected slot weight is editable and undoable. In inspector text, Tab still
+inserts a tab; physical Control+Tab moves to Apply without applying, and
+Control+Shift+Tab returns to alias. See the
+[layout/keyboard evidence and limits](docs/v1-m2-block-layout-verification-2026-09-10.md).
+
 - User guide (使用指引): [`docs/user-guide.md`](docs/user-guide.md)
 - Current verified state: [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md)
 - Product and technical roadmap: [`docs/ROADMAP.md`](docs/ROADMAP.md)

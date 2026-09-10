@@ -59,6 +59,19 @@ class TableEditorTests(TestCase):
     def setUp(self) -> None:
         app()
 
+    def test_layout_projection_does_not_change_loaded_properties(self):
+        from app.core.blocks.layout import Size
+        original = LayoutNode(id="layout_loaded", kind="row", gap=Size(12.5, "mm"),
+                              alignment="middle", fallback={"strategy": "error", "custom": "retained"})
+        panel = BlockLayoutPanel(BlockRegistry(), original)
+        self.assertEqual(panel.layout, original)
+        changes = []
+        panel.layoutChanged.connect(lambda: changes.append(True))
+        panel._sync_inspector()
+        self.assertEqual(panel.layout, original)
+        self.assertEqual(changes, [])
+        panel.close()
+
     def test_direct_cell_edit_updates_model_and_zero_false_are_visible(self):
         model = TableEditorModel(TableData(columns=[ColumnSpec(id="c", name="Value")], rows=[
             TableRow(id="custom", cells={"c": Cell(kind="number", value=0)}),
@@ -192,6 +205,68 @@ class BlockLayoutPanelTests(TestCase):
     def setUp(self) -> None:
         app()
 
+    def test_slot_weight_edits_selected_slot_once_and_preserves_selection(self):
+        from dataclasses import replace
+        from PySide6.QtGui import QUndoStack
+        first = replace(block_slot("blk_a"), weight=2.5, minWidthPt=17)
+        second = replace(block_slot("blk_b"), weight=4)
+        original = LayoutNode(id="weights", children=(first, second))
+        panel = BlockLayoutPanel(registry_with_blocks(), original)
+        panel.command_stack = QUndoStack(panel)
+        self.assertFalse(panel.weight_spin.isEnabled())
+        panel.slot_list.setCurrentRow(0)
+        self.assertEqual(panel.weight_spin.value(), 2.5)
+        self.assertEqual(panel.command_stack.count(), 0)
+        panel.weight_spin.setValue(3.5)
+        self.assertEqual(panel.layout.children, (replace(first, weight=3.5), second))
+        self.assertEqual(panel.slot_list.currentRow(), 0)
+        self.assertEqual(panel.command_stack.count(), 1)
+        panel.undo()
+        self.assertEqual(panel.layout, original)
+        self.assertEqual(panel.weight_spin.value(), 2.5)
+        panel.close()
+
+    def test_edit_gap_preserves_unedited_fallback_properties(self):
+        original = LayoutNode(id="fallback", fallback={"strategy": "error", "custom": "keep"})
+        panel = BlockLayoutPanel(registry_with_blocks(), original)
+        panel.gap_spin.setValue(8)
+        self.assertEqual(panel.layout.fallback, original.fallback)
+        panel.close()
+
+    def test_inspector_control_tab_moves_focus_without_applying_or_losing_tab_input(self):
+        import sys
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+        from app.gui.blocks.inspector import BlockInspector
+        from app.gui.blocks.project_session import ProjectSession
+        registry = registry_with_blocks()
+        block = next(block for block in registry.blocks() if block.type == "text")
+        session = ProjectSession(registry=registry)
+        inspector = BlockInspector(session)
+        try:
+            session.selection.select_block(block.id, source="keyboard-test")
+            inspector.resize(500, 500)
+            inspector.show()
+            inspector.activateWindow()
+            inspector.content_edit.setFocus()
+            inspector.content_edit.selectAll()
+            QTest.keyClicks(inspector.content_edit, "draft")
+            QTest.keyClick(inspector.content_edit, Qt.Key.Key_Tab)
+            self.assertEqual(inspector.content_edit.toPlainText(), "draft\t")
+            control = Qt.KeyboardModifier.MetaModifier if sys.platform == "darwin" else Qt.KeyboardModifier.ControlModifier
+            QTest.keyClick(inspector.content_edit, Qt.Key.Key_Tab, control | Qt.KeyboardModifier.ShiftModifier)
+            app().processEvents()
+            self.assertIs(app().focusWidget(), inspector.alias_edit)
+            inspector.content_edit.setFocus()
+            QTest.keyClick(inspector.content_edit, Qt.Key.Key_Tab, control)
+            self.assertIs(app().focusWidget(), inspector.apply_button)
+            self.assertEqual(inspector.content_edit.toPlainText(), "draft\t")
+            self.assertEqual(registry.get(block.id), block)
+            self.assertEqual(session.undo_stack.count(), 0)
+        finally:
+            session.shutdown()
+            inspector.close()
+
     def test_apply_row_and_undo(self) -> None:
         registry = registry_with_blocks()
         panel = BlockLayoutPanel(registry)
@@ -301,6 +376,7 @@ class BlockProjectDialogTests(TestCase):
         registry = registry_with_blocks()
         dialog = BlockProjectDialog(registry)
         self.assertEqual(dialog.findChild(QTabWidget).count(), 6)
+        dialog.session.shutdown()  # Explicit cleanup of the synthetic unsaved model.
         dialog.close()
 
     def test_formula_tab_edits_block_ast(self) -> None:
@@ -340,7 +416,7 @@ class BlockProjectDialogTests(TestCase):
         self.assertEqual(registry.get(block.id).content["latexCache"], r"E=\gamma mc^2")
 
     @skipUnless(TOOLCHAIN.is_compile_ready, "xelatex required")
-    def test_preview_builds_pdf_and_syncs_table(self) -> None:
+    def test_preview_builds_pdf_after_explicit_table_draft_application(self) -> None:
         from app.core.blocks.model import Block, Caption, Semantic, content_for_text
         from app.core.blocks.table_model import Cell, ColumnSpec, TableData, TableRow
 
@@ -398,6 +474,9 @@ class BlockProjectDialogTests(TestCase):
                 table_model=model,
                 project_dir=project,
             )
+            self.assertIsNone(dialog._build_pdf_sync())
+            self.assertEqual(registry.get(table_block.id).content["rows"][0]["cells"]["c1"]["value"], 20)
+            self.assertTrue(dialog.session.apply_editor_drafts((("table", table_block.id),)))
             result = dialog._build_pdf_sync()
 
             self.assertTrue(result.ok, result.combined_output)

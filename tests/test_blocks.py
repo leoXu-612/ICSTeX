@@ -74,6 +74,14 @@ def valid_block_dict(block_type: str = "text", **overrides: object) -> dict:
 
 
 class BlockSchemaTests(TestCase):
+    def test_table_merge_rectangles_use_the_existing_table_model_representation(self):
+        data = valid_block_dict("table")
+        data["content"]["merges"] = [[0, 0, 0, 0]]
+        self.assertEqual(validate_block(data), [])
+        for invalid in ({"row": 0}, [0, 0, 0], [0, 0, 0, -1], [0, 0, 0, "0"]):
+            data["content"]["merges"] = [invalid]
+            self.assertTrue(validate_block(data))
+
     def test_all_block_types_validate(self) -> None:
         for block_type in BLOCK_TYPES:
             with self.subTest(block_type=block_type):

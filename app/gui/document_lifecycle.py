@@ -194,6 +194,7 @@ class DocumentLifecycle:
         window.dependencies.refresh_memberships()
         if old_path != path:
             window.project_panels.context_changed()
+        window.workspace.schedule()
         return True
 
     # --- history snapshot ---------------------------------------------------

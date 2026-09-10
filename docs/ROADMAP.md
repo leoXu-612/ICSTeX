@@ -1,6 +1,6 @@
 # ICSTeX Roadmap
 
-更新时间：2026-09-09（Asia/Taipei）
+更新时间：2026-09-10（Asia/Taipei）
 
 本文件描述产品与技术路线，不是功能愿望清单。每个进入实施的项目都必须
 同时满足用户价值、稳定性、可维护性和可验证性要求。
@@ -40,7 +40,7 @@ ICSTeX 要成为 ICC 学生从“建立写作项目”到“提交可靠成果�
 
 完成条件：维护者明确选择验收项目或下一发布/升级任务，再建立新的 bounded brief。
 
-## Now - Establish a Clean Release Boundary
+## Independent Release Gate - Preserve the Accepted Artifact Boundary
 
 目标：把已验证源码变成可解释、可复现、跨平台一致的下一版本。
 
@@ -50,8 +50,8 @@ ICSTeX 要成为 ICC 学生从“建立写作项目”到“提交可靠成果�
   扩展为自由画布或通用语言服务器。
 - 收口项目文件工具箱：稳定项目树根、展示论文与图片资源、支持 `.tex` 拖拽/新窗口、
   图片安全拖入，以及项目内受控重命名和移动；不加入删除或静默引用重写。
-- 确认截至 2026-08-01 的 post-0.2.7 source delta 发布版本；推荐 `0.2.8`。
-- 同步 `app/__init__.py`、`pyproject.toml`、packaging metadata、README 和 CHANGELOG。
+- 旧 post-0.2.7 / `0.2.8` 推荐已不适用；当前源码与公开制品版本由
+  `docs/PROJECT_STATE.md` 区分，下一正式版本由维护者选择，不因 V1 工作代号改号。
 - 重新生成并验证 versioned macOS DMG 与 clean source archive。
 - 在 Windows-local path 构建同版本 ZIP/installer，并验证：
   - 无系统 Python 时可启动；
@@ -60,12 +60,14 @@ ICSTeX 要成为 ICC 学生从“建立写作项目”到“提交可靠成果�
   - 基础 source-to-PDF 流程成功。
 - 保持已通过 WEB-001～004 的静态官网及其 Release 数据完整性；任何公开 Pages
   部署仍需维护者明确批准并执行受保护的发布流程。
-- 从 2026-08-01 verified source state 起只处理 release blocker。
+- 发布分支制品仍受独立验收门槛约束；已获授权的下一代本地源码开发按
+  `docs/CODEX_V1_DEVELOPMENT_INSTRUCTIONS.md` 和 `docs/V1_IMPLEMENTATION_PLAN.md`
+  执行，不把发布暂缓误当成本地功能开发禁令。
 
 完成条件：源码、文档、macOS artifact、Windows artifact 和版本号一致，且
 `docs/PROJECT_STATE.md` 已记录最终验证状态。
 
-## Next - Submission Readiness
+## Active Local Development - Submission Readiness
 
 目标：用已有能力组成第一个真正的“科研写作基础设施”纵向工作流。
 
@@ -99,14 +101,15 @@ Environment Doctor，不另建平行状态系统。
 该方向目前是 architecture proposal；开始实施前应在
 `docs/DECISION_LOG.md` 中转为 Accepted decision。
 
-## Candidate - Source-First Formula Composer
+## Implemented Draft Editing - Source-First Formula Composer
 
 目标：让学生用二维结构和键盘高效构造公式，同时保持 LaTeX 源码可见、可复制、
 可撤销且不被静默改写。
 
-该候选不覆盖 clean release boundary 或 Submission Readiness 的优先级。首个
-DeepSeek assignment 只实现纯 core contract；GUI、MathLive/QtWebEngine、package
-注入和文档写入必须在后续独立 slice 中评审。
+纯规则、隔离 GUI 草稿、package edit plan、显式确认、revision 与一次 Undo 已在
+源码实现并有专项验收，见项目状态。旧“只实现 core”的阶段描述不再代表当前能力。
+不引入 MathLive/QtWebEngine 或通用 WYSIWYG；D013 的完整跨平台、IME、成本和
+架构 promotion gate 仍未因此自动关闭。M2 复用并验证既有编辑器，不重新实现。
 
 分阶段条件：
 

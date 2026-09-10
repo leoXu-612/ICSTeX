@@ -45,6 +45,201 @@ def _app() -> QApplication:
 
 
 class WorkbenchVisualSmokeTests(TestCase):
+    def test_table_draft_controls_are_reachable_in_a_narrow_large_font_workspace(self):
+        from app.core.blocks.registry import BlockRegistry, CreateBlockInput
+        from app.core.blocks.table_model import Cell, ColumnSpec, TableData, TableRow
+        from app.gui.blocks.project_session import ProjectSession
+        from app.gui.blocks.workspace_widget import BlockWorkspaceWidget
+        application = _app()
+        registry = BlockRegistry()
+        block = registry.create(CreateBlockInput(type="table", alias="合成的长名称表格",
+            content=TableData(columns=[ColumnSpec("c1", "Value")],
+                rows=[TableRow("r1", {"c1": Cell("text", "before")})]).to_content_dict()))
+        session = ProjectSession(registry=registry)
+        workspace = BlockWorkspaceWidget(session)
+        try:
+            font = workspace.font()
+            font.setPointSizeF(18)
+            workspace.setFont(font)
+            workspace.resize(300, 380)
+            workspace.show()
+            workspace.open_table(block.id)
+            workspace.table_editor.table.item(0, 0).setText("unapplied")
+            application.processEvents()
+            scroll = workspace.tabs.widget(1)
+            for button in (workspace.table_apply_button, workspace.table_discard_button):
+                scroll.ensureWidgetVisible(button)
+                QTest.qWait(20)
+                rect = button.rect()
+                rect.moveTopLeft(button.mapTo(scroll.viewport(), rect.topLeft()))
+                self.assertTrue(scroll.viewport().rect().contains(rect), (rect, scroll.viewport().rect()))
+            self.assertEqual(block.content["rows"][0]["cells"]["c1"]["value"], "before")
+            self.assertEqual(session.undo_stack.count(), 0)
+            self.assertIsNone(session.compile_manager)
+        finally:
+            session.shutdown()
+            workspace.close()
+            workspace.deleteLater()
+            session.deleteLater()
+            application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_button_flow_wraps_whole_buttons_without_overlap(self):
+        from app.gui.responsive.helpers import ButtonFlowLayout
+        from PySide6.QtWidgets import QPushButton, QWidget
+        application = _app()
+        widget = QWidget()
+        flow = ButtonFlowLayout(widget)
+        buttons = [QPushButton(text) for text in ("组合为 Row", "组合为 Grid", "取消组合", "撤销")]
+        for button in buttons:
+            flow.addWidget(button)
+        try:
+            widget.show()
+            for width in (260, 640, 280):
+                widget.resize(width, 400)
+                application.processEvents()
+                for index, button in enumerate(buttons):
+                    self.assertTrue(widget.rect().contains(button.geometry()))
+                    self.assertGreaterEqual(button.width(), button.sizeHint().width())
+                    for other in buttons[index + 1:]:
+                        self.assertFalse(button.geometry().intersects(other.geometry()))
+                if width == 260:
+                    self.assertGreater(buttons[-1].y(), buttons[0].y())
+        finally:
+            widget.close()
+            widget.deleteLater()
+            application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_block_preview_switch_preserves_widgets_and_focused_editor(self):
+        from app.gui.blocks.workspace_widget import BlockPreviewArea
+        from PySide6.QtWidgets import QLineEdit, QWidget, QVBoxLayout
+        application = _app()
+        editor, pdf = QWidget(), QWidget()
+        edit = QLineEdit()
+        QVBoxLayout(editor).addWidget(edit)
+        area = BlockPreviewArea(editor, pdf)
+        parents = editor.parentWidget(), pdf.parentWidget()
+        try:
+            area.resize(600, 500)
+            area.show()
+            application.processEvents()
+            area.pdf_button.click()
+            self.assertTrue(editor.isHidden())
+            area.resize(1400, 500)
+            application.processEvents()
+            self.assertFalse(editor.isHidden())
+            edit.setFocus()
+            QTest.keyClicks(edit, "pending draft")
+            area.resize(600, 500)
+            application.processEvents()
+            self.assertFalse(editor.isHidden())
+            self.assertTrue(pdf.isHidden())
+            self.assertIs(application.focusWidget(), edit)
+            self.assertEqual(edit.text(), "pending draft")
+            self.assertEqual((editor.parentWidget(), pdf.parentWidget()), parents)
+        finally:
+            area.close()
+            area.deleteLater()
+            application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_first_window_registers_with_new_scale_manager(self):
+        application = _app()
+        previous = getattr(application, "ui_scale_manager", None)
+        if previous is not None:
+            del application.ui_scale_manager
+        window = None
+        try:
+            window = MainWindow(settings_store=AppSettings(QSettings(
+                str(Path(_TEMP.name) / f"first-scale-{next(_COUNTER)}.ini"), QSettings.Format.IniFormat)))
+            self.assertIn(window, application.ui_scale_manager._windows)
+        finally:
+            if window is not None:
+                window.close()
+                window.deleteLater()
+                application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+            if previous is not None:
+                application.ui_scale_manager = previous
+
+    def test_block_layout_and_inspector_fit_narrow_scroll_containers(self):
+        from app.gui.blocks.project_session import ProjectSession
+        from app.gui.blocks.workspace_widget import BlockWorkspaceWidget
+        from app.gui.blocks.inspector import BlockInspector
+        application = _app()
+        session = ProjectSession()
+        workspace = BlockWorkspaceWidget(session)
+        inspector = BlockInspector(session)
+        try:
+            for widget in (workspace, inspector):
+                widget.resize(280, 300)
+                widget.show()
+                application.processEvents()
+                self.assertLessEqual(widget.width(), 280)
+                self.assertLessEqual(widget.height(), 300)
+            self.assertIsNone(session.compile_manager)
+        finally:
+            session.shutdown()
+            for widget in (workspace, inspector):
+                widget.close()
+                widget.deleteLater()
+            application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_profile_dialog_keyboard_and_scroll_access_at_all_scales(self):
+        from app.gui.project_profile_dialog import ProjectProfileDialog
+        from app.gui.theme.ui_scale_manager import UiScaleManager
+        from PySide6.QtWidgets import QDialogButtonBox
+        application = _app()
+        manager = getattr(application, "ui_scale_manager", None)
+        if manager is None:
+            manager = UiScaleManager(application)
+            application.ui_scale_manager = manager
+        previous = manager.scale
+        with TemporaryDirectory() as directory:
+            dialog = ProjectProfileDialog(Path(directory).resolve())
+            try:
+                dialog.resize(520, 480)
+                dialog.show()
+                for scale in (0.9, 1.0, 1.1, 1.25, 1.5):
+                    manager.apply_scale(scale)
+                    application.processEvents()
+                    dialog.word_max.setFocus()
+                    dialog.word_max.selectAll()
+                    QTest.keyClicks(dialog.word_max, "234")
+                    QTest.keyClick(dialog.word_max, Qt.Key.Key_Tab)
+                    application.processEvents()
+                    self.assertEqual(dialog.word_max.text(), "234")
+                    self.assertIsNotNone(application.focusWidget())
+                    for kind in (QDialogButtonBox.StandardButton.Save, QDialogButtonBox.StandardButton.Cancel):
+                        button = dialog.buttons.button(kind)
+                        self.assertTrue(button.isVisible())
+                        self.assertTrue(dialog.rect().contains(button.mapTo(dialog, button.rect().center())))
+                QTest.keyClick(dialog, Qt.Key.Key_Escape)
+                self.assertFalse((Path(directory) / ".icstex").exists())
+            finally:
+                dialog.close()
+                manager.apply_scale(previous)
+
+    def test_destroyed_welcome_page_is_disconnected_from_scale_manager(self) -> None:
+        import sys
+        from unittest.mock import patch
+        from PySide6.QtCore import QCoreApplication
+        from shiboken6 import isValid
+        from app.gui.theme.ui_scale_manager import UiScaleManager
+        from app.gui.welcome_page import WelcomePage
+
+        application = _app()
+        if not hasattr(application, "ui_scale_manager"):
+            application.ui_scale_manager = UiScaleManager(application)
+        with patch.object(sys, "excepthook") as errors:
+            for _ in range(5):
+                page = WelcomePage()
+                page.show()
+                application.processEvents()
+                page.deleteLater()
+                QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+                self.assertFalse(isValid(page))
+                application.ui_scale_manager.scale_changed.emit(1.25)
+                application.processEvents()
+            errors.assert_not_called()
+
     def test_formula_and_table_editor_layout_and_keyboard_flow(self) -> None:
         from app.gui.formula_dialog import FormulaDialog
         from app.gui.insert_panel import TableDialog

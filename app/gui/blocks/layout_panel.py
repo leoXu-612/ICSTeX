@@ -7,14 +7,14 @@ LayoutNode with an undo stack; Block content is never modified.
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import replace
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QSignalBlocker, Signal
 from PySide6.QtGui import QUndoStack
 from PySide6.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
     QFormLayout,
-    QHBoxLayout,
     QLabel,
     QListWidget,
     QListWidgetItem,
@@ -26,7 +26,9 @@ from PySide6.QtWidgets import (
 from app.core.blocks.ids import new_instance_id
 from app.core.blocks.layout import BlockSlot, LayoutNode, Size, block_slot
 from app.core.blocks.registry import BlockRegistry
+from app.core.blocks.property_draft import layout_gap_mm
 from app.gui.blocks.commands import ChangeLayoutCommand
+from app.gui.responsive.helpers import ButtonFlowLayout
 
 
 class BlockLayoutPanel(QWidget):
@@ -69,21 +71,22 @@ class BlockLayoutPanel(QWidget):
         self.alignment_combo.addItems(["top", "middle", "bottom"])
         self.fallback_combo = QComboBox()
         self.fallback_combo.addItems(["stackVertically", "error", "wrapRows", "normalizeWeights", "reduceGap"])
-        self.weight_spin.valueChanged.connect(lambda _value: self._inspector_changed())
-        self.gap_spin.valueChanged.connect(lambda _value: self._inspector_changed())
-        self.alignment_combo.currentTextChanged.connect(lambda _text: self._inspector_changed())
-        self.fallback_combo.currentTextChanged.connect(lambda _text: self._inspector_changed())
+        self.weight_spin.valueChanged.connect(self._weight_changed)
+        self.slot_list.currentRowChanged.connect(lambda _row: self._sync_weight())
+        self.gap_spin.valueChanged.connect(lambda _value: self._inspector_changed("gap"))
+        self.alignment_combo.currentTextChanged.connect(lambda _text: self._inspector_changed("alignment"))
+        self.fallback_combo.currentTextChanged.connect(lambda _text: self._inspector_changed("fallback"))
 
         inspector = QFormLayout()
+        inspector.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         inspector.addRow("权重", self.weight_spin)
         inspector.addRow("gap", self.gap_spin)
         inspector.addRow("对齐", self.alignment_combo)
         inspector.addRow("回退", self.fallback_combo)
 
-        buttons = QHBoxLayout()
+        buttons = ButtonFlowLayout()
         for widget in (self.row_button, self.grid_button, self.ungroup_button, self.undo_button):
             buttons.addWidget(widget)
-        buttons.addStretch()
 
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("选择 Block 后组合："))
@@ -141,6 +144,8 @@ class BlockLayoutPanel(QWidget):
 
     def _commit(self, new_layout: LayoutNode | None) -> None:
         old_layout = deepcopy(self.layout)
+        if new_layout == old_layout:
+            return
         if self.command_stack is not None:
             self.command_stack.push(ChangeLayoutCommand(self, old_layout, new_layout))
         else:
@@ -159,27 +164,57 @@ class BlockLayoutPanel(QWidget):
 
     def _sync_inspector(self) -> None:
         has_layout = self.layout is not None
-        for widget in (self.weight_spin, self.gap_spin, self.alignment_combo, self.fallback_combo, self.slot_list):
+        for widget in (self.gap_spin, self.alignment_combo, self.fallback_combo, self.slot_list):
             widget.setEnabled(has_layout)
         if not has_layout:
+            self._refresh_slots()
             return
-        gap = self.layout.gap
-        self.gap_spin.setValue(gap.value if gap is not None else 0.0)
-        self.alignment_combo.setCurrentText(self.layout.alignment)
-        strategy = self.layout.fallback.get("strategy", "stackVertically")
-        if self.fallback_combo.findText(strategy) >= 0:
-            self.fallback_combo.setCurrentText(strategy)
+        with QSignalBlocker(self.gap_spin), QSignalBlocker(self.alignment_combo), QSignalBlocker(self.fallback_combo):
+            self.gap_spin.setValue(layout_gap_mm(self.layout))
+            self.alignment_combo.setCurrentText(self.layout.alignment)
+            strategy = self.layout.fallback.get("strategy", "stackVertically")
+            if self.fallback_combo.findText(strategy) >= 0:
+                self.fallback_combo.setCurrentText(strategy)
         self._refresh_slots()
 
     def _refresh_slots(self) -> None:
+        current = self.slot_list.currentItem()
+        selected_id = current.data(256) if current is not None else None
         self.slot_list.blockSignals(True)
         self.slot_list.clear()
         if self.layout is not None:
             for child in self.layout.children:
                 instance_id = getattr(child, "instanceId", "")
                 block_id = getattr(child, "blockId", "")
-                self.slot_list.addItem(f"{instance_id} -> {block_id}")
+                item = QListWidgetItem(f"{instance_id} -> {block_id}")
+                item.setData(256, instance_id or getattr(child, "id", None))
+                self.slot_list.addItem(item)
+                if selected_id is not None and item.data(256) == selected_id:
+                    self.slot_list.setCurrentItem(item)
         self.slot_list.blockSignals(False)
+        self._sync_weight()
+
+    def _selected_slot(self) -> BlockSlot | None:
+        row = self.slot_list.currentRow()
+        if self.layout is not None and 0 <= row < len(self.layout.children):
+            child = self.layout.children[row]
+            if isinstance(child, BlockSlot):
+                return child
+        return None
+
+    def _sync_weight(self) -> None:
+        slot = self._selected_slot()
+        self.weight_spin.setEnabled(slot is not None)
+        with QSignalBlocker(self.weight_spin):
+            self.weight_spin.setValue(slot.weight if slot is not None else 1.0)
+
+    def _weight_changed(self, value: float) -> None:
+        slot = self._selected_slot()
+        if self.layout is None or slot is None:
+            return
+        children = list(self.layout.children)
+        children[self.slot_list.currentRow()] = replace(slot, weight=value)
+        self._commit(replace(self.layout, children=tuple(children)))
 
     def move_slot(self, source_row: int, destination_row: int) -> None:
         """Reorder the current layout's children (drag-drop state operation)."""
@@ -233,20 +268,10 @@ class BlockLayoutPanel(QWidget):
                 )
             )
 
-    def _inspector_changed(self) -> None:
+    def _inspector_changed(self, field: str) -> None:
         if self.layout is None:
             return
-        self._commit(
-            LayoutNode(
-                schemaVersion=self.layout.schemaVersion,
-                id=self.layout.id,
-                kind=self.layout.kind,
-                children=self.layout.children,
-                columns=self.layout.columns,
-                gap=Size(value=self.gap_spin.value(), unit="mm"),
-                rowGap=self.layout.rowGap,
-                alignment=self.alignment_combo.currentText(),
-                keepTogether=self.layout.keepTogether,
-                fallback={"strategy": self.fallback_combo.currentText()},
-            )
-        )
+        values = {"gap": Size(value=self.gap_spin.value(), unit="mm"),
+                  "alignment": self.alignment_combo.currentText(),
+                  "fallback": {**self.layout.fallback, "strategy": self.fallback_combo.currentText()}}
+        self._commit(replace(self.layout, **{field: values[field]}))

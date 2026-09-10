@@ -13,7 +13,7 @@ from PySide6.QtWidgets import QDialog, QVBoxLayout
 
 from app.core.blocks.registry import BlockRegistry
 from app.core.blocks.source_merge import MergeResult
-from app.core.blocks.table_model import TableData, TableEditorModel
+from app.core.blocks.table_model import TableEditorModel
 from app.core.blocks.theme import AppTheme, DocumentTheme
 from app.gui.blocks.project_session import ProjectSession
 from app.gui.blocks.workspace_controller import BlockWorkspaceController
@@ -29,6 +29,7 @@ class BlockProjectDialog(QDialog):
         *,
         layout=None,
         table_model: TableEditorModel | None = None,
+        table_block_id: str | None = None,
         merge_result: MergeResult | None = None,
         theme: AppTheme | None = None,
         document_theme: DocumentTheme | None = None,
@@ -37,6 +38,7 @@ class BlockProjectDialog(QDialog):
         parent=None,
     ) -> None:
         super().__init__(parent)
+        self._owns_session = session is None
         self.setWindowTitle("Block 项目（MVP）")
         self.resize(900, 640)
 
@@ -51,7 +53,7 @@ class BlockProjectDialog(QDialog):
                 project_dir=project_dir,
             )
             if table_model is not None:
-                self.session.table_model = table_model
+                self.session.seed_table_draft(table_model, table_block_id)
         self.project_dir = self.session.project_dir
         self.registry = self.session.registry
         self.document_theme = self.session.document_theme
@@ -69,11 +71,20 @@ class BlockProjectDialog(QDialog):
     def _run_preview(self) -> None:
         if self.project_dir is None:
             return
-        self._build_pdf_sync()
+        from app.gui.blocks.close_guard import compile_block_session
+        compile_block_session(self, self.session)
 
     def _build_pdf_sync(self) -> object:
         """Legacy synchronous preview entry; routed through the session."""
         return self.session.compile_final()
 
     def _sync_table_to_registry(self) -> None:
-        self.session.sync_table_to_registry()
+        self.session.apply_editor_drafts((("table", self.session.table_target_id),))
+
+    def done(self, result):
+        if self._owns_session:
+            from app.gui.blocks.close_guard import confirm_block_close
+            if not confirm_block_close(self, self.session):
+                return
+            self.session.shutdown()
+        super().done(result)

@@ -1622,3 +1622,376 @@ must link here instead of repeating old task details.
   `dpl_7KCFhWRVwYtSdbS2WdUyavEFqobJ`; no deployment was requested. Updated current
   state and handoffs in the follow-up documentation commit without weakening
   installation-lifetime exclusion, late-instance or interruption acceptance gates.
+
+## 2026-09-10 - V1 M0 baseline and partial M1 read-only submission checks
+
+- Continued the explicit local-only V1 goal from clean synchronized HEAD
+  `f03776e87c0f938421a70ff5b085db920f2d01d7`, without reusing the preceding batch's
+  commit/push authorization. Read the complete development instructions and
+  current governance context; preserved the independent held Beta brief.
+- Completed M0 capability delta, acceptance ledger, reusable new-only synthetic
+  single-file/multi-file/Block fixtures and baseline response measurements.
+  Baseline source digest is recorded in `docs/data/v1/m0-response-baseline.json`;
+  measured targets and source/platform limitations are in the active plan.
+- Added pure read-only check rules and a bounded GUI worker/panel. Ordinary
+  source checks capture buffers, root, engine/tools, dependency observations and
+  existing FINAL records; expose status/reason/location/input identity; and
+  reject changed, cancelled, failed, late or closed-window results. No refresh
+  saves, compiles, uploads or changes source. Static coverage stays UNKNOWN,
+  unset word targets stay N/A, and preview is not treated as FINAL.
+- Bound Block checks to the visible session and compared captured model JSON
+  with safe bounded metadata reads and pure generated source. Retained pending
+  save reasons are no longer used as saved-state evidence. Block FINAL/PDF are
+  explicitly UNKNOWN; no direct overwrite/assembly actions are offered for
+  discrepancies. Ordinary hidden source changes no longer alter the Block key.
+- Native inspection exposed squeezed adjacent docks and a false metadata-event
+  assumption. Tabified the bottom docks; added explicit, owner-scoped listening
+  for three Block metadata files without enabling preview/build events. Replaced
+  synthetic-only metadata coverage with a real polling-event test. A navigation
+  test that raced an undelivered file event now waits for actual generation change.
+- Fixed the known WelcomePage retained-lambda lifetime issue using a Qt bound
+  slot and repeated destroyed-page/scale regression. Required compileall passed.
+  Final full offscreen discovery passed 998 tests in 212.415 seconds, exit 0;
+  log: `/tmp/icstex-v1-m1-block-suite-r2.log`. The focused submission/Block/watcher
+  run passed 62 tests in 4.974 seconds, exit 0. The intentional worker-failure
+  test now captures/asserts its expected error log. Final full output had no
+  RuntimeError, RuntimeWarning or traceback; whitespace checks passed.
+- Final native command was `QT_QPA_PLATFORM=cocoa python3
+  tools/probe_submission_check.py --output /tmp/icstex-v1-native-20260910-m1-block-r3`.
+  Exit 0; macOS 26.6.1 arm64, Python 3.12.6. App Python path/content digest:
+  `7af81592d3235997563f6b835511120e26a8291d17302bab20cf96b0af08f140`.
+  Verified a real one-page ordinary FINAL, child navigation line 4, invalidation,
+  five scale tiers, active Block ownership, actual metadata-event invalidation,
+  no Block compiler initialization, and restored original synthetic bytes.
+  Inspected native images; high-scale Block editor/inspector clipping and the
+  shared old source PDF remain open M2 issues, not accepted Block PDF evidence.
+- No student files, installed app or release artifacts were edited. Signed
+  candidate appcast SHA-256 remains
+  `be57a732b6532e3247916530bdc688b7e05b1cd4ec0457b216a5020250140c03`;
+  live remote `release/2.1` remains `f03776e`. All V1 changes remain local and
+  uncommitted. M1 is partial; next work is Block FINAL identity and formal-log
+  coverage, then M2-M6. No packaging, installation, signing, deployment, release,
+  goal-completion claim or relaxation of Beta installation exclusion occurred.
+
+## 2026-09-10 — V1 M1 actual FINAL evidence and read-only acceptance
+
+- Continued local V1 work without staging or changing the synchronized Git HEAD.
+  Captured bounded known inputs around actual FINAL jobs and hashed the returned
+  PDF before the completion callback. Current checks bind actual job identity,
+  source/model revision, engine/toolchain, input observations and formal log.
+  CURRENT without evidence, changed inputs/PDF, stale logs and PREVIEW cannot pass.
+- Block sessions now set model revisions on compile jobs, accept each result once
+  on their Qt thread, reject old/duplicate/closed callbacks, and retain FINAL
+  separately from PREVIEW. Block display no longer mutates ordinary-source PDF
+  state; background Block completion cannot replace a source PDF. Existing Block
+  save behavior is preserved, and M2/M4 conflict/draft work remains explicit.
+- Required compileall and whitespace checks passed. Focused tests passed 98 in
+  6.857 seconds; final full command `QT_QPA_PLATFORM=offscreen python3 -m unittest
+  discover -s tests` passed 1009 in 230.919 seconds, exit 0. Log:
+  `/tmp/icstex-v1-m1-final-binding-suite.log`. No traceback, RuntimeError or
+  RuntimeWarning was found in that final full output.
+- Final native command: `QT_QPA_PLATFORM=cocoa python3
+  tools/probe_submission_check.py --output /tmp/icstex-v1-native-20260910-m1-final-r2`,
+  exit 0. Both ordinary and Block workflows generated and displayed an actual
+  one-page XeLaTeX FINAL; Block completed exactly once. Input/PDF/log checks pass
+  only for matching current evidence. External metadata and generated-child edits
+  invalidate/reject old evidence. Synthetic originals were restored byte-exactly.
+  Five scale tiers were exercised. App Python path/content SHA-256:
+  `4a4e58ca20356a22000d86a9a45fa81b0adf68566411368b68c85e1dd8a55116`.
+- Detailed mechanism, native evidence and limits are in
+  `docs/v1-m1-final-evidence-2026-09-10.md`. M1 read-only acceptance is complete;
+  before/after sampling is not M5 frozen-input delivery. M2–M6, Block high-scale
+  layout/close conflicts, IME/AX/Windows/human acceptance remain incomplete.
+  No commit, push, package, installation, signing, deployment or release action.
+
+## 2026-09-10 — V1 M2 declarative project profile slice
+
+- Added optional version-1 `.icstex/project-profile.json` and an explicit scoped
+  editor. Existing template/engine choices are recommendations; directory hints
+  are not created and no course limit is invented. Word targets and static-check
+  visibility affect M1 checks; absent/disabled/invalid states are distinguished.
+  Core FINAL/PDF/log/saved-input guards cannot be disabled. Visible Block scope
+  is used instead of a hidden ordinary tab.
+- Profile reads are bounded to 64 KiB, strictly decoded, repeated for consistency
+  and protected by existing safe project reads. Unknown/duplicate/executable
+  fields and unsafe suggestions are rejected. Atomic single-file CAS preserves
+  external winners and the UI draft; POSIX temp creation/replacement is anchored
+  to a non-symlink directory descriptor. Extracted the existing MCP project lock
+  without changing its identity/authority; GUI profile saves refuse a busy lock
+  immediately. This is not a frozen project snapshot or an external-editor lock.
+- Added exact-profile-only watcher opt-in and invalidation, no implicit refresh
+  during typing. Dialog Save/Cancel, two-writer CAS, oversize/unknown input,
+  symlinks, disk failure, mid-save changes, active Block scope, actual file events
+  and five-scale keyboard access have focused regressions.
+- Required compileall and `git diff --check` passed. Final focused suite passed
+  104 tests in 20.680 seconds, exit 0; log
+  `/tmp/icstex-v1-m2-profile-focused-r4.log`. Initial full discovery passed 1028
+  tests in 225.637 seconds but was superseded by final plain-text UI hardening,
+  a directory validation adjustment and the added visual regression. Final
+  `QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests` passed 1029
+  tests in 329.444 seconds, exit 0; log
+  `/tmp/icstex-v1-m2-profile-suite-r2.log`. No traceback, RuntimeError or
+  RuntimeWarning in the final output; offscreen size-hint warnings remain.
+- Native command: `QT_QPA_PLATFORM=cocoa python3 tools/probe_project_profile.py
+  --output /tmp/icstex-v1-native-20260910-m2-profile-r3`, exit 0. macOS 26.6.1 arm64,
+  Python 3.12.6; app Python path/content digest
+  `cc34365cc2dc294c1888bd06321be785a423eadb70c4d6b9821edfc2a5778da4`.
+  Real one-page FINAL bytes/build identity and original synthetic sources remained
+  unchanged. Keyboard cancel wrote nothing; Save applied the word target, a real
+  file event invalidated the old check, and the next check showed the target
+  failing while FINAL still passed. Conflict/disable and five scale tiers passed;
+  lower fields, visible buttons and conflict/target-result images were inspected.
+  Source cursor and scroll stayed unchanged. No native traceback/RuntimeError/
+  RuntimeWarning/IMK or table-bounds warning in the final probe output.
+- Evidence and limits: `docs/v1-m2-profile-verification-2026-09-10.md`. M2 profile
+  slice accepted locally; full M2–M6 are still incomplete. Next slice is safe
+  project creation and coherent workbench/onboarding, then Block layout/close
+  conflicts. IME/AX/Windows/human and release gates remain separate.
+- HEAD remains `f03776e`; signed candidate appcast SHA-256 remains
+  `be57a732b6532e3247916530bdc688b7e05b1cd4ec0457b216a5020250140c03`.
+  All V1 work remains uncommitted. No package, installed-app replacement,
+  credentials, deployment, release or goal-completion action occurred.
+
+## 2026-09-10 — V1 M2 creation and workspace slice
+
+- Added Chinese-name project creation with destination/template preview, explicit
+  engine selection, optional profile, missing-tool guidance and preservation of
+  the existing window by default. Validate before mutation, reject all existing
+  targets, create files exclusively and verify bytes. Partial new directories are
+  retained and reported as failed, never silently opened as a successful project.
+- Added a full-width workspace presentation row using existing cached root/save/
+  FINAL state and existing navigation/action guards. Child source navigation
+  preserves project asset/search scope. Block uses the visible session's engine,
+  and source-only toolbar controls remain hidden through real layout. Clean Block
+  close restores source controls and its FINAL. No new universal session or
+  automatic profile application to existing projects.
+- Required compileall and diff check passed. Focused suite: 203 tests, 26.188
+  seconds, exit 0 (`/tmp/icstex-v1-m2-workspace-focused-r6.log`). Final full command
+  `QT_QPA_PLATFORM=offscreen python3 -X faulthandler -m unittest discover -s tests`:
+  1042 tests, 396.325 seconds, exit 0
+  (`/tmp/icstex-v1-m2-workspace-suite-r2.log`), no traceback/RuntimeError/
+  RuntimeWarning/fatal Python error. Superseded full run was stopped after later
+  source changes; it is not acceptance evidence.
+- Native `tools/probe_workspace_flow.py`, Cocoa, output
+  `/tmp/icstex-v1-native-20260910-m2-workspace-r6`, exit 0. Real keyboard-operated
+  Chinese wizard -> explicit one-page FINAL -> read-only checks -> byte-identical
+  PDF export -> second-window reopen. Create/open did not compile. Source bytes
+  stayed unchanged; input coverage stayed unknown. Source/Block/header/wizard
+  captured at five scales; clean Block close restored the source FINAL.
+  App Python path/content SHA-256:
+  `9d713aa8350aa690ff9b6e516b35cdc78c179f8c7cff83a916fae0a5590a5be9`.
+- Failure history and limitations are recorded in
+  `docs/v1-m2-workspace-verification-2026-09-10.md`: early Qt timer SIGSEGV causal
+  uncertainty remains despite later green runs; native IMK/table warnings and
+  Block editor/inspector clipping persist. Global-stylesheet sampling in a large
+  test process is not a product performance benchmark. Pending Block edits,
+  external conflicts and whole-window close are not accepted by a clean-close test.
+- Next active slice remains M2 Block layout/pending-edit close protection, then
+  the remaining M3-M6. No restart of completed M0/M1, architecture promotion,
+  credentials, package, installed-app replacement, signing, deployment or release.
+- Live `git ls-remote` still matched HEAD `f03776e87c0f938421a70ff5b085db920f2d01d7`;
+  the previous source-sync batch is complete, while subsequent V1 work stays
+  uncommitted under the active local-development instruction. The signed local
+  candidate hash remains `be57a732b6532e3247916530bdc688b7e05b1cd4ec0457b216a5020250140c03`.
+
+## 2026-09-10 — V1 M2 guarded Block save and close slice
+
+- Preserved the existing Block session, formats and command stack. Captured
+  original metadata/generated ownership; safe bounded reads, cooperating project
+  lock, before/after byte rechecks and conditional rollback now refuse lossy,
+  unknown, external and unsafe-path writes. Bounded pending recovery evidence is
+  staged before project replacement. Partial/unresolved evidence blocks retry;
+  it is neither an OS-atomic project transaction nor an accepted M4 checkpoint.
+- Save persists metadata and corresponding managed TeX without compiling. A real
+  native save-close-reopen run exposed the earlier metadata-only save defect;
+  the red regression and corrected generation/readiness expectations are retained.
+  A malformed legacy table draft also reproduced silent empty-table conversion;
+  validation now retains the unknown payload and refuses unsafe saving.
+- MainWindow/Block close and owned-dialog Escape use Save/Discard/Cancel before
+  shutdown, with Block auto-writes paused throughout Source and Block prompts.
+  Conflict keeps the window, draft and external winner. Explicit Discard and
+  shutdown ignore late writes/results. Stop no longer closes the session. Visible
+  FINAL uses the existing asynchronous compiler; Source/PDF ownership stays separate.
+- Required compileall and `git diff --check` passed. Final focused suite:
+  255 tests, 24.633 seconds, exit 0 (`/tmp/icstex-v1-m2-block-focused-r6.log`).
+  Final full discovery: 1068 tests, 389.469 seconds, exit 0
+  (`/tmp/icstex-v1-m2-block-suite-r2.log`); no Python traceback, RuntimeError,
+  RuntimeWarning or fatal Python error. Superseded r1 was intentionally terminated
+  after the reopen fix became necessary; its interrupt and exit 143 are not
+  successful validation. A later sampling attempt found the final test process
+  already exited; it produced no performance evidence.
+- Native `tools/probe_block_close.py`, Cocoa, output
+  `/tmp/icstex-v1-native-20260910-m2-block-close-r4`, exit 0. Real modal keyboard
+  Save/Cancel/Discard, saved-model reopen, actual one-page FINAL, conflict refusal,
+  owned-dialog close and late-callback protection passed. The PDF text contains
+  the saved synthetic draft; final SHA-256
+  `f828a65f684839173d3c4ef9a6dc40b910071e25e2094816c5c42b6c069d87cd`.
+  Small-sample FINAL dispatch was 2.450 ms with 97 GUI heartbeat ticks during
+  compilation, not a general performance claim. Source PDF/cursor/scroll remained
+  unchanged. Same-source r3/r4 final, cancel, error and retained-draft images were
+  inspected. Font-alias warning remains; no Python exception in the final native log.
+- Same-source `tools/probe_workspace_flow.py` r7 also exited 0: Chinese creation,
+  FINAL/check/export/reopen and clean Block close still passed, with unchanged
+  synthetic source bytes. The workspace probe recorded table-bounds/font-alias
+  warnings. No new Python crash report was found; earlier timer SIGSEGV causal
+  uncertainty and IME/AX/Windows/human acceptance remain open. Block narrow/high-
+  scale controls still clip; next active slice is layout/keyboard reachability.
+- App Python path/content SHA-256 for these runs:
+  `4c0b3b607adaec9aea9340c6f8bb25206e10cc99cb9cfd490532bd3864cbcd0d`.
+  Detailed reproducibility and limits:
+  `docs/v1-m2-block-close-verification-2026-09-10.md`. M2-M6 remain incomplete;
+  M4 still owns explicit recovery to a new directory and M5 frozen delivery.
+- Live remote `release/2.1` remained at HEAD `f03776e87c0f938421a70ff5b085db920f2d01d7`;
+  V1 work stays uncommitted. Signed candidate appcast SHA-256 remained
+  `be57a732b6532e3247916530bdc688b7e05b1cd4ec0457b216a5020250140c03`.
+  No commit/push, package, installed-app replacement, credentials, signing,
+  deployment, release or goal-completion operation occurred.
+
+## 2026-09-10 — V1 M2 Block layout/keyboard reachability verified locally
+
+- Retained the existing Block session, command stack, guarded model writer and
+  shared Source/PDF ownership. Added whole-button wrapping, scroll containment,
+  contextual inspector rows, first-window scale registration and explicit narrow
+  editor/PDF switching. Real Block toolbar actions replace Source placeholders;
+  standalone dialogs retain their compile controls.
+- Reproduced and fixed layout projection changing loaded middle/error values,
+  ineffective slot-weight editing and removal of unedited fallback fields.
+  Selected-slot edits preserve other slot fields/selection and enter one Undo.
+  Physical Control+Tab focuses Apply without committing; ordinary Tab and text
+  Undo/Redo remain local. Detailed files and red/native attempts are in
+  `docs/v1-m2-block-layout-verification-2026-09-10.md`.
+- Required compileall and `git diff --check` passed. Final focused GUI/layout
+  run: 82 tests, 27.638 seconds, exit 0, log
+  `/tmp/icstex-v1-m2-block-layout-focused-r6.log`. Full discovery: 1076 tests,
+  539.011 seconds, exit 0, log `/tmp/icstex-v1-m2-block-layout-suite-r1.log`.
+  No Python traceback/RuntimeError/RuntimeWarning/fatal error in the full log;
+  offscreen plugin warnings remain. No app source changed during the full run.
+- Native Cocoa layout r6, close r5 and workspace r8 all exited 0 on app Python
+  path/content SHA-256
+  `ea723c4ae672e8504fa3213efbc83b228ca22e04ce9e2c0032d377b81e9adcea`, rechecked afterward.
+  Evidence directories begin `/tmp/icstex-v1-native-20260910-m2-` and end
+  `layout-accept-r6`, `block-close-r5`, `workspace-r8`. Five scales and two sizes,
+  whole-button scroll reachability, keyboard local/global Undo, explicit Save
+  without compilation, actual FINAL, PDF identity/zoom and Source cursor/scroll/
+  byte preservation passed. Selected narrow/wide/FINAL and conflict-dialog
+  screenshots were inspected. The 150%/1080 center body is 111 logical pixels:
+  scrolling is needed; this is not simultaneous full-editor visibility.
+- Save/Cancel/Discard, reopen, conflict preservation and late callbacks were
+  reverified. The retained one-page close-probe FINAL contains the saved draft,
+  SHA-256 `87f22e8dcbd2d5adde50a7ead402af9102828e92961d46d4b72534fd1c033550`.
+  The same-source Chinese create/FINAL/check/PDF export/reopen flow also passed.
+  Font-alias warnings remain in native logs, and workspace still emits a table-
+  bounds warning. No new Python crash report was found in the directory check;
+  earlier timer SIGSEGV, IME/AX/Windows/human acceptance remain open.
+- The full suite ran longer than the preceding 389.469-second run. A read-only
+  live one-second sample showed Qt application stylesheet/CSS work and 2.1 GB
+  process footprint (2.2 GB peak); this is not an isolated app benchmark or proof
+  of a leak. Preserve `/tmp/icstex-v1-m2-block-layout-suite-sample-r1.txt` as an M6
+  investigation signal. Do not equate full-suite success with performance pass.
+- A separate synthetic reproduction confirmed unapplied Inspector text is not
+  reflected in `has_unsaved_changes` and is lost on `refresh()`. This pre-existing
+  editor-draft gap remains unresolved and is the next active M2 safety slice;
+  model close protection does not cover every widget draft. M2-M6 remain incomplete.
+- Live remote `release/2.1` still matched HEAD
+  `f03776e87c0f938421a70ff5b085db920f2d01d7`; signed local candidate feed remained
+  `be57a732b6532e3247916530bdc688b7e05b1cd4ec0457b216a5020250140c03`.
+  V1 changes remain uncommitted. No commit/push/rename, package, installed-app
+  replacement, credential action, signing, deployment or publication occurred.
+
+## 2026-09-11 — V1 M2 unapplied Inspector properties verified locally
+
+- Added pure target/base property-draft rules and session-visible pending state.
+  Refresh, selection and local text Undo preserve unapplied fields without model
+  edits, disk writes or compiler authorization. Pending properties pause automatic
+  save/preview and invalidate saved/FINAL readiness. Alias/text/heading/image and
+  selected layout/slot-parent properties are covered; untouched values, unknown
+  fields and pt gap units are preserved.
+- Explicit Apply or a confirmed batch validates all captured bases before one
+  model Undo command. Save/close/FINAL explain application of pending properties;
+  cancellation, changed confirmations, newer re-entrant input and deleted/changed
+  targets retain drafts. External save conflicts preserve both memory and disk
+  versions. This is memory-only protection, not M4 crash recovery or a checkpoint.
+- Required compileall and `git diff --check` passed. Focused suite: 115 tests,
+  91.311 seconds, exit 0 (`/tmp/icstex-v1-m2-property-drafts-r5.log`); a later
+  EOF-only whitespace cleanup was covered by native/full validation. Final full
+  discovery: 1098 tests, 1677.963 seconds, exit 0
+  (`/tmp/icstex-v1-m2-property-drafts-suite-r1.log`). No Python traceback,
+  RuntimeError, RuntimeWarning or fatal error; offscreen plugin warnings remain.
+  No app source changed during the full run. App Python path/content SHA-256:
+  `e675b187e1b02c5b69afd8730d9c53b073e56f7d38fb72eae79859145e43970d`, rechecked afterward.
+- Three same-source Cocoa probes exited 0: property drafts r5, layout acceptance
+  r7 and Block close r6 under `/tmp/icstex-v1-native-20260911-m2-`. They verified
+  native keyboard text/confirmation paths, cross-object draft retention, five
+  scale tiers, batch application, Save-close-reopen, conflict preservation and
+  actual FINAL. Source PDF/cursor/nonzero scroll/bytes remained intact. The retained
+  one-page property FINAL contains the applied synthetic draft, SHA-256
+  `57ee2d8059ab29b071aa052102d67d85b95fa8be9cdbc7bdc3c282a383552568`.
+  Final PDF, 150% draft, Save-close and external-conflict screenshots were inspected.
+  Font-alias/table-bounds warnings remain; no new Python crash report was found.
+- Full-suite duration exceeded the preceding 539.011-second run. A one-second
+  sample again found QApplication stylesheet/CSS work and a 2.1 GB footprint;
+  receipt `/tmp/icstex-v1-m2-property-drafts-suite-sample-r1.txt`. A later machine
+  sample showed substantial swap use. These are investigation signals, not an
+  isolated app benchmark, proof of a leak or attribution solely to this patch.
+  M6 retains window/style lifetime, earlier timer-crash causality and separate
+  native IME/AX/Windows/human acceptance. Next full discovery should be verbose.
+- Independent synthetic, no-project-directory/no-compiler reproductions found
+  two still-open M2 defects: selecting the second table opens/edits the first
+  registry table, and an accepted formula modal overwrites a target changed while
+  the dialog was open. Image replacement's modal path remains untested. The next
+  bounded slice fixes secondary editor target/revision ownership; M2-M6 are not
+  complete. Details and failed runs are in
+  `docs/v1-m2-property-draft-verification-2026-09-11.md`.
+- Live remote `release/2.1` matched HEAD
+  `f03776e87c0f938421a70ff5b085db920f2d01d7`; the signed local candidate feed remained
+  `be57a732b6532e3247916530bdc688b7e05b1cd4ec0457b216a5020250140c03`.
+  V1 work stays uncommitted. No commit/push/rename, packaging, installed-app change,
+  credentials, signing, deployment or publication occurred. Beta holds remain.
+
+## 2026-09-11 — V1 M2 secondary editor targets, focused/native verified; full pending
+
+- Implemented explicit multi-table target/cache/draft ownership, live-cell dirty
+  tracking, captured-base table batches and one global Undo without first-table
+  synchronization. FormulaTab/Inspector share guarded modal application; stale
+  accepted text is retained. Deleted pending targets reopen, tuple draft-choice
+  selection survives refresh, and exact-draft Discard refuses newer input. The
+  image picker changed-target reproduction now refuses copying before mutation.
+- Native testing found an additional Enter/immediate-Save-or-switch stale delegate
+  commit warning. Two red regressions reproduced it. Delivering only the existing
+  delegate's queued MetaCall before manual closure fixed both; native replay has
+  no stale commit warning. No general GUI event pumping or warning suppression.
+- Frozen app Python path/content SHA-256:
+  `caac75122b49f7a0e283cf1a8203a1beaa62d5d458b9c67ad21eb24abc1b1625`.
+  Required compileall and diff whitespace checks passed. Focused final-source
+  170 tests passed in 91.731 seconds, exit 0; the new target module has 22 tests.
+  Full verbose r2 is still running in `/tmp/icstex-v1-m2-editor-targets-suite-r2.log`
+  (owned process 71286, exec session 78934). Do not count this as full acceptance.
+  Full r1 was superseded by the native-found app change and terminated with 143;
+  its earlier SIGINT was caught inside a Qt callback, not a functional test result.
+- Four same-source Cocoa probes exited 0: editor targets r5, property drafts r6,
+  layout r8 and Block close r7. Actual two-table edits, local/global Undo, formula
+  Cancel/Apply/stale-base conflict, guarded Save/close/reopen and visible FINAL
+  passed while Source PDF/cursor/nonzero scroll/bytes were retained. The one-page
+  target FINAL visibly contains both intended tables and `x+4`, SHA-256
+  `9cd54006f5ec4de503dfe39ea14b218a44c490f7c149443b359daa9035734ba5`.
+  Final/150%/formula-conflict/external-conflict screenshots were inspected. Real
+  native activation was required; early focus-failed attempts are not acceptance.
+  Font-alias, table-bounds and input-service warnings remain; no new Python crash
+  report was found in the contemporaneous check. IME/AX/Windows/human gaps remain.
+- Slow full-suite scaling has bounded diagnostic evidence: the isolated nine-test
+  scale module passed in 6.648 seconds. Eight submission GUI tests passed in
+  4.607 seconds but left 8 closed MainWindows/5518 widgets after GC/deferred-delete;
+  explicit synthetic window disposal left no MainWindow and 7 widgets. This is
+  fixture-retention evidence, not an app-wide leak conclusion. A one-second full
+  process sample again shows QApplication stylesheet work (1.8 GB footprint,
+  2.0 GB peak). Fix test fixture disposal after capturing the frozen full result.
+- A next-slice synthetic image import reproduced an internal `assets/images`
+  symlink writing into a sibling directory while returning a project-relative
+  path; original source bytes stayed intact. This remains unfixed; picker target
+  protection is not full asset safety. M2-M6 and independent Beta gates remain
+  open. Details: `docs/v1-m2-editor-target-verification-2026-09-11.md`.
+- Live remote still matches local HEAD
+  `f03776e87c0f938421a70ff5b085db920f2d01d7`; local signed candidate feed hash remains
+  `be57a732b6532e3247916530bdc688b7e05b1cd4ec0457b216a5020250140c03`.
+  No staging/commit/push/rename, packaging, installed-app replacement, credentials,
+  signing, deployment or release action occurred. V1 development stays local.

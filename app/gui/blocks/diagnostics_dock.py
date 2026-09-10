@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
 
 from app.core.blocks.source_map import block_at_line
 from app.gui.blocks.project_session import ProjectSession
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Signal, Qt
 
 
 _ERROR_LINE_RE = re.compile(r"([^:\s]+\.tex):(\d+):")
@@ -30,6 +30,7 @@ class BlockDiagnostics(QWidget):
         self.session = session
         self._last_result = None
         self.status_label = QLabel("空闲")
+        self.status_label.setTextFormat(Qt.TextFormat.PlainText)
         self.status_label.setWordWrap(True)
         self.log_view = QPlainTextEdit()
         self.log_view.setReadOnly(True)
@@ -45,11 +46,21 @@ class BlockDiagnostics(QWidget):
         layout.addLayout(row)
         layout.addWidget(self.log_view)
 
-        session.compile_requested.connect(lambda reason: self._on_requested(reason))
+        session.compile_requested.connect(self._on_requested)
         session.compile_finished.connect(self._on_finished)
+        session.save_state_changed.connect(self._on_save_state)
+        self._on_save_state()
+
+    def _on_save_state(self):
+        if self.session.save_error:
+            self.status_label.setText("保存受阻：内存草稿仍保留")
+            self.log_view.setPlainText(self.session.save_error)
+            self.error_seen.emit()
 
     def _on_requested(self, reason: str) -> None:
-        self.status_label.setText(f"编译已排队：{reason}")
+        self.status_label.setText(f"编译请求：{reason}" if self.session._compile_authorized else
+                                  "尚未授权自动预览；首次编译需显式触发。")
+        self._on_save_state()
 
     def _on_finished(self, result) -> None:
         self._last_result = result

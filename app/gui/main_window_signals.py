@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from app.core.compiler import BuildPurpose
+from app.gui.project_profile_dialog import show_project_profile
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from app.gui.main_window import MainWindow
@@ -17,6 +18,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 def connect_signals(window: "MainWindow") -> None:
     # File / project actions
     window.new_project_action.triggered.connect(window.new_project)
+    window.project_profile_action.triggered.connect(lambda: show_project_profile(window))
     window.new_action.triggered.connect(window.new_document)
     window.open_file_action.triggered.connect(window.open_file_dialog)
     window.open_folder_action.triggered.connect(window.open_folder_dialog)
@@ -40,6 +42,15 @@ def connect_signals(window: "MainWindow") -> None:
     window.health_check_action.triggered.connect(
         lambda _checked=False: window.run_project_check(switch_to_panel=True)
     )
+    window.submission_check_action.triggered.connect(window.readiness.show)
+    window.submission_panel.refreshRequested.connect(window.readiness.request)
+    window.submission_panel.cancelRequested.connect(window.readiness.cancel)
+    window.submission_panel.actionRequested.connect(window.readiness.act)
+    window.signals.external_changed.connect(window.readiness.external_changed)
+    window.signals.started.connect(window.readiness.build_started)
+    window.signals.finished.connect(window.readiness.build_finished)
+    window.editor_tabs.currentChanged.connect(window.readiness.invalidate)
+    window.engine_selector.currentIndexChanged.connect(window.readiness.invalidate)
     window.environment_doctor_action.triggered.connect(window.show_environment_doctor)
     window.feedback_bundle_action.triggered.connect(window.copy_feedback_bundle)
     window.import_perf_action.triggered.connect(window.show_import_perf_dialog)

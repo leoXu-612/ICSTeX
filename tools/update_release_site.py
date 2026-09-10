@@ -31,9 +31,11 @@ def read_app_version() -> str:
 
 
 def generated_release_data(manifest: dict[str, object]) -> dict[str, object]:
-    version = read_app_version()
-    if manifest.get("version") != version:
-        raise ValueError(f"manifest version {manifest.get('version')!r} does not match app version {version!r}")
+    # This projection describes published artifacts, not an unreleased checkout.
+    # Release preparation separately enforces source identity before publishing.
+    version = manifest.get("version")
+    if not isinstance(version, str) or not version:
+        raise ValueError("manifest needs a non-empty version")
     tag = manifest.get("tag")
     if tag != f"v{version}":
         raise ValueError(f"manifest tag {tag!r} must be v{version}")
@@ -67,6 +69,12 @@ def generated_release_data(manifest: dict[str, object]) -> dict[str, object]:
         "documents": manifest["documents"],
         "limitations": manifest["limitations"],
     }
+
+
+def require_source_version(manifest: dict[str, object]) -> None:
+    version = read_app_version()
+    if manifest.get("version") != version:
+        raise ValueError(f"manifest version {manifest.get('version')!r} does not match app version {version!r}")
 
 
 def render(data: dict[str, object]) -> str:

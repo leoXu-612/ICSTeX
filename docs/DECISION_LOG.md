@@ -33,7 +33,7 @@
 | D015 | Accepted | Agent/Harness 通过项目绑定、默认只读的 stdio MCP 操作 ICSTeX |
 | D016 | Accepted | MCP 并发复用官方调度，并由项目级协调器保持一致性 |
 | D017 | Accepted | 文件工具箱保持只读模型，文件变更经项目级安全控制器执行 |
-| D020 | Proposed | 用户开启更新检查，验证完整制品并在保存退出后更新应用 |
+| D020 | Accepted | 用户开启更新检查，验证完整制品并在保存退出后更新应用 |
 
 ## D001 - Local Research Writing Infrastructure
 
@@ -175,6 +175,9 @@ macOS DMG、source archive、Windows ZIP/installer、版本元数据和用户文
 - 现有 0.2.7 artifacts 继续作为已验证历史制品，不声称包含 post-0.2.7 delta。
 - Windows build 必须来自 Windows-local path 并在那里完成启动和 toolchain 验证。
 - signing、architecture 和 notarization 状态必须如实描述。
+- 已发布下载页由其 release manifest 固定，不随尚未发布的源码版本改变。
+  离线 release preparation 与 tag-at-HEAD 发布校验仍要求 manifest 版本匹配源码；
+  普通网站一致性测试只验证已发布 manifest、制品和页面之间的一致性。
 
 ## D009 - Layered Project Memory
 

@@ -1436,3 +1436,156 @@ must link here instead of repeating old task details.
   bump, updater activation or student-content change was performed.
 - Updated the current source matrix and completed handoffs to distinguish
   synchronized repository source from unchanged public installation packages.
+
+## 2026-09-09 - macOS arm64 Beta candidate prepared; signing awaits human authorization
+
+- User assigned activation of macOS arm64 Beta using Vercel plus GitHub Releases,
+  approved a dedicated Ed25519 key in the local Keychain, and later approved
+  production publication after acceptance. Windows, Apple Developer ID signing,
+  notarization and GitHub Actions remain excluded. Started from clean
+  `release/2.1` at `4d15bdd`; this round remains local/uncommitted.
+- Advanced source metadata to `2.1.0-beta.2` and bound the candidate to sequence
+  `210002`, arm64/Beta, the existing Vercel domain and a new dedicated public key.
+  Sparkle `generate_keys --account com.icstex.app.beta` reported successful
+  Keychain storage; a subsequent public-key-only lookup matched the checked-in
+  configuration. No private key was exported or printed.
+- Revalidated Sparkle 2.9.6 archive SHA-256
+  `52bf9e88cdd972fc0c81501377a880e90d47031bd8ca5462488f843e2609e192` before extraction.
+  The initial bridge inherited macOS 26.0 from the host; the actual Qt 6.11.1
+  QtCore slices declared 13.0. Added explicit bridge deployment target 13.0 and
+  matching bundle minimum, then recompiled with warnings as errors. `vtool`
+  verified the resulting arm64 bridge minimum OS 13.0. This is a binary target
+  check, not a macOS 13 runtime acceptance claim.
+- Initial full preflight failed two site tests because the source version had
+  advanced beyond the published Beta 1 manifest. Kept the download page and old
+  assets pinned to their manifest, while retaining strict source-version checks
+  in release preparation and tag-at-HEAD verification. Added focused regressions
+  for that boundary and the explicit bridge target. Final required compileall
+  and packaging preflight passed: 962 tests in 222.579 seconds. Existing
+  welcome-page scale callback/deleted-QLabel warnings recurred without failing
+  the suite; they were not fixed or hidden in this task.
+- Built a fresh frozen PyInstaller candidate with the opt-in runtime. The
+  executable is arm64, bundle version/display version are 210002/Beta 2, and
+  the embedded public configuration/plist agree. Deep strict ad-hoc signature
+  verification passed. Candidate executable SHA-256:
+  `4804a92062a9e2e332bfeba039ac5a349d6c28528c22024fcd38b77055b247c5`.
+  Input app-tree hash is
+  `7951127e915ac29d80039c7c42af86d623cf26d449462e98eff5a5203e3d4934`
+  for 211 files, sorted path + NUL + file bytes + NUL, excluding `__pycache__`.
+  A checksum comparison found no source-file differences from the frozen copy.
+- Native candidate UI showed Beta 2, the fixed update host and automatic checks
+  off. An explicit check initialized Sparkle and displayed its retrieval-error
+  alert because no accepted update source was published; cancellation kept the
+  application usable. No successful feed retrieval/download/install is claimed.
+  QA used a temporary home, but the recent-project UI still exposed existing
+  preferences, so this is not claimed as fully isolated preferences. No listed
+  project or student document was opened. The native automation's post-quit
+  observation relaunched its selected candidate; that exact QA process was
+  terminated afterward. The original installed process remained running.
+- Copied the verified candidate under
+  `dist/ICSTeX-2.1.0-beta.2-macos-arm64-candidate/`; generated a symlink-preserving
+  ZIP using `ditto`. Archive length 56,212,119 bytes, SHA-256
+  `c58effd2ce9f0528589ada9ec4f18311870e8c0db571fecaa88a4705b9bca300`.
+  Local preflight/build/launch logs remain in its `verification/` folder.
+- The first `sign_update` call failed with Keychain error -60008; `security error`
+  described inability to obtain authorization. The unsigned appcast was excluded
+  from deployment. The verified SDK was retained under
+  `dist/updater-sdk-Sparkle-2.9.6/` for the explicit human Terminal signing step
+  documented in `docs/BETA_ACTIVATION_HANDOFF.md`.
+- Vercel CLI download timed out and its existing login token was expired, but
+  the authenticated Vercel connector successfully deployed the original website
+  project as preview `dpl_7KCFhWRVwYtSdbS2WdUyavEFqobJ` (READY). URL:
+  `https://website-9jgkbdafm-leoxuminghua-7962s-projects.vercel.app`.
+  The preview contains unchanged website content plus update cache headers and
+  no appcast; production was not promoted. No GitHub release/tag/push/upload,
+  old-asset overwrite, installed-app replacement, Developer ID signing,
+  notarization or GitHub Actions run was performed.
+- Activation remains unfinished: human Keychain authorization, archive/feed
+  signature validation, real signed two-version update and failure/recovery
+  acceptance, then immutable assets and signed production feed publication.
+
+## 2026-09-09 - Signed Beta 2 native QA completed; activation held at installation exclusion
+
+- Maintainer completed the Keychain authorization. Official Sparkle 2.9.6 tools
+  then signed local production-intended and loopback-only QA feeds/archives.
+  Independent Ed25519 verification of exact feed/archive bytes passed using the
+  configured public key. No private material was exported. No new signing key
+  or OS security workaround was used.
+- Native testing exposed obscured progress behind the Qt settings dialog.
+  Fixed manual-check window handoff and added a working active-session progress
+  button without changing the scheduled attempt time or auto-check re-entry
+  policy. Added three controller regressions and visual coverage. Required
+  preflight passed 965 tests in 215.812 seconds before the revised candidate was
+  built; existing welcome/deleted-QLabel warnings remain.
+- Built r2 from frozen current app/packaging source. App tree (211 files, sorted
+  path + NUL + content + NUL, excluding __pycache__) SHA-256:
+  `d48056f79629e13a861d9082751075134f63c854032408c19bb0e695566d5474`.
+  Archive `ICSTeX-2.1.0-beta.2-macos-arm64.zip` length 56,211,122 bytes, SHA-256
+  `342c0300a6d7dc82d087aaee0703576996666678c01b6b01f163c16574b1061f`;
+  executable SHA-256
+  `86dac5d20b468325dc147e21795324040241310898e353218b4279c586b4f9c3`.
+  Signed production-intended feed SHA-256
+  `be57a732b6532e3247916530bdc688b7e05b1cd4ec0457b216a5020250140c03`.
+  Preserved r1 separately; no published identity/asset was overwritten.
+- Private QA builds changed only copied-source test seams: explicit temporary
+  INI preferences, fixed loopback feed exception, QA label/sequence and local
+  networking plist option. Public source remains HTTPS-only. Native signature
+  and installer policy were unchanged. Served byte-identical r2 archive from a
+  loopback-only server; no project contents were served or uploaded.
+- Real native checks exercised HTTP 503, feed and archive tampering, no update,
+  download cancellation, two-window Save/Cancel, unnamed Save As cancellation,
+  and a pre-existing same-executable-path process. Successful Save/Install
+  replaced bootstrap 210001 with exact r2 210002 and automatically relaunched it
+  before UI automation selected it. Full bundle checksum/symlink comparison
+  showed no differences; deep strict signature and independent cold launch
+  passed. Synthetic source hash stayed unchanged; saved unnamed content matched
+  its expected fixture. No student document was opened or edited.
+- A 240 MB APFS fixture with about 24 MiB free rejected installation, preserving
+  the old complete bundle. Manual cold launch passed. A read-only remount was
+  rejected by Sparkle before download. A deliberately signed broken QA build
+  exited 86 after installation; it did not automatically roll back. Preserved
+  that installed broken bundle, restored the trusted whole old bundle, and
+  verified recursive checksum, signature and visible cold launch. The test app
+  and loopback server were stopped; the APFS fixture was detached.
+- Inspection of Sparkle 2.9.6 InstallerProgressAppController.m lines 319-325
+  found its explicit one-process/late-instance monitoring limitation. ICSTeX's
+  GUI probe is not held across host exit. This is an unmet installation-exclusion
+  proof obligation, not a reproduced corrupt update. The existing activation
+  gate remains unchanged. Late-instance races, forced installer interruption,
+  and actual public HTTPS delivery remain unverified. Native external-conflict
+  and active-work fault injection is not claimed beyond automated coverage.
+- Recorded the bounded implementation decision required before adding a helper,
+  altering startup policy, or modifying the pinned engine. No new installer was
+  introduced, and no public activation was performed. Vercel preview remains
+  READY with no appcast; only GitHub v2.1.0-beta.1 is published. The installed
+  application, production deployment and prior release assets remain unchanged.
+  Changes remain local/uncommitted; no push, tag, release, asset upload, Windows
+  activation, Developer ID signing, notarization, or GitHub Actions was performed.
+- Final handoff preflight passed 965 tests in 246.461 seconds. Candidate source,
+  archive and feed signatures were independently rechecked and remained equal.
+  The production domain still resolved through Vercel metadata to
+  `dpl_D71b854e1vvoJa4GAwfAxnEmFAfn`; GitHub still listed only v2.1.0-beta.1.
+  Published-website consistency passed; strict source-version release checking
+  correctly rejected the Beta 1 manifest against the unreleased Beta 2 source.
+  No new matching ICSTeX/Python/Updater/Autoupdate crash report was observed.
+
+## 2026-09-10 - Next-generation Codex development instructions (documentation only)
+
+- Added `docs/CODEX_V1_DEVELOPMENT_INSTRUCTIONS.md` as an inactive handoff
+  for a future user-started development session, and linked it from
+  `PROJECT_INDEX.md`. It defines M0-M7 phases, three end-to-end user workflows,
+  fifteen acceptance scenarios, preservation rules and a copyable launch prompt.
+- The local source-development scope is separate from platform/user acceptance,
+  packaging, installation and public distribution. Existing `FORCODEX.md`,
+  Beta handoffs, signatures, update configuration and public/installed artifacts
+  were not changed. The instructions require live baseline checks and preserve
+  the unresolved installation-lifetime exclusion gate.
+- Required compileall completed with exit code 0. Full offscreen unittest
+  discovery completed with 965 tests OK in 232.304 seconds, exit code 0.
+  The pre-existing welcome-page scale callback still emitted deleted-QLabel
+  RuntimeError messages at `app/gui/welcome_page.py:161-172`; no application
+  fix or new native GUI acceptance is claimed.
+- Whitespace checks produced no diagnostics. This round changed only the new
+  instructions, the index entry and this appended record; no product source,
+  version metadata or student documents were edited. No commit, push, packaging,
+  installation, signing, deployment or release was performed.

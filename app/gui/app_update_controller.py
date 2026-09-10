@@ -115,9 +115,10 @@ class AppUpdateController(QObject):
             return
         config = self.availability.config
         self._dialog.set_state(
-            available=self.availability.available and not self._closed and not self._checking,
+            available=self.availability.available and not self._closed and not self._handoff,
             automatic=self.automatic,
             message=self.message,
+            checking=self._checking,
             source=f"更新源：{urlsplit(config.feed_url).hostname}" if config else "",
             channel=("Beta 通道" if config.channel == "beta" else "稳定通道") if config else "",
         )
@@ -153,9 +154,21 @@ class AppUpdateController(QObject):
             self.check(user_initiated=False)
 
     def check(self, *, user_initiated: bool) -> None:
-        if self._closed or self._checking or self._handoff or not self.availability.available:
+        if self._closed or self._handoff or not self.availability.available:
             return
         if not user_initiated and not self.automatic:
+            return
+        if self._checking:
+            if user_initiated and self._backend is not None:
+                # A manual native check focuses the existing update session.
+                # Do not schedule another attempt or reset active install state.
+                if self._dialog is not None:
+                    self._dialog.hide()
+                try:
+                    self._backend.check(user_initiated=True)
+                except Exception:
+                    self.message = "更新仍在处理，暂时无法显示进度窗口。请稍后重试。"
+                    self.show_dialog()
             return
         try:
             if self._backend is None:
@@ -167,10 +180,14 @@ class AppUpdateController(QObject):
             # Persist attempts, including failures, to avoid a retry/network loop.
             self.settings.setValue("updates/last_attempt", self._now())
             self.settings.sync()
+            if user_initiated and self._dialog is not None:
+                self._dialog.hide()
             self._backend.check(user_initiated=user_initiated)
         except Exception:
             self._checking = False
             self.message = "更新检查无法启动或连接失败。未安装任何更新，请稍后重试。"
+            if user_initiated and self._dialog is not None:
+                self.show_dialog()
         self.changed.emit()
 
     @Slot(str)

@@ -26,6 +26,9 @@ from app.core.app_updates import (CONFIG_NAME, UpdateConfiguration,
                                    process_architecture, read_update_configuration)
 
 
+# Matches the current Qt 6.11 macOS binaries; do not inherit the build host OS.
+MACOS_MIN_SYSTEM_VERSION = "13.0"
+
 SDK_RELEASES = {
     "darwin": {
         "version": "2.9.6",
@@ -50,6 +53,7 @@ def verify_sdk_archive(archive: Path, target_platform: str) -> None:
 def sparkle_plist(config: UpdateConfiguration) -> dict:
     return {
         "CFBundleVersion": str(config.release_sequence),
+        "LSMinimumSystemVersion": MACOS_MIN_SYSTEM_VERSION,
         "SUFeedURL": config.feed_url, "SUPublicEDKey": config.public_key,
         "SUEnableAutomaticChecks": False, "SUAutomaticallyUpdate": False,
         "SUAllowsAutomaticUpdates": False, "SUEnableSystemProfiling": False,
@@ -65,6 +69,7 @@ def compile_sparkle_bridge(sdk: Path, output: Path, architecture: str) -> None:
     subprocess.run([
         "xcrun", "clang", "-fobjc-arc", "-dynamiclib", "-Wall", "-Wextra", "-Werror",
         "-Wno-unused-parameter", "-arch", architecture, "-F", str(sdk),
+        f"-mmacosx-version-min={MACOS_MIN_SYSTEM_VERSION}",
         "-framework", "Foundation", "-framework", "Sparkle",
         "-Wl,-rpath,@loader_path", "-Wl,-install_name,@rpath/ICSTeXUpdateBridge.dylib",
         str(ROOT / "packaging" / "native_updates" / "sparkle_bridge.m"), "-o", str(output),

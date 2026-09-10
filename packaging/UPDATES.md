@@ -6,7 +6,9 @@ Developer ID signing, notarization, or replacing an installed application.
 
 The client uses Sparkle 2.9.6 on macOS and WinSparkle 0.9.4 on Windows. Official
 SDK URLs and exact release SHA-256 digests are pinned in `native_updates.py`.
-The repository does not vendor the SDKs or contain a real appcast configuration.
+The repository does not vendor the SDKs. Maintainer public configuration for
+the macOS arm64 Beta candidate is in `release/updates/macos-arm64-beta.json`.
+Its presence does not enable ordinary builds or establish activation acceptance.
 
 ## 1. Release prerequisites
 
@@ -145,3 +147,20 @@ each platform, using isolated documents and non-production test credentials:
 The existing user base needs one manual bootstrap installation. Unit tests,
 SDK staging, a loaded bridge and a visible settings dialog do not establish a
 working or recoverable public auto-update path.
+
+## Candidate build versus published website
+
+`release/release-manifest.json` and `website/release.json` continue to identify
+the existing published download-page release until its replacement is accepted.
+They do not acquire a new version merely because `app/__init__.py` advances.
+`tools/release_prepare.py` and `verify_release_consistency.py --require-tag-at-head`
+retain the source-version gate for preparing that release. The separate native
+channel configuration binds the candidate's exact version and numeric sequence.
+
+For the dedicated Beta key, use Sparkle's `--account com.icstex.app.beta` option.
+Only the public key is checked in. The private key stays in the maintainer's
+login Keychain; macOS access prompts and backup decisions remain human steps.
+Do not deploy an unsigned candidate appcast or replace Beta 1 release assets.
+Signed candidates whose activation gates remain open are also local-only:
+keep them in ignored `release/updates/candidates/`, outside `website/`. A source
+commit or push does not authorize copying them into the deployment tree.

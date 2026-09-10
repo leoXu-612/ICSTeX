@@ -1,6 +1,6 @@
 # FORCODEX.md
 
-Timestamp: 2026-09-08 (source synchronization handoff)
+Timestamp: 2026-09-09 (macOS arm64 Beta update activation)
 
 This is Codex's current bounded brief. Replace it when the assignment changes;
 do not append completed-task history.
@@ -11,21 +11,44 @@ The verified source/artifact matrix is maintained in `docs/PROJECT_STATE.md`.
 The local installed application contains the frozen response/preview, formula/
 table and default-offline update-entry source. Its exact local build identity,
 verification boundaries and rollback receipt are recorded in the state and log.
-The product source is also synchronized to GitHub; public installation artifacts
-remain unchanged. Native online update delivery is not
-activated or accepted; its separate maintainer gates remain in
-`docs/FORCODEX_UPDATES.md` and `packaging/UPDATES.md`.
+The prior product source is synchronized to GitHub; the current Beta 2 changes
+remain local and uncommitted. Native online delivery is not activated or accepted.
+Human Keychain authorization is complete. Candidate r2 has independently verified
+archive/feed signatures and has passed a real isolated native replacement and
+cold launch. Activation is held because the late-starting-instance/native
+installation mutual-exclusion gate is not established. See
+`docs/BETA_ACTIVATION_HANDOFF.md` for evidence and the required scope decision.
 
 ## Active Bounded Assignment
 
-The user-requested local installation and source repository synchronization are
-complete. No further implementation, renaming, version change or release work
-is assigned. Preserve the installed app, rollback copy, local-only screenshots
-and existing commit history. Start a new bounded brief only for a new assignment.
+Connect only the macOS arm64 Beta channel using Vercel signed appcasts and
+versioned GitHub prerelease full archives. Preserve Beta 1 public assets and
+the installed application. Use Sparkle 2.9.6 and the existing native adapter.
+Keep automatic checks opt-in. Do not trigger GitHub Actions, activate Windows
+updates, or perform Apple Developer ID signing/notarization in this assignment.
 
-Public installation packages and online updates remain separate release gates.
-Do not activate an updater, access signing credentials, change repository
-security/workflow settings or modify student content under this completed task.
+The user explicitly approved a dedicated ICSTeX Beta Ed25519 key in this Mac's
+login Keychain. Keep private material there; never export it to files, logs,
+source, or website content. Backup remains a human decision.
+
+Use isolated application copies and synthetic documents for signed two-version
+acceptance. A deployment or valid signature is not proof of replacement. Record
+exact source/version/sequence, archive hashes, public key identity, feed URL,
+deployment/release identities, native outcomes and recovery limitations. Publish
+only accepted targets. Run required full tests and packaging preflight.
+
+The user also explicitly approved publishing to the existing Vercel production
+domain after acceptance, keeping current website content unchanged apart from
+the Beta update directory and its caching headers. Only a preview has been
+deployed; it contains no appcast. The now-signed local feed is not approved for
+publication while an activation gate remains unmet. Do not generate another key,
+weaken the gate, or claim that a GUI process scan is an installation lock.
+
+Pause publication pending a bounded decision on installation-lifetime exclusion
+and application/MCP startup coordination. Adding a new helper, modifying Sparkle,
+or changing the supported multi-instance policy is not an incidental deployment
+step. Preserve the signed r2 candidate and all prior artifacts. Remaining native
+race/interruption tests and public HTTPS delivery tests are explicitly unverified.
 
 ## Required Context
 
@@ -38,5 +61,6 @@ security/workflow settings or modify student content under this completed task.
 
 ## Handoff Rule
 
-Start a new bounded brief only after a new assignment. Put historical commands
-and results in `PROJECT_LOG.md`; keep measured limitations explicit.
+Put verified current facts in project state and append historical evidence to
+`PROJECT_LOG.md`. Keep unverified release gates explicit. Do not modify student
+content or repository workflow/security settings.

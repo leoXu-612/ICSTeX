@@ -6,6 +6,9 @@ import sys
 from html.parser import HTMLParser
 from pathlib import Path
 from unittest import TestCase
+from unittest.mock import patch
+
+from tools import update_release_site
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,6 +34,27 @@ class SiteHTMLInspector(HTMLParser):
 
 
 class ReleaseSiteTests(TestCase):
+    def test_published_metadata_stays_pinned_while_source_advances(self) -> None:
+        manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        with patch.object(update_release_site, "read_app_version", return_value="99.0.0-beta.1"):
+            rendered = update_release_site.generated_release_data(manifest)
+            self.assertEqual(rendered["version"], manifest["version"])
+            self.assertEqual(rendered["tag"], manifest["tag"])
+            with self.assertRaisesRegex(ValueError, "does not match app version"):
+                update_release_site.require_source_version(manifest)
+        self.assertTrue(all(f"/{manifest['tag']}/" in asset["download_url"]
+                            for asset in rendered["assets"]))
+
+    def test_published_manifest_cannot_relabel_a_tag(self) -> None:
+        manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        manifest["tag"] = "v99.0.0"
+        with self.assertRaisesRegex(ValueError, "manifest tag"):
+            update_release_site.generated_release_data(manifest)
+
+    def test_release_preparation_keeps_source_version_gate(self) -> None:
+        source = (ROOT / "tools" / "release_prepare.py").read_text(encoding="utf-8")
+        self.assertIn('"--require-source-version"', source)
+
     def read_text(self, relative: str) -> str:
         return (ROOT / relative).read_text(encoding="utf-8")
 

@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "version": "2.1.0-beta.2",
+  "release_sequence": 210002,
+  "channel": "beta",
+  "platform": "darwin",
+  "architecture": "arm64",
+  "feed_url": "https://website-phi-beryl-92.vercel.app/updates/macos/arm64/beta/appcast.xml",
+  "public_key": "1mtBpc0v9IuhwChfoSVOpY+X9ygltPGvTubRa7qqpYc="
+}

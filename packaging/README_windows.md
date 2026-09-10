@@ -1,6 +1,9 @@
 # ICSTeX for Windows
 
-版本：2.1.0-beta.1
+版本：2.1.0-beta.2
+
+此处为源码版本。Beta 2 本轮仅验收 macOS arm64，Windows 未重建或开放更新；
+下列 Beta 1 文件名仍指既有制品，不代表提供 Beta 2 Windows 安装包。
 
 ICSTeX - ICC Student's TeX - 是一个面向学生的桌面 LaTeX 编辑器，支持实时编译、PDF 预览、项目模板、插图/表格辅助、BibTeX 引用和标签工具。
 

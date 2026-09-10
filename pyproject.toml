@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "icstex"
-version = "2.1.0-beta.1"
+version = "2.1.0-beta.2"
 description = "ICC Student's TeX: a cross-platform Overleaf-style desktop LaTeX editor and live compiler."
 requires-python = ">=3.11"
 dependencies = [

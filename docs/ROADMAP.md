@@ -1,6 +1,6 @@
 # ICSTeX Roadmap
 
-更新时间：2026-09-08（Asia/Taipei）
+更新时间：2026-09-09（Asia/Taipei）
 
 本文件描述产品与技术路线，不是功能愿望清单。每个进入实施的项目都必须
 同时满足用户价值、稳定性、可维护性和可验证性要求。
@@ -137,8 +137,10 @@ DeepSeek assignment 只实现纯 core contract；GUI、MathLive/QtWebEngine、pa
 长期决策见 D020。中文设置、应用级调度、全窗口保存退出和 Sparkle/WinSparkle
 薄适配器已在工作源码实现；普通源码和默认打包仍不启用更新。
 
-下一发布阶段完成唯一版本/序号、真实 appcast/公钥、macOS 分发签名与公证、
-Windows 分架构 EXE 安装器，以及 N→N+1 的安装/取消/失败恢复验收。首个带更新器
+当前独立任务先接通 macOS arm64 Beta；候选 r2 的签名、真实 N→N+1 替换、冷启动、
+取消与限定故障恢复已验证。公开发布暂缓：需明确安装全生命周期互斥和晚启动实例的
+处理路径，完成原生竞态/中断验收后再发布 GitHub 资产与 Vercel appcast。
+Apple Developer ID/公证与 Windows 分架构 EXE 安装器仍为后续独立任务。首个带更新器
 的版本需人工安装。接入步骤见 `packaging/UPDATES.md`；公开升级尚未开放。
 差分、运行时渠道切换、自动回滚与百分比灰度后置；不触发 GitHub Actions。
 

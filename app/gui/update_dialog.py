@@ -62,9 +62,11 @@ class AppUpdateDialog(QDialog):
         layout.addLayout(row)
 
     def set_state(self, *, available: bool, automatic: bool,
-                  message: str, source: str = "", channel: str = "") -> None:
+                  message: str, source: str = "", channel: str = "",
+                  checking: bool = False) -> None:
         self.status.setText(message)
         self.check_button.setEnabled(available)
+        self.check_button.setText("查看更新进度" if checking else "检查更新")
         self.automatic.setEnabled(available)
         self.automatic.blockSignals(True)
         self.automatic.setChecked(automatic if available else False)

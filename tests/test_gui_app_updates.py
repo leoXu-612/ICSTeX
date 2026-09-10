@@ -93,8 +93,40 @@ class ApplicationUpdateControllerTests(unittest.TestCase):
         self.controller.check(user_initiated=True)
         self.controller.check(user_initiated=True)
         self.factory.assert_called_once()
-        self.backend.check.assert_called_once_with(user_initiated=True)
+        self.assertEqual(self.backend.check.call_count, 2)
+        self.backend.check.assert_called_with(user_initiated=True)
         self.assertEqual(float(self.settings.value("updates/last_attempt")), 100000)
+
+    def test_manual_check_can_restore_active_native_progress(self):
+        self.controller.show_dialog()
+        self.controller.check(user_initiated=True)
+        self.assertFalse(self.controller._dialog.isVisible())
+        self.controller.show_dialog()
+        self.assertTrue(self.controller._dialog.check_button.isEnabled())
+        self.assertEqual(self.controller._dialog.check_button.text(), "查看更新进度")
+        self.controller._now = lambda: 200000.0
+        self.controller._dialog.check_button.click()
+        self.assertFalse(self.controller._dialog.isVisible())
+        self.assertTrue(self.controller._checking)
+        self.assertEqual(self.backend.check.call_count, 2)
+        self.assertEqual(float(self.settings.value("updates/last_attempt")), 100000)
+        self.controller._on_native_event("cancelled")
+        self.assertEqual(self.controller._dialog.check_button.text(), "检查更新")
+
+    def test_progress_focus_failure_keeps_active_session_and_windows(self):
+        self.controller.check(user_initiated=True)
+        self.backend.check.side_effect = RuntimeError("native window not ready")
+        self.controller.check(user_initiated=True)
+        self.assertTrue(self.controller._checking)
+        self.assertTrue(self.controller._dialog.isVisible())
+        self.assertTrue(all(window.isEnabled() for window in self.windows))
+        self.assertIn("仍在处理", self.controller.message)
+
+    def test_automatic_check_does_not_reenter_active_session(self):
+        self.controller.set_automatic(True)
+        self.controller.check(user_initiated=True)
+        self.controller.check(user_initiated=False)
+        self.backend.check.assert_called_once_with(user_initiated=True)
 
     def test_opt_in_persists_and_daily_check_is_bounded(self):
         self.controller.set_automatic(True)

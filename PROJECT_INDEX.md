@@ -14,6 +14,8 @@
 - `AGENTS.md`：所有 coding agent 的操作约束。
 - `docs/PROJECT_STATE.md`：当前已验证源码、release matrix 与风险。
 - `docs/ROADMAP.md`：产品和技术优先级。
+- `docs/CODEX_V1_DEVELOPMENT_INSTRUCTIONS.md`：下一代正式版的待执行开发总纲、
+  分阶段验收与授权边界；不自动替换现有 active brief。
 - `docs/DECISION_LOG.md`：长期架构决策及其原因。
 - `docs/update-delivery-design-2026-09-08.md`：原生更新器实现、信任分工与发布验收边界。
 - `packaging/UPDATES.md`：维护者提供配置、暂存固定 SDK、签名与 appcast 接入步骤。

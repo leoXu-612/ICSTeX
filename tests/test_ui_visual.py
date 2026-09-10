@@ -218,6 +218,10 @@ class AppUpdateVisualTests(TestCase):
                              source="更新源：updates.example.org", channel="Beta 通道")
             self.assertTrue(dialog.check_button.isEnabled())
             self.assertTrue(dialog.automatic.isChecked())
+            dialog.set_state(available=True, automatic=False, message="更新正在进行。", checking=True)
+            application.processEvents()
+            self.assertEqual(dialog.check_button.text(), "查看更新进度")
+            self.assertTrue(dialog.rect().contains(dialog.check_button.geometry()))
         finally:
             dialog.close()
             dialog.deleteLater()

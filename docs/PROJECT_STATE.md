@@ -1,16 +1,19 @@
 # ICSTeX Project State
 
-更新时间：2026-09-08（Asia/Taipei）
+更新时间：2026-09-09（Asia/Taipei）
 
 本文件是当前已验证状态的权威来源；历史证据写入 `PROJECT_LOG.md`，未来计划写入
 `docs/ROADMAP.md`，长期约束写入 `docs/DECISION_LOG.md`。
 
 ## Product and Source State
 
-- 权威工作区：本仓库根目录；当前产品源码已提交并同步至 GitHub 的 `release/2.1`。
+- 权威工作区：本仓库根目录；此前产品源码已同步至 GitHub 的 `release/2.1`。
+  当前本地正在准备 Beta 2 macOS arm64 更新通道，新增变更尚未提交或推送。
   响应/预览优化、公式/表格交互和默认离线更新入口已生成并安装本机 macOS 开发
   构建；公开安装制品尚未包含这些后续更新。
-- 当前版本：`2.1.0-beta.1`；版本来源为 `app/__init__.py`。
+- 当前源码版本：`2.1.0-beta.2`；版本来源为 `app/__init__.py`。
+  已安装应用与公开下载仍为 Beta 1；Beta 2 r2 已签名并完成隔离双版本替换，
+  但安装全生命周期互斥门槛未建立，尚未公开发布。
 - 技术栈：Python 3.11+、PySide6、本机 LaTeX distribution、PyInstaller。
 - 产品边界：中文优先、本地文件与本地编译优先、不静默上传用户内容、不捆绑
   MacTeX、TeX Live 或 MiKTeX。
@@ -66,7 +69,9 @@
 - UI Scale 90/100/110/125/150%、响应式欢迎页、标签栏和 PDF 工具栏。
 - 当前工作源码提供“软件更新…”入口、默认关闭的每日检查、应用级单例及全部窗口
   保存退出保护。Sparkle/WinSparkle 薄适配器和可选 SDK 构建接入已实现；源码运行
-  与默认安装包均未配置更新源、公钥或原生运行时，不自动联网。公开升级尚未开放。
+  与默认安装包仍不配置更新源、公钥或原生运行时，不自动联网。Beta 2 arm64
+  候选已显式嵌入运行时与公钥，签名 feed 与双版本安装已验证；原生竞态/中断等
+  剩余门槛未通过，公开升级尚未开放。
 - RapidOCR 本地运行时和 Text Block 链路保留在源码中，但 2.1 Beta 1 用户入口禁用。
 - 当前工作源码提供项目绑定、默认只读的 stdio MCP adapter 与配套
   `icstex-control` Skill。官方 MCP SDK 2.x 负责并发请求和同步工具线程卸载；core
@@ -243,11 +248,44 @@
   恢复均未验收。不声称自动回滚、跨进程安装锁或 Windows feed 元数据签名。
   维护者接入与开放门槛见 `packaging/UPDATES.md`。
 
+2026-09-09 macOS arm64 Beta 签名与原生升级验证：
+
+- 必需 compileall 与最终 packaging preflight 通过；完整 offscreen 回归 965 项
+  通过（246.461 秒）。既有 welcome-page/deleted-QLabel 非致命异常仍出现，未修复。
+- 版本 `2.1.0-beta.2`、序号 `210002`。维护者已完成钥匙串授权；官方 Sparkle 工具
+  签署归档和 appcast 后，以公钥独立验证两者的精确字节均通过。专用私钥保留在本机
+  钥匙串，只有公钥进入 `release/updates/macos-arm64-beta.json`；未导出私钥。
+- 更新桥与 bundle 最低 macOS 版本为 13.0；本机 arm64 原生运行已测，不代表
+  macOS 13 实机验收。ad-hoc 深度严格签名通过；未 Developer ID 签名或公证。
+- 原生验收发现并修复 Qt 更新设置窗口遮挡 Sparkle 进度的问题；手动检查隐藏设置，
+  活动会话可通过“查看更新进度”重新调出，不重置检查时间或安装状态。增加 3 项
+  controller 回归并更新视觉测试；自动检查不重入活动会话。
+- 冻结源码生成 r2 候选，归档 SHA-256 为
+  `342c0300a6d7dc82d087aaee0703576996666678c01b6b01f163c16574b1061f`，
+  长度 56,211,122 bytes。app 211 文件摘要为
+  `d48056f79629e13a861d9082751075134f63c854032408c19bb0e695566d5474`。
+- 私有 QA bootstrap 210001 通过原生安装器替换为精确的签名 r2 210002，并自动重启；
+  完整 bundle checksum/symlink 比较无差异，独立冷启动通过。合成文档保存结果与
+  预期 SHA-256 相同，已有合成文档字节未变。测试源仅固定回环地址例外；正式源码
+  仍强制 HTTPS，r2 固定正式域名。没有替换主安装版或打开学生文档。
+- 原生测试覆盖 HTTP 503、篡改 feed/归档拒绝、无更新、下载取消、全窗口 Save/Cancel、
+  未命名 Save As 取消、预先运行的同路径进程拒绝、低磁盘空间和只读安装位置。
+  故意无法启动的签名 QA 包未自动回滚；恢复完整可信旧 bundle 后 checksum、签名和
+  冷启动通过。不能声称自动回滚或跨版本草稿恢复。
+- 发布暂缓：GUI 进程扫描不覆盖主进程退出后的安装生命周期。Sparkle 2.9.6 上游
+  终止监视代码仅选择首个进程并明确说明晚启动实例的限制，尚不能建立所需互斥保证；
+  这不是已复现安装损坏。晚启动竞态、强制中断与真实公开 HTTPS 分发仍未验收。
+- Vercel 原项目预览 `dpl_7KCFhWRVwYtSdbS2WdUyavEFqobJ` 为 READY，只有现有网站
+  和缓存配置，没有 appcast；正式部署、GitHub Beta 1 资产与本机主应用未改动。
+  详细矩阵见 `docs/beta-update-verification-2026-09-09.md`，当前候选/剩余决策见
+  `docs/BETA_ACTIVATION_HANDOFF.md`。当前变更未提交/推送，不触发 GitHub Actions。
+
 ## Release Matrix
 
 | 对象 | 状态 | 说明 |
 | --- | --- | --- |
-| 当前源码 | Verified source synchronized | 2.1.0-beta.1；产品源码提交 `39e315e` 已同步至 `origin/release/2.1`；默认离线本机安装已验证，原生联网升级验收未完成 |
+| 当前源码 | Beta 2 signed local candidate | 2.1.0-beta.2；新增变更未提交/推送；此前产品源码 `39e315e` 已同步，公开激活仍受验收门槛限制 |
+| Beta 2 macOS arm64 候选 | Signed and replaced in QA; activation held | `dist/ICSTeX-2.1.0-beta.2-macos-arm64-candidate-r2/`；序号 210002；签名、真实替换和冷启动通过，原生安装互斥门槛未建立 |
 | 本机 macOS 应用 | Latest local development build installed | `/Applications/ICSTeX.app`；20260908-204029-b002533f；包含响应/预览优化、公式/表格更新及默认离线更新入口；旧应用已保留 |
 | macOS arm64 DMG/ZIP | Verified, rebuilt | hardened source；ad-hoc signed、未 notarize |
 | clean source ZIP | Verified, rebuilt | hardened source；publication hygiene scan passed |
@@ -274,8 +312,9 @@
 
 ## Current Risks and Immediate Work
 
-- 应用内更新尚无真实 appcast/公钥。首个带更新器版本须人工引导安装；公开开放前
-  分平台完成签名、安装器、占用检测和双版本升级/失败恢复验证。普通网站 JSON
+- macOS arm64 Beta 的签名与隔离双版本替换已验证，发布暂缓于晚启动实例/安装全生命周期
+  互斥门槛；需要先决定其有界实现路径，再完成原生竞态/中断和公开 HTTPS 分发验证。
+  首个带更新器版本仍须人工引导安装；不把 GUI 占用扫描当作安装锁。普通网站 JSON
   不是更新 feed，现有 Windows ZIP 不直接进行原地更新。
 - Windows ARM64 ZIP 已在 Windows-local `C:\w3` 从 hardened source ZIP 重建；
   Python 3.12.10 ARM64，移除系统 Python PATH 后的打包应用启动验收通过。

@@ -1,6 +1,6 @@
 # ICSTeX
 
-Current version: 2.1.0-beta.1. Current packaged release: 2.1.0-beta.1. The working source may be ahead of the packaged
+Current version: 2.1.0-beta.2. Current packaged release: 2.1.0-beta.1. The working source may be ahead of the packaged
 release; see [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) for the exact boundary.
 
 ICSTeX - ICC Student's TeX - is local research-writing infrastructure for ICC
@@ -151,7 +151,7 @@ macOS:
 bash packaging/build_macos.sh
 ```
 
-This creates both `dist/ICSTeX-2.1.0-beta.1.dmg` and a latest alias at
+This creates both `dist/ICSTeX-2.1.0-beta.2.dmg` and a latest alias at
 `dist/ICSTeX.dmg`. Share the versioned DMG when distributing test builds.
 
 Windows:

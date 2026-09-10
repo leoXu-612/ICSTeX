@@ -155,12 +155,19 @@ class UpdatePackagingTests(unittest.TestCase):
     def test_sparkle_security_and_offline_defaults_are_explicit(self):
         info = self.helpers["sparkle_plist"](update_config())
         self.assertEqual(info["CFBundleVersion"], "101")
+        self.assertEqual(info["LSMinimumSystemVersion"], "13.0")
         self.assertTrue(info["SURequireSignedFeed"])
         self.assertTrue(info["SUVerifyUpdateBeforeExtraction"])
         self.assertEqual(info["SUSignedFeedFailureExpirationInterval"], 0)
         for key in ("SUEnableAutomaticChecks", "SUAutomaticallyUpdate", "SUAllowsAutomaticUpdates",
                     "SUEnableSystemProfiling", "SUShowReleaseNotes", "SUEnableJavaScript"):
             self.assertIs(info[key], False)
+
+    def test_bridge_deployment_target_does_not_inherit_build_host(self):
+        with patch("sys.platform", "darwin"), patch("subprocess.run") as run:
+            self.helpers["compile_sparkle_bridge"](Path("/sdk"), Path("/output/bridge"), "arm64")
+        self.assertIn("-mmacosx-version-min=13.0", run.call_args.args[0])
+        self.assertTrue(run.call_args.kwargs["check"])
 
     def test_default_packaging_remains_without_updater_runtime(self):
         with patch.dict("os.environ", {}, clear=True):

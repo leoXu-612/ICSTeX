@@ -22,7 +22,8 @@ def main() -> int:
     if args.check:
         generator.append("--check")
     subprocess.run(generator, cwd=ROOT, check=True)
-    subprocess.run([sys.executable, str(ROOT / "tools" / "verify_release_consistency.py")], cwd=ROOT, check=True)
+    subprocess.run([sys.executable, str(ROOT / "tools" / "verify_release_consistency.py"),
+                    "--require-source-version"], cwd=ROOT, check=True)
     print("Offline release preparation PASS. No tag, push, GitHub Release, or site deployment was performed.")
     return 0
 

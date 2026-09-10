@@ -1,5 +1,5 @@
 #define MyAppName "ICSTeX"
-#define MyAppVersion "2.1.0-beta.1"
+#define MyAppVersion "2.1.0-beta.2"
 #define MyAppPublisher "ICSTeX"
 #define MyAppExeName "ICSTeX.exe"
 

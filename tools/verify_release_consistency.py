@@ -110,11 +110,15 @@ def fail(problems: list[str], message: str) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--require-tag-at-head", action="store_true")
+    parser.add_argument("--require-source-version", action="store_true",
+                        help="release gate: published manifest must match this checkout")
     args = parser.parse_args()
 
     problems: list[str] = []
     try:
         manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+        if args.require_source_version or args.require_tag_at_head:
+            update_release_site.require_source_version(manifest)
         generated = update_release_site.generated_release_data(manifest)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"Release consistency FAILED: {exc}", file=sys.stderr)

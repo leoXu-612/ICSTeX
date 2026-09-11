@@ -395,7 +395,7 @@ class BlockInspector(QWidget):
             return
         if key[0] in ("block", "table", "table_cell", "formula"):
             self.session.selection.select_block(key[1], source="inspector-draft")
-            if key[0] == "table" and self.workspace is not None:
+            if key[0] in ("table", "table_cell") and self.workspace is not None:
                 self.workspace.open_table(key[1])
         else:
             self.session.selection.select_layout_node(key[1], source="inspector-draft")

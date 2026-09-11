@@ -43,6 +43,8 @@ class EditorTab:
     external_conflict: bool = False
     pending_compile_after_save: bool = False
     save_timer: QTimer | None = None
+    recovery_pending: bool = False
+    recovery_base: bytes | None = None
 
 
 @dataclass(frozen=True)

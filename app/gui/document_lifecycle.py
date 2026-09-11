@@ -62,7 +62,7 @@ class DocumentLifecycle:
     # --- save coordination --------------------------------------------------
 
     def schedule_save(self, tab: EditorTab, *, compile_after_save: bool = False) -> None:
-        if not tab.path or id(tab) in self.checkpoint_tabs:
+        if not tab.path or tab.recovery_pending or id(tab) in self.checkpoint_tabs:
             return
         window = self.window
         if tab.external_conflict:
@@ -107,7 +107,7 @@ class DocumentLifecycle:
             tab.save_timer.stop()
 
     def compile_after_idle(self, tab: EditorTab) -> None:
-        if tab.manager is None or id(tab) in self.checkpoint_tabs:
+        if tab.manager is None or tab.recovery_pending or id(tab) in self.checkpoint_tabs:
             return
         purpose = automatic_build_purpose(
             enabled=self.window.auto_compile_action.isChecked(),
@@ -151,6 +151,14 @@ class DocumentLifecycle:
             window.statusBar().showMessage("外部文件冲突尚未确认；未覆盖磁盘文件。", 5000)
             return False
         try:
+            if tab.recovery_pending and old_path == path and tab.recovery_base is not None:
+                from app.core.project_checkpoint import _read_file
+                scope = window.selected_project_scope or path.parent
+                current, _ = _read_file(scope, path.relative_to(scope).as_posix())
+                if current != tab.recovery_base:
+                    tab.external_conflict = True
+                    window.statusBar().showMessage("恢复副本已被外部修改；草稿保留，请另存为或重新审阅。", 6000)
+                    return False
             text = tab.editor.toPlainText()
             path.parent.mkdir(parents=True, exist_ok=True)
             write_latex_text_atomic(path, text, encoding=tab.encoding)
@@ -172,6 +180,8 @@ class DocumentLifecycle:
         tab.dirty = False
         tab.modified = False
         tab.external_conflict = False
+        tab.recovery_pending = False
+        tab.recovery_base = None
         window._invalidate_include_cache()
         if tab.manager is None or old_path != path:
             tab.manager = window.create_compile_manager(path)

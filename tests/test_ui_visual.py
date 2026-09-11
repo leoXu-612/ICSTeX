@@ -45,6 +45,32 @@ def _app() -> QApplication:
 
 
 class WorkbenchVisualSmokeTests(TestCase):
+    def test_recovery_draft_review_buttons_fit_large_font(self):
+        from app.gui.project_recovery_dialog import RecoveryDraftDialog
+        from tests.test_gui_editor import isolated_settings
+        application = _app()
+        window = MainWindow(settings_store=isolated_settings())
+        dialog = RecoveryDraftDialog(window)
+        try:
+            for size in (12, 18):
+                font = dialog.font()
+                font.setPointSize(size)
+                dialog.setFont(font)
+                dialog.resize(760, 560)
+                dialog.show()
+                application.processEvents()
+                for control in (dialog.choose_button, dialog.apply_button, dialog.close_button):
+                    self.assertTrue(dialog.rect().contains(control.mapTo(dialog, control.rect().topLeft())))
+                    self.assertTrue(dialog.rect().contains(control.mapTo(dialog, control.rect().bottomRight())))
+                self.assertTrue(dialog.preview.isReadOnly())
+                self.assertFalse(dialog.apply_button.isEnabled())
+        finally:
+            dialog.reject()
+            dialog.deleteLater()
+            window.close()
+            window.deleteLater()
+            application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
     def test_checkpoint_review_actions_and_close_fit_with_large_font(self):
         from app.gui.project_checkpoint_dialog import ProjectCheckpointDialog
         from tests.test_gui_editor import isolated_settings

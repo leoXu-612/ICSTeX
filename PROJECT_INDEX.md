@@ -53,7 +53,9 @@
 - `docs/v1-m4-history-safety-verification-2026-09-11.md`：文本历史来源/路径/摘要保护、
   合法旧记录只读兼容、确认后一次 Undo、保存重开/FINAL 验证与剩余平台边界。
 - `docs/v1-m4-checkpoint-gui-verification-2026-09-11.md`：项目检查点真实选择/确认/恢复界面、
-  多窗口源码和 Block 属性草稿独立捕获、保存字节重开/FINAL；草稿重载和中断写入恢复仍待完成。
+  多窗口源码和 Block 属性草稿独立捕获、保存字节重开/FINAL；捕获阶段证据。
+- `docs/v1-m4-recovered-drafts-verification-2026-09-11.md`：恢复副本复核、独立窗口继续
+  源码/Block/未应用单元格草稿、首次显式保存保护与重开/FINAL；中断写入和迁移仍待完成。
 - `docs/DECISION_LOG.md`：长期架构决策及其原因。
 - `docs/update-delivery-design-2026-09-08.md`：原生更新器实现、信任分工与发布验收边界。
 - `packaging/UPDATES.md`：维护者提供配置、暂存固定 SDK、签名与 appcast 接入步骤。

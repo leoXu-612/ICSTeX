@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from app.core.compiler import BuildPurpose
 from app.gui.project_profile_dialog import show_project_profile
 from app.gui.project_checkpoint_dialog import show_project_checkpoint
+from app.gui.project_recovery_dialog import show_recovery_drafts
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from app.gui.main_window import MainWindow
@@ -22,6 +23,7 @@ def connect_signals(window: "MainWindow") -> None:
     window.project_profile_action.triggered.connect(lambda: show_project_profile(window))
     window.project_checkpoint_action.triggered.connect(lambda: show_project_checkpoint(window))
     window.restore_checkpoint_action.triggered.connect(lambda: show_project_checkpoint(window, restore=True))
+    window.recovery_drafts_action.triggered.connect(lambda: show_recovery_drafts(window))
     window.new_action.triggered.connect(window.new_document)
     window.open_file_action.triggered.connect(window.open_file_dialog)
     window.open_folder_action.triggered.connect(window.open_folder_dialog)

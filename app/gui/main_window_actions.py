@@ -48,6 +48,7 @@ def build_actions(window: "MainWindow") -> None:
     window.project_profile_action = QAction("项目配置…", window)
     window.project_checkpoint_action = QAction("创建项目检查点…", window)
     window.restore_checkpoint_action = QAction("从检查点恢复为新目录…", window)
+    window.recovery_drafts_action = QAction("审阅恢复副本并继续草稿…", window)
     window.new_action = QAction(icon("file-plus-2"), "新建文档", window)
     window.open_file_action = QAction(icon("folder-open"), "打开文件", window)
     window.open_folder_action = QAction(icon("folder"), "打开文件夹", window)
@@ -137,6 +138,7 @@ def build_actions(window: "MainWindow") -> None:
         window.project_profile_action,
         window.project_checkpoint_action,
         window.restore_checkpoint_action,
+        window.recovery_drafts_action,
         window.save_action,
         window.save_as_action,
         window.export_pdf_action,

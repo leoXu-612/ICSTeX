@@ -2508,3 +2508,41 @@ must link here instead of repeating old task details.
   `be57a732b6532e3247916530bdc688b7e05b1cd4ec0457b216a5020250140c03`.
   Branch/file names already matched scope; no rename, force push, tag, package,
   installed-app replacement, version/workflow/website change or release occurred.
+
+## 2026-09-11 — Recovered drafts resume/edit/save verified for authorized source submission
+
+- Explicit recovery-copy review now rechecks all manifest-listed saved/draft bytes
+  after confirmation and opens selected source or Block drafts in a new window.
+  Source insertion is one undoable edit; Block models and pending properties stay
+  separate, with actual live-table-cell input reopening through the existing GUI.
+  Initial automatic writes remain paused until explicit Save. Existing conflict
+  guards preserve external winners, originals and independent draft files.
+- Frozen app Python path/content SHA-256:
+  `305fb3dbb5f6f8accfb3ebda55eab249c185b90f0c1787a7a38d79eb3728efbc`.
+  Required compileall and staged whitespace checks passed. Final focused 13 tests
+  passed in 7.848 seconds, exit 0; integrated 92 tests passed in 10.108 seconds,
+  exit 0. Final full discovery passed 1338 tests in 1220.539 seconds, exit 0;
+  exec `70159` / PID `25486` are terminal, with unchanged app hash after completion.
+  Receipt: `/tmp/icstex-v1-m4-recovered-drafts-suite-r1.log`; no test failure or
+  Python exception was found. The slower UI-scale stage sampled in QApplication
+  stylesheet work; this does not isolate a regression or prove a memory leak.
+  Controlled performance/lifecycle comparison remains M6 work.
+- Actual offscreen product r3 passed on this same app hash. Ordinary and Block
+  workflows exercised real capture/review/confirmation, cancelled without project
+  writes, resumed pending text, Undo/Redo, explicit Save and fresh-window FINAL.
+  Original projects and independent draft files remained byte-identical. Review,
+  Block pending input and reopened PDF-view screenshots were inspected; PDF text
+  extraction independently confirmed both recovered texts. Receipts/screenshots
+  remain under `/tmp/icstex-v1-recovered-drafts-20260911-r3/`; PDF hashes, initial
+  theme-validation failure and r1/r2 probe viewport failures are retained in
+  `docs/v1-m4-recovered-drafts-verification-2026-09-11.md`.
+- The renewed user request authorizes committing and pushing this increment.
+  Existing `codex/v1-development` and source/test/report names already match the
+  scope, so no further rename is needed. Submission includes source, tests,
+  synthetic probe and related documentation only; screenshots, PDFs, logs and
+  the ignored signed candidate remain local. The live Git base is `1155acb`;
+  remote push evidence will be recorded only after successful verification.
+- No complete V1/M4, native picker/IME/AX/Windows/human, interrupted-write or
+  migration acceptance is claimed. M5/M6 and held Beta installation-lifetime
+  exclusion gates remain open. No packaging, installation, version, workflow,
+  website, feed, tag, credential or release changes are included.

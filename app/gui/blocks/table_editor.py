@@ -142,6 +142,26 @@ class TableEditor(QWidget):
         finally:
             self._committing_cell = False
 
+    def resume_cell_draft(self, initial, values):
+        """Reopen a recovered live input, without applying it to the table model."""
+        self.commit_pending_edit()
+        rows = [row.id for row in self.model.data.rows]
+        columns = [column.id for column in self.model.data.columns]
+        if initial["row"] not in rows or initial["column"] not in columns:
+            return False
+        row, column = rows.index(initial["row"]), columns.index(initial["column"])
+        item = self.table.item(row, column)
+        if item is None or str(item.data(Qt.ItemDataRole.EditRole) or "") != initial["text"]:
+            return False
+        self.table.setCurrentCell(row, column)
+        self.table.editItem(item)
+        if self._cell_editor is None:
+            return False
+        self._cell_editor.setText(values["text"])
+        self.live_cell_changed.emit({**self._cell_payload, "text": values["text"]})
+        self._cell_editor.setFocus()
+        return True
+
     def refresh(self) -> None:
         self.commit_pending_edit()
         data = self.model.data

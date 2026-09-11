@@ -128,9 +128,13 @@ Use **文件 → 创建项目检查点…** to review selected local files and a
 drafts before choosing a new checkpoint file. Saved bytes and UTF-8 drafts remain
 separate. **从检查点恢复为新目录…** verifies and reviews an archive before restoring
 its saved files under `project/` and independent drafts under `drafts/`; it never
-overwrites or switches the current project. Block draft JSON can be inspected but
-is not yet resumed as an editing session. Native picker/platform and full recovery
-acceptance remain open; see [checkpoint GUI evidence and limits](docs/v1-m4-checkpoint-gui-verification-2026-09-11.md).
+overwrites or switches the current project. Use **审阅恢复副本并继续草稿…** to verify
+the restored container, select drafts and explicitly open a new editing window.
+Source drafts support Undo; Block models and pending properties remain separately
+editable. Automatic writes stay paused until the first explicit save. Unknown or
+changed copies are refused; original projects and independent draft files remain
+untouched. Native/platform, interrupted-write and migration acceptance remain open;
+see [recovered-draft evidence and limits](docs/v1-m4-recovered-drafts-verification-2026-09-11.md).
 
 Block image imports stage bytes before exclusive publication, preserve existing
 assets, and reject observed unsafe paths or source changes. Drag errors leave the

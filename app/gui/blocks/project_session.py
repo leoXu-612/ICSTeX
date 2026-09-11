@@ -84,6 +84,7 @@ class ProjectSession(QObject):
         self._compile_authorized = False
         self._writes_paused = False
         self._checkpoint_paused = False
+        self.recovery_pending = False
         self._dirty = False
         self.editor_drafts: dict[tuple[str, str], PropertyDraft] = {}
         self.editor_draft_revision = 0
@@ -159,7 +160,7 @@ class ProjectSession(QObject):
         if self.editor_drafts:
             self._save_timer.stop()
             self._preview_timer.stop()
-        elif self._dirty and self.project_dir is not None and not self._writes_paused and not self.save_error:
+        elif self._dirty and self.project_dir is not None and not self._writes_paused and not self.recovery_pending and not self.save_error:
             # The model change already issued its single save/preview request.
             # Resume those timers without broadcasting a second request.
             self._save_timer.start()
@@ -246,7 +247,7 @@ class ProjectSession(QObject):
 
     def resume_writes(self, pending):
         self._writes_paused = False
-        if self._closed or self.save_error or self.editor_drafts:
+        if self._closed or self.save_error or self.editor_drafts or self.recovery_pending:
             return
         if pending[0] and self._dirty:
             self._save_timer.start()
@@ -377,7 +378,7 @@ class ProjectSession(QObject):
         self._pending_save_reason = reason
         profile.log("SAVE_REQUESTED", revision=self._revision, reason=reason)
         self.save_requested.emit(reason)
-        if self.project_dir is not None and not self.save_error and not self._writes_paused and not self.editor_drafts:
+        if self.project_dir is not None and not self.save_error and not self._writes_paused and not self.recovery_pending and not self.editor_drafts:
             self._save_timer.start()
 
     def save_now(self) -> list[Path]:
@@ -397,6 +398,7 @@ class ProjectSession(QObject):
             self._save_failed(exc)
             return []
         self._dirty = False
+        self.recovery_pending = False
         self.save_error = ""
         self.last_save_ok = True
         bytes_written = sum(len(payloads[path]) for path in written)
@@ -433,6 +435,7 @@ class ProjectSession(QObject):
             self._save_failed(exc)
             return None
         self._dirty = False
+        self.recovery_pending = False
         self.save_error = ""
         self.last_save_ok = True
         self._save_timer.stop()
@@ -462,7 +465,7 @@ class ProjectSession(QObject):
         profile.log("COMPILE_REQUESTED", revision=self._revision, reason=reason)
         self.compile_requested.emit(reason)
         if (self.project_dir is None or not self._compile_authorized
-                or self.save_error or self._writes_paused or self.editor_drafts):
+                or self.save_error or self._writes_paused or self.recovery_pending or self.editor_drafts):
             return
         profile.log(
             "COMPILE_DEBOUNCE_STARTED",
@@ -475,7 +478,7 @@ class ProjectSession(QObject):
 
     def _fire_preview(self) -> None:
         if (self._closed or self.project_dir is None or not self._compile_authorized
-                or self._writes_paused or self.save_error or self.editor_drafts):
+                or self._writes_paused or self.save_error or self.recovery_pending or self.editor_drafts):
             return
         main = self.assemble_latex()
         if main is None:

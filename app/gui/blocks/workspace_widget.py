@@ -263,6 +263,12 @@ class BlockWorkspaceWidget(QWidget):
         self.session.table_target_id = block_id
         self._refresh_table()
         self.tabs.setCurrentIndex(1)
+        cell = self.session.editor_drafts.get(("table_cell", block_id))
+        if cell is not None:
+            from app.core.blocks.property_draft import draft_conflict
+            if (draft_conflict(cell, self.session.registry, self.session.layout)
+                    or not self.table_editor.resume_cell_draft(cell.initial, cell.values)):
+                self.table_draft_status.setText("恢复单元格的原对象或位置不一致；原草稿仍保留，请在恢复审阅中比较。")
 
     def _choose_table(self, index):
         target = self.table_selector.itemData(index)

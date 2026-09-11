@@ -1,7 +1,7 @@
 # V1 local implementation and acceptance
 
 Updated: 2026-09-11. M0/M1 complete; M2 property-draft slice verified locally; full M2-M6 incomplete.
-Active slice: M4 reviewed resumption of recovered drafts and interrupted Block-write recovery. Project-checkpoint GUI selection, actual source/Block draft capture and reviewed restore-to-new-directory passed local focused, product and final-source full regression. The preceding increments were synchronized by explicit user request as c521041; the latest GUI slice was separately authorized and pushed as 1b1f371, with its remote hash verified. This is not complete M4 acceptance. Native M2/M3 acceptance still waits for manual Mac unlock.
+Active slice: M4 interrupted Block-write recovery and explicit migration remain next. Reviewed recovered-draft resumption passed focused, actual offscreen product and final frozen-source full regression; all run handles are terminal, with receipts in PROJECT_STATE.md. The user explicitly authorized submitting the current increment; codex/v1-development already matches the scope and needs no further rename. Prior checkpoints c521041 and 1b1f371 remain preserved. This is not complete M4 acceptance. Native M2/M3 acceptance still waits for manual Mac unlock.
 Full scope: `CODEX_V1_DEVELOPMENT_INSTRUCTIONS.md`, M1-M6 plus M7 readiness handoff.
 No automatic commits/pushes, packages, installed-app changes, signing or publication.
 Exception for this checkpoint only: on 2026-09-11 the user explicitly requested
@@ -475,10 +475,17 @@ Final focused/product/full runs passed on unchanged app hash `11b95515`; all ful
 run handles are terminal. Details and source-identified receipts:
 `v1-m4-checkpoint-gui-verification-2026-09-11.md` and `PROJECT_STATE.md`.
 
-Next M4 work is a reviewed way to resume the recovered source/Block drafts in a new
-editing copy, pending Block journal recovery and explicit migration. The captured
-Block JSON is inspectable, not yet a resumed editing session. No in-place restore,
-cloud-availability guarantee, native/Windows or power-loss acceptance is implied.
+Reviewed recovery-copy resumption now verifies all manifest-listed saved/draft
+bytes again after confirmation and creates a separate editor window. Source drafts
+load as one undoable edit; Block state and unapplied fields remain separate, with
+live table cells reopening through the existing editor. The first explicit save
+releases an initial automatic-write hold; saved-byte conflict guards remain active.
+Original projects and independent draft files are not overwritten. See
+`v1-m4-recovered-drafts-verification-2026-09-11.md` for frozen-source evidence,
+probe failures and limits. Next M4 work is pending Block journal recovery and
+explicit migration; preserve incomplete journals instead of deleting them to
+enable writes. No in-place restore, cloud-availability guarantee, native/Windows
+or power-loss acceptance is implied.
 M3 still needs retained source versions and scalable previews. The latest user
 request authorizes this source checkpoint only; it does not open release gates or
 grant standing automatic-push permission.

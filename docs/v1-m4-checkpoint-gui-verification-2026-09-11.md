@@ -2,9 +2,11 @@
 
 The working source now creates selected-file checkpoints and reviews/restores them
 into new directories through real dialogs. Disk bytes and actual GUI drafts remain
-separate. This is not complete M4: recovered Block drafts are inspectable JSON,
-not yet a resumed editing session; interrupted Block-write recovery and migration
-acceptance remain outstanding.
+separate. At this checkpoint, recovered Block drafts were inspectable JSON, not
+resumed editing sessions. The later independently verified resumption increment is
+documented in `v1-m4-recovered-drafts-verification-2026-09-11.md`; it does not alter
+this historical source receipt. Interrupted Block-write recovery and migration
+acceptance remain outstanding, so neither increment completes M4.
 
 ## User workflow and ownership
 

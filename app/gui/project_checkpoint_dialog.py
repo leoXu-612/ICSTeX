@@ -208,6 +208,8 @@ class ProjectCheckpointDialog(QDialog):
         bottom = QHBoxLayout()
         self.reveal_button = QPushButton("显示已验证结果的位置")
         self.reveal_button.hide()
+        self.resume_button = QPushButton("审阅恢复草稿并继续编辑…")
+        self.resume_button.hide()
         self.action_button = QPushButton("审阅后恢复到新目录" if restore else "创建选定文件检查点")
         self.action_button.setDefault(False)
         self.close_button = QPushButton("取消 / 关闭")
@@ -216,6 +218,7 @@ class ProjectCheckpointDialog(QDialog):
         bottom.addWidget(self.action_button)
         bottom.addWidget(self.close_button)
         outer.addLayout(bottom)
+        outer.addWidget(self.resume_button)
         self.signals = _Signals(self)
         self.signals.finished.connect(self._finished, Qt.ConnectionType.QueuedConnection)
         self.open_button.clicked.connect(self.choose_archive if restore else self.add_files)
@@ -226,6 +229,7 @@ class ProjectCheckpointDialog(QDialog):
         self.clear_button.clicked.connect(lambda: self._check_all(Qt.CheckState.Unchecked))
         self.tree.currentItemChanged.connect(self._preview)
         self.reveal_button.clicked.connect(self.reveal)
+        self.resume_button.clicked.connect(self.resume_drafts)
         self.destroyed.connect(self.cancel.set)
         if restore:
             self.select_button.hide()
@@ -302,6 +306,7 @@ class ProjectCheckpointDialog(QDialog):
         else:
             self.result_path = self._job_target
             if self.operation == "restore":
+                self.resume_button.setVisible(bool(result.info.drafts))
                 self.status.setText(f"已核验并恢复到新目录：{result.directory}\n磁盘文件：project/；独立草稿：drafts/。"
                                     "恢复操作未改写原项目，也未切换项目、应用草稿或触发编译。")
             else:
@@ -361,6 +366,7 @@ class ProjectCheckpointDialog(QDialog):
         self.info = None
         self.result_path = None
         self.reveal_button.hide()
+        self.resume_button.hide()
         self.archive = path
         self.tree.clear()
         self.previews.clear()
@@ -414,6 +420,11 @@ class ProjectCheckpointDialog(QDialog):
         if self.result_path is not None:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.result_path if self.restore_mode else self.result_path.parent)))
 
+    def resume_drafts(self):
+        if self.restore_mode and self.result_path is not None and not self.busy:
+            from app.gui.project_recovery_dialog import show_recovery_drafts
+            show_recovery_drafts(self.window, self.result_path)
+
     def reject(self):
         if self.busy:
             self.closing = True
@@ -452,6 +463,11 @@ def show_project_checkpoint(window, *, restore=False):
 
 
 def checkpoint_close_guard(window):
+    recovery = getattr(QApplication.instance(), "_icstex_recovery_dialog", None)
+    if recovery is not None and isValid(recovery) and recovery.window is window:
+        recovery.reject()
+        if recovery.busy:
+            return False
     dialog = getattr(QApplication.instance(), "_icstex_checkpoint_dialog", None)
     if dialog is None or not isValid(dialog):
         return True

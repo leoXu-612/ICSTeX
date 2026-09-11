@@ -151,6 +151,8 @@ class WorkspaceController(QObject):
                 pdf_text += " · 不含待应用编辑草稿"
             if session.final_is_running:
                 pdf_text = "FINAL 编译中，旧显示不作当前提交"
+            if session.recovery_pending:
+                save_text += " · 恢复草稿，首次保存前不自动写入"
             if session.has_unsaved_changes:
                 action, next_text = window.block_save_action, "保存 Block 草稿"
             elif session.save_error:
@@ -166,6 +168,8 @@ class WorkspaceController(QObject):
             conflict = any(item.external_conflict for item in tabs)
             dirty = any(item.modified or item.dirty or item.path is None for item in tabs)
             save_text = "有外部冲突" if conflict else "有未保存内容" if dirty else "已保存" if tab else "尚无文档"
+            if any(item.recovery_pending for item in tabs):
+                save_text += " · 恢复草稿，首次保存前不自动写入"
             record = window.pdf_state.record_for(root) if root else None
             displayed = window.displayed_pdfs.get(root) if root else None
             if displayed and window.pdf_panel.current_pdf == displayed.path:

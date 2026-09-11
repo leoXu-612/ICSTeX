@@ -2456,3 +2456,36 @@ must link here instead of repeating old task details.
   version/workflow/website/feed edit, signing, tag or release was performed. The
   source checkpoint's skip marker preserves the existing no-CI-request boundary;
   all outstanding native/platform/product acceptance and Beta gates remain open.
+
+## 2026-09-11 — M4 checkpoint GUI verified and source submission authorized
+
+- File-menu/History entry points now capture an explicitly selected file inventory
+  plus actual source/Block drafts, with a GUI-owned cooperating-write lease. Review
+  and restore are bound to the verified manifest and publish only a new directory;
+  originals and separate drafts are preserved. A late publication/cancel race was
+  reproduced and fixed so an already-generated result retains its visible location.
+- Final app Python path/content SHA-256:
+  `11b95515d2cb3984d152de46a2791a3c58ddfd8069e82d4b6e5b90a23464c46d`.
+  Required compileall passed; final focused 38 tests passed in 1.192 seconds,
+  exit 0 (`/tmp/icstex-v1-m4-checkpoint-gui-focused-r7.log`). Full discovery passed
+  1325 tests in 373.316 seconds, exit 0; exec `81933` / PID `21124` terminal,
+  `/tmp/icstex-v1-m4-checkpoint-gui-suite-r2.log`; the app hash remained unchanged.
+  Earlier full r1 was deliberately stopped before the final UI race correction,
+  exit 143, and is not final-source acceptance.
+- Final actual GUI product probe r5 passed on the same source; five ordinary and
+  eight Block files, including GBK/CRLF, recovered byte-exactly. One ordinary and
+  two Block-workflow drafts came from real editors and remain separate; originals
+  were unchanged and confirmation cancellation produced no output. Explicitly
+  reopening saved recovered sources and requesting XeLaTeX produced one-page FINAL
+  PDFs; both creation-review and FINAL screenshots were inspected. Results live
+  under `/tmp/icstex-v1-checkpoint-gui-20260911-r5/`; PDF hashes and failed attempts
+  are recorded in `docs/v1-m4-checkpoint-gui-verification-2026-09-11.md`.
+- The current user request authorizes submitting this local increment. Existing
+  `codex/v1-development` and the source/test/report filenames already match scope;
+  no further rename is required. Prepare source, tests, synthetic probe and docs
+  only; screenshots, PDFs, logs and the ignored signed appcast stay local. The Git
+  push receipt will be recorded only after live remote verification.
+- Native picker/IME/AX/Windows/human acceptance, reviewed recovered-draft resumption,
+  interrupted Block writes, migration, M5 and M6 remain outstanding. No version,
+  workflow, website, artifact, installed application or release change is authorized
+  by this source checkpoint. Preserve the independent held Beta activation gates.

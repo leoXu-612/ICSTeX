@@ -39,6 +39,7 @@ class DocumentLifecycle:
 
     def __init__(self, window: "MainWindow") -> None:
         self.window = window
+        self.checkpoint_tabs: set[int] = set()
 
     # --- editor factory -----------------------------------------------------
 
@@ -61,7 +62,7 @@ class DocumentLifecycle:
     # --- save coordination --------------------------------------------------
 
     def schedule_save(self, tab: EditorTab, *, compile_after_save: bool = False) -> None:
-        if not tab.path:
+        if not tab.path or id(tab) in self.checkpoint_tabs:
             return
         window = self.window
         if tab.external_conflict:
@@ -86,7 +87,7 @@ class DocumentLifecycle:
         *,
         compile_after_save: bool | None = None,
     ) -> bool:
-        if tab.path is None or tab.external_conflict:
+        if tab.path is None or tab.external_conflict or id(tab) in self.checkpoint_tabs:
             return False
         should_compile = tab.pending_compile_after_save if compile_after_save is None else compile_after_save
         tab.pending_compile_after_save = False
@@ -106,7 +107,7 @@ class DocumentLifecycle:
             tab.save_timer.stop()
 
     def compile_after_idle(self, tab: EditorTab) -> None:
-        if tab.manager is None:
+        if tab.manager is None or id(tab) in self.checkpoint_tabs:
             return
         purpose = automatic_build_purpose(
             enabled=self.window.auto_compile_action.isChecked(),
@@ -129,6 +130,8 @@ class DocumentLifecycle:
                 self.window._compile_root_for_tab(tab) != target and tab.path.resolve() not in dependencies
             ):
                 continue
+            if id(tab) in self.checkpoint_tabs:
+                return False
             if tab.external_conflict:
                 return False
             if not (tab.dirty or tab.modified or (tab.save_timer and tab.save_timer.isActive())):
@@ -138,6 +141,8 @@ class DocumentLifecycle:
         return True
 
     def save_tab(self, tab: EditorTab, path: Path) -> bool:
+        if id(tab) in self.checkpoint_tabs:
+            return False
         window = self.window
         old_path = tab.path
         old_manager = tab.manager

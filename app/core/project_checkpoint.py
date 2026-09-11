@@ -23,7 +23,7 @@ import unicodedata
 import uuid
 import zipfile
 
-from app.core.project_dependencies import _open_safe_input
+from app.core.project_dependencies import _open_safe_input, safe_project_input
 
 
 MAX_FILES = 2000
@@ -506,6 +506,86 @@ def inspect_checkpoint(path, *, cancelled=None, _expected_signature=None) -> Che
         raise ValueError("Checkpoint archive is corrupt or incomplete") from exc
 
 
+@contextmanager
+def _candidate_directory(project, directory):
+    """Anchor name enumeration; discovered names never grant content access."""
+    if safe_project_input(project, directory / "guard", allow_internal=True) is None:
+        raise OSError("Linked candidate directory refused")
+    initial = directory.lstat()
+    descriptor = None
+    try:
+        if os.scandir in os.supports_fd and hasattr(os, "O_NOFOLLOW"):
+            descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            opened = os.fstat(descriptor)
+            if (opened.st_dev, opened.st_ino) != (initial.st_dev, initial.st_ino):
+                raise OSError("Candidate directory changed before enumeration")
+        if safe_project_input(project, directory / "guard", allow_internal=True) is None:
+            raise OSError("Linked candidate parent refused")
+        with os.scandir(descriptor if descriptor is not None else directory) as entries:
+            yield entries
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+
+
+def checkpoint_candidates(project, *, cancelled=None):
+    """Bounded local name inventory, not dependency or cloud-availability proof."""
+    project = Path(project).expanduser().resolve(strict=True)
+    extensions = {".tex", ".ltx", ".bib", ".sty", ".cls", ".bst", ".png", ".jpg",
+                  ".jpeg", ".svg", ".pdf", ".eps", ".csv", ".xlsx"}
+    paths, warnings, pending = [], [], [(project, 0)]
+    visited = 0
+    while pending:
+        directory, depth = pending.pop()
+        _cancel(cancelled)
+        try:
+            with _candidate_directory(project, directory) as entries:
+                for entry in entries:
+                    _cancel(cancelled)
+                    visited += 1
+                    if visited > 10000 or len(paths) >= MAX_FILES - len(_METADATA):
+                        return tuple(sorted(paths)), ("目录清单达到上限；未列出的文件不在检查点内。",)
+                    path = directory / entry.name
+                    if entry.is_symlink() or (hasattr(path, "is_junction") and path.is_junction()):
+                        warnings.append("有链接被排除；清单不是完整项目备份。")
+                        continue
+                    if entry.is_dir(follow_symlinks=False):
+                        if entry.name.casefold() not in _INTERNAL and not entry.name.startswith("."):
+                            if depth < 31:
+                                pending.append((path, depth + 1))
+                            else:
+                                warnings.append("目录深度超限；清单不完整。")
+                    elif entry.is_file(follow_symlinks=False):
+                        relative = path.relative_to(project).as_posix()
+                        if Path(relative).suffix.lower() in extensions or relative == "styles/document-theme.json":
+                            _relative(relative)
+                            paths.append(relative)
+        except CheckpointCancelled:
+            raise
+        except (OSError, ValueError):
+            warnings.append("部分本地目录不可读或路径不兼容；可用性未知。")
+    for relative in sorted(_METADATA):
+        path = project / relative
+        # Actual opening, link refusal and availability are verified at capture.
+        if path.exists() or path.is_symlink():
+            paths.append(relative)
+    return tuple(sorted(paths)), tuple(dict.fromkeys(warnings))
+
+
+def checkpoint_review(path, *, cancelled=None):
+    """Validate all bytes and return bounded, explicitly truncated draft previews."""
+    try:
+        with _verified_archive(path, cancelled) as (archive, info, check):
+            previews = {}
+            for entry in info.drafts:
+                value = _object_bytes(archive, entry.sha256, entry.size, cancelled).decode("utf-8")
+                previews[entry.id] = value[:64000] + ("\n[预览截断；完整草稿将在独立 drafts 目录恢复。]" if len(value) > 64000 else "")
+            check()
+            return info, previews
+    except (zipfile.BadZipFile, KeyError) as exc:
+        raise ValueError("Checkpoint archive is corrupt or incomplete") from exc
+
+
 def _write_restored(directory, relative, payload, *, directory_fd=None):
     """Exclusive file creation in an owned staging directory; no extractall."""
     parts = PurePosixPath(relative).parts
@@ -581,7 +661,7 @@ def _verify_restored_tree(directory, expected_files, directory_fd):
         raise OSError("Restore staging is incomplete")
 
 
-def restore_checkpoint(path, target, *, cancelled=None) -> RestoreResult:
+def restore_checkpoint(path, target, *, cancelled=None, expected_info=None) -> RestoreResult:
     """Restore bytes under NEW target/project, drafts under target/drafts.
 
     Unsupported platforms/filesystems fail closed before directory publication.
@@ -590,6 +670,8 @@ def restore_checkpoint(path, target, *, cancelled=None) -> RestoreResult:
     """
     try:
         with _verified_archive(path, cancelled) as (archive, info, check_archive):
+            if expected_info is not None and info != expected_info:
+                raise ValueError("Checkpoint changed since review; no restore performed")
             with _OutputParent(target) as parent:
                 name = f".icstex-restore.incomplete-{uuid.uuid4().hex}"
                 os.mkdir(parent.name(name), mode=0o700, **parent.kwargs)

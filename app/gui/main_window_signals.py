@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from app.core.compiler import BuildPurpose
 from app.gui.project_profile_dialog import show_project_profile
+from app.gui.project_checkpoint_dialog import show_project_checkpoint
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from app.gui.main_window import MainWindow
@@ -19,6 +20,8 @@ def connect_signals(window: "MainWindow") -> None:
     # File / project actions
     window.new_project_action.triggered.connect(window.new_project)
     window.project_profile_action.triggered.connect(lambda: show_project_profile(window))
+    window.project_checkpoint_action.triggered.connect(lambda: show_project_checkpoint(window))
+    window.restore_checkpoint_action.triggered.connect(lambda: show_project_checkpoint(window, restore=True))
     window.new_action.triggered.connect(window.new_document)
     window.open_file_action.triggered.connect(window.open_file_dialog)
     window.open_folder_action.triggered.connect(window.open_folder_dialog)
@@ -115,6 +118,8 @@ def connect_signals(window: "MainWindow") -> None:
     window.images_panel.insertRequested.connect(window.insert_existing_image)
     window.history_panel.refreshRequested.connect(window.refresh_project_panels)
     window.history_panel.restoreRequested.connect(window.restore_history_snapshot)
+    window.history_panel.checkpointRequested.connect(window.project_checkpoint_action.trigger)
+    window.history_panel.checkpointRestoreRequested.connect(window.restore_checkpoint_action.trigger)
 
     # Insert + templates panels
     window.insert_panel.figureRequested.connect(window.insert_figure)

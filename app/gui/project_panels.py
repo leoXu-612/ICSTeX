@@ -551,6 +551,8 @@ class OutlinePanel(QWidget):
 class HistoryPanel(QWidget):
     refreshRequested = Signal()
     restoreRequested = Signal(str)
+    checkpointRequested = Signal()
+    checkpointRestoreRequested = Signal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -579,6 +581,12 @@ class HistoryPanel(QWidget):
         self.status_label.setObjectName("panelHint")
         layout.addWidget(self.status_label)
 
+        self.checkpoint_button = QPushButton("创建项目检查点…")
+        self.checkpoint_restore_button = QPushButton("检查点恢复为新目录…")
+        layout.addWidget(self.checkpoint_button)
+        layout.addWidget(self.checkpoint_restore_button)
+        self.checkpoint_button.clicked.connect(self.checkpointRequested.emit)
+        self.checkpoint_restore_button.clicked.connect(self.checkpointRestoreRequested.emit)
         self.refresh_button.clicked.connect(self.refreshRequested.emit)
         self.restore_button.clicked.connect(self._emit_restore)
         self.table.cellDoubleClicked.connect(lambda _row, _column: self._emit_restore())

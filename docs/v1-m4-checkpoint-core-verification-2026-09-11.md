@@ -7,7 +7,11 @@ capture, recovery review, migration guidance and native/platform acceptance rema
 The separate legacy-history audit below found a real existing unsafe path boundary.
 This report preserves that checkpoint's evidence; the later bounded repair is
 recorded in `v1-m4-history-safety-verification-2026-09-11.md`. M4 as a whole remains
-incomplete because its project-checkpoint GUI and wider acceptance are outstanding.
+incomplete at that stage because its project-checkpoint GUI and wider acceptance
+were outstanding.
+
+Later GUI capture/review evidence is in `v1-m4-checkpoint-gui-verification-2026-09-11.md`.
+The core-stage limitations below describe this earlier receipt, not the latest UI.
 
 ## Scope and implementation
 

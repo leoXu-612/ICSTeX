@@ -68,6 +68,36 @@ class ProjectCheckpointTests(unittest.TestCase):
             checkpoint.restore_checkpoint(self.path, target)
         self.assertEqual(list(target.iterdir()), [])
 
+    def test_restore_is_bound_to_the_fully_reviewed_manifest(self):
+        reviewed = self.create()
+        self.path.unlink()
+        (self.project / "main.tex").write_bytes(b"new unrelated valid checkpoint")
+        self.create()
+        target = self.home / "restore-after-review"
+        with self.assertRaisesRegex(ValueError, "changed since review"):
+            checkpoint.restore_checkpoint(self.path, target, expected_info=reviewed)
+        self.assertFalse(target.exists())
+
+    def test_review_verifies_all_bytes_and_bounds_only_the_display_preview(self):
+        text = "draft" * 15000
+        self.create(drafts=(checkpoint.DraftInput("source", "source-text", "main.tex", text.encode()),))
+        info, previews = checkpoint.checkpoint_review(self.path)
+        self.assertIn("source", previews)
+        self.assertLess(len(previews["source"]), len(text))
+        result = checkpoint.restore_checkpoint(self.path, self.home / "full-draft", expected_info=info)
+        self.assertEqual((result.drafts_dir / "source.txt").read_text(), text)
+
+    def test_candidate_names_exclude_links_secrets_and_private_history(self):
+        (self.project / "private.pem").write_text("synthetic private placeholder")
+        (self.project / "linked.tex").symlink_to(self.home / "outside.tex")
+        internal = self.project / ".icstex"
+        (internal / "history").mkdir(parents=True)
+        (internal / "history" / "old.tex").write_text("private history")
+        (internal / "blocks.json").write_text("{}")
+        paths, warnings = checkpoint.checkpoint_candidates(self.project)
+        self.assertEqual(set(paths), {"main.tex", "refs.bib", ".icstex/blocks.json"})
+        self.assertTrue(warnings)
+
     def test_cancel_and_disk_full_leave_no_final_target(self):
         with self.assertRaises(checkpoint.CheckpointCancelled):
             self.create(cancelled=lambda: True)

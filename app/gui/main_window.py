@@ -1075,6 +1075,10 @@ class MainWindow(QMainWindow):
         self.tab_manager.close_at(index)
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        from app.gui.project_checkpoint_dialog import checkpoint_close_guard
+        if not checkpoint_close_guard(self):
+            event.ignore()
+            return
         self.tab_manager.handle_close_event(event)
         if event.isAccepted():
             self.readiness.shutdown()

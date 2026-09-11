@@ -122,8 +122,15 @@ The development source's text History validates registered source ownership and
 content digests before restoration. Confirmation produces one undoable, unsaved
 editor change; it does not save or compile. Valid legacy histories remain readable
 without automatic migration or deletion. This single-file UTF-8 text history is
-not a byte-exact project backup; the new project-checkpoint core is not yet exposed
-in the GUI. See [history recovery evidence and limits](docs/v1-m4-history-safety-verification-2026-09-11.md).
+not a byte-exact project backup. See [history recovery evidence and limits](docs/v1-m4-history-safety-verification-2026-09-11.md).
+
+Use **文件 → 创建项目检查点…** to review selected local files and actual source/Block
+drafts before choosing a new checkpoint file. Saved bytes and UTF-8 drafts remain
+separate. **从检查点恢复为新目录…** verifies and reviews an archive before restoring
+its saved files under `project/` and independent drafts under `drafts/`; it never
+overwrites or switches the current project. Block draft JSON can be inspected but
+is not yet resumed as an editing session. Native picker/platform and full recovery
+acceptance remain open; see [checkpoint GUI evidence and limits](docs/v1-m4-checkpoint-gui-verification-2026-09-11.md).
 
 Block image imports stage bytes before exclusive publication, preserve existing
 assets, and reject observed unsafe paths or source changes. Drag errors leave the

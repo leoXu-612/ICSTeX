@@ -83,6 +83,7 @@ class ProjectSession(QObject):
         self._closed = False
         self._compile_authorized = False
         self._writes_paused = False
+        self._checkpoint_paused = False
         self._dirty = False
         self.editor_drafts: dict[tuple[str, str], PropertyDraft] = {}
         self.editor_draft_revision = 0
@@ -382,7 +383,7 @@ class ProjectSession(QObject):
     def save_now(self) -> list[Path]:
         self._save_timer.stop()
         self.last_save_ok = False
-        if self._closed or self.project_dir is None or self.editor_drafts:
+        if self._closed or self._checkpoint_paused or self.project_dir is None or self.editor_drafts:
             return []
         watch = profile.Stopwatch()
         profile.log("SAVE_STARTED", revision=self._revision)
@@ -420,7 +421,7 @@ class ProjectSession(QObject):
     # --- unified compile routing ----------------------------------------
     def assemble_latex(self) -> Path | None:
         """Deterministic Stable LaTeX regeneration (same output as the MVP)."""
-        if self._closed or self.project_dir is None or self.editor_drafts:
+        if self._closed or self._checkpoint_paused or self.project_dir is None or self.editor_drafts:
             return None
         project = self.project_dir
         watch = profile.Stopwatch()
@@ -497,7 +498,7 @@ class ProjectSession(QObject):
 
     def _prepare_final(self) -> bool:
         self._preview_timer.stop()
-        if self._closed or self.project_dir is None or self.editor_drafts:
+        if self._closed or self._checkpoint_paused or self.project_dir is None or self.editor_drafts:
             return False
         self._raw_latex_authorized = True
         self._compile_authorized = True

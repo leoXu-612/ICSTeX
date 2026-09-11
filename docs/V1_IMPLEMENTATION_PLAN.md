@@ -1,7 +1,7 @@
 # V1 local implementation and acceptance
 
 Updated: 2026-09-11. M0/M1 complete; M2 property-draft slice verified locally; full M2-M6 incomplete.
-Active slice: M4 project-checkpoint GUI selection, real source/Block draft capture and reviewed restore-to-new-directory. The preceding local increments, including the bounded legacy-history repair, were synchronized by explicit user request as c521041; this is not complete M4 acceptance. Native M2/M3 acceptance still waits for manual Mac unlock.
+Active slice: M4 reviewed resumption of recovered drafts and interrupted Block-write recovery. Project-checkpoint GUI selection, actual source/Block draft capture and reviewed restore-to-new-directory passed local focused, product and final-source full regression. The preceding increments were synchronized by explicit user request as c521041; the latest GUI slice is separately authorized for submission. This is not complete M4 acceptance. Native M2/M3 acceptance still waits for manual Mac unlock.
 Full scope: `CODEX_V1_DEVELOPMENT_INSTRUCTIONS.md`, M1-M6 plus M7 readiness handoff.
 No automatic commits/pushes, packages, installed-app changes, signing or publication.
 Exception for this checkpoint only: on 2026-09-11 the user explicitly requested
@@ -465,15 +465,23 @@ Cancel, tamper refusal, Undo/Redo, explicit Save, reopen and visible FINAL passe
 See `v1-m4-history-safety-verification-2026-09-11.md` and the current state for final
 source-identified regression receipts and remaining race/platform limits.
 
-The next UI integration must explicitly select
-the project and files, pause only this app's own write entrances, capture source
-and Block drafts separately with ownership/revision guards, and offer reviewed
-restore to a new directory without applying drafts or switching projects implicitly.
-The checkpoint core is not yet exposed in the History panel; don't describe it as
-automatic draft/crash recovery or full M4. No in-place restore, pending Block journal
-recovery, migration, cloud-availability guarantee, native/Windows or power-loss
-acceptance has been added. M3 still needs retained source versions and scalable
-previews. All previous completed full-run handles remain terminal.
+The File menu and History panel now expose explicit file selection, actual
+source/Block draft capture and reviewed restore into a new directory. A GUI-owned
+lease pauses cooperating writes and automatic compilation while capturing; newer
+input invalidates the result. Restore binds to the reviewed manifest, leaves
+originals unchanged and never applies drafts or switches projects implicitly.
+Published results remain visible even when publication wins a late cancellation.
+Final focused/product/full runs passed on unchanged app hash `11b95515`; all full
+run handles are terminal. Details and source-identified receipts:
+`v1-m4-checkpoint-gui-verification-2026-09-11.md` and `PROJECT_STATE.md`.
+
+Next M4 work is a reviewed way to resume the recovered source/Block drafts in a new
+editing copy, pending Block journal recovery and explicit migration. The captured
+Block JSON is inspectable, not yet a resumed editing session. No in-place restore,
+cloud-availability guarantee, native/Windows or power-loss acceptance is implied.
+M3 still needs retained source versions and scalable previews. The latest user
+request authorizes this source checkpoint only; it does not open release gates or
+grant standing automatic-push permission.
 
 M4/M5 still own consistent recovery/frozen delivery. Keep the earlier Qt crash
 causal uncertainty, native IMK/table warnings, high-scale readability and

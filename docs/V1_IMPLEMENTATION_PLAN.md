@@ -1,7 +1,7 @@
 # V1 local implementation and acceptance
 
 Updated: 2026-09-11. M0/M1 complete; M2 property-draft slice verified locally; full M2-M6 incomplete.
-Active slice: M4 reviewed resumption of recovered drafts and interrupted Block-write recovery. Project-checkpoint GUI selection, actual source/Block draft capture and reviewed restore-to-new-directory passed local focused, product and final-source full regression. The preceding increments were synchronized by explicit user request as c521041; the latest GUI slice is separately authorized for submission. This is not complete M4 acceptance. Native M2/M3 acceptance still waits for manual Mac unlock.
+Active slice: M4 reviewed resumption of recovered drafts and interrupted Block-write recovery. Project-checkpoint GUI selection, actual source/Block draft capture and reviewed restore-to-new-directory passed local focused, product and final-source full regression. The preceding increments were synchronized by explicit user request as c521041; the latest GUI slice was separately authorized and pushed as 1b1f371, with its remote hash verified. This is not complete M4 acceptance. Native M2/M3 acceptance still waits for manual Mac unlock.
 Full scope: `CODEX_V1_DEVELOPMENT_INSTRUCTIONS.md`, M1-M6 plus M7 readiness handoff.
 No automatic commits/pushes, packages, installed-app changes, signing or publication.
 Exception for this checkpoint only: on 2026-09-11 the user explicitly requested

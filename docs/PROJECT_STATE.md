@@ -31,8 +31,9 @@
   确认后一次 Undo 与显式保存重开/FINAL 已验证。用户再次授权的本批源码已以
   `c521041` 推送至 `codex/v1-development`，远端完整哈希已核对一致；该分支名
   已符合 V1 范围，无需再次改名。最新 GUI 增量已按本轮单次授权以 `1b1f371`
-  推送至该开发分支，远端完整哈希核验一致。本次恢复草稿增量已获单次提交授权，
-  分支与文件名已符合范围，无需再次改名；实际推送回执另行核验。上次原生观察为
+  推送至该开发分支，远端完整哈希核验一致。本次恢复草稿增量已按单次授权以
+  `9360f86` 推送至该分支并核对远端完整哈希。分支与文件名已符合范围，无需再次
+  改名。上次原生观察为
   Mac 锁定，待手动解锁后验收。
   这不是完整 V1 或发布验收。活动范围和未完成验收见 `docs/V1_IMPLEMENTATION_PLAN.md`。
   签名 appcast 已移至 Git 忽略的本地候选目录，不在网站树或远端提交中。
@@ -624,7 +625,7 @@
 
 | 对象 | 状态 | 说明 |
 | --- | --- | --- |
-| 当前源码 | Verified V1 recovered-draft increment awaiting synchronization | 2.1.0-beta.2；前一 M4 GUI 源码 `1b1f371` 已推送至 `codex/v1-development`；最新恢复草稿专项/合成产品/最终完整回归通过，提交已授权；保留 Beta 远端 `release/2.1`；不是完整 V1 验收或发布 |
+| 当前源码 | Verified V1 recovered-draft increment synchronized | 2.1.0-beta.2；最新恢复草稿源码 `9360f86` 已推送至 `codex/v1-development`，专项/合成产品/最终完整回归通过且远端哈希核验一致；保留 Beta 远端 `release/2.1`；不是完整 V1 验收或发布 |
 | Beta 2 macOS arm64 候选 | Signed and replaced in QA; activation held | `dist/ICSTeX-2.1.0-beta.2-macos-arm64-candidate-r2/`；序号 210002；签名、真实替换和冷启动通过，原生安装互斥门槛未建立 |
 | 本机 macOS 应用 | Latest local development build installed | `/Applications/ICSTeX.app`；20260908-204029-b002533f；包含响应/预览优化、公式/表格更新及默认离线更新入口；旧应用已保留 |
 | macOS arm64 DMG/ZIP | Verified, rebuilt | hardened source；ad-hoc signed、未 notarize |
@@ -708,6 +709,9 @@
 - 最新 GUI 检查点 `1b1f3715c0f4b6c89050c477ab47636c32be698b` 已按单次授权推送并
   核对远端哈希；20 个文件仅含源码、测试、合成探针和文档。采用 `[skip ci]`，
   推送后 GitHub API 查询该提交的 Actions run 数为 0；发布分支和本地候选未变。
+- 后续恢复草稿源码 `9360f864273d50977ee84b23b9c34ba6dd5e73ac` 已按本次授权推送并
+  核对远端哈希；24 个文件仅含源码、测试、合成探针和相关文档。采用 `[skip ci]`，
+  GitHub API 按完整提交 SHA 查询的 Actions run 数为 0；发布分支和本地候选未变。
 - macOS 仅验证 Apple Silicon，且未 Developer ID 签名或 notarize。
 - 2.1 是 Beta；公式 OCR 结果必须人工检查，重要项目仍需外部版本备份。
 - 字数统计是可审计的源码级统计，不等同所有课程的提交口径；标题、说明/脚注、公式

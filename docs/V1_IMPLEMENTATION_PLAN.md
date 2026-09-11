@@ -1,7 +1,7 @@
 # V1 local implementation and acceptance
 
 Updated: 2026-09-11. M0/M1 complete; M2 property-draft slice verified locally; full M2-M6 incomplete.
-Active slice: M4 interrupted Block-write recovery and explicit migration remain next. Reviewed recovered-draft resumption passed focused, actual offscreen product and final frozen-source full regression; all run handles are terminal, with receipts in PROJECT_STATE.md. The user explicitly authorized submitting the current increment; codex/v1-development already matches the scope and needs no further rename. Prior checkpoints c521041 and 1b1f371 remain preserved. This is not complete M4 acceptance. Native M2/M3 acceptance still waits for manual Mac unlock.
+Active slice: M4 interrupted Block-write recovery and explicit migration remain next. Reviewed recovered-draft resumption passed focused, actual offscreen product and final frozen-source full regression; all run handles are terminal, with receipts in PROJECT_STATE.md. The explicitly authorized increment was pushed as 9360f86 and its full remote hash verified; codex/v1-development already matches the scope and needed no further rename. Prior checkpoints c521041 and 1b1f371 remain preserved. This is not complete M4 acceptance or standing push authority. Native M2/M3 acceptance still waits for manual Mac unlock.
 Full scope: `CODEX_V1_DEVELOPMENT_INSTRUCTIONS.md`, M1-M6 plus M7 readiness handoff.
 No automatic commits/pushes, packages, installed-app changes, signing or publication.
 Exception for this checkpoint only: on 2026-09-11 the user explicitly requested

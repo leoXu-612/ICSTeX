@@ -2546,3 +2546,24 @@ must link here instead of repeating old task details.
   migration acceptance is claimed. M5/M6 and held Beta installation-lifetime
   exclusion gates remain open. No packaging, installation, version, workflow,
   website, feed, tag, credential or release changes are included.
+
+## 2026-09-11 — Authorized recovered-draft source push verified
+
+- Source commit `9360f864273d50977ee84b23b9c34ba6dd5e73ac`
+  (`feat: resume reviewed source and Block recovery drafts [skip ci]`) contains
+  the 24 prepared source/test/probe/documentation files. Explicit non-force push
+  `HEAD:refs/heads/codex/v1-development` succeeded; `git ls-remote` returned the
+  complete local hash and local/upstream ahead-behind counts were 0/0. Worktree
+  and index were clean before this documentation-only synchronization receipt.
+- The app digest remains `305fb3dbb5f6f8accfb3ebda55eab249c185b90f0c1787a7a38d79eb3728efbc`,
+  matching the completed full-suite evidence above. Staged whitespace validation
+  passed; a limited added-line common-key/token/credential-URL/home-path scan had
+  no matches, not a comprehensive security audit. Raw screenshots, PDFs and logs
+  were not committed. GitHub API, queried with the full source SHA, reported zero
+  Actions runs after push.
+- Remote `release/2.1` remains
+  `f03776e87c0f938421a70ff5b085db920f2d01d7`. The ignored signed appcast remains
+  `be57a732b6532e3247916530bdc688b7e05b1cd4ec0457b216a5020250140c03`.
+  Branch/file names already matched scope; no rename, force push, tag, package,
+  installed-app replacement, version/workflow/website edit or release occurred.
+  This checkpoint does not grant standing permission to push later development.

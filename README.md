@@ -4,6 +4,7 @@ Current version: 2.1.0-beta.3. Current packaged release: 2.1.0-beta.3 for macOS 
 This release includes opt-in, signed in-app updates. Older manual builds need one manual bootstrap installation.
 See [`release/BUILD_RECEIPT.json`](release/BUILD_RECEIPT.json)
 for the exact packaged source identity and [`release/KNOWN_LIMITATIONS.md`](release/KNOWN_LIMITATIONS.md) for limits.
+Verified online delivery is recorded in [`docs/BETA3_DELIVERY.md`](docs/BETA3_DELIVERY.md).
 
 ICSTeX - ICC Student's TeX - is local research-writing infrastructure for ICC
 students, delivered as a Python/PySide6 desktop application. It combines LaTeX

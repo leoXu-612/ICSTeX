@@ -2567,3 +2567,16 @@ must link here instead of repeating old task details.
   Branch/file names already matched scope; no rename, force push, tag, package,
   installed-app replacement, version/workflow/website edit or release occurred.
   This checkpoint does not grant standing permission to push later development.
+
+## 2026-09-15 — macOS Beta 3 update delivery
+
+Implemented and accepted the installation-lifetime guard, then published the
+signed Beta3/210003 archives and appcast. Final source preflight passed1758tests;
+non-fatal diagnostics were retained. Anonymous installer downloads matched all
+digests. Native modified-feed/archive rejection and interrupted-installer recovery
+passed in isolated copies. With the loopback fixture service stopped, the opted-in
+client completed a real production HTTPS download, confirmed installation and
+automatic relaunch to the exact signed release bytes. See docs/BETA3_DELIVERY.md.
+The source tagv2.1.0-beta.3 remains immutable at81b1672. Follow-up website/privacy
+copy and delivery documentation do not change that application binary. No student
+documents or private signing keys were published; no notarization or rollback guarantee.

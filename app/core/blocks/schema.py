@@ -219,6 +219,7 @@ LAYOUT_SCHEMA = {
         "child": {
             "oneOf": [
                 {"$ref": "#/$defs/slot"},
+                {"$ref": "#"},
                 {
                     "type": "object",
                     "additionalProperties": False,
@@ -359,6 +360,14 @@ _VALIDATORS = {
 _CONTENT_VALIDATORS = {
     block_type: Draft202012Validator(schema) for block_type, schema in CONTENT_SCHEMAS.items()
 }
+_PERSISTED_DOCUMENT_THEME_VALIDATOR = Draft202012Validator({
+    **DOCUMENT_THEME_SCHEMA,
+    "properties": {
+        **DOCUMENT_THEME_SCHEMA["properties"],
+        "page": {**DOCUMENT_THEME_SCHEMA["properties"]["page"], "required": []},
+        "typography": {**DOCUMENT_THEME_SCHEMA["properties"]["typography"], "required": []},
+    },
+})
 
 
 def _issues(validator: Draft202012Validator, data: object) -> list[str]:
@@ -397,6 +406,11 @@ def validate_theme(data: dict) -> list[str]:
     if validator is None:
         return ["未知主题类型：" + str(kind)]
     return _issues(validator, data)
+
+
+def validate_saved_document_theme(data: dict) -> list[str]:
+    """Stored sessions contain partial overrides; full template input stays strict."""
+    return _issues(_PERSISTED_DOCUMENT_THEME_VALIDATOR, data)
 
 
 def validate_source(data: dict) -> list[str]:

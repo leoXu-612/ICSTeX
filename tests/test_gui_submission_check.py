@@ -7,7 +7,7 @@ import time
 from unittest import TestCase
 from unittest.mock import patch
 
-from PySide6.QtCore import QCoreApplication, QEvent, QSettings
+from PySide6.QtCore import QCoreApplication, QEvent, QSettings, Qt
 from PySide6.QtWidgets import QApplication
 
 from app.core.latex_tools import LaTeXToolchain
@@ -15,6 +15,99 @@ from app.core.settings import AppSettings
 from app.core.submission_check import CheckStatus, check_submission
 from app.gui.main_window import MainWindow
 from tests.v1_fixtures import create_project
+
+
+class SubmissionCheckPresentationTests(TestCase):
+    def setUp(self):
+        from app.core.submission_check import CheckItem, CheckReport
+        from app.gui.submission_check_panel import SubmissionCheckPanel
+        from app.gui.theme import apply_theme
+        self.app = QApplication.instance() or QApplication([])
+        apply_theme(self.app)
+        self.panel = SubmissionCheckPanel()
+        self.panel.resize(820, 320)
+        self.panel.show()
+        self.report = CheckReport(("fixture",), "9" * 64, 1234, tuple(
+            CheckItem(rule, title, state, reason, action, "/synthetic", "9" * 64, file, line)
+            for rule, title, state, reason, action, file, line in (
+                ("pass", "Saved", CheckStatus.PASS, "Verified saved bytes.", "review", None, None),
+                ("unknown", "Coverage", CheckStatus.UNKNOWN, "Dynamic inputs need review.", "review", None, None),
+                ("fail", "Missing citation", CheckStatus.FAIL, "Citation key was not found.", "navigate", Path("/synthetic/chapter.tex"), 12),
+                ("na", "Target", CheckStatus.NOT_APPLICABLE, "No word target applies.", "review", None, None),
+                ("save", "Unsaved", CheckStatus.FAIL, "A draft is not saved.", "save", None, None))), (), True)
+        self.panel.set_report(self.report)
+        self.app.processEvents()
+        self.addCleanup(self.dispose)
+
+    def dispose(self):
+        self.panel.close()
+        self.panel.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_summary_keeps_unknown_separate_and_priority_keeps_original_indices(self):
+        from PySide6.QtTest import QSignalSpy
+        from PySide6.QtCore import Qt
+        self.assertIn("未通过 2", self.panel.summary.text())
+        self.assertIn("未知 1", self.panel.summary.text())
+        self.assertIn("通过 1", self.panel.summary.text())
+        order = [self.panel.tree.topLevelItem(i).data(0, Qt.ItemDataRole.UserRole) for i in range(5)]
+        self.assertEqual(order, [2, 4, 1, 0, 3])
+        actions = QSignalSpy(self.panel.actionRequested)
+        self.panel.action_button.click()
+        self.assertEqual(actions.at(0), [2])
+        self.assertIs(self.panel.report, self.report)
+
+    def test_reason_and_next_step_are_separate_from_full_technical_identity(self):
+        self.assertIn("Citation key was not found.", self.panel.detail.toPlainText())
+        self.assertIn("下一步", self.panel.detail.toPlainText())
+        self.assertNotIn(self.report.input_id, self.panel.detail.toPlainText())
+        self.assertTrue(self.panel.technical_detail.isHidden())
+        self.panel.technical_button.click()
+        self.app.processEvents()
+        self.assertFalse(self.panel.technical_detail.isHidden())
+        self.assertTrue(self.panel.technical_detail.isReadOnly())
+        self.assertIn(self.report.input_id, self.panel.technical_detail.toPlainText())
+        self.assertIn("/synthetic/chapter.tex:12", self.panel.technical_detail.toPlainText())
+
+    def test_primary_controls_are_outside_scrolling_content(self):
+        for button in (self.panel.refresh_button, self.panel.cancel_button, self.panel.action_button):
+            self.assertFalse(self.panel.splitter.isAncestorOf(button))
+        self.panel.detail.verticalScrollBar().setValue(self.panel.detail.verticalScrollBar().maximum())
+        self.app.processEvents()
+        for button in (self.panel.refresh_button, self.panel.cancel_button, self.panel.action_button):
+            self.assertTrue(button.visibleRegion().contains(button.rect()))
+
+    def test_expanded_reading_restores_same_selection_split_and_widgets(self):
+        from PySide6.QtGui import QTextCursor
+        self.panel.splitter.setSizes([245, 555])
+        self.app.processEvents()
+        before = self.panel.splitter.sizes()
+        row, detail = self.panel.tree.currentItem(), self.panel.detail
+        reading_height = detail.viewport().height()
+        detail.moveCursor(QTextCursor.MoveOperation.End)
+        position = detail.textCursor().position()
+        self.panel.expand_button.click()
+        self.app.processEvents()
+        self.assertTrue(self.panel.tree.isHidden())
+        self.assertIs(self.panel.detail, detail)
+        self.assertGreater(detail.viewport().height(), reading_height + 25)
+        self.assertFalse(self.panel.splitter.isAncestorOf(self.panel.refresh_button))
+        self.panel.expand_button.click()
+        self.app.processEvents()
+        self.assertFalse(self.panel.tree.isHidden())
+        self.assertIs(self.panel.tree.currentItem(), row)
+        self.assertEqual(self.panel.splitter.sizes(), before)
+        self.assertEqual(detail.textCursor().position(), position)
+
+    def test_pending_clears_old_technical_evidence_and_disables_actions(self):
+        self.panel.technical_button.click()
+        self.panel.pending("输入已变化，待重新检查", busy=True)
+        self.assertIsNone(self.panel.report)
+        self.assertEqual(self.panel.detail.toPlainText(), "")
+        self.assertEqual(self.panel.technical_detail.toPlainText(), "")
+        self.assertFalse(self.panel.action_button.isEnabled())
+        self.assertFalse(self.panel.technical_button.isEnabled())
+        self.assertTrue(self.panel.cancel_button.isEnabled())
 
 
 def wait_until(predicate, seconds=8):
@@ -52,10 +145,11 @@ class SubmissionCheckGuiTests(TestCase):
         for tab in self.window.tabs.values():
             self.window.documents.cancel_save_timer(tab)
             tab.modified = tab.dirty = False
-        self.window.close()
+        self.assertTrue(self.window.close())
         self.app.processEvents()
-        self.window.deleteLater()
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        from shiboken6 import isValid
+        self.assertFalse(isValid(self.window))
         self.temp.cleanup()
 
     def check(self):
@@ -74,8 +168,46 @@ class SubmissionCheckGuiTests(TestCase):
             compile_.assert_not_called()
             network.assert_not_called()
         self.assertEqual(self.panel.tree.topLevelItemCount(), len(report.items))
-        self.assertIn(report.input_id, self.panel.detail.toPlainText())
+        self.assertIn(report.input_id, self.panel.technical_detail.toPlainText())
+        self.assertNotIn(report.input_id, self.panel.detail.toPlainText())
         self.assertEqual(before, {p: p.read_bytes() for p in self.sample.root.parent.rglob("*") if p.is_file()})
+
+    def test_resized_large_font_console_shows_a_whole_selected_row_without_overlap(self):
+        self.window.resize(1440, 900)
+        self.window.show()
+        self.check()
+        row = next(self.panel.tree.topLevelItem(i) for i in range(self.panel.tree.topLevelItemCount())
+                   if self.panel.tree.topLevelItem(i).text(0) == "未知")
+        self.panel.tree.setCurrentItem(row)
+        previous = self.app.ui_scale_manager.scale
+        try:
+            self.window.set_ui_scale(1.5)
+            self.window.resize(1080, 720)
+            for _ in range(12):
+                self.app.processEvents()
+            row = self.panel.tree.currentItem()
+            self.assertTrue(self.panel.tree.viewport().visibleRegion().contains(self.panel.tree.visualItemRect(row)))
+            self.assertLess(self.panel.splitter.geometry().bottom(), self.panel.expand_button.geometry().top())
+            self.assertLessEqual(self.window.height(), 720)
+        finally:
+            self.window.set_ui_scale(previous)
+
+    def test_preedit_preserves_check_key_and_buffer_identity_but_commit_invalidates(self):
+        from PySide6.QtGui import QInputMethodEvent
+        report = self.check()
+        request = self.controller.capture_request()
+        editor = self.window.current_tab().editor
+        for text in ("zhong", "zhongwen", ""):
+            QApplication.sendEvent(editor, QInputMethodEvent(text, []))
+            self.controller.reconcile()
+            self.assertIs(self.panel.report, report)
+            current = self.controller.capture_request()
+            self.assertEqual(current.key, request.key)
+            self.assertEqual(current.buffers, request.buffers)
+        event = QInputMethodEvent()
+        event.setCommitString("\u4e2d\u6587")
+        QApplication.sendEvent(editor, event)
+        self.assertIsNone(self.panel.report)
 
     def test_profile_edit_is_explicit_and_updates_word_target_without_source_writes(self):
         from app.gui.project_profile_dialog import ProjectProfileDialog
@@ -152,7 +284,9 @@ class SubmissionCheckGuiTests(TestCase):
     def test_profile_shortcut_is_available_from_check_evidence(self):
         report = self.check()
         index = next(n for n, item in enumerate(report.items) if item.rule_id == "project_profile")
-        self.panel.tree.setCurrentItem(self.panel.tree.topLevelItem(index))
+        row = next(self.panel.tree.topLevelItem(i) for i in range(self.panel.tree.topLevelItemCount())
+                   if self.panel.tree.topLevelItem(i).data(0, Qt.ItemDataRole.UserRole) == index)
+        self.panel.tree.setCurrentItem(row)
         self.assertEqual(self.panel.action_button.text(), "项目配置")
         self.assertTrue(self.panel.action_button.isEnabled())
         with patch("app.gui.main_window_signals.show_project_profile") as show:
@@ -213,6 +347,43 @@ class SubmissionCheckGuiTests(TestCase):
         self.assertIsNone(self.panel.report)
         self.assertIn("未知", self.panel.summary.text())
         self.check()
+
+    def test_late_preedit_check_survives_but_blocked_edit_undo_rejects_old_result(self):
+        from PySide6.QtGui import QInputMethodEvent
+        editor = self.window.current_tab().editor
+        for action in ("preedit", "edit_undo"):
+            with self.subTest(action=action):
+                entered, release = threading.Event(), threading.Event()
+
+                def delayed(request, cancelled):
+                    result = check_submission(request, cancelled)
+                    entered.set()
+                    release.wait(5)
+                    return result
+
+                with patch("app.gui.submission_check_controller.check_submission", delayed):
+                    try:
+                        self.controller.request()
+                        wait_until(entered.is_set)
+                        if action == "preedit":
+                            QApplication.sendEvent(editor, QInputMethodEvent("zhong", []))
+                        else:
+                            editor.blockSignals(True)
+                            try:
+                                editor.insertPlainText("changed ")
+                                editor.undo()
+                            finally:
+                                editor.blockSignals(False)
+                        self.controller.reconcile()
+                        release.set()
+                        wait_until(lambda: not self.controller.is_busy)
+                    finally:
+                        release.set()
+                if action == "preedit":
+                    self.assertIsNotNone(self.panel.report)
+                    QApplication.sendEvent(editor, QInputMethodEvent())
+                else:
+                    self.assertIsNone(self.panel.report)
 
     def test_navigation_uses_child_location_and_stale_actions_do_nothing(self):
         child = self.sample.draft_path
@@ -328,7 +499,10 @@ class SubmissionCheckGuiTests(TestCase):
             self.assertFalse(self.window.auto_compile_toggle.isVisible())
         _set_block_mode(self.window, False)
         self.app.processEvents()
-        self.assertFalse(self.window.engine_selector.isHidden())
+        # C keeps the low-frequency selector in the existing Compile menu.
+        self.assertTrue(self.window.engine_selector.isHidden())
+        self.assertTrue(all(action.isEnabled() and action.isVisible()
+                            for action in self.window.engine_actions.values()))
         self.assertTrue(self.window.compile_action.isEnabled())
         self.assertTrue(self.window.save_action.isEnabled())
 
@@ -340,7 +514,9 @@ class SubmissionCheckGuiTests(TestCase):
         self.app.processEvents()
         self.assertIsNone(self.window.block_session)
         self.assertFalse(self.window.block_mode_action.isChecked())
-        self.assertFalse(self.window.engine_selector.isHidden())
+        self.assertTrue(self.window.engine_selector.isHidden())
+        self.assertTrue(all(action.isEnabled() and action.isVisible()
+                            for action in self.window.engine_actions.values()))
         self.assertFalse(self.window.auto_compile_toggle.isHidden())
         self.assertTrue(self.window.auto_compile_action.isEnabled())
         self.assertTrue(self.window.save_action.isEnabled())
@@ -484,7 +660,11 @@ class SubmissionCheckGuiTests(TestCase):
         old_path = self.window.pdf_panel.current_pdf
         _, session = self.install_block()
         self.assertIsNone(self.window.pdf_panel.current_pdf, "entering Block must clear unrelated source PDF")
-        self.assertFalse(self.window.export_pdf_action.isEnabled())
+        self.assertTrue(self.window.export_pdf_action.isEnabled())
+        with patch("app.gui.submission_delivery_dialog.show_submission_delivery", return_value=None) as review:
+            self.window.export_pdf()
+            review.assert_called_once_with(self.window)
+            self.assertIs(self.window.readiness._active_block(), session)
         _set_block_mode(self.window, False)
         self.fake_block_compile(session)
         self.assertEqual(self.window.pdf_panel.current_pdf, old_path)

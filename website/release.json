@@ -2,44 +2,23 @@
   "assets": [
     {
       "architecture": "Apple Silicon (arm64)",
-      "download_url": "https://github.com/leoXu-612/ICSTeX/releases/download/v2.1.0-beta.1/ICSTeX-2.1.0-beta.1-macos-arm64.dmg",
+      "download_url": "https://github.com/leoXu-612/ICSTeX/releases/download/v2.1.0-beta.2/ICSTeX-2.1.0-beta.2-macos-arm64.dmg",
       "kind": "DMG",
-      "name": "ICSTeX-2.1.0-beta.1-macos-arm64.dmg",
+      "name": "ICSTeX-2.1.0-beta.2-macos-arm64.dmg",
       "platform": "macOS",
       "primary_download": true,
-      "sha256": "e796cc7c88500a1a35e1dc0d7d810d130619fb4b63c335d95def751d0cc772ba",
+      "sha256": "934ca18aa00b4c62d7188ab5354e11c702f159871055ec05bac6f6dbdca4dd57",
       "status": "verified"
     },
     {
       "architecture": "Apple Silicon (arm64)",
-      "download_url": "https://github.com/leoXu-612/ICSTeX/releases/download/v2.1.0-beta.1/ICSTeX-2.1.0-beta.1-macos-arm64.zip",
+      "download_url": "https://github.com/leoXu-612/ICSTeX/releases/download/v2.1.0-beta.2/ICSTeX-2.1.0-beta.2-macos-arm64.zip",
       "kind": "ZIP",
-      "name": "ICSTeX-2.1.0-beta.1-macos-arm64.zip",
+      "name": "ICSTeX-2.1.0-beta.2-macos-arm64.zip",
       "platform": "macOS",
       "primary_download": false,
-      "sha256": "9fd6684510157325c1cd80836ad9a33584b0140055095b2f98723e1ab27cf838",
+      "sha256": "2a13bceacb754458b4a81069bac17bc509631ef1b4df47ae32a7ed46c9d8a511",
       "status": "verified"
-    },
-    {
-      "architecture": "Any",
-      "download_url": "https://github.com/leoXu-612/ICSTeX/releases/download/v2.1.0-beta.1/ICSTeX-Source-2.1.0-beta.1.zip",
-      "kind": "ZIP",
-      "name": "ICSTeX-Source-2.1.0-beta.1.zip",
-      "platform": "Source",
-      "primary_download": false,
-      "sha256": "e2556c4356e8c8bbb20d2b548f33ced91d8c631cccd5b76c147f0ae301dbb51a",
-      "status": "verified"
-    },
-    {
-      "architecture": "ARM64 only",
-      "download_url": "https://github.com/leoXu-612/ICSTeX/releases/download/v2.1.0-beta.1/ICSTeX-2.1.0-beta.1-Windows-arm64.zip",
-      "kind": "ZIP",
-      "name": "ICSTeX-2.1.0-beta.1-Windows-arm64.zip",
-      "platform": "Windows",
-      "primary_download": false,
-      "sha256": "9f7ee34c82c6c781fbdeebf6d86704d823d91e9915185b3e64b2c12c685030fb",
-      "status": "developer-beta",
-      "website_visibility": "limitations-only"
     }
   ],
   "channel": "beta",
@@ -48,21 +27,23 @@
     "KNOWN_LIMITATIONS.md",
     "RELEASE_NOTES.md",
     "SHA256SUMS.txt",
-    "THIRD_PARTY_NOTICES.md"
+    "THIRD_PARTY_NOTICES.md",
+    "BUILD_RECEIPT.json"
   ],
   "github_release_published": true,
   "github_repository_public": true,
   "limitations": [
-    "macOS 版只支持 Apple 芯片，尚未经过 Apple 公证。首次打开时需要在系统设置中手动确认。",
-    "这个 Beta 暂无 Windows x64 压缩包和安装程序。常见的 Intel 或 AMD Windows 电脑目前无法安装。",
-    "Windows ARM64 版目前只验证了应用可以启动。由于测试机没有安装 LaTeX 环境，尚未完成从源码生成 PDF 的测试。",
-    "公式图片识别需要另外安装本地组件，识别结果可能有误，插入文档前请自行核对。"
+    "本次仅提供 macOS Apple Silicon（arm64）手动安装包，未经过 Developer ID 签名或 Apple 公证。",
+    "应用内自动更新尚未启用；升级前请保存文稿、退出旧版并保留备份。",
+    "Windows 新版安装包尚未提供，旧 ARM64 Developer Beta 保留在历史 Release 中；不支持常见的 Windows x64 电脑。",
+    "LaTeX 发行版和可选 OCR 组件需另行安装，公式识别结果仍需人工核对。",
+    "这是 Beta 版本；系统输入法、辅助功能和全部历史原生崩溃尚未完成全面验收，重要项目请保留独立备份。"
   ],
-  "release_name": "公式编辑与本地识别",
-  "release_page_url": "https://github.com/leoXu-612/ICSTeX/releases/tag/v2.1.0-beta.1",
+  "release_name": "写作响应与 PDF 预览改进",
+  "release_page_url": "https://github.com/leoXu-612/ICSTeX/releases/tag/v2.1.0-beta.2",
   "releases_url": "https://github.com/leoXu-612/ICSTeX/releases",
   "repository": "leoXu-612/ICSTeX",
   "schema_version": 1,
-  "tag": "v2.1.0-beta.1",
-  "version": "2.1.0-beta.1"
+  "tag": "v2.1.0-beta.2",
+  "version": "2.1.0-beta.2"
 }

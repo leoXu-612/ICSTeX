@@ -1,68 +1,26 @@
-# ICSTeX 2.1 Beta 1 — Formula Intelligence
+# ICSTeX 2.1.0-beta.2 — 写作响应与 PDF 预览改进
 
-## 版本
+发布日期：2026-09-15。Git 标签：`v2.1.0-beta.2`。
+本次发布 macOS Apple Silicon（arm64）的 DMG 和 ZIP 手动安装包。
 
-- 工程版本：`2.1.0-beta.1`
-- 发布通道：`beta`
-- 平台：macOS Apple Silicon（arm64）与 Windows on ARM（ARM64）Developer Beta
-- Git Tag：`v2.1.0-beta.1`
+## 主要变化
 
-## 摘要
+- 自动快速预览减少重复依赖等待和本机保存回声；后台字数统计在保存、编译和首轮显示期间让位。
+- 改善大项目输入时的长尾卡顿，保留保存和编译的必要校验。
+- 修复可复现的 PDF 永久白页、旧渲染结果进入新文档缓存，以及相关销毁顺序问题。
+- 写作界面减少重复状态栏和空白面板，常用工具带短标签；顶部统计入口统一为“控制台”。
+- 移除插入面板的旧“分段函数”按钮，公式编辑器中的分段结构保留。
+- 新增“帮助 → 在 GitHub 支持项目（Star）”，仅在主动点击时打开仓库，不要求点赞才能使用。
+- 保留快速预览反向 SyncTeX、正式导出与预览隔离、光标/阅读位置及文档保存保护。
 
-ICSTeX 2.1 introduces a new local-first formula workflow.
+## 更新方式
 
-You can write formulas through the structured formula editor or import
-formula images through the optional local pix2tex runtime. Recognition
-results remain editable and are reviewed before being written into the
-document.
+本包用于手动安装，与已核验的本机应用代码一致，不包含公开自动更新运行时。
+“软件更新”入口仍会说明更新尚未配置；这不是已启用的云端升级服务。
+源码中的启动检查调度已准备，但安装期保护和真实线上升级验收仍未完成。
 
-This release does not require a cloud account or API key. Formula
-recognition runs locally after the optional runtime has been installed.
+## 平台和证据边界
 
-中文：
-
-ICSTeX 2.1 引入了新的本地公式工作流。
-
-用户既可以通过结构化公式编辑器输入数学公式，也可以通过可选的
-pix2tex 本地运行时从图片识别公式。所有识别结果都会先进入编辑与
-核对流程，确认后才会写入文档。
-
-本版本不依赖云端账户或 API Key。完成可选组件安装后，公式识别可在
-离线环境中运行。
-
-## 纳入 2.1 Beta 1
-
-- Formula Editor 2.0（结构化公式编辑器：可视化 + 源码双视图、草稿隔离、单次写回）
-- pix2tex 本地公式识别（可选运行时）
-- 统一批量图片识别窗口：队列、顺序识别、进度条
-- 逐项状态（待识别/识别中/成功/失败/已取消/已精调）、单项重试、查看错误、从批次移除
-- ROI 创建、移动、缩放和删除；8 点 ROI 手柄；选中 ROI 单独重识别；ROI 变化防抖重识别
-- Formula / LaTeX 双视图同步；aligned 多公式合并
-- 重复提交幂等；重复图片指纹去重（可勾选允许重复入队）；对话框打开防抖
-- Formula Block 单次写回；Undo / Redo；离线本地运行
-- UI Scale 响应式布局；Block 模块与主控制台集成
-
-## 不纳入 2.1 Beta 1
-
-- RapidOCR 文字识别 GUI（入口已禁用，后续 Beta 开放）
-- OCR → Text Block 完整提交流程（同上）
-- 自动判断文字或公式、整页文档 OCR、表格 OCR、图表识别
-- 云端识别、MCP
-
-## 升级与回退
-
-本版本为独立安装包；如需回退，请保留 0.2.7 及更早的安装包与项目备份。
-
-## Windows 制品边界
-
-- `ICSTeX-2.1.0-beta.1-Windows-arm64.zip` 仅用于 Windows on ARM。
-- x64 ZIP 与 x64 Setup EXE 尚未生成；ARM64 包不能改名后分发给 Intel/AMD Windows 用户。
-- Windows 包未签名，且不内置 MiKTeX 或 TeX Live。
-
-## 安全边界
-
-- 打开项目不再自动编译；首次 Compile 后才在本次会话恢复该项目的自动预览。
-- 编译强制忽略项目 `.latexmkrc`、关闭 shell escape，并设置有限超时。
-- Magic Root、Block 图片和可移植导出拒绝越界路径与符号链接；公式从受管 AST
-  重建，不执行可篡改的缓存文本。
-- DOI 与 arXiv 元数据只访问固定 HTTPS 端点，禁止重定向并限制响应大小。
+没有发布 Windows Beta 2 或 Intel Mac 包，也没有完成 Developer ID 签名或公证。
+构建代码身份见 `BUILD_RECEIPT.json`，下载摘要见 `SHA256SUMS.txt`，使用限制见
+`KNOWN_LIMITATIONS.md`。旧版 Release 和安装包保持不变。

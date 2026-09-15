@@ -1,23 +1,16 @@
-# ICSTeX 2.1.0-beta.1 — 已知限制
+# ICSTeX 2.1.0-beta.2 — 已知限制
 
-1. 公式识别结果必须人工检查，不能保证所有复杂公式完全正确。
-2. pix2tex 是可选本地组件，需要较大的独立运行环境（约 1.2 GB，含 Python 3.11 虚拟环境与模型）。
-3. 启动公式识别时会产生额外内存占用（实测峰值 RSS 约 670–690 MB）。
-4. 当前优先支持印刷体块级公式；真实页面截图与手写公式的识别质量较差（详见
-   `docs/ocr-dogfooding-report.md`）。
-5. 批量队列默认将内容完全相同的图片视为重复项并跳过；可在窗口中勾选“允许相同图片重复入队”。
-6. 批量识别提供逐项失败状态、错误查看与单项重试；单张失败不会中断整个队列，但需要用户主动重试失败项。
-7. RapidOCR 文字识别尚未作为用户功能开放（入口在 2.1 Beta 1 中禁用）。
-8. 当前已验证平台为 macOS Apple Silicon 与 Windows on ARM（ARM64）；Windows x64
-   ZIP/Setup 尚未构建验证。
-9. 这是 Beta 版本，重要项目应保留 Git 或其他备份。
-
-## 打包相关说明
-
-- 安装包不包含 pix2tex 模型权重；用户主动安装“本地公式识别”组件时，Installer 下载模型并记录许可证与版本信息。
-- 应用不内置 LaTeX 发行版；用户需自行安装 MacTeX / TeX Live / MiKTeX。
-- Windows ARM64 构建机未安装 TeX distribution，因此该平台只完成启动验收，
-  尚未完成 Windows source-to-PDF 验收。
-- Windows ARM64 ZIP 未签名；x64 installer 需要独立 x64 构建环境和 Inno Setup。
-- 安全模式不支持项目 `.latexmkrc`、TeX shell escape 或依赖外部命令的 `minted`
-  工作流；此 Beta 不提供关闭该边界的项目内开关。
+- 这是 macOS Apple Silicon（arm64）手动安装 Beta，不是正式稳定版。
+- 使用 ad-hoc 签名，未经 Developer ID 签名或 Apple 公证；首次打开可能需要系统授权。
+- 应用内自动更新尚未启用。本包不含 Sparkle 更新运行时、更新源或签名公钥配置。
+  自动升级的安装期多实例保护仍需完成，不能把手动安装包当作自动更新候选。
+- 本次没有 Windows Beta 2、Windows x64 或 Intel Mac 安装包。历史 Windows ARM64
+  包仅完成有限验收，不能代表 Windows 的完整写作/编译支持。
+- LaTeX 发行版和可选 OCR 组件不包含在安装包内。公式识别结果仍须人工核对。
+- 已修复可复现的 PDF 刷新、旧渲染结果和销毁问题，但不声称全部历史原生崩溃均已归因。
+  系统输入法候选、VoiceOver 和全部纯键盘路径未完成完整验收。
+- 快速预览与正式导出分开；正式导出仍需当前版本的完整编译结果。性能取决于文稿和工具链，
+  不承诺任意项目或首次编译都能达到固定时长。
+- 打包内容以 `BUILD_RECEIPT.json` 为准。源码中的独立 MCP/OCR worker 等模块并不全部
+  属于这个 GUI 安装包；本次不提供网络 MCP 服务。
+- 保留所有文稿和旧应用的备份。Beta 不承诺自动回滚或跨版本未保存草稿恢复。

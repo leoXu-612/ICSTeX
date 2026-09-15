@@ -100,18 +100,18 @@
 
             <section class="platform-panel" id="panel-windows" role="tabpanel" aria-labelledby="tab-windows" tabindex="0" data-platform-panel="windows" hidden>
               <header class="package-header">
-                <div><p class="platform-label">Windows 下载</p><h3>Windows 目前只提供 ARM64 版本</h3></div>
-                <span class="status-label status-pending">部分可用</span>
+                <div><p class="platform-label">Windows 下载</p><h3>Windows 安装包暂未同步到新版</h3></div>
+                <span class="status-label status-pending">旧版保留</span>
               </header>
-              <p class="platform-summary">常见的 Intel 或 AMD Windows 电脑使用 x64，暂时不能运行这个版本。只有在“系统信息”中看到 ARM64 时才请下载。</p>
+              <p class="platform-summary">本次新版只提供 macOS 安装包。Windows ARM64 的旧测试版仍在历史 Release 中保留；它不能用于常见的 Intel 或 AMD x64 电脑。</p>
               <div class="package-options">
                 <article class="package-option is-unavailable">
                   <div><strong>Windows x64</strong><span>ZIP 和安装程序仍在准备中</span><code>暂未提供</code></div>
                   <span class="button button-secondary is-disabled" aria-disabled="true">尚不可下载</span>
                 </article>
                 <article class="package-option">
-                  <div><strong>Windows ARM64 ZIP</strong><span>测试版，只适用于 Windows ARM64</span><code data-release-sha="windows-arm64">正在读取 SHA-256…</code></div>
-                  <a class="button button-primary is-disabled" data-release-download="windows-arm64" aria-disabled="true">下载 ARM64 ZIP</a>
+                  <div><strong>Windows ARM64 ZIP</strong><span>本次未提供新包，旧版请前往历史 Release</span><code data-release-sha="windows-arm64">当前版本暂无 SHA-256</code></div>
+                  <a class="button button-primary is-disabled" data-release-download="windows-arm64" aria-disabled="true">当前版本未提供</a>
                 </article>
               </div>
               <ol class="install-steps" aria-label="Windows ARM64 安装步骤">
@@ -119,8 +119,9 @@
                 <li><span>02</span><strong>完整解压</strong><small>不要直接在 ZIP 里运行。解压全部文件后，再打开 ICSTeX.exe。</small></li>
                 <li><span>03</span><strong>准备 LaTeX 环境</strong><small>安装 MiKTeX 或 TeX Live，然后运行 ICSTeX 的“环境医生”。</small></li>
               </ol>
-              <a class="text-link" data-release-link="limitations" href="#limits">查看 Windows 版已经完成的测试 <span aria-hidden="true">→</span></a>
+              <a class="text-link" data-release-link="releases" href="#limits">前往历史 Release 查看旧版 Windows 下载 <span aria-hidden="true">→</span></a>
             </section>
+            <p class="availability" id="support-project">觉得好用？<a id="support-project-link" class="is-disabled" data-release-link="repository" aria-disabled="true" target="_blank" rel="noopener noreferrer" aria-label="在新标签页打开 GitHub 仓库，手动点 Star 支持项目">去 GitHub 点个 Star 支持开发</a>。完全自愿，不影响下载或使用。</p>
           </div>
         </div>
       </section>

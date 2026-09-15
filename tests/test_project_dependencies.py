@@ -10,6 +10,34 @@ from app.core.project_dependencies import (
 
 
 class ProjectDependencyTests(TestCase):
+    def test_safe_input_component_bounds_preserve_in_scope_parent_steps(self) -> None:
+        with TemporaryDirectory() as directory:
+            scope = Path(directory).resolve()
+            for candidate, expected in (
+                (scope / "sub" / ".." / "child.tex", scope / "child.tex"),
+                (Path("sub") / ".." / "child.tex", scope / "child.tex"),
+                (scope, None),
+                (scope / "sub" / "..", None),
+                (scope / ".." / scope.name / "child.tex", None),
+                (scope.with_name(scope.name + "-other") / "child.tex", None),
+                (scope / ".icstex" / ".." / "child.tex", None),
+                (scope / "sub" / ".." / "generated.log", None),
+            ):
+                with self.subTest(candidate=candidate):
+                    self.assertEqual(safe_project_input(scope, candidate), expected)
+
+    def test_safe_input_rechecks_component_links_between_calls(self) -> None:
+        with TemporaryDirectory() as directory, TemporaryDirectory() as external:
+            scope = Path(directory).resolve()
+            nested = scope / "nested"
+            nested.mkdir()
+            candidate = nested / "child.tex"
+            self.assertEqual(safe_project_input(scope, candidate), candidate)
+            nested.rmdir()
+            nested.symlink_to(Path(external).resolve(), target_is_directory=True)
+            self.assertIsNone(safe_project_input(scope, candidate))
+            self.assertIsNone(safe_project_input(scope, nested / ".." / "main.tex"))
+
     def test_pdf_svg_and_rejected_image_candidates_are_exposed(self) -> None:
         with TemporaryDirectory() as directory:
             scope = Path(directory).resolve()

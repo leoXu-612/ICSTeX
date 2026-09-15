@@ -283,6 +283,28 @@ class GuiPreviewPipelineTests(TestCase):
                 reload_pdf.assert_called_once_with(pdf, logical_key=tab.manager.root_file)
                 self.assertEqual(self.window.displayed_pdfs[tab.manager.root_file].build_id, second)
 
+    def test_same_pdf_bytes_keep_view_but_update_displayed_build_identity(self):
+        from app.core.pdf_identity import capture_pdf_identity
+        from tests.test_pdf_panel import _write_zoom_pdf
+        tab = self._add_document()
+        actual = self.directory / "fixture.pdf"
+        _write_zoom_pdf(actual)
+        raw = actual.read_bytes()
+        first = self._result(tab, BuildPurpose.PREVIEW, 1, pdf_bytes=raw)
+        first = replace(first, pdf_identity=capture_pdf_identity(first.pdf_file, self.directory))
+        self._start(tab, BuildPurpose.PREVIEW, 1)
+        self._finish(first)
+        self.assertIsNotNone(self.window.pdf_panel._loaded_identity)
+        second = self._result(tab, BuildPurpose.PREVIEW, 2, pdf_bytes=raw)
+        second = replace(second, pdf_identity=capture_pdf_identity(second.pdf_file, self.directory))
+        with patch.object(self.window.pdf_panel._document, "load", wraps=self.window.pdf_panel._document.load) as load:
+            self._start(tab, BuildPurpose.PREVIEW, 2)
+            self._finish(second)
+            load.assert_not_called()
+        self.assertTrue(self.window.pdf_panel.last_load_reused)
+        self.assertEqual(self.window.displayed_pdfs[tab.manager.root_file].build_id, 2)
+        self.assertEqual(self.window.pdf_panel.current_pdf, second.pdf_file)
+
     def test_preview_reverse_sync_refuses_missing_tool_data_or_unsafe_target(self) -> None:
         tab = self._add_document()
         pdf = self._finish_success(tab, BuildPurpose.PREVIEW, 1)
@@ -432,7 +454,7 @@ class GuiPreviewPipelineTests(TestCase):
         self.assertEqual(child.read_text(encoding="utf-8"), child_text)
         self.assertEqual(tab.path.read_text(encoding="utf-8"), source_text)
 
-    def test_preview_only_export_queues_final_and_never_copies_preview_pdf(self) -> None:
+    def test_preview_only_export_requires_review_and_separate_final_never_copies_preview(self) -> None:
         tab = self._add_document()
         manager = tab.manager
         assert manager is not None
@@ -440,17 +462,14 @@ class GuiPreviewPipelineTests(TestCase):
         target = self.directory / "submission.pdf"
 
         with patch.object(manager, "compile_async") as compile_async, patch(
-            "app.gui.main_window.QFileDialog.getSaveFileName",
-            return_value=(str(target), ""),
-        ):
-            self.assertTrue(self.window.export_pdf())
+            "app.gui.submission_delivery_dialog.show_submission_delivery", return_value=None,
+        ) as review:
+            self.assertFalse(self.window.export_pdf())
 
-        compile_async.assert_called_once_with(BuildPurpose.FINAL)
+        review.assert_called_once_with(self.window)
+        compile_async.assert_not_called()
         self.assertFalse(target.exists())
-        pending = self.window.pdf_export.pending_for(manager.root_file)
-        self.assertIsNotNone(pending)
-        assert pending is not None
-        self.assertEqual(pending.target, target.resolve())
+        self.assertIsNone(self.window.pdf_export.pending_for(manager.root_file))
 
     def test_idle_build_uses_preview_but_explicit_compile_defaults_to_final(self) -> None:
         tab = self._add_document()
@@ -468,18 +487,21 @@ class GuiPreviewPipelineTests(TestCase):
             patch.object(manager, "compile_async") as compile_async,
         ):
             self.window.documents.compile_after_idle(tab)
+            self.assertTrue(_wait_until(lambda: compile_async.called))
             compile_async.assert_called_once_with(BuildPurpose.PREVIEW)
 
             self.window.auto_compile_action.setChecked(False)
             compile_async.reset_mock()
             with patch.object(manager, "cancel_pending") as cancel_pending:
                 self.window.compile_current(immediate=True)
+                self.assertTrue(_wait_until(lambda: compile_async.called))
                 cancel_pending.assert_called_once_with()
                 compile_async.assert_called_once_with(BuildPurpose.FINAL)
 
             compile_async.reset_mock()
             with patch.object(manager, "cancel_pending") as cancel_pending:
                 self.window.compile.compile_current(immediate=True)
+                self.assertTrue(_wait_until(lambda: compile_async.called))
                 cancel_pending.assert_called_once_with()
                 compile_async.assert_called_once_with(BuildPurpose.FINAL)
 

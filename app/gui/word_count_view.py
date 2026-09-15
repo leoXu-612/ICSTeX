@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.word_count import WordCountResult, WordCountSegment
+from app.gui.insert_panel import scrollable_panel
 
 
 STATS: tuple[tuple[str, str], ...] = (
@@ -323,9 +324,8 @@ class WordCountView(QWidget):
 
 
 def wrap_in_scroll(view: WordCountView) -> QScrollArea:
-    scroll = QScrollArea()
+    scroll = scrollable_panel(view)
     scroll.setObjectName("wordScroll")
-    scroll.setWidgetResizable(True)
     scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-    scroll.setWidget(view)
+    scroll.followReadOnlyText(view.preview_browser)
     return scroll

@@ -5,10 +5,14 @@ from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import patch
 import os
+import sys
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtGui import QInputMethodEvent, QTextCursor
+from PySide6.QtTest import QTest
 from app.core.blocks.property_draft import PropertyDraft, prepare_drafts
 from app.core.blocks.project_repository import load_project
 from app.gui.blocks.inspector import BlockInspector
@@ -46,6 +50,68 @@ class PropertyDraftTests(TestCase):
 
     def enter(self, text="Unapplied text"):
         self.inspector.content_edit.setPlainText(text)
+
+    def test_focus_shortcut_routes_before_native_text_key_consumption(self):
+        # Cocoa can offer ShortcutOverride but consume Control+Tab before a
+        # widget KeyPress. Model that boundary, not an IME or native-platform pass.
+        class TextInputBoundary(QObject):
+            def eventFilter(self, watched, event):
+                return event.type() == QEvent.Type.KeyPress
+
+        inspector = self.inspector
+        inspector.show()
+        inspector.activateWindow()
+        self.app.processEvents()
+        editor = inspector.content_edit
+        self.enter("Unapplied focus draft")
+        boundary = TextInputBoundary(editor)
+        editor.installEventFilter(boundary)
+        control = Qt.KeyboardModifier.MetaModifier if sys.platform == "darwin" else Qt.KeyboardModifier.ControlModifier
+        original = deepcopy(self.block.to_dict())
+        for key, modifiers, target in (
+            (Qt.Key.Key_Tab, control, inspector.apply_button),
+            (Qt.Key.Key_Tab, control | Qt.KeyboardModifier.ShiftModifier, inspector.alias_edit),
+            (Qt.Key.Key_Backtab, control | Qt.KeyboardModifier.ShiftModifier, inspector.alias_edit),
+        ):
+            with self.subTest(modifiers=modifiers):
+                editor.setFocus()
+                self.app.processEvents()
+                self.assertIs(self.app.focusWidget(), editor)
+                QTest.keyClick(inspector.windowHandle(), key, modifiers)
+                self.app.processEvents()
+                self.assertIs(self.app.focusWidget(), target)
+                self.assertEqual(editor.toPlainText(), "Unapplied focus draft")
+                self.assertEqual(self.block.to_dict(), original)
+                self.assertEqual(self.session.undo_stack.count(), 0)
+                self.assertIsNone(self.session.compile_manager)
+                self.assertEqual({p: p.read_bytes() for p in self.before}, self.before)
+
+    def test_composition_refresh_cancel_commit_and_undo_preserve_model_and_disk(self):
+        original = deepcopy(self.block.to_dict())
+        editor = self.inspector.content_edit
+        text = editor.toPlainText()
+        editor.moveCursor(QTextCursor.MoveOperation.End)
+        for preedit in ("zhong", "zhongwen", ""):
+            QApplication.sendEvent(editor, QInputMethodEvent(preedit, []))
+            self.inspector.refresh()
+            self.assertEqual(editor.toPlainText(), text)
+            self.assertFalse(self.session.editor_drafts)
+            self.assertEqual(self.block.to_dict(), original)
+        event = QInputMethodEvent()
+        event.setCommitString("中文")
+        QApplication.sendEvent(editor, event)
+        self.assertEqual(editor.toPlainText(), text + "中文")
+        self.assertTrue(self.session.editor_drafts)
+        self.inspector.refresh()
+        editor.undo()
+        self.assertEqual(editor.toPlainText(), text)
+        self.assertFalse(self.session.editor_drafts)
+        editor.redo()
+        self.assertEqual(editor.toPlainText(), text + "中文")
+        self.assertEqual(self.block.to_dict(), original)
+        self.assertEqual(self.session.undo_stack.count(), 0)
+        self.assertIsNone(self.session.compile_manager)
+        self.assertEqual({p: p.read_bytes() for p in self.before}, self.before)
 
     def test_refresh_preserves_unapplied_text_and_counts_it_without_model_or_io(self):
         before = deepcopy(self.block.to_dict())
@@ -195,7 +261,8 @@ class PropertyDraftTests(TestCase):
         self.addCleanup(workspace.close)
         self.session.selection.select_layout_node("nested", source="test")
         self.assertEqual(self.inspector.layout_gap.value(), 4)
-        self.assertEqual(self.inspector.layout_alignment.currentText(), "middle")
+        self.assertEqual(self.inspector.layout_alignment.currentData(), "middle")
+        self.assertEqual(self.inspector.layout_alignment.currentText(), "居中")
         self.inspector.layout_gap.setValue(9)
         self.inspector.refresh()
         self.session.selection.select_layout_node("outer", source="test")
@@ -315,7 +382,7 @@ class PropertyDraftTests(TestCase):
         self.session.layout = node
         self.session.selection.select_layout_node(node.id, source="test")
         self.assertEqual(self.inspector.layout_gap.value(), 25.4)
-        self.inspector.layout_alignment.setCurrentText("bottom")
+        self.inspector.layout_alignment.setCurrentIndex(self.inspector.layout_alignment.findData("bottom"))
         self.inspector.layout_apply.click()
         self.assertEqual(self.session.layout.gap, node.gap)
         self.assertEqual(self.session.layout.fallback, node.fallback)
@@ -327,5 +394,5 @@ class PropertyDraftTests(TestCase):
         panel = BlockLayoutPanel(self.session.registry, node)
         self.addCleanup(panel.deleteLater)
         self.assertEqual(panel.gap_spin.value(), 25.4)
-        panel.alignment_combo.setCurrentText("bottom")
+        panel.alignment_combo.setCurrentIndex(panel.alignment_combo.findData("bottom"))
         self.assertEqual(panel.layout.gap, node.gap)

@@ -82,6 +82,9 @@ class BlockProjectDialog(QDialog):
         self.session.apply_editor_drafts((("table", self.session.table_target_id),))
 
     def done(self, result):
+        from app.gui.project_checkpoint_dialog import checkpoint_close_guard
+        if not checkpoint_close_guard(self):
+            return
         if self._owns_session:
             from app.gui.blocks.close_guard import confirm_block_close
             if not confirm_block_close(self, self.session):

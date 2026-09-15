@@ -11,6 +11,7 @@ from app.core.blocks.source_registry import SourceCheckLimits
 from app.gui.blocks.project_session import ProjectSession
 from app.gui.blocks.source_status import SourceStatusController
 from app.gui.blocks.workspace_controller import BlockWorkspaceController
+from app.gui.blocks.presentation import BLOCK_LABELS, LAYOUT_LABELS, add_identity_copy, block_label
 from app.gui.insert_panel import scrollable_panel
 from app.gui.responsive.helpers import ButtonFlowLayout, configure_tab_bar
 from PySide6.QtCore import Qt, Signal
@@ -68,10 +69,11 @@ class BlockNavigationWidget(QWidget):
         self.type_filter = QComboBox()
         self.type_filter.addItem("全部类型", None)
         for block_type in BLOCK_TYPES:
-            self.type_filter.addItem(block_type, block_type)
+            self.type_filter.addItem(BLOCK_LABELS.get(block_type, "未知类型"), block_type)
         self.type_filter.currentIndexChanged.connect(self._refresh_blocks)
 
         self.block_list = QListWidget()
+        add_identity_copy(self.block_list, lambda item: item.toolTip())
         self.block_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
         self.block_list.setDragDropMode(QListWidget.DragDropMode.InternalMove)
         self.block_list.setAcceptDrops(True)
@@ -80,7 +82,7 @@ class BlockNavigationWidget(QWidget):
 
         new_menu = QMenu(self)
         for block_type in BLOCK_TYPES:
-            new_menu.addAction(block_type, lambda _checked=False, t=block_type: self.controller.add_block(t))
+            new_menu.addAction(BLOCK_LABELS.get(block_type, "未知类型"), lambda _checked=False, t=block_type: self.controller.add_block(t))
         self.new_button = QPushButton("新建 Block")
         self.new_button.setMenu(new_menu)
         self.text_ocr_button = QPushButton("文字识别…")
@@ -107,11 +109,12 @@ class BlockNavigationWidget(QWidget):
 
         # --- Layout tab ---------------------------------------------------
         self.layout_tree = QTreeWidget()
+        add_identity_copy(self.layout_tree, lambda item: item.toolTip(0))
         self.layout_tree.setHeaderHidden(True)
         self.layout_tree.itemSelectionChanged.connect(self._on_layout_selection)
-        self.add_row_button = QPushButton("新增 Row")
+        self.add_row_button = QPushButton("新增横排")
         self.add_row_button.clicked.connect(lambda: self._add_container("row"))
-        self.add_grid_button = QPushButton("新增 Grid")
+        self.add_grid_button = QPushButton("新增网格")
         self.add_grid_button.clicked.connect(lambda: self._add_container("grid"))
         self.delete_node_button = QPushButton("删除容器/槽位")
         self.delete_node_button.clicked.connect(self._delete_layout_node)
@@ -130,6 +133,7 @@ class BlockNavigationWidget(QWidget):
         self.sources_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.sources_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.sources_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.sources_table.setTabKeyNavigation(False)
         self.sources_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.sources_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self.sources_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
@@ -151,6 +155,7 @@ class BlockNavigationWidget(QWidget):
         self.source_details.setReadOnly(True)
         self.source_details.setMinimumHeight(100)
         self.affected_blocks = QListWidget()
+        add_identity_copy(self.affected_blocks, lambda item: item.toolTip())
         self.affected_blocks.itemActivated.connect(self._locate_source_block)
         self.locate_source_block_button = QPushButton("定位所选关联 Block")
         self.locate_source_block_button.clicked.connect(self._locate_source_block)
@@ -166,8 +171,8 @@ class BlockNavigationWidget(QWidget):
         self.source_status.changed.connect(self._refresh_sources)
 
         self.tabs = QTabWidget()
-        self.tabs.addTab(scrollable_panel(blocks_tab), "Blocks")
-        self.tabs.addTab(scrollable_panel(layout_tab), "Layout")
+        self.tabs.addTab(scrollable_panel(blocks_tab), "内容")
+        self.tabs.addTab(scrollable_panel(layout_tab), "布局")
         self.tabs.addTab(scrollable_panel(sources_tab), "来源")
         configure_tab_bar(self.tabs)
         outer = QVBoxLayout(self)
@@ -258,29 +263,42 @@ class BlockNavigationWidget(QWidget):
             if query and query not in block.alias.lower() and query not in block.id.lower():
                 continue
             marker = "" if block.id in used else "（未使用）"
-            item = QListWidgetItem(f"{block.type}: {block.alias} {marker}")
+            item = QListWidgetItem(f"{block_label(block)} {marker}")
+            item.setToolTip(f"Block：{block.id}\n类型：{block.type}")
             item.setData(256, block.id)
             item.setSelected(block.id in selected_ids)
             self.block_list.addItem(item)
         self.block_list.blockSignals(False)
 
     def _refresh_layout(self) -> None:
+        current = self.layout_tree.currentItem()
+        selected = current.data(0, 256) if current is not None else None
         self.layout_tree.blockSignals(True)
         self.layout_tree.clear()
         if self.session.layout is None:
             QTreeWidgetItem(self.layout_tree, ["（空布局）"])
         else:
-            self._add_layout_node(None, self.session.layout)
+            root = self._add_layout_node(None, self.session.layout)
+            self.layout_tree.addTopLevelItem(root)
             self.layout_tree.expandAll()
+            def restore(item):
+                if selected is not None and item.data(0, 256) == selected:
+                    self.layout_tree.setCurrentItem(item)
+                for index in range(item.childCount()):
+                    restore(item.child(index))
+            restore(root)
         self.layout_tree.blockSignals(False)
 
     def _add_layout_node(self, parent: QTreeWidgetItem | None, node) -> QTreeWidgetItem:
         if not hasattr(node, "kind"):
-            item = QTreeWidgetItem(parent, [f"槽：{node.blockId}"])
+            block = self.session.registry.get(node.blockId)
+            item = QTreeWidgetItem(parent, [block_label(block) if block else "缺失的内容"])
             item.setData(0, 256, ("slot", node.instanceId))
+            item.setToolTip(0, f"位置：{node.instanceId}\nBlock：{node.blockId}")
             return item
-        item = QTreeWidgetItem(parent, [f"{node.kind}: {node.id}"])
+        item = QTreeWidgetItem(parent, [f"{LAYOUT_LABELS.get(node.kind, '布局')} · {len(node.children)} 项"])
         item.setData(0, 256, ("node", node.id))
+        item.setToolTip(0, f"布局：{node.id}\n类型：{node.kind}")
         for child in node.children:
             self._add_layout_node(item, child)
         return item
@@ -350,7 +368,8 @@ class BlockNavigationWidget(QWidget):
                       f"累计 {limits.max_total_bytes // (1024 * 1024)} MiB；超限或读取失败为未知。"])
         self.source_details.setPlainText("\n".join(lines))
         for block in self._source_blocks(source_id):
-            item = QListWidgetItem(f"{block.alias or block.id} · {block.type} · {block.id}")
+            item = QListWidgetItem(block_label(block))
+            item.setToolTip(f"Block：{block.id}\n来源：{source_id}")
             item.setData(Qt.ItemDataRole.UserRole, block.id)
             self.affected_blocks.addItem(item)
         if self.affected_blocks.count():

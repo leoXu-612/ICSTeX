@@ -12,6 +12,9 @@ from app.core.compiler import BuildPurpose
 from app.gui.project_profile_dialog import show_project_profile
 from app.gui.project_checkpoint_dialog import show_project_checkpoint
 from app.gui.project_recovery_dialog import show_recovery_drafts
+from app.gui.block_write_recovery_dialog import show_block_write_recovery
+from app.gui.project_migration_dialog import show_project_migration
+from app.gui.table_navigation import enable_table_key_activation
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from app.gui.main_window import MainWindow
@@ -24,6 +27,9 @@ def connect_signals(window: "MainWindow") -> None:
     window.project_checkpoint_action.triggered.connect(lambda: show_project_checkpoint(window))
     window.restore_checkpoint_action.triggered.connect(lambda: show_project_checkpoint(window, restore=True))
     window.recovery_drafts_action.triggered.connect(lambda: show_recovery_drafts(window))
+    window.write_recovery_action.triggered.connect(lambda: show_block_write_recovery(window))
+    window.migrate_project_action.triggered.connect(lambda: show_project_migration(window))
+    window.prepare_submission_action.triggered.connect(window.prepare_submission)
     window.new_action.triggered.connect(window.new_document)
     window.open_file_action.triggered.connect(window.open_file_dialog)
     window.open_folder_action.triggered.connect(window.open_folder_dialog)
@@ -61,7 +67,10 @@ def connect_signals(window: "MainWindow") -> None:
     window.import_perf_action.triggered.connect(window.show_import_perf_dialog)
     window.block_project_action.triggered.connect(window.show_block_project_dialog)
     window.user_guide_action.triggered.connect(window.show_user_guide)
+    from app.gui.main_window_layout import show_console, reveal_workspace_widget
+    window.word_count_action.triggered.connect(lambda: show_console(window, window.word_count_panel))
     window.word_count_action.triggered.connect(lambda: window.update_word_count(force=True))
+    window.pdf_panel.revealRequested.connect(lambda widget: reveal_workspace_widget(window, widget))
     window.sync_pdf_action.triggered.connect(window.sync_current_source_to_pdf)
     window.engine_selector.currentIndexChanged.connect(window.on_engine_selector_changed)
 
@@ -86,6 +95,9 @@ def connect_signals(window: "MainWindow") -> None:
     window.tree.doubleClicked.connect(window.open_tree_item)
     window.tree.customContextMenuRequested.connect(window.show_file_tree_context_menu)
     window.error_table.cellDoubleClicked.connect(window.jump_to_error)
+    window.error_table.cellActivated.connect(window.jump_to_error)
+    enable_table_key_activation(window.error_table)
+    window.error_table.setToolTip("方向键移动，空格选中当前行，Return/Enter 定位；Tab 切换控件。")
 
     # Compile signals + PDF
     window.signals.external_changed.connect(window.reload_external_change)

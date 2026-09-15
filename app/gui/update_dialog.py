@@ -35,7 +35,8 @@ class AppUpdateDialog(QDialog):
         self.status.setWordWrap(True)
         self.status.setAccessibleName("更新状态")
         layout.addWidget(self.status)
-        self.automatic = QCheckBox("每天自动检查更新（仅在 ICSTeX 运行时）")
+        self.automatic = QCheckBox("启动时自动检查更新，运行期间每天复查")
+        self.automatic.setToolTip("开启后，启动延后 30 秒检查；连续重启间隔不足 5 分钟时延后检查。编译或导出期间暂缓。")
         self.automatic.toggled.connect(self.automatic_changed)
         layout.addWidget(self.automatic)
         self.privacy = QLabel(

@@ -144,6 +144,15 @@ def explain_latex_error(error: LaTeXError, *, root_file: Path | None = None) -> 
     lower = raw.lower()
     file = error.file or root_file
 
+    if raw.startswith("luaotfload: FATAL ERROR"):
+        return Diagnostic(
+            severity=SEVERITY_ERROR,
+            title="LuaLaTeX 字体组件失败",
+            message="luaotfload 字体组件报告致命错误。请查看原始日志并检查工具链与文件访问配置；"
+                    "这不等同于正文语法错误。不会自动放宽读取限制或切换引擎。",
+            raw_message=raw,
+        )
+
     if "undefined control sequence" in lower:
         command = _extract_command(raw)
         package = COMMAND_PACKAGE_HINTS.get(command or "")

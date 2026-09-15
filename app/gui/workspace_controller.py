@@ -6,8 +6,8 @@ read project contents, create managers, write files or authorize compilation.
 from __future__ import annotations
 
 from PySide6.QtCore import QEvent, QObject, QTimer, Qt, Slot
-from PySide6.QtGui import QAction
-from PySide6.QtWidgets import (QHBoxLayout, QLabel, QMenu, QSizePolicy, QToolBar, QToolButton,
+from PySide6.QtGui import QAction, QTextCursor
+from PySide6.QtWidgets import (QHBoxLayout, QLabel, QMenu, QPlainTextEdit, QSizePolicy, QToolBar, QToolButton,
                                QVBoxLayout, QWidget)
 
 from app.core.compiler import BuildPurpose
@@ -43,6 +43,45 @@ class _SummaryLabel(QLabel):
             self.describe(self.full_text)
 
 
+class _DetailsText(QPlainTextEdit):
+    """Full, selectable status text in a bounded, font-aware reading area."""
+
+    def __init__(self):
+        super().__init__()
+        self.full_text = ""
+        self.setObjectName("workspaceDetails")
+        self.setAccessibleName("项目状态（只读）")
+        self.setReadOnly(True)
+        self.setTabChangesFocus(True)
+        self.setMinimumWidth(0)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        self._resize_to_font()
+
+    def describe(self, text):
+        if text == self.full_text:
+            return
+        previous = self.textCursor()
+        anchor, position = previous.anchor(), previous.position()
+        scroll = self.verticalScrollBar().value()
+        self.full_text = text
+        self.setPlainText(text)
+        cursor = self.textCursor()
+        end = self.document().characterCount() - 1
+        cursor.setPosition(min(anchor, end))
+        cursor.setPosition(min(position, end), QTextCursor.MoveMode.KeepAnchor)
+        self.setTextCursor(cursor)
+        self.verticalScrollBar().setValue(scroll)
+
+    def _resize_to_font(self):
+        self.setFixedHeight(self.fontMetrics().lineSpacing() * 3 +
+                            round(self.document().documentMargin() * 2) + 2 * self.frameWidth() + 4)
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() in (QEvent.Type.FontChange, QEvent.Type.StyleChange):
+            self._resize_to_font()
+
+
 class WorkspaceController(QObject):
     def __init__(self, window):
         super().__init__(window)
@@ -52,7 +91,9 @@ class WorkspaceController(QObject):
         self.bar.setObjectName("workspaceHeader")
         self.bar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.title = _SummaryLabel()
-        self.details = _SummaryLabel()
+        self.title.setObjectName("workspaceSummary")
+        self.details = _DetailsText()
+        self.details.hide()
         self.next_button = QToolButton()
         self.next_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         self.navigation = QToolButton()
@@ -66,20 +107,19 @@ class WorkspaceController(QObject):
         row.addWidget(self.navigation)
         row.addWidget(self.next_button)
         layout = QVBoxLayout(self.bar)
-        layout.setContentsMargins(10, 5, 10, 5)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(3)
         layout.addLayout(row)
         layout.addWidget(self.details)
         self.save_action = QAction("保存项目文档", self)
         self.save_action.triggered.connect(self._save_project)
-        # A full-width row stays readable when both Block side docks are open.
-        # Keep the existing central stack and PDF ownership untouched.
+        # Ordinary writing shares the main toolbar row; Block keeps a separate
+        # row when its context requires more controls.
         self.toolbar = QToolBar("项目工作区", window)
         self.toolbar.setObjectName("workspaceToolbar")
         self.toolbar.setMovable(False)
         self.toolbar.setFloatable(False)
         self.toolbar.addWidget(self.bar)
-        window.addToolBarBreak(Qt.ToolBarArea.TopToolBarArea)
         window.addToolBar(Qt.ToolBarArea.TopToolBarArea, self.toolbar)
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
@@ -204,11 +244,15 @@ class WorkspaceController(QObject):
         mode = "Block（元数据驱动）" if session else "源码（LaTeX 为准）"
         name = scope.name if scope else "未选择项目"
         entry = str(root.relative_to(scope)) if root and scope and root.is_relative_to(scope) else "待确认"
-        self.title.describe(f"{name} · {mode} · {check_text}")
-        self.details.describe(f"入口：{entry} · 保存：{save_text} · 引擎：{engine.display_name} · PDF：{pdf_text}")
+        self.title.describe(f"{name} · {'Block' if session else '源码'} · {save_text}")
+        self.details.describe(f"入口：{entry}\n保存：{save_text}\n引擎：{engine.display_name}\nPDF：{pdf_text}\n{check_text}")
+        self.title.setToolTip(f"{name} · {mode}\n{self.details.full_text}\n{check_text}")
+        self._check_text = check_text
         self.next_button.setDefaultAction(action)
         self.next_button.setText(next_text)
         self.next_button.setToolTip("显式执行下一步；不会因状态变化而自动运行。")
+        self.next_button.setVisible(action not in (window.compile_action, window.stop_compile_action,
+            window.block_save_action, window.block_compile_action, window.block_stop_action))
         window.status_engine_label.setText(engine.display_name)
 
     @Slot()
@@ -218,7 +262,7 @@ class WorkspaceController(QObject):
             return
         if root is None:
             self.window.save_current()
-        elif not self.window.documents.flush_root_documents(root):
+        elif not self.window.documents.request_root_save(root):
             self.window.statusBar().showMessage("项目尚未全部保存；请先处理冲突或另存为。", 5000)
         self.window.readiness.invalidate()
         self.schedule()
@@ -227,9 +271,17 @@ class WorkspaceController(QObject):
     def _build_navigation(self):
         self.menu.clear()
         window = self.window
+        details = self.menu.addAction("展开项目状态")
+        details.setCheckable(True)
+        details.setChecked(not self.details.isHidden())
+        details.toggled.connect(self.details.setVisible)
+        self.menu.addSection(getattr(self, "_check_text", "提交检查：待刷新"))
         if self._block():
             for action in (window.block_save_action, window.block_compile_action, window.block_stop_action):
                 self.menu.addAction(action)
+            self.menu.addSeparator()
+            for key in ("navigation", "inspector", "diagnostics"):
+                self.menu.addAction(window.block_panels.docks[key].toggleViewAction())
             self.menu.addSeparator()
             for label, index in (("内容", 0), ("布局", 1), ("素材与来源", 2)):
                 self.menu.addAction(label).triggered.connect(lambda _checked=False, index=index: self._block_navigation(index))
@@ -251,7 +303,7 @@ class WorkspaceController(QObject):
 
     def _block_navigation(self, index):
         if self._block() is not None:
-            self.window.block_nav_dock.show()
+            self.window.block_panels.request("navigation")
             self.window.block_nav.tabs.setCurrentIndex(index)
 
     def shutdown(self):

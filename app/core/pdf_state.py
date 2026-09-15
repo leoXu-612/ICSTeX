@@ -91,6 +91,11 @@ class PdfStateStore:
         self._records: dict[Path, PdfBuildRecord] = {}
 
     def record_for(self, root: str | Path) -> PdfBuildRecord:
+        # Registered canonical paths are state identities, not fresh filesystem
+        # queries. Typing must not resolve them again on every revision update.
+        record = self._records.get(root)
+        if record is not None:
+            return record
         key = normalize_path(root)
         record = self._records.get(key)
         if record is None:

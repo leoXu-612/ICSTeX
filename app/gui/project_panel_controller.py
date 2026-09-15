@@ -100,7 +100,8 @@ class ProjectPanelController:
         if index >= 0:
             window.bottom_tabs.setTabText(index, f"检查 {len(diagnostics)}" if diagnostics else "检查")
         if switch_to_panel:
-            window.bottom_tabs.setCurrentWidget(window.diagnostic_panel)
+            from app.gui.main_window_layout import show_console
+            show_console(window, window.diagnostic_panel)
         if diagnostics:
             window.statusBar().showMessage(f"当前源码静态检查：{len(diagnostics)} 项提示；不代表完整提交检查。", 4000)
         else:
@@ -264,7 +265,7 @@ class ProjectPanelController:
             self._dirty.difference_update(domains)
             return
 
-        key = (id(tab.editor), tab.editor.document().revision(), tab.path)
+        key = (id(tab.editor), tab.editor.source_revision, tab.path)
         if key != self._source_key:
             self._source_key = key
             self._source_text = tab.editor.toPlainText()
@@ -308,6 +309,7 @@ class ProjectPanelController:
             if "references" in domains:
                 window.references_panel.set_references(
                     self._bib_keys, undefined_citations(tex_text, self._bib_text),
+                    library_path=bib_path,
                 )
             if "completion" in domains:
                 tab.editor.set_completion_context(

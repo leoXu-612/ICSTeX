@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import os
+import signal
 import subprocess
 import threading
 from tempfile import TemporaryDirectory
@@ -21,7 +22,100 @@ from app.core.latex_tools import LaTeXEngine, LaTeXToolchain
 
 
 class CompileManagerTests(TestCase):
-    def test_restricted_io_uses_relative_arguments_and_paranoid_tex_environment(self) -> None:
+    @patch("app.core.compiler.sys.platform", "linux")
+    def test_fast_lossless_compression_is_only_for_unrestricted_xelatex_preview(self):
+        for engine in (LaTeXEngine.XELATEX, LaTeXEngine.PDFLATEX, LaTeXEngine.LUALATEX):
+            for purpose in (BuildPurpose.PREVIEW, BuildPurpose.FINAL):
+                for restricted in (False, True):
+                    with self.subTest(engine=engine, purpose=purpose, restricted=restricted), TemporaryDirectory() as directory:
+                        root = Path(directory) / "main.tex"
+                        root.write_text("\\documentclass{article}", encoding="utf-8")
+                        manager = CompileManager(root, engine=engine, restricted_io=restricted,
+                            toolchain=LaTeXToolchain("/bin/latexmk", "/bin/pdflatex", "/bin/xelatex", "/bin/lualatex"))
+
+                        class FakeProcess:
+                            returncode = 1
+
+                            def communicate(self, timeout=None):
+                                return "", ""
+
+                        with patch("app.core.compiler.subprocess.Popen", return_value=FakeProcess()) as popen:
+                            manager.compile_now(purpose)
+                        command = popen.call_args.args[0]
+                        optimized = engine is LaTeXEngine.XELATEX and purpose is BuildPurpose.PREVIEW and not restricted
+                        self.assertEqual("-e" in command, optimized)
+                        if optimized:
+                            self.assertIn("-z 1", command[command.index("-e") + 1])
+                        self.assertIn("-no-shell-escape", command)
+                        self.assertIn("-norc", command)
+                        self.assertEqual("-g" in command, purpose is BuildPurpose.FINAL)
+
+    def test_final_captures_only_actual_stdout_without_another_tool_process(self) -> None:
+        from app.core.build_evidence import final_build_evidence
+        from tests.test_build_tool_versions import PDF
+        for purpose in (BuildPurpose.FINAL, BuildPurpose.PREVIEW):
+            with self.subTest(purpose=purpose), TemporaryDirectory() as directory:
+                root = Path(directory) / "main.tex"
+                root.write_text("\\documentclass{article}", encoding="utf-8")
+                manager = CompileManager(root, toolchain=LaTeXToolchain(None, "/bin/pdflatex"))
+                manager.set_input_revision(17)
+
+                class FakeProcess:
+                    returncode = 0
+
+                    def communicate(self, timeout=None):
+                        manager.pdf_file_for(purpose).write_bytes(b"%PDF-1.4 synthetic")
+                        # Cached log is not version evidence; current stdout is.
+                        manager.log_file_for(purpose).write_text(PDF.replace("1.40.27", "1.40.99"))
+                        return PDF, "This is pdfTeX, Version 9.9"
+
+                with patch("app.core.compiler.subprocess.Popen", return_value=FakeProcess()) as popen:
+                    result = manager.compile_now(purpose)
+                self.assertEqual(popen.call_count, 1)
+                self.assertTrue(result.ok)
+                if purpose is BuildPurpose.FINAL:
+                    self.assertEqual(result.tool_versions.engine.version, "3.141592653-2.6-1.40.27")
+                    proof = final_build_evidence(result)
+                    self.assertEqual(proof.job_key.source_revision, 17)
+                    self.assertIs(proof.tool_versions, result.tool_versions)
+                    manager.engine = LaTeXEngine.XELATEX
+                    self.assertEqual(proof.tool_versions.engine.program, "pdfTeX")
+                else:
+                    self.assertIsNone(result.tool_versions)
+                    self.assertIsNone(final_build_evidence(result))
+
+    def test_final_forces_latexmk_rules_without_cleaning_or_changing_preview(self) -> None:
+        for driver in (None, "/bin/latexmk"):
+            for purpose in (BuildPurpose.FINAL, BuildPurpose.PREVIEW):
+                with self.subTest(driver=driver, purpose=purpose), TemporaryDirectory() as directory:
+                    tex = Path(directory) / "main.tex"
+                    tex.write_text("\\documentclass{article}", encoding="utf-8")
+                    manager = CompileManager(
+                        tex, toolchain=LaTeXToolchain(latexmk=driver, pdflatex="/bin/pdflatex"),
+                    )
+                    pdf = manager.pdf_file_for(purpose)
+                    pdf.parent.mkdir(parents=True)
+                    pdf.write_bytes(b"%PDF-1.4 cached but unrelated")
+
+                    class FakeProcess:
+                        returncode = 0
+
+                        def communicate(self, timeout=None):
+                            return "", ""
+
+                    with patch("app.core.compiler.subprocess.Popen", return_value=FakeProcess()) as popen:
+                        result = manager.compile_now(purpose)
+                    self.assertIsNotNone(result)
+                    command = popen.call_args.args[0]
+                    self.assertEqual("-g" in command, bool(driver and purpose is BuildPurpose.FINAL))
+                    self.assertFalse({"-gg", "-C", "-c", "-f"}.intersection(command))
+                    self.assertIn("-no-shell-escape", command)
+                    if driver:
+                        self.assertIn("-norc", command)
+                    self.assertEqual(pdf.read_bytes(), b"%PDF-1.4 cached but unrelated")
+
+    @patch("app.core.compiler.sys.platform", "linux")
+    def test_non_macos_restricted_io_keeps_relative_arguments_and_paranoid_environment(self) -> None:
         with TemporaryDirectory() as directory:
             root = Path(directory)
             tex = root / "main.tex"
@@ -274,6 +368,7 @@ class CompileManagerTests(TestCase):
             run.assert_not_called()
             self.assertTrue(manager.wait_until_idle(0))
 
+    @patch("app.core.compiler.sys.platform", "linux")
     def test_job_configuration_and_recorder_are_captured_before_callback(self) -> None:
         with TemporaryDirectory() as directory:
             root = Path(directory).resolve()
@@ -670,6 +765,23 @@ class CompileOutcomeTests(TestCase):
 
     @skipIf(os.name == "nt", "process groups differ on Windows")
     def test_timeout_kills_entire_process_tree(self) -> None:
+        self._assert_timeout_kills_ready_process_tree(startup_delay=0)
+
+    @skipIf(os.name == "nt", "process groups differ on Windows")
+    def test_timeout_tree_fixture_waits_for_slow_engine_startup(self) -> None:
+        self._assert_timeout_kills_ready_process_tree(startup_delay=1.2)
+
+    @skipIf(os.name == "nt", "process groups differ on Windows")
+    def test_timeout_tree_fixture_detects_driver_only_termination(self) -> None:
+        # A broken kill must fail before the sleeping child exits naturally;
+        # the fixture's cleanup must not turn it into a false green result.
+        with patch.object(CompileManager, "_terminate_process", side_effect=lambda process: process.terminate()):
+            with self.assertLogs("app.core.compiler", level="ERROR") as captured:
+                with self.assertRaisesRegex(AssertionError, "INTERNAL_ERROR.*TIMEOUT"):
+                    self._assert_timeout_kills_ready_process_tree(startup_delay=0)
+            self.assertIn("TimeoutExpired", captured.output[0])
+
+    def _assert_timeout_kills_ready_process_tree(self, *, startup_delay: float) -> None:
         # A real driver (like latexmk) spawns an engine child that inherits the
         # stdout/stderr pipes. Killing only the driver would leave the engine
         # holding the pipe open, so the post-timeout communicate() could block
@@ -682,9 +794,11 @@ class CompileOutcomeTests(TestCase):
             driver = root / "fake-driver.py"
             driver.write_text(
                 "#!/usr/bin/env python3\n"
-                "import subprocess, sys\n"
-                "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])\n"
-                "open('grandchild.pid', 'w').write(str(child.pid))\n"
+                "import subprocess, sys, time\n"
+                f"time.sleep({startup_delay!r})\n"
+                "child = subprocess.Popen([sys.executable, '-c', "
+                "\"import os, time; from pathlib import Path; "
+                "Path('grandchild.pid').write_text(str(os.getpid())); time.sleep(30)\"])\n"
                 "child.wait()\n",
                 encoding="utf-8",
             )
@@ -699,18 +813,61 @@ class CompileOutcomeTests(TestCase):
                 ),
             )
 
-            result = manager.compile_now(timeout_seconds=1.0)
+            real_popen = subprocess.Popen
+            processes = []
+            ready_children = []
 
-            self.assertIsNotNone(result)
-            assert result is not None
-            self.assertEqual(result.outcome, CompileOutcome.TIMEOUT)
-            grandchild_pid = int((root / "grandchild.pid").read_text(encoding="utf-8").strip())
-            dead = False
-            for _ in range(30):
-                try:
-                    os.kill(grandchild_pid, 0)
-                except ProcessLookupError:
-                    dead = True
-                    break
-                time.sleep(0.1)
-            self.assertTrue(dead, "engine child survived the compile timeout")
+            def ready_driver(command, **kwargs):
+                process = real_popen(command, **kwargs)
+                processes.append(process)
+                real_communicate = process.communicate
+
+                def bounded_communicate(input=None, timeout=None):
+                    # Only bound the fixture's post-kill pipe drain. The actual
+                    # production timeout remains unchanged and runs for real.
+                    return real_communicate(input=input, timeout=3 if timeout is None else timeout)
+
+                process.communicate = bounded_communicate
+                # This case tests termination of an existing descendant, not
+                # interpreter startup speed. Wait outside communicate's real
+                # timeout; missing/failed setup is a bounded assertion failure.
+                deadline = time.monotonic() + 10
+                while time.monotonic() < deadline:
+                    self.assertIsNone(process.poll(), "test driver exited before engine readiness")
+                    try:
+                        child_pid = int((root / "grandchild.pid").read_text(encoding="utf-8"))
+                    except (FileNotFoundError, ValueError):
+                        time.sleep(0.01)
+                        continue
+                    os.kill(child_pid, 0)
+                    self.assertEqual(os.getpgid(child_pid), process.pid)
+                    ready_children.append(child_pid)
+                    return process
+                self.fail("test engine did not report readiness within 10 seconds")
+
+            try:
+                with patch("app.core.compiler.subprocess.Popen", side_effect=ready_driver):
+                    result = manager.compile_now(timeout_seconds=1.0)
+                self.assertIsNotNone(result)
+                assert result is not None
+                self.assertEqual(result.outcome, CompileOutcome.TIMEOUT)
+                self.assertEqual(len(ready_children), 1)
+                grandchild_pid = ready_children[0]
+                dead = False
+                for _ in range(30):
+                    try:
+                        os.kill(grandchild_pid, 0)
+                    except ProcessLookupError:
+                        dead = True
+                        break
+                    time.sleep(0.1)
+                self.assertTrue(dead, "engine child survived the compile timeout")
+            finally:
+                # Cleanup happens after the descendant-death assertion. It
+                # cannot manufacture a pass if production termination fails.
+                for process in processes:
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    process.communicate(timeout=3)

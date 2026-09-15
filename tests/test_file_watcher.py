@@ -13,6 +13,42 @@ from app.core.file_watcher import ExternalFileWatcher
 
 
 class ExternalFileWatcherTests(TestCase):
+    def test_deferred_memberships_do_not_block_gui_on_metadata_and_coalesce_latest(self):
+        with TemporaryDirectory() as directory:
+            scope = Path(directory).resolve()
+            old, latest = scope / "old.tex", scope / "latest.tex"
+            old.write_text("old")
+            latest.write_text("latest")
+            watcher = ExternalFileWatcher(lambda _path: None)
+            entered, release = threading.Event(), threading.Event()
+            threads = []
+            original = watcher._signature
+
+            def delayed(path):
+                threads.append(threading.get_ident())
+                if not entered.is_set():
+                    entered.set()
+                    release.wait(3)
+                return original(path)
+
+            try:
+                with patch.object(watcher, "_signature", side_effect=delayed):
+                    watcher.set_paths("dependency", {old}, canonical=True, defer_metadata=True)
+                    self.assertTrue(entered.wait(1))
+                    for _ in range(10):
+                        watcher.set_paths("dependency", {latest}, canonical=True, defer_metadata=True)
+                    self.assertEqual(len(watcher._pending_memberships), 1)
+                    release.set()
+                    until = time.monotonic() + 3
+                    while watcher.has_pending_memberships and time.monotonic() < until:
+                        time.sleep(.005)
+                    self.assertFalse(watcher.has_pending_memberships)
+                    self.assertEqual(watcher._files, {latest})
+                    self.assertNotIn(threading.get_ident(), threads)
+            finally:
+                release.set()
+                watcher.stop()
+
     def test_profile_opt_in_does_not_enable_other_metadata_or_outputs(self):
         with TemporaryDirectory() as directory:
             root = Path(directory).resolve()

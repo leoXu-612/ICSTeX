@@ -14,7 +14,10 @@ from functools import wraps
 import re
 
 from PySide6.QtCore import QEvent, QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QFontMetricsF, QKeyEvent, QKeySequence, QPainter, QPen
+from PySide6.QtGui import (
+    QColor, QFont, QFontMetricsF, QInputMethodEvent, QKeyEvent, QKeySequence,
+    QPainter, QPen, QTextCharFormat, QTextLayout,
+)
 from PySide6.QtWidgets import QApplication, QWidget
 
 from app.core.formula_tree import (
@@ -32,10 +35,11 @@ from app.core.formula_tree import (
     symbol_display,
 )
 from app.core.formula_input import recognize_formula
+from app.gui.theme import COLOR_ACCENT, COLOR_SELECTED
 
 
-_CARET = QColor(35, 110, 200)
-_SELECTION = QColor(170, 205, 245, 130)
+_CARET = QColor(COLOR_ACCENT)
+_SELECTION = QColor(COLOR_SELECTED)
 _SLOT_HINT = QColor(160, 160, 160, 90)
 _TEXT = QColor(30, 30, 30)
 _BACKGROUND = QColor(255, 255, 255)
@@ -119,6 +123,9 @@ def _edit_operation(method):
     @wraps(method)
     def wrapped(self, *args, **kwargs):
         outer = self._edit_depth == 0
+        if (outer and method.__name__ not in ("inputMethodEvent", "set_latex")
+                and not self.finish_composition()):
+            return
         if outer:
             before = self.latex()
         self._edit_depth += 1
@@ -150,9 +157,14 @@ class MathEditorWidget(QWidget):
         self._undo: list[tuple[MathSequence, list[tuple[str, int, int]], int]] = []
         self._redo: list[tuple[MathSequence, list[tuple[str, int, int]], int]] = []
         self._pending_command = ""
+        self._preedit = ""
+        self._preedit_attributes = []
+        self._composition_undo = None
         self.setMinimumHeight(90)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAttribute(Qt.WidgetAttribute.WA_InputMethodEnabled)
         self.setAccessibleName("可视公式编辑区")
+        self.stateChanged.connect(self._update_input_method)
 
     # ------------------------------------------------------------------
     # Public API
@@ -160,6 +172,7 @@ class MathEditorWidget(QWidget):
 
     @_edit_operation
     def set_latex(self, text: str) -> None:
+        self._reset_composition()
         self.root = parse_math_latex(text)
         self.path = [("root", 0, -1)]
         self.index = len(_boundaries(self.root))
@@ -412,22 +425,27 @@ class MathEditorWidget(QWidget):
                 return
         self.insert_text(text)
 
+    @_edit_operation
     def cursor_left(self, select: bool = False) -> None:
         self._selection_for_move(select)
         self._move_horizontal(-1)
 
+    @_edit_operation
     def cursor_right(self, select: bool = False) -> None:
         self._selection_for_move(select)
         self._move_horizontal(1)
 
+    @_edit_operation
     def cursor_up(self, select: bool = False) -> None:
         self._selection_for_move(select)
         self._move_vertical(-1)
 
+    @_edit_operation
     def cursor_down(self, select: bool = False) -> None:
         self._selection_for_move(select)
         self._move_vertical(1)
 
+    @_edit_operation
     def cursor_tab(self, backwards: bool = False) -> None:
         self.anchor = None
         slots = self._all_slots()
@@ -439,11 +457,13 @@ class MathEditorWidget(QWidget):
         next_slot = slots[(current_index + (-1 if backwards else 1)) % len(slots)]
         self._jump_into_slot(next_slot, 0)
 
+    @_edit_operation
     def cursor_home(self, select: bool = False) -> None:
         self._selection_for_move(select)
         self.index = 0
         self.update()
 
+    @_edit_operation
     def cursor_end(self, select: bool = False) -> None:
         self._selection_for_move(select)
         slot = self._resolve_slot()
@@ -549,6 +569,7 @@ class MathEditorWidget(QWidget):
         self._pending_command = ""
         self.update()
 
+    @_edit_operation
     def select_all(self) -> None:
         self.anchor = ([("root", 0, -1)], 0)
         self.path = [("root", 0, -1)]
@@ -570,6 +591,167 @@ class MathEditorWidget(QWidget):
     @_edit_operation
     def commit_pending_command(self) -> None:
         self._finish_pending_command()
+
+    # ------------------------------------------------------------------
+    # Input methods. The surrounding text is the current mathematical slot;
+    # structural nodes are atomic object characters, never editable TeX bytes.
+    # Preedit is a painted overlay and is excluded from LaTeX and undo history.
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _input_text(items) -> str:
+        return "".join(item.text if isinstance(item, Text) else "\ufffc" for item in items)
+
+    @staticmethod
+    def _utf16_length(text: str) -> int:
+        return len(text.encode("utf-16-le")) // 2
+
+    @classmethod
+    def _input_position(cls, slot: MathSequence, index: int) -> int:
+        boundaries = _boundaries(slot)
+        if index >= len(boundaries):
+            return len(cls._input_text(slot.items))
+        boundary = boundaries[max(0, index)]
+        return len(cls._input_text(slot.items[:boundary.item_index])) + boundary.offset
+
+    @classmethod
+    def _input_index(cls, slot: MathSequence, position: int) -> int:
+        starts = []
+        total = 0
+        for item in slot.items:
+            starts.append(total)
+            total += len(item.text) if isinstance(item, Text) else 1
+        boundaries = _boundaries(slot)
+        for index, boundary in enumerate(boundaries):
+            if starts[boundary.item_index] + boundary.offset == position:
+                return index
+        return len(boundaries)
+
+    @staticmethod
+    def _input_offsets(text: str) -> dict[int, int]:
+        offsets = {0: 0}
+        total = 0
+        for index, char in enumerate(text):
+            total += 2 if ord(char) > 0xffff else 1
+            offsets[total] = index + 1
+        return offsets
+
+    @staticmethod
+    def _input_slice(items, start: int, end: int):
+        result = []
+        position = 0
+        for item in items:
+            width = len(item.text) if isinstance(item, Text) else 1
+            low, high = max(start, position), min(end, position + width)
+            if low < high:
+                result.append(Text(item.text[low - position:high - position])
+                              if isinstance(item, Text) else item)
+            position += width
+        return result
+
+    def _update_input_method(self) -> None:
+        if self.hasFocus():
+            QApplication.inputMethod().update(Qt.InputMethodQuery.ImQueryAll)
+
+    def _reset_composition(self) -> None:
+        if self._preedit and self.hasFocus():
+            QApplication.inputMethod().reset()
+        self._preedit = ""
+        self._preedit_attributes = []
+        self._composition_undo = None
+
+    @property
+    def has_preedit(self) -> bool:
+        return bool(self._preedit)
+
+    def finish_composition(self) -> bool:
+        if self._preedit and self.hasFocus():
+            QApplication.inputMethod().commit()
+        # Never invent a candidate or silently apply an incomplete preedit.
+        return not self._preedit
+
+    def inputMethodQuery(self, query):
+        slot = self._resolve_slot()
+        text = self._input_text(slot.items)
+        position = self._input_position(slot, self.index)
+        anchor = (self._input_position(slot, self.anchor[1])
+                  if self.anchor is not None and self.anchor[0] == self.path else position)
+        values = {
+            Qt.InputMethodQuery.ImEnabled: self.isEnabled(),
+            Qt.InputMethodQuery.ImFont: QFont("Menlo", 15),
+            Qt.InputMethodQuery.ImSurroundingText: text,
+            Qt.InputMethodQuery.ImCursorPosition: self._utf16_length(text[:position]),
+            Qt.InputMethodQuery.ImAnchorPosition: self._utf16_length(text[:anchor]),
+            Qt.InputMethodQuery.ImAbsolutePosition: self._utf16_length(text[:position]),
+            Qt.InputMethodQuery.ImCurrentSelection: text[min(anchor, position):max(anchor, position)],
+            Qt.InputMethodQuery.ImTextBeforeCursor: text[:position],
+            Qt.InputMethodQuery.ImTextAfterCursor: text[position:],
+        }
+        if query == Qt.InputMethodQuery.ImCursorRectangle:
+            font, small, big, box = self._paint_layout()
+            rect = self._caret_rect(box, font) or QRectF(10, 10, 1, 20)
+            if self._preedit:
+                layout, cursor, _visible, _color = self._preedit_layout(font)
+                x, _position = layout.lineAt(0).cursorToX(cursor)
+                rect.translate(x, 0)
+            return rect
+        return values[query] if query in values else super().inputMethodQuery(query)
+
+    @_edit_operation
+    def inputMethodEvent(self, event: QInputMethodEvent) -> None:
+        starting = not self._preedit
+        if starting and (event.preeditString() or event.commitString()):
+            self._finish_pending_command()
+        slot = self._resolve_slot()
+        items = slot.items
+        text = self._input_text(items)
+        position = self._input_position(slot, self.index)
+        has_edit = bool(event.preeditString() or event.commitString() or event.replacementLength())
+        selected = self.anchor is not None and self.anchor[0] == self.path and has_edit
+        if selected:
+            anchor = self._input_position(slot, self.anchor[1])
+            low, high = sorted((position, anchor))
+            items = self._input_slice(items, 0, low) + self._input_slice(items, high, len(text))
+            text = self._input_text(items)
+            position = low
+        # Qt positions are UTF-16 units. A replacement must not split a surrogate
+        # pair or consume a different structural slot than the context we expose.
+        offsets = self._input_offsets(text)
+        start = self._utf16_length(text[:position]) + event.replacementStart()
+        end = start + event.replacementLength()
+        if start not in offsets or end not in offsets or end < start:
+            event.ignore()
+            return
+        low, high = offsets[start], offsets[end]
+        commit = event.commitString()
+        if commit or event.replacementLength():
+            items = (self._input_slice(items, 0, low) + ([Text(commit)] if commit else [])
+                     + self._input_slice(items, high, len(text)))
+            position = low + len(commit)
+        if latex_of(MathSequence(items=items)) != latex_of(slot):
+            if not (self._undo and self._undo[-1] is self._composition_undo):
+                self._push_history()
+                self._composition_undo = self._undo[-1] if starting and selected else None
+            slot.items = items
+        self.index = self._input_index(slot, position)
+        if has_edit:
+            self.anchor = None
+        for attribute in event.attributes():
+            if attribute.type == QInputMethodEvent.AttributeType.Selection:
+                current = self._input_text(slot.items)
+                positions = self._input_offsets(current)
+                a, b = attribute.start, attribute.start + attribute.length
+                if a in positions and b in positions:
+                    self.anchor = (deepcopy(self.path), self._input_index(slot, positions[a])) if a != b else None
+                    self.index = self._input_index(slot, positions[b])
+        self._preedit = event.preeditString()
+        self._preedit_attributes = list(event.attributes())
+        # Selection removal belongs to the first commit only. A subsequent
+        # commit in the same input-method session needs its own undo record.
+        if not self._preedit or commit or event.replacementLength():
+            self._composition_undo = None
+        self.update()
+        event.accept()
 
     # ------------------------------------------------------------------
     # Cursor machinery
@@ -972,6 +1154,21 @@ class MathEditorWidget(QWidget):
         painter.fillRect(self.rect(), _BACKGROUND)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
+        font, small_font, big_font, box = self._paint_layout()
+        self._draw(painter, box, font, small_font, big_font)
+
+        # Caret and selection overlay.
+        selection_rects = self._selection_rects(box, small_font)
+        for rect in selection_rects:
+            painter.fillRect(rect, _SELECTION)
+        caret_rect = self._caret_rect(box, font)
+        if caret_rect is not None:
+            if self._preedit:
+                self._paint_preedit(painter, caret_rect, font)
+            else:
+                painter.fillRect(caret_rect, _CARET)
+
+    def _paint_layout(self):
         font = QFont("Menlo", 15)
         font.setStyleHint(QFont.StyleHint.Monospace)
         small_font = QFont(font)
@@ -985,15 +1182,51 @@ class MathEditorWidget(QWidget):
 
         box = self._measure(self.root, fm, small_fm, big_fm)
         self._place(box, 10, 10)
-        self._draw(painter, box, font, small_font, big_font)
+        return font, small_font, big_font, box
 
-        # Caret and selection overlay.
-        selection_rects = self._selection_rects(box, small_font)
-        for rect in selection_rects:
-            painter.fillRect(rect, _SELECTION)
-        caret_rect = self._caret_rect(box, font)
-        if caret_rect is not None:
-            painter.fillRect(caret_rect, _CARET)
+    def _preedit_layout(self, font: QFont):
+        layout = QTextLayout(self._preedit, font)
+        formats = []
+        cursor = self._utf16_length(self._preedit)
+        visible = True
+        color = _CARET
+        for attribute in self._preedit_attributes:
+            if attribute.type == QInputMethodEvent.AttributeType.TextFormat:
+                value = attribute.value
+                if hasattr(value, "toCharFormat"):
+                    value = value.toCharFormat()
+                if isinstance(value, QTextCharFormat):
+                    span = QTextLayout.FormatRange()
+                    span.start, span.length, span.format = attribute.start, attribute.length, value
+                    formats.append(span)
+            elif attribute.type == QInputMethodEvent.AttributeType.Cursor:
+                cursor, visible = attribute.start, bool(attribute.length)
+                if isinstance(attribute.value, QColor):
+                    color = attribute.value
+        if not formats:
+            span = QTextLayout.FormatRange()
+            span.start, span.length = 0, self._utf16_length(self._preedit)
+            style = QTextCharFormat()
+            style.setFontUnderline(True)
+            span.format = style
+            formats.append(span)
+        layout.setFormats(formats)
+        layout.beginLayout()
+        line = layout.createLine()
+        line.setLineWidth(max(1.0, QFontMetricsF(font).horizontalAdvance(self._preedit) + 2))
+        layout.endLayout()
+        return layout, cursor, visible, color
+
+    def _paint_preedit(self, painter: QPainter, caret: QRectF, font: QFont) -> None:
+        layout, cursor, visible, color = self._preedit_layout(font)
+        line = layout.lineAt(0)
+        origin = QPointF(caret.x(), caret.y())
+        painter.fillRect(QRectF(origin.x(), origin.y(), line.naturalTextWidth() + 2, line.height()), _BACKGROUND)
+        painter.setPen(_TEXT)
+        layout.draw(painter, origin)
+        if visible:
+            painter.setPen(color)
+            layout.drawCursor(painter, origin, cursor)
 
     def _measure(self, node: MathNode, fm: QFontMetricsF, small_fm: QFontMetricsF, big_fm: QFontMetricsF) -> Box:
         if isinstance(node, Text):
@@ -1200,12 +1433,18 @@ class MathEditorWidget(QWidget):
     # ------------------------------------------------------------------
 
     def mousePressEvent(self, event) -> None:  # type: ignore[no-untyped-def]
+        if not self.finish_composition():
+            event.accept()
+            return
         self.setFocus()
         self._hit_test(event.position().x(), event.position().y())
         self.anchor = (deepcopy(self.path), self.index)
         self.update()
 
     def mouseMoveEvent(self, event) -> None:  # type: ignore[no-untyped-def]
+        if not self.finish_composition():
+            event.accept()
+            return
         if self.anchor is None:
             return
         self._hit_test(event.position().x(), event.position().y())
@@ -1308,11 +1547,18 @@ class MathEditorWidget(QWidget):
     def event(self, event) -> bool:
         # QWidget otherwise consumes Tab before keyPressEvent can visit slots.
         if event.type() == QEvent.Type.KeyPress and event.key() in (Qt.Key.Key_Tab, Qt.Key.Key_Backtab):
+            if not self.finish_composition():
+                event.accept()
+                return True
             self.commit_pending_command()
             self.cursor_tab(event.key() == Qt.Key.Key_Backtab or bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier))
             event.accept()
             return True
-        return super().event(event)
+        result = super().event(event)
+        if event.type() in (QEvent.Type.KeyPress, QEvent.Type.MouseButtonPress,
+                            QEvent.Type.MouseMove, QEvent.Type.FocusIn, QEvent.Type.Resize):
+            self._update_input_method()
+        return result
 
     @_edit_operation
     def keyPressEvent(self, event: QKeyEvent) -> None:

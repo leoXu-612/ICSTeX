@@ -74,6 +74,33 @@ class SourceStatusGuiTests(TestCase):
         self.assertIn("尚未检查", nav.sources_summary.text())
         self.assertEqual(nav.sources_table.editTriggers(), QAbstractItemView.EditTrigger.NoEditTriggers)
 
+    def test_source_table_tabs_to_actions_without_changing_model_or_files(self):
+        from PySide6.QtTest import QTest
+        nav = self.open_nav()
+        nav.tabs.setCurrentIndex(2)
+        nav.show()
+        nav.activateWindow()
+        before = {path: path.read_bytes() for path in self.project.rglob("*") if path.is_file()}
+        revision = self.session._revision
+        content = deepcopy(self.block.content)
+        try:
+            nav.sources_table.setCurrentCell(0, 0)
+            nav.sources_table.setFocus()
+            self.app.processEvents()
+            self.assertIs(self.app.focusWidget(), nav.sources_table)
+            QTest.keyClick(nav.sources_table, Qt.Key.Key_Tab)
+            self.assertIs(self.app.focusWidget(), nav.refresh_sources_button)
+            QTest.keyClick(nav.refresh_sources_button, Qt.Key.Key_Backtab)
+            self.assertIs(self.app.focusWidget(), nav.sources_table)
+            QTest.keyClick(nav.sources_table, Qt.Key.Key_Backtab)
+            self.assertIsNot(self.app.focusWidget(), nav.sources_table)
+            self.assertEqual(self.session._revision, revision)
+            self.assertEqual(self.block.content, content)
+            self.assertEqual(self.session._compile_launches, 0)
+            self.assertEqual({path: path.read_bytes() for path in before}, before)
+        finally:
+            nav.close()
+
     def test_filter_typing_does_not_rebuild_source_or_layout_panels(self):
         nav = self.open_nav()
         with patch.object(nav, "_refresh_sources") as sources, patch.object(nav, "_refresh_layout") as layout:

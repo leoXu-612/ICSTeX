@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from app.core.log_parser import LaTeXError
+from app.core.build_tool_versions import BuildToolVersions
 from app.core.project_dependencies import (InputObservation, MAX_INPUTS, observe_input,
                                          safe_project_input, static_dependencies)
 
@@ -61,10 +62,12 @@ class FinalBuildEvidence:
     errors: tuple[LaTeXError, ...]
     warnings: tuple[LaTeXError, ...]
     log_complete: bool
+    tool_versions: BuildToolVersions | None = None
 
 
 def final_build_evidence(result: CompileResult) -> FinalBuildEvidence | None:
     if result.job_key is None or result.purpose.value != "final" or result.job_key.purpose.value != "final":
         return None
     return FinalBuildEvidence(result.job_key, result.build_id, result.outcome, result.pdf_file,
-                              result.input_evidence, tuple(result.errors), result.warnings, result.log_complete)
+                              result.input_evidence, tuple(result.errors), result.warnings, result.log_complete,
+                              result.tool_versions)

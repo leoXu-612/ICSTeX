@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+from weakref import proxy
 
 from PySide6.QtCore import QRect, QStringListModel, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QDragEnterEvent, QDragMoveEvent, QDropEvent, QKeyEvent, QPainter, QTextCursor, QTextFormat, QTextOption
+from PySide6.QtGui import QColor, QDragEnterEvent, QDragMoveEvent, QDropEvent, QInputMethodEvent, QKeyEvent, QPainter, QTextCursor, QTextFormat, QTextOption
 from PySide6.QtWidgets import QCompleter, QPlainTextEdit, QTextEdit, QWidget
 
 from app.core.latex_completion import CompletionCandidate, completion_context
@@ -30,7 +31,9 @@ IMAGE_DROP_EXTENSIONS = {".png", ".jpg", ".jpeg", ".pdf", ".eps", ".svg"}
 class LineNumberArea(QWidget):
     def __init__(self, editor: "LaTeXEditor") -> None:
         super().__init__(editor)
-        self.editor = editor
+        # Qt owns the gutter; it must not own its editor back through Python.
+        # Such a cycle can defer widget destruction to a worker's cyclic GC.
+        self.editor = proxy(editor)
 
     def sizeHint(self) -> QSize:
         return QSize(self.editor.line_number_area_width(), 0)
@@ -42,6 +45,7 @@ class LineNumberArea(QWidget):
 class LaTeXEditor(QPlainTextEdit):
     imageDropped = Signal(list)
     texFilesDropped = Signal(list)
+    sourceTextChanged = Signal()
 
     def __init__(self, text: str = "") -> None:
         super().__init__()
@@ -56,6 +60,13 @@ class LaTeXEditor(QPlainTextEdit):
         self._completion_citations: list[str] = []
         self._completion_candidates: dict[str, CompletionCandidate] = {}
         self._completion_replacement_length = 0
+        self._handling_input_method = False
+        self._source_revision = 0
+        # The document still signals real reloads when the editor's signals
+        # are blocked. Do not derive this monotonic identity from Qt's revision,
+        # which also changes for preedit layout and can reset on setPlainText.
+        self.document().contentsChange.connect(self._source_contents_changed)
+        self.textChanged.connect(self._source_text_changed)
 
         self.setAcceptDrops(True)
         self.set_soft_wrap_enabled(True)
@@ -151,6 +162,37 @@ class LaTeXEditor(QPlainTextEdit):
             selections.append(self._current_line_selection)
         selections.extend(self._search_selections)
         self.setExtraSelections(selections)
+
+    @property
+    def source_revision(self) -> int:
+        """Cheap edit identity for source readers, excluding IME-only layout."""
+        return self._source_revision
+
+    def _source_contents_changed(self, _position: int, removed: int, added: int) -> None:
+        if not self._handling_input_method and (removed or added):
+            self._source_revision += 1
+
+    def _source_text_changed(self) -> None:
+        if not self._handling_input_method:
+            self.sourceTextChanged.emit()
+
+    def has_preedit(self) -> bool:
+        return bool(self.textCursor().block().layout().preeditAreaText())
+
+    def inputMethodEvent(self, event: QInputMethodEvent) -> None:
+        # Qt also emits textChanged and increments its document revision for
+        # preedit-only layout changes. Keep those native signals intact, but
+        # notify source consumers only if the actual text changed. Compare
+        # only at this IME boundary, not on every ordinary keystroke.
+        before = self.toPlainText()
+        self._handling_input_method = True
+        try:
+            super().inputMethodEvent(event)
+        finally:
+            self._handling_input_method = False
+        if self.toPlainText() != before:
+            self._source_revision += 1
+            self.sourceTextChanged.emit()
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         if self._completer.popup().isVisible():

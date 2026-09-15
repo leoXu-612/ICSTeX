@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Slot
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QDockWidget,
@@ -36,7 +36,7 @@ from app.gui.submission_check_panel import SubmissionCheckPanel
 from app.gui.find_replace import FindReplaceBar
 from app.gui.icons import icon
 from app.gui.insert_panel import InsertPanel, TemplatesPanel, scrollable_panel
-from app.gui.main_window_actions import build_actions
+from app.gui.main_window_actions import auto_compile_tooltip, build_actions
 from app.gui.block_mode import install_block_mode
 from app.gui.main_window_support import make_panel, set_dynamic_property
 from app.gui.pdf_panel import PdfPanel
@@ -49,6 +49,7 @@ from app.gui.project_panels import (
     ReferencesPanel,
 )
 from app.gui.responsive.helpers import configure_tab_bar
+from app.gui.responsive.editor_pdf_area import EditorPdfArea
 from app.gui.theme import log_font
 from app.gui.toolbox_navigation import ToolboxNavigation
 from app.gui.welcome_page import WelcomePage
@@ -102,6 +103,7 @@ def _install_status_bar(window: "MainWindow") -> None:
     window.status_engine_label.setObjectName("statusPill")
     window.status_auto_label = QLabel("自动编译" if window.preferences.auto_compile else "手动编译")
     window.status_auto_label.setObjectName("statusPill")
+    window.status_auto_label.setToolTip(auto_compile_tooltip(window.preferences.fast_preview))
     set_dynamic_property(window.status_auto_label, "state", "active" if window.preferences.auto_compile else "idle")
     window.compile_time_label = QLabel("空闲")
     window.compile_time_label.setObjectName("compileTimer")
@@ -149,7 +151,7 @@ def _install_sidebar(window: "MainWindow") -> None:
     window.references_panel = ReferencesPanel()
     window.labels_panel = LabelsPanel()
 
-    sidebar = ToolboxNavigation()
+    sidebar = ToolboxNavigation(window)
     sidebar.setMinimumWidth(320)
     sidebar.addTab(window.tree, "文件", "files", SIDEBAR_TAB_TIPS[0])
     sidebar.addTab(window.outline_panel, "大纲", "list-tree", SIDEBAR_TAB_TIPS[1])
@@ -193,7 +195,10 @@ def _install_source_pane(window: "MainWindow") -> None:
 
 
 def _install_pdf_pane(window: "MainWindow") -> None:
-    window.pdf_panel = PdfPanel()
+    window.pdf_panel = PdfPanel(search_action=window.pdf_search_action)
+    window.pdf_panel.compileRequested.connect(lambda: (
+        window.block_compile_action if window.block_mode_action.isChecked()
+        and window.block_session is not None else window.compile_action).trigger())
 
 
 def _install_toolbox_dock(window: "MainWindow") -> None:
@@ -210,21 +215,26 @@ def _install_toolbox_dock(window: "MainWindow") -> None:
 
 
 def _install_main_splitter(window: "MainWindow") -> None:
-    source_panel = make_panel("源码", window._source_body, "实时编译")
-    source_panel.setMinimumWidth(430)
-    pdf_panel = make_panel("PDF 预览", window.pdf_panel, "双击同步源码")
-    pdf_panel.setMinimumWidth(360)
+    source_panel = window._source_body
+    pdf_panel = QWidget()
+    pdf_layout = QVBoxLayout(pdf_panel)
+    pdf_layout.setContentsMargins(0, 0, 0, 0)
+    pdf_layout.addWidget(window.pdf_panel)
+    # Use content-derived minimum hints: fixed 430 + 360 widths overlap when
+    # the toolbox is open in the supported 1080px window.
     window.pdf_panel_wrapper = pdf_panel
 
-    splitter = QSplitter(Qt.Orientation.Horizontal)
+    area = EditorPdfArea(source_panel, pdf_panel, editor_label="编辑源码",
+                         compact_width=960, compact_columns=90, wide_sizes=(790, 650))
+    splitter = area.splitter
     splitter.setChildrenCollapsible(False)
     splitter.setHandleWidth(8)
-    splitter.addWidget(source_panel)
-    splitter.addWidget(pdf_panel)
     splitter.setStretchFactor(0, 55)
     splitter.setStretchFactor(1, 45)
-    splitter.setSizes([790, 650])
     window.main_splitter = splitter
+    window.source_preview_area = area
+    area.set_preview_available(False)
+    window.pdf_panel.availabilityChanged.connect(area.set_preview_available)
     del window._source_body
 
 
@@ -238,6 +248,7 @@ def _install_log_and_errors(window: "MainWindow") -> None:
     table.setHorizontalHeaderLabels(["文件", "行号", "信息"])
     table.setAlternatingRowColors(True)
     table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+    table.setTabKeyNavigation(False)
     table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
     table.setShowGrid(False)
     table.verticalHeader().setVisible(False)
@@ -257,8 +268,40 @@ def _install_word_count_panel(window: "MainWindow") -> None:
     window.word_count_panel = wrap_word_count_in_scroll(window.word_count_view)
 
 
+class _ConsoleTabs(QTabWidget):
+    """Keep an expanded console usable after tab/scale/window changes."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._layout_timer = QTimer(self)
+        self._layout_timer.setSingleShot(True)
+        self._layout_timer.timeout.connect(self._reveal_content)
+        self.currentChanged.connect(self._queue_layout)
+
+    @Slot()
+    def _queue_layout(self) -> None:
+        self._layout_timer.start(0)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._queue_layout()
+
+    @Slot()
+    def _reveal_content(self) -> None:
+        if not self.isVisible():
+            return
+        panel = self.parentWidget()
+        splitter = panel.parentWidget() if panel is not None else None
+        if not isinstance(splitter, QSplitter) or splitter.count() != 2:
+            return
+        sizes = splitter.sizes()
+        needed = panel.minimumSizeHint().height()
+        if sizes[1] < needed:
+            splitter.setSizes([max(1, sum(sizes) - needed), needed])
+
+
 def _install_bottom_tabs(window: "MainWindow") -> None:
-    tabs = QTabWidget()
+    tabs = _ConsoleTabs()
     tabs.setObjectName("bottomTabs")
     configure_tab_bar(tabs)
     tabs.addTab(window.log_view, "日志")
@@ -273,23 +316,21 @@ def _install_bottom_tabs(window: "MainWindow") -> None:
 
 def _install_vertical_splitter(window: "MainWindow") -> None:
     collapse_button = QToolButton()
-    collapse_button.setObjectName("panelHeaderButton")
-    collapse_button.setIcon(icon("chevron-down", size=16))
-    collapse_button.setToolTip("收起编译控制台")
-    collapse_button.setFixedSize(26, 26)
+    collapse_button.setObjectName("consoleToggle")
+    collapse_button.setDefaultAction(window.console_action)
+    collapse_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
     window.bottom_collapse_button = collapse_button
-    window.bottom_panel = make_panel(
-        "编译控制台",
-        window.bottom_tabs,
-        "日志、错误、统计",
-        actions=[collapse_button],
-    )
-    window.bottom_panel.setMinimumHeight(36)
+    window.statusBar().insertPermanentWidget(0, collapse_button)
+    window.bottom_panel = QWidget()
+    window.bottom_panel.setObjectName("panel")
+    console_layout = QVBoxLayout(window.bottom_panel)
+    console_layout.setContentsMargins(0, 0, 0, 0)
+    console_layout.addWidget(window.bottom_tabs)
     splitter = QSplitter(Qt.Orientation.Vertical)
     splitter.setObjectName("verticalSplitter")
     splitter.setChildrenCollapsible(True)
     splitter.setHandleWidth(8)
-    splitter.addWidget(window.main_splitter)
+    splitter.addWidget(window.source_preview_area)
     splitter.addWidget(window.bottom_panel)
     splitter.setCollapsible(0, False)
     splitter.setCollapsible(1, False)
@@ -298,22 +339,59 @@ def _install_vertical_splitter(window: "MainWindow") -> None:
     splitter.setSizes([690, 210])
     window.vertical_splitter = splitter
     window._bottom_panel_expanded_height = 210
-    collapse_button.clicked.connect(lambda: _toggle_bottom_panel(window))
+    window.console_action.triggered.connect(lambda: _toggle_bottom_panel(window))
+    window.bottom_tabs.currentChanged.connect(lambda _index: show_console(window))
+    collapsed = window.app_settings.settings.value("window/console_collapsed", True, type=bool)
+    _set_bottom_panel_collapsed(window, collapsed)
     window.setCentralWidget(splitter)
 
 
 def _toggle_bottom_panel(window: "MainWindow") -> None:
+    collapsed = not window.bottom_tabs.isHidden()
+    window.source_panels.set_console(not collapsed)
+    window.app_settings.settings.setValue("window/console_collapsed", collapsed)
+
+
+def show_console(window: "MainWindow", page=None, *, error_notice=False) -> None:
+    """Reveal requested diagnostics without focusing them or saving a preference."""
+    if hasattr(window, "block_mode_action") and window.block_mode_action.isChecked():
+        return
+    if hasattr(window, "source_panels"):
+        window.source_panels.set_console(True, page=page, error_notice=error_notice)
+        return
+    if page is not None:
+        window.bottom_tabs.setCurrentWidget(page)
+    _set_bottom_panel_collapsed(window, False)
+
+
+def reveal_workspace_widget(window: "MainWindow", widget: QWidget) -> None:
+    area = (window.block_preview_area if window.block_mode_action.isChecked()
+            and window.block_session is not None else window.source_preview_area)
+    if widget is area.pdf or area.pdf.isAncestorOf(widget):
+        area.select_pdf(True)
+    elif widget is area.editor or area.editor.isAncestorOf(widget):
+        area.select_pdf(False)
+
+
+def _set_bottom_panel_collapsed(window: "MainWindow", collapsed: bool) -> None:
     sizes = window.vertical_splitter.sizes()
     if len(sizes) != 2:
         return
-    total = max(sum(sizes), window.height())
-    if sizes[1] > 44:
-        window._bottom_panel_expanded_height = max(120, sizes[1])
-        window.vertical_splitter.setSizes([max(1, total - 36), 36])
-        window.bottom_collapse_button.setIcon(icon("chevron-up", size=16))
-        window.bottom_collapse_button.setToolTip("展开编译控制台")
+    window.console_action.setChecked(not collapsed)
+    window.console_action.setIcon(icon("chevron-up" if collapsed else "chevron-down", size=16))
+    window.console_action.setToolTip(("展开" if collapsed else "收起") + "控制台：日志、错误、字数和检查")
+    total = sum(sizes)
+    if collapsed:
+        if not window.bottom_tabs.isHidden():
+            window._bottom_panel_expanded_height = max(120, sizes[1])
+        window.bottom_tabs.hide()
+        window.bottom_panel.hide()
+        window.vertical_splitter.setSizes([max(1, total), 0])
     else:
+        if not window.bottom_tabs.isHidden():
+            return
+        window.bottom_panel.setMaximumHeight(16777215)
+        window.bottom_panel.show()
+        window.bottom_tabs.show()
         restored = min(max(120, window._bottom_panel_expanded_height), max(120, total // 2))
         window.vertical_splitter.setSizes([max(1, total - restored), restored])
-        window.bottom_collapse_button.setIcon(icon("chevron-down", size=16))
-        window.bottom_collapse_button.setToolTip("收起编译控制台")

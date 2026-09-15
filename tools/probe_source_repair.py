@@ -33,6 +33,7 @@ from app.gui.blocks.source_repair_dialog import SourceTableMappingDialog, Source
 from app.gui.main_window import MainWindow
 from app.gui.theme import apply_theme
 from tools.probe_submission_check import wait_for
+from tools.probe_history_restore import visible_pdf_ink
 
 
 def drive_repair(application, window, output, *, cancel_final=False, mutate_final=None):
@@ -206,6 +207,16 @@ def main():
         (output / "source-repair-final.pdf").write_bytes(pdf)
         report["final_pdf_sha256"] = hashlib.sha256(pdf).hexdigest()
         report["final_pdf_pages"] = window.pdf_panel._document.pageCount()
+        if window.block_preview_area.pdf_button.isVisible():
+            QTest.mouseClick(window.block_preview_area.pdf_button, Qt.MouseButton.LeftButton)
+        wait_for(window.pdf_panel.isVisible)
+        window.pdf_panel.fit_width()
+        wait_for(lambda: visible_pdf_ink(window) > 30)
+        text = " ".join(window.pdf_panel._document.getAllText(i).text()
+                        for i in range(window.pdf_panel._document.pageCount()))
+        assert all(value in text.split() for value in ("12", "11", "21")), text
+        wait_for(lambda: window.workspace.next_button.text() == "核对 Block 项目")
+        report["visible_final_and_extracted_repaired_values"] = True
         assert window.grab().save(str(output / "source-repair-final-window.png"))
         assert (project / "base.csv").read_bytes() == original
         assert (project / "data.csv").read_bytes() == current

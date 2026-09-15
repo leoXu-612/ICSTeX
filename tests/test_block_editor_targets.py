@@ -9,6 +9,7 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QCoreApplication, QEvent, Qt, qInstallMessageHandler
+from PySide6.QtGui import QInputMethodEvent
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QDialog, QLineEdit, QMessageBox
 
@@ -175,6 +176,32 @@ class BlockEditorTargetTests(TestCase):
         self.assertEqual(self.workspace.table_editor.table.item(0, 0).text(), self.first.alias)
         self.open_table(self.second)
         self.assertEqual(self.workspace.table_editor.table.item(0, 0).text(), "live cell draft")
+        self.assertEqual({p: p.read_bytes() for p in self.before}, self.before)
+
+    def test_cell_composition_cancel_commit_undo_and_switch_keep_draft_target(self):
+        editor = self.start_cell_input("")
+        editor.deselect()
+        editor.setCursorPosition(len(editor.text()))
+        original = editor.text()
+        for preedit in ("zhong", "zhongwen", ""):
+            QApplication.sendEvent(editor, QInputMethodEvent(preedit, []))
+            self.assertEqual(editor.text(), original)
+            self.assertFalse(self.session.editor_drafts)
+        event = QInputMethodEvent()
+        event.setCommitString("中文")
+        QApplication.sendEvent(editor, event)
+        self.assertEqual(editor.text(), original + "中文")
+        self.assertIn(("table_cell", self.second.id), self.session.editor_drafts)
+        editor.undo()
+        self.assertEqual(editor.text(), original)
+        self.assertFalse(self.session.editor_drafts)
+        editor.redo()
+        self.open_table(self.first)
+        self.open_table(self.second)
+        self.assertEqual(self.workspace.table_editor.table.item(0, 0).text(), original + "中文")
+        self.assertEqual(self.value(self.second), self.second.alias)
+        self.assertEqual(self.value(self.first), self.first.alias)
+        self.assertEqual(self.session.undo_stack.count(), 0)
         self.assertEqual({p: p.read_bytes() for p in self.before}, self.before)
 
     def test_save_flushes_live_cell_to_its_draft_before_explicit_confirmation(self):

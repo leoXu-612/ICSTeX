@@ -13,6 +13,9 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.diagnostics import Diagnostic
+from app.gui.insert_panel import scrollable_panel
+from app.gui.table_navigation import enable_table_key_activation
+from app.gui.theme import PRIMARY_BUTTON_STATE_STYLE
 
 
 class DiagnosticsPanel(QWidget):
@@ -29,6 +32,7 @@ class DiagnosticsPanel(QWidget):
         self.refresh_button = QPushButton("检查项目")
         self.fix_button = QPushButton("修复选中")
         self.fix_button.setObjectName("primaryButton")
+        self.fix_button.setStyleSheet(PRIMARY_BUTTON_STATE_STYLE)
         self.table = QTableWidget(0, 4)
         self._build()
 
@@ -60,7 +64,10 @@ class DiagnosticsPanel(QWidget):
         return int(value) if value is not None else None
 
     def _build(self) -> None:
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        content = QWidget()
+        layout = QVBoxLayout(content)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
 
@@ -73,15 +80,25 @@ class DiagnosticsPanel(QWidget):
 
         self.table.setHorizontalHeaderLabels(["级别", "问题", "行号", "说明"])
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table.setTabKeyNavigation(False)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setShowGrid(False)
         self.table.verticalHeader().setVisible(False)
         self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.setMinimumHeight(120)
         layout.addWidget(self.table)
+
+        self.scroll = scrollable_panel(content)
+        self.scroll.setObjectName("diagnosticsScroll")
+        outer.addWidget(self.scroll)
+        self.table.currentCellChanged.connect(self.scroll.queueFocusReveal)
 
         self.refresh_button.clicked.connect(self.refreshRequested.emit)
         self.fix_button.clicked.connect(self._emit_fix)
         self.table.cellDoubleClicked.connect(lambda _row, _column: self._emit_jump())
+        self.table.cellActivated.connect(lambda _row, _column: self._emit_jump())
+        enable_table_key_activation(self.table)
+        self.table.setToolTip("方向键移动，空格选中当前行，Return/Enter 定位；Tab 切换控件。")
 
     def _emit_fix(self) -> None:
         index = self.selected_index()

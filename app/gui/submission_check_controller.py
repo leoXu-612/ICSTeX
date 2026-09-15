@@ -97,14 +97,14 @@ class SubmissionCheckController(QObject):
         if active:
             manager = active.compile_manager
             return ("block", id(active), active.project_dir, root, active._revision, active.editor_draft_revision,
-                    tuple((tab.path, id(tab.editor), tab.editor.document().revision(),
+                    tuple((tab.path, id(tab.editor), tab.editor.source_revision,
                            tab.modified, tab.dirty) for tab in window.tabs.values()
                           if active.project_dir and tab.path and tab.path.is_relative_to(active.project_dir)),
                     manager.engine if manager else LaTeXEngine.XELATEX,
                     manager.toolchain if manager else window.toolchain, active.compile_generation)
         session = getattr(window, "block_session", None)
         return (window.selected_project_scope, root, id(window.current_tab()),
-                tuple((tab.path, id(tab.editor), tab.editor.document().revision(),
+                tuple((tab.path, id(tab.editor), tab.editor.source_revision,
                        tab.modified, tab.dirty) for tab in window.tabs.values()),
                 repr(window.pdf_state.record_for(root)) if root else None,
                 window.current_engine, window.toolchain,
@@ -122,12 +122,11 @@ class SubmissionCheckController(QObject):
         window = self.window
         self.mode_changed()
         if self._active_block():
-            window.tabifyDockWidget(window.block_diagnostics_dock, self._block_dock)
-            self._block_dock.show()
-            self._block_dock.raise_()
+            window.block_panels.request("submission")
             self.request()
             return
-        window.bottom_tabs.setCurrentWidget(window.submission_panel)
+        from app.gui.main_window_layout import show_console
+        show_console(window, window.submission_panel)
         sizes = window.vertical_splitter.sizes()
         if sizes and sizes[-1] < 180:
             window.vertical_splitter.setSizes([max(220, window.height() - 300), 260])
@@ -167,15 +166,9 @@ class SubmissionCheckController(QObject):
             tuple(draft.label for draft in session.editor_drafts.values()),
         )
 
-    @Slot()
-    def request(self):
-        if self._closed:
-            return
+    def capture_request(self):
+        """Snapshot existing GUI state without saving, compiling or starting a check."""
         key, scope, root, tabs, record, session = self._context()
-        self.window.file_watcher.set_paths(
-            ("profile", id(self)), {scope / PROFILE_PATH} if scope else set(),
-            canonical=True, project_profile=True)
-        self._root = root
         tab = self.window.current_tab()
         engine = (self.window.compile._effective_engine_for(tab.path, root)
                   if tab is not None and tab.path is not None and root is not None
@@ -188,9 +181,9 @@ class SubmissionCheckController(QObject):
         extra_inputs = set(self.window.dependencies.paths_for(root)) if root else set()
         if evidence and evidence.inputs:
             extra_inputs.update(path for path, _ in evidence.inputs.observations)
-        request = CheckRequest(
+        return CheckRequest(
             key, scope, root,
-            tuple(BufferInput(tab.path, tab.editor.toPlainText(), tab.editor.document().revision(),
+            tuple(BufferInput(tab.path, tab.editor.toPlainText(), tab.editor.source_revision,
                               tab.modified or tab.dirty) for tab in tabs),
             tools, engine,
             replace(record) if record is not None else None,
@@ -201,6 +194,17 @@ class SubmissionCheckController(QObject):
             source_revision=session._revision if session else record.source_revision if record else None,
             building=session.final_is_running if session else False,
         )
+
+    @Slot()
+    def request(self):
+        if self._closed:
+            return
+        request = self.capture_request()
+        scope = request.scope
+        self.window.file_watcher.set_paths(
+            ("profile", id(self)), {scope / PROFILE_PATH} if scope else set(),
+            canonical=True, project_profile=True)
+        self._root = request.root
         self._displayed_key = None
         self.window.submission_panel.pending("检查中 · 只读，不保存、不编译、不联网。", busy=True)
         self._timer.start()

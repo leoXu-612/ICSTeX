@@ -44,25 +44,31 @@ def safe_project_input(scope: Path, path: Path, *, allow_internal: bool = False)
     """Canonicalize lexically while rejecting every traversed symlink."""
     scope = scope.expanduser().resolve()
     candidate = path if path.is_absolute() else scope / path
-    try:
-        parts = candidate.relative_to(scope).parts
-    except ValueError:
+    scope_parts = scope.parts
+    candidate_parts = candidate.parts
+    # Compare components, not a string prefix. Path.relative_to/is_relative_to
+    # repeatedly construct ancestor paths on Python 3.12; this scan is hot in
+    # large dependency graphs. normcase preserves native Windows path semantics.
+    if tuple(map(os.path.normcase, candidate_parts[:len(scope_parts)])) != tuple(map(os.path.normcase, scope_parts)):
         return None
     current = scope
-    for part in parts:
+    depth = 0
+    for part in candidate_parts[len(scope_parts):]:
         if part in {"", "."}:
             continue
         if part == "..":
-            current = current.parent
-            if not current.is_relative_to(scope):
+            if depth == 0:
                 return None
+            current = current.parent
+            depth -= 1
             continue
         if not allow_internal and part in INTERNAL_DIRS:
             return None
         current /= part
+        depth += 1
         if current.is_symlink() or (hasattr(current, "is_junction") and current.is_junction()):
             return None
-    if current == scope or not current.is_relative_to(scope):
+    if depth == 0:
         return None
     if not allow_internal and current.suffix.lower() in GENERATED_SUFFIXES:
         return None

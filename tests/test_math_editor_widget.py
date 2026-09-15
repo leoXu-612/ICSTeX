@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QKeyEvent
+from PySide6.QtGui import QColor, QInputMethodEvent, QKeyEvent, QTextCharFormat
 from PySide6.QtTest import QTest
 
 from app.gui.math_editor_widget import MathEditorWidget
@@ -23,6 +23,137 @@ def app() -> QApplication:
 class MathEditorWidgetTests(TestCase):
     def setUp(self) -> None:
         app()
+
+    def test_input_method_commit_is_inserted_once_and_undoable(self):
+        widget = MathEditorWidget()
+        self.addCleanup(widget.deleteLater)
+        widget.set_latex("x+")
+        event = QInputMethodEvent()
+        event.setCommitString("中文")
+        QApplication.sendEvent(widget, event)
+        self.assertTrue(event.isAccepted())
+        self.assertEqual(widget.latex(), "x+中文")
+        widget.undo()
+        self.assertEqual(widget.latex(), "x+")
+
+    def test_preedit_is_rendered_with_attributes_but_not_exported_or_undoable(self):
+        widget = MathEditorWidget()
+        self.addCleanup(widget.deleteLater)
+        widget.resize(400, 100)
+        widget.set_latex("x+")
+        style = QTextCharFormat()
+        style.setForeground(QColor("red"))
+        style.setBackground(QColor("yellow"))
+        style.setFontUnderline(True)
+        attributes = [
+            QInputMethodEvent.Attribute(QInputMethodEvent.AttributeType.TextFormat, 0, 5, style),
+            QInputMethodEvent.Attribute(QInputMethodEvent.AttributeType.Cursor, 2, 1, QColor("blue")),
+        ]
+        original = widget.grab().toImage()
+        original_caret = widget.inputMethodQuery(Qt.InputMethodQuery.ImCursorRectangle)
+        changes = []
+        widget.latexChanged.connect(changes.append)
+        QApplication.sendEvent(widget, QInputMethodEvent("zhong", attributes))
+        self.assertTrue(widget.has_preedit)
+        self.assertEqual(widget.latex(), "x+")
+        self.assertFalse(widget.can_undo)
+        self.assertGreater(widget.inputMethodQuery(Qt.InputMethodQuery.ImCursorRectangle).x(), original_caret.x())
+        self.assertNotEqual(widget.grab().toImage(), original)
+        QApplication.sendEvent(widget, QInputMethodEvent())
+        self.assertFalse(widget.has_preedit)
+        self.assertEqual(widget.grab().toImage(), original)
+        self.assertEqual(changes, [])
+
+    def test_composition_replaces_selection_in_one_undo_and_preserves_other_nodes(self):
+        widget = MathEditorWidget()
+        self.addCleanup(widget.deleteLater)
+        widget.set_latex(r"\unknown{a}+abc")
+        original = widget.latex()
+        widget.cursor_end()
+        # The existing structured cursor has a separate end-of-slot boundary.
+        widget.cursor_left(select=True)
+        widget.cursor_left(select=True)
+        widget.cursor_left(select=True)
+        self.assertEqual(widget.selected_latex(), "bc")
+        QApplication.sendEvent(widget, QInputMethodEvent("zhongwen", []))
+        self.assertEqual(widget.latex(), r"\unknown{a}+a")
+        event = QInputMethodEvent()
+        event.setCommitString("中文")
+        QApplication.sendEvent(widget, event)
+        self.assertEqual(widget.latex(), r"\unknown{a}+a中文")
+        widget.undo()
+        self.assertEqual(widget.latex(), original)
+        self.assertFalse(widget.can_undo)
+        widget.redo()
+        self.assertEqual(widget.latex(), r"\unknown{a}+a中文")
+
+    def test_reconversion_is_utf16_scoped_and_does_not_damage_a_fraction(self):
+        widget = MathEditorWidget()
+        self.addCleanup(widget.deleteLater)
+        widget.insert_structure("fraction")
+        widget.insert_text("a\U0001f642")
+        original = widget.latex()
+        self.assertEqual(widget.inputMethodQuery(Qt.InputMethodQuery.ImSurroundingText), "a\U0001f642")
+        self.assertEqual(widget.inputMethodQuery(Qt.InputMethodQuery.ImCursorPosition), 3)
+        event = QInputMethodEvent()
+        event.setCommitString("中", -2, 2)
+        QApplication.sendEvent(widget, event)
+        self.assertTrue(event.isAccepted())
+        self.assertEqual(widget.latex(), r"\frac{a中}{}")
+        widget.undo()
+        self.assertEqual(widget.latex(), original)
+        invalid = QInputMethodEvent()
+        invalid.setCommitString("BAD", -1, 1)
+        QApplication.sendEvent(widget, invalid)
+        self.assertFalse(invalid.isAccepted())
+        self.assertEqual(widget.latex(), original)
+
+    def test_commit_and_next_preedit_have_separate_undo_and_cancel_keeps_commit(self):
+        widget = MathEditorWidget()
+        self.addCleanup(widget.deleteLater)
+        widget.set_latex("x+")
+        event = QInputMethodEvent("wen", [])
+        event.setCommitString("中")
+        QApplication.sendEvent(widget, event)
+        self.assertEqual(widget.latex(), "x+中")
+        self.assertTrue(widget.has_preedit)
+        QApplication.sendEvent(widget, QInputMethodEvent())
+        widget.undo()
+        self.assertEqual(widget.latex(), "x+")
+        self.assertFalse(widget.can_undo)
+
+    def test_partial_commits_after_selection_keep_distinct_undo_boundaries(self):
+        widget = MathEditorWidget()
+        self.addCleanup(widget.deleteLater)
+        widget.set_latex("old")
+        widget.select_all()
+        QApplication.sendEvent(widget, QInputMethodEvent("zhong", []))
+        event = QInputMethodEvent("wen", [])
+        event.setCommitString("中")
+        QApplication.sendEvent(widget, event)
+        event = QInputMethodEvent()
+        event.setCommitString("文")
+        QApplication.sendEvent(widget, event)
+        self.assertEqual(widget.latex(), "中文")
+        widget.undo()
+        self.assertEqual(widget.latex(), "中")
+        widget.undo()
+        self.assertEqual(widget.latex(), "old")
+        self.assertFalse(widget.can_undo)
+
+    def test_surrounding_structure_is_atomic_and_selection_query_is_plain_text(self):
+        widget = MathEditorWidget()
+        self.addCleanup(widget.deleteLater)
+        widget.set_latex(r"a\frac{x}{y}b")
+        self.assertEqual(widget.inputMethodQuery(Qt.InputMethodQuery.ImSurroundingText), "a\ufffcb")
+        widget.select_all()
+        self.assertEqual(widget.inputMethodQuery(Qt.InputMethodQuery.ImCurrentSelection), "a\ufffcb")
+        event = QInputMethodEvent()
+        event.setCommitString("中文")
+        QApplication.sendEvent(widget, event)
+        self.assertEqual(widget.latex(), "中文")
+        widget.undo()
+        self.assertEqual(widget.latex(), r"a\frac{x}{y}b")
 
     def test_typing_replaces_selection_in_one_undo(self):
         widget = MathEditorWidget()

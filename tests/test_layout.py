@@ -22,6 +22,18 @@ def row_with_slots(slots: list[BlockSlot], **overrides: object) -> LayoutNode:
 
 
 class LayoutModelTests(TestCase):
+    def test_nested_model_round_trips_and_validates_every_child(self):
+        row = row_with_slots([block_slot("blk_a"), block_slot("blk_b")])
+        node = LayoutNode(id="lyt_root", kind="column", children=(row, block_slot("blk_c")))
+        raw = node.to_dict()
+        self.assertEqual(validate_layout(raw), [])
+        self.assertEqual(LayoutNode.from_dict(raw).to_dict(), raw)
+        raw["children"][0]["children"][0]["weight"] = 0
+        self.assertTrue(validate_layout(raw))
+        raw = node.to_dict()
+        raw["children"][0]["unexpected"] = True
+        self.assertTrue(validate_layout(raw))
+
     def test_serialize_round_trip(self) -> None:
         node = LayoutNode(
             id="lyt_grid",

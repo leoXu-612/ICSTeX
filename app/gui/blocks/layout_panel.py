@@ -28,6 +28,8 @@ from app.core.blocks.layout import BlockSlot, LayoutNode, Size, block_slot
 from app.core.blocks.registry import BlockRegistry
 from app.core.blocks.property_draft import layout_gap_mm
 from app.gui.blocks.commands import ChangeLayoutCommand
+from app.gui.blocks.presentation import (ALIGNMENT_LABELS, FALLBACK_LABELS, LAYOUT_LABELS,
+                                        add_identity_copy, block_label)
 from app.gui.responsive.helpers import ButtonFlowLayout
 
 
@@ -44,12 +46,13 @@ class BlockLayoutPanel(QWidget):
         self.command_stack: QUndoStack | None = None
 
         self.block_list = QListWidget()
+        add_identity_copy(self.block_list, lambda item: item.toolTip())
         self.block_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
         self.block_list.setDragDropMode(QListWidget.DragDropMode.InternalMove)
         self.refresh_block_list()
 
-        self.row_button = QPushButton("组合为 Row")
-        self.grid_button = QPushButton("组合为 Grid")
+        self.row_button = QPushButton("组合为横排")
+        self.grid_button = QPushButton("组合为网格")
         self.ungroup_button = QPushButton("取消组合")
         self.undo_button = QPushButton("撤销")
         self.row_button.clicked.connect(self.apply_row)
@@ -58,6 +61,7 @@ class BlockLayoutPanel(QWidget):
         self.undo_button.clicked.connect(self.undo)
 
         self.slot_list = QListWidget()
+        add_identity_copy(self.slot_list, lambda item: item.toolTip())
         self.slot_list.setDragDropMode(QListWidget.DragDropMode.InternalMove)
         self.slot_list.model().rowsMoved.connect(self._on_slots_moved)
 
@@ -68,9 +72,11 @@ class BlockLayoutPanel(QWidget):
         self.gap_spin.setRange(0.0, 100.0)
         self.gap_spin.setSuffix(" mm")
         self.alignment_combo = QComboBox()
-        self.alignment_combo.addItems(["top", "middle", "bottom"])
+        for value, label in ALIGNMENT_LABELS.items():
+            self.alignment_combo.addItem(label, value)
         self.fallback_combo = QComboBox()
-        self.fallback_combo.addItems(["stackVertically", "error", "wrapRows", "normalizeWeights", "reduceGap"])
+        for value, label in FALLBACK_LABELS.items():
+            self.fallback_combo.addItem(label, value)
         self.weight_spin.valueChanged.connect(self._weight_changed)
         self.slot_list.currentRowChanged.connect(lambda _row: self._sync_weight())
         self.gap_spin.valueChanged.connect(lambda _value: self._inspector_changed("gap"))
@@ -80,7 +86,7 @@ class BlockLayoutPanel(QWidget):
         inspector = QFormLayout()
         inspector.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         inspector.addRow("权重", self.weight_spin)
-        inspector.addRow("gap", self.gap_spin)
+        inspector.addRow("间距", self.gap_spin)
         inspector.addRow("对齐", self.alignment_combo)
         inspector.addRow("回退", self.fallback_combo)
 
@@ -111,7 +117,8 @@ class BlockLayoutPanel(QWidget):
         self.block_list.blockSignals(True)
         self.block_list.clear()
         for block in self.registry.blocks():
-            item = QListWidgetItem(f"{block.alias}（{block.id}）")
+            item = QListWidgetItem(block_label(block))
+            item.setToolTip(f"Block：{block.id}\n类型：{block.type}")
             item.setData(256, block.id)
             item.setSelected(block.id in selected_ids)
             self.block_list.addItem(item)
@@ -171,10 +178,10 @@ class BlockLayoutPanel(QWidget):
             return
         with QSignalBlocker(self.gap_spin), QSignalBlocker(self.alignment_combo), QSignalBlocker(self.fallback_combo):
             self.gap_spin.setValue(layout_gap_mm(self.layout))
-            self.alignment_combo.setCurrentText(self.layout.alignment)
+            self.alignment_combo.setCurrentIndex(self.alignment_combo.findData(self.layout.alignment))
             strategy = self.layout.fallback.get("strategy", "stackVertically")
-            if self.fallback_combo.findText(strategy) >= 0:
-                self.fallback_combo.setCurrentText(strategy)
+            if self.fallback_combo.findData(strategy) >= 0:
+                self.fallback_combo.setCurrentIndex(self.fallback_combo.findData(strategy))
         self._refresh_slots()
 
     def _refresh_slots(self) -> None:
@@ -183,11 +190,14 @@ class BlockLayoutPanel(QWidget):
         self.slot_list.blockSignals(True)
         self.slot_list.clear()
         if self.layout is not None:
-            for child in self.layout.children:
+            for index, child in enumerate(self.layout.children):
                 instance_id = getattr(child, "instanceId", "")
                 block_id = getattr(child, "blockId", "")
-                item = QListWidgetItem(f"{instance_id} -> {block_id}")
+                block = self.registry.get(block_id) if block_id else None
+                label = block_label(block) if block else LAYOUT_LABELS.get(getattr(child, "kind", None), "缺失的内容")
+                item = QListWidgetItem(f"位置 {index + 1} · {label}")
                 item.setData(256, instance_id or getattr(child, "id", None))
+                item.setToolTip(f"位置：{instance_id or getattr(child, 'id', '')}\nBlock：{block_id}")
                 self.slot_list.addItem(item)
                 if selected_id is not None and item.data(256) == selected_id:
                     self.slot_list.setCurrentItem(item)
@@ -246,9 +256,9 @@ class BlockLayoutPanel(QWidget):
             return
         order: list[int] = []
         for index in range(self.slot_list.count()):
-            text = self.slot_list.item(index).text()
+            identity = self.slot_list.item(index).data(256)
             for child_index, child in enumerate(self.layout.children):
-                if getattr(child, "instanceId", "") == text.split(" -> ")[0]:
+                if (getattr(child, "instanceId", None) or getattr(child, "id", None)) == identity:
                     order.append(child_index)
                     break
         if order and order != list(range(len(order))):
@@ -272,6 +282,6 @@ class BlockLayoutPanel(QWidget):
         if self.layout is None:
             return
         values = {"gap": Size(value=self.gap_spin.value(), unit="mm"),
-                  "alignment": self.alignment_combo.currentText(),
-                  "fallback": {**self.layout.fallback, "strategy": self.fallback_combo.currentText()}}
+                  "alignment": self.alignment_combo.currentData(),
+                  "fallback": {**self.layout.fallback, "strategy": self.fallback_combo.currentData()}}
         self._commit(replace(self.layout, **{field: values[field]}))

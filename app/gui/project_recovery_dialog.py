@@ -6,7 +6,7 @@ import threading
 from PySide6.QtCore import Qt, Slot
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (QApplication, QDialog, QFileDialog, QHBoxLayout, QLabel,
-    QMessageBox, QPlainTextEdit, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout)
+    QMessageBox, QPlainTextEdit, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QScrollArea, QWidget)
 from shiboken6 import isValid
 
 from app.core.project_recovery import (check_recovery_identity, parse_block_draft,
@@ -14,6 +14,8 @@ from app.core.project_recovery import (check_recovery_identity, parse_block_draf
 from app.core.text_encoding import decode_latex_bytes
 from app.gui.main_window_support import EditorTab
 from app.gui.project_checkpoint_dialog import _Signals, _run, _windows, _belongs
+from app.gui.responsive.helpers import ButtonFlowLayout
+from app.gui.theme import PRIMARY_BUTTON_STATE_STYLE
 
 
 def open_recovered_drafts(owner, copy, ids):
@@ -125,7 +127,13 @@ class RecoveryDraftDialog(QDialog):
         self.setWindowTitle("恢复副本 · 审阅草稿并继续编辑")
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
         self.resize(900, 660)
-        layout = QVBoxLayout(self)
+        frame = QVBoxLayout(self)
+        self.scroller = QScrollArea()
+        self.scroller.setWidgetResizable(True)
+        body = QWidget()
+        self.scroller.setWidget(body)
+        frame.addWidget(self.scroller, 1)
+        layout = QVBoxLayout(body)
         self.status = QLabel("选择已恢复的目录（内含 project/、drafts/、manifest.json），核验后明确选择草稿。")
         self.status.setWordWrap(True)
         self.status.setTextFormat(Qt.TextFormat.PlainText)
@@ -137,22 +145,29 @@ class RecoveryDraftDialog(QDialog):
         self.tree.setRootIsDecorated(False)
         self.tree.setColumnWidth(0, 170)
         self.tree.setColumnWidth(1, 300)
+        self.tree.setMinimumHeight(160)
         layout.addWidget(self.tree, 1)
         self.preview = QPlainTextEdit()
         self.preview.setReadOnly(True)
+        self.preview.setMinimumHeight(160)
+        self.preview.setTabChangesFocus(True)
         layout.addWidget(self.preview, 1)
         policy = QLabel("仅在新窗口载入选定草稿；首次显式保存前不自动写入。磁盘版本与原草稿文件保留。"
                         "同目标多份草稿须择一；Block 与源码草稿分别处理，不自动混合。未知格式不迁移。")
         policy.setWordWrap(True)
         layout.addWidget(policy)
-        row = QHBoxLayout()
+        row = ButtonFlowLayout()
         self.apply_button = QPushButton("确认后在新窗口继续编辑")
+        self.apply_button.setObjectName("primaryButton")
+        self.apply_button.setStyleSheet(PRIMARY_BUTTON_STATE_STYLE)
         self.apply_button.setEnabled(False)
         self.close_button = QPushButton("取消 / 关闭")
-        row.addStretch(1)
         row.addWidget(self.apply_button)
         row.addWidget(self.close_button)
-        layout.addLayout(row)
+        frame.addLayout(row)
+        for button in self.findChildren(QPushButton):
+            button.setAutoDefault(False)
+            button.setDefault(False)
         self.signals = _Signals(self)
         self.signals.finished.connect(self._finished, Qt.ConnectionType.QueuedConnection)
         self.destroyed.connect(self.cancel.set)

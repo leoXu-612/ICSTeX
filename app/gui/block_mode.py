@@ -27,6 +27,7 @@ from app.core.blocks.project_repository import load_project
 from app.core.compiler import BuildPurpose
 from app.core.project_dependencies import safe_project_input
 from app.core.paths import normalize_path
+from app.gui.theme import PRIMARY_ACTION_FOCUS_STYLE
 from app.gui.blocks.diagnostics_dock import BlockDiagnostics
 from app.gui.blocks.inspector import BlockInspector
 from app.gui.blocks.navigation_dock import BlockNavigationWidget
@@ -34,7 +35,7 @@ from app.gui.blocks import profile
 from app.gui.blocks.project_session import ProjectSession
 from app.gui.blocks.close_guard import compile_block_session, confirm_block_close, save_block_session
 from app.gui.blocks.workspace_widget import BlockWorkspaceWidget, BlockPreviewArea
-from app.gui.main_window_support import make_panel
+from app.gui.main_window_support import make_panel, set_dynamic_property
 
 
 def install_block_mode(window) -> None:
@@ -88,6 +89,7 @@ def install_block_mode(window) -> None:
         toolbar.insertAction(source, action)
     compile_button = toolbar.widgetForAction(window.block_compile_action)
     compile_button.setObjectName("primaryAction")
+    compile_button.setStyleSheet(PRIMARY_ACTION_FOCUS_STYLE)
     compile_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
     window.block_mode_action = QAction("Block 模式", window)
     window.block_mode_action.setCheckable(True)
@@ -172,7 +174,7 @@ def _install_session(window, session: ProjectSession) -> bool:
     diagnostics = BlockDiagnostics(session)
     window.block_diagnostics = diagnostics
     window.block_diagnostics_dock.setWidget(diagnostics)
-    diagnostics.error_seen.connect(lambda: window.block_diagnostics_dock.show())
+    diagnostics.error_seen.connect(lambda: window.block_panels.request("diagnostics", error_notice=True))
 
     session.compile_finished.connect(lambda result: _on_block_compile_finished(window, result))
     session.undo_stack.indexChanged.connect(lambda _index: _sync_block_undo_actions(window))
@@ -180,7 +182,7 @@ def _install_session(window, session: ProjectSession) -> bool:
 
     # Central page: workspace + the shared PDF panel.
     pdf_panel = _detach_pdf_panel(window)
-    window.block_pdf_wrapper = make_panel("Block PDF 预览", pdf_panel, "与源码页共享同一 PDF 面板")
+    window.block_pdf_wrapper = make_panel("PDF 预览", pdf_panel, "Block 正式编译结果")
     window.block_preview_area = BlockPreviewArea(workspace, window.block_pdf_wrapper)
     page = QWidget()
     page_layout = QVBoxLayout(page)
@@ -206,6 +208,11 @@ def _open_block_editor(window, block_id: str) -> None:
     workspace = window.block_workspace
     tab_index = {"table": 1, "formula": 2}.get(block.type, 0)
     workspace.tabs.setCurrentIndex(tab_index)
+    if block.type == "text":
+        # Text blocks use the existing inspector editor; reveal it only on
+        # an explicit edit request, not every selection or model refresh.
+        window.block_panels.request("inspector")
+        window.block_inspector.content_edit.setFocus()
 
 
 def _on_block_compile_finished(window, result) -> None:
@@ -227,8 +234,27 @@ def sync_block_pdf(window) -> None:
         return
     busy = bool(session.compile_manager and session.compile_manager.is_busy)
     window.block_compile_action.setEnabled(session.project_dir is not None and not busy)
+    if hasattr(window.pdf_panel, "empty_compile_button"):
+        window.pdf_panel.empty_compile_button.setEnabled(window.block_compile_action.isEnabled())
     window.block_stop_action.setEnabled(busy)
     result = session.last_result
+    # Source compilation may continue while its page is hidden. Its clock and
+    # automatic-mode preference do not describe this Block session.
+    window.compile_timer.stop()
+    window.compile_started_at = None
+    window.status_auto_label.hide()
+    window.compile_progress.setVisible(busy)
+    if busy:
+        window.compile_time_label.setText("Block 编译中")
+        state = "active"
+    elif result is not None:
+        operation = "编译" if result.purpose is BuildPurpose.FINAL else "预览"
+        window.compile_time_label.setText(f"Block 上次{operation} {result.duration_seconds:.2f}s")
+        state = "success" if result.ok else "error"
+    else:
+        window.compile_time_label.setText("Block 空闲")
+        state = ""
+    set_dynamic_property(window.compile_time_label, "state", state)
     root = session.project_dir / "main.tex" if session.project_dir else None
     job = result.job_key if result else None
     current = bool(job and result.ok and job.root_file == root and job.source_revision == session._revision
@@ -236,7 +262,9 @@ def sync_block_pdf(window) -> None:
     if current:
         marker = (id(session), result.build_id)
         if getattr(window, "_displayed_block_build", None) != marker or window.pdf_panel.current_pdf != result.pdf_file:
-            window.pdf_panel.load_pdf(result.pdf_file, logical_key=root)
+            identity = getattr(result, "pdf_identity", None)
+            options = {"content_identity": identity} if identity is not None else {}
+            window.pdf_panel.load_pdf(result.pdf_file, logical_key=root, **options)
             window._displayed_block_build = marker
         purpose = "FINAL" if result.purpose is BuildPurpose.FINAL else "快速预览"
         window.pdf_panel.set_freshness(f"Block {purpose} 已生成 · 提交前请核对输入证据", "neutral")
@@ -248,19 +276,23 @@ def sync_block_pdf(window) -> None:
         window.pdf_panel.set_freshness("Block 暂无当前模型的可用 PDF · 请正式编译", "warning")
     if session.final_is_running:
         window.pdf_panel.set_freshness("Block FINAL 编译中 · 旧显示不可作为当前提交", "neutral")
-    # Until M5 provides Block delivery guards, never route these to a hidden source tab.
-    for action in (window.export_pdf_action, window.reveal_pdf_action, window.sync_pdf_action):
+    # Delivery binds the visible Block session, never the hidden source tab.
+    for action in (window.reveal_pdf_action, window.sync_pdf_action):
         action.setEnabled(False)
-    window.pdf_panel.export_pdf_button.setEnabled(False)
+    window.export_pdf_action.setEnabled(True)
+    window.pdf_panel.export_pdf_button.setEnabled(True)
     window.pdf_panel.reveal_pdf_button.setEnabled(False)
 
 
 def _set_block_mode(window, active: bool) -> None:
+    if active:
+        window.source_panels.set_active(False)
+    if not active:
+        # Remember dock visibility before readiness moves its shared panel
+        # back into the source console and hides the Block container.
+        window.block_panels.set_active(False)
     window.block_mode_action.setChecked(active)
     window.readiness.mode_changed()
-    window.block_nav_dock.setVisible(active)
-    window.block_inspector_dock.setVisible(active)
-    window.block_diagnostics_dock.setVisible(active)
     if active and not getattr(window, "_block_layout_initialized", False):
         from app.gui.theme.ui_metrics import UiMetrics
         from app.gui.theme.ui_scale_manager import refresh_window_metrics
@@ -271,10 +303,12 @@ def _set_block_mode(window, active: bool) -> None:
                            [metrics.dock_min_width, metrics.inspector_min_width], Qt.Orientation.Horizontal)
         window.resizeDocks([window.block_diagnostics_dock], [round(140 * metrics.scale)], Qt.Orientation.Vertical)
         window._block_layout_initialized = True
-    window.engine_toolbar_action.setVisible(not active)
+    # The compiler selector remains available from the existing Compile menu.
+    window.engine_toolbar_action.setVisible(False)
     window.stop_compile_action.setVisible(not active)
     window.auto_compile_toolbar_action.setVisible(not active)
     window.auto_compile_action.setEnabled(not active)
+    window.toolbox_action.setVisible(not active)
     window.block_save_action.setEnabled(active and window.block_session is not None)
     for action in (window.block_save_action, window.block_compile_action, window.block_stop_action):
         action.setVisible(active)
@@ -297,10 +331,12 @@ def _set_block_mode(window, active: bool) -> None:
     else:
         window._sync_pdf_panel_to_active_root()
     window.update_document_view_state()
+    window._sync_compile_indicators_to_active_root()
     if active:
         window.stop_compile_action.setEnabled(False)
     if hasattr(window, "workspace"):
         window.workspace.refresh()
+    window.block_panels.set_active(active)
 
 
 def _detach_pdf_panel(window):
@@ -344,6 +380,7 @@ def _close_block_project(window, *, discard: bool = False) -> bool:
     if session is not None:
         if not discard and not confirm_block_close(window, session):
             return False
+        window.block_panels.set_active(False)
         session.shutdown()
         for signal in (session.model_changed, session.save_completed, session.compile_requested,
                        session.compile_state_changed, session.save_state_changed):

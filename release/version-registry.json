@@ -142,7 +142,7 @@
       "release_name": "Formula Intelligence",
       "release_date": "2026-08-08",
       "git_tag": "v2.1.0-beta.1",
-      "status": "current",
+      "status": "historical",
       "headline": "公式编辑器 2.0；pix2tex 本地公式识别；批量识别队列与逐项状态；ROI 交互；幂等与防抖；UI Scale；Block 主控制台",
       "assets": [
         {
@@ -180,6 +180,37 @@
           "kind": "ZIP",
           "sha256": "9f7ee34c82c6c781fbdeebf6d86704d823d91e9915185b3e64b2c12c685030fb",
           "status": "developer-beta"
+        }
+      ]
+    },
+    {
+      "version": "2.1.0-beta.2",
+      "major": 2,
+      "minor": 1,
+      "channel": "beta",
+      "release_name": "Formula Intelligence",
+      "release_date": "2026-09-15",
+      "git_tag": "v2.1.0-beta.2",
+      "status": "current",
+      "headline": "Mac 手动安装版：自动预览响应、PDF刷新与普通写作UI改进；自动升级未启用",
+      "assets": [
+        {
+          "name": "ICSTeX-2.1.0-beta.2-macos-arm64.dmg",
+          "platform": "macOS",
+          "architecture": "Apple Silicon (arm64)",
+          "kind": "DMG",
+          "sha256": "934ca18aa00b4c62d7188ab5354e11c702f159871055ec05bac6f6dbdca4dd57",
+          "status": "verified",
+          "primary_download": true
+        },
+        {
+          "name": "ICSTeX-2.1.0-beta.2-macos-arm64.zip",
+          "platform": "macOS",
+          "architecture": "Apple Silicon (arm64)",
+          "kind": "ZIP",
+          "sha256": "2a13bceacb754458b4a81069bac17bc509631ef1b4df47ae32a7ed46c9d8a511",
+          "status": "verified",
+          "primary_download": false
         }
       ]
     }

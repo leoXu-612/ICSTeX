@@ -4,13 +4,14 @@ from __future__ import annotations
 from dataclasses import replace
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
+from PySide6.QtWidgets import (QCheckBox, QDialog, QDialogButtonBox,
                                QFormLayout, QLabel, QLineEdit, QMessageBox,
                                QPlainTextEdit, QScrollArea, QVBoxLayout, QWidget)
 
 from app.core.latex_insertions import all_templates
 from app.core.latex_tools import LaTeXEngine
 from app.core.project_profile import ProjectProfile, load_profile, profile_bytes, save_profile
+from app.gui.dialog_combo_box import DialogComboBox
 
 
 class ProjectProfileDialog(QDialog):
@@ -35,7 +36,7 @@ class ProjectProfileDialog(QDialog):
         self.enabled = QCheckBox("使用此项目配置（禁用会保留填写内容）")
         self.enabled.setChecked(profile.enabled)
         form.addRow(self.enabled)
-        self.template = QComboBox()
+        self.template = DialogComboBox()
         self.template.addItem("不指定", "")
         for template in all_templates():
             self.template.addItem(template.title, template.key)
@@ -43,7 +44,7 @@ class ProjectProfileDialog(QDialog):
             self.template.addItem(f"本机未找到：{profile.template}", profile.template)
         self.template.setCurrentIndex(self.template.findData(profile.template))
         form.addRow("参考模板（不替换正文）", self.template)
-        self.engine = QComboBox()
+        self.engine = DialogComboBox()
         self.engine.addItem("不指定", "")
         for engine in LaTeXEngine:
             self.engine.addItem(engine.display_name, engine.value)
@@ -53,6 +54,7 @@ class ProjectProfileDialog(QDialog):
         note.setWordWrap(True)
         form.addRow(note)
         self.directories = QPlainTextEdit("\n".join(profile.directories))
+        self.directories.setTabChangesFocus(True)
         self.directories.setMaximumHeight(100)
         self.directories.setAccessibleName("目录建议，每行一个项目相对路径")
         form.addRow("目录建议（每行一个）", self.directories)

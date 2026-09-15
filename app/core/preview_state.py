@@ -75,6 +75,11 @@ class PreviewStateStore:
         self._records: dict[Path, PreviewBuildRecord] = {}
 
     def record_for(self, root: str | Path) -> PreviewBuildRecord:
+        # Match the canonical PDF store: reuse established root identities in
+        # the typing path; unknown paths still undergo normal resolution.
+        record = self._records.get(root)
+        if record is not None:
+            return record
         key = normalize_path(root)
         record = self._records.get(key)
         if record is None:

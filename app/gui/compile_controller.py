@@ -54,9 +54,17 @@ class CompileController:
         self.image_proxy_cache = ImageProxyCache()
         self._job_keys: dict[tuple[Path, int], CompileJobKey] = {}
         self._final_evidence = {}
+        self._pdf_identities = {}
+        self._deferred_dependencies = {}
 
     def final_evidence_for(self, root):
         return self._final_evidence.get(root)
+
+    def display_identity_for(self, displayed):
+        value = self._pdf_identities.get((displayed.root_file, displayed.purpose))
+        if value is not None and value[:2] == (displayed.build_id, displayed.path):
+            return value[2]
+        return None
 
     # --- main entry points --------------------------------------------------
 
@@ -67,12 +75,15 @@ class CompileController:
         show_missing_warning: bool = False,
         purpose: BuildPurpose | None = None,
         user_initiated: bool = True,
+        _tab_id: int | None = None,
+        _reason: str = "手动触发/编辑器修改",
+        _dependencies_checked: bool = False,
     ) -> None:
         window = self.window
         # Calling this entry point is a deliberate/manual compile unless an
         # auto-save caller explicitly requests PREVIEW.
         selected_purpose = purpose or BuildPurpose.FINAL
-        tab = window.current_tab()
+        tab = window.tabs.get(_tab_id) if _tab_id is not None else window.current_tab()
         if not tab:
             return
         if not user_initiated and not window.auto_compile_action.isChecked():
@@ -107,7 +118,17 @@ class CompileController:
         if tab.path is None:
             return
         root = window._compile_root_for_tab(tab)
+        if root is not None and not _dependencies_checked and window.dependencies.memberships_current:
+            window.dependencies.refresh_memberships(force=True)
+        if root is not None and not window.dependencies.memberships_current:
+            self._defer_dependencies(tab, root, selected_purpose, immediate,
+                                     show_missing_warning, user_initiated, _reason)
+            return
         if root is not None and not window.documents.flush_root_documents(root):
+            return
+        if root is not None and not window.dependencies.memberships_current:
+            self._defer_dependencies(tab, root, selected_purpose, immediate,
+                                     show_missing_warning, user_initiated, _reason)
             return
         if tab.manager is None:
             tab.manager = self.create_manager(tab.path)
@@ -121,11 +142,71 @@ class CompileController:
             tab.manager.cancel_pending()
             tab.manager.compile_async(selected_purpose)
         else:
-            tab.manager.schedule_compile("手动触发/编辑器修改", selected_purpose)
+            tab.manager.schedule_compile(_reason, selected_purpose)
+
+    def _defer_dependencies(self, tab, root, purpose, immediate, warning, user, reason, manager_only=False):
+        old = self._deferred_dependencies.get(root)
+        if old is not None and old[0] in self.window.tabs and (
+                (old[2] is BuildPurpose.FINAL and purpose is BuildPurpose.PREVIEW) or (old[5] and not user)):
+            self.window.dependencies.refresh_memberships()
+            return
+        self._deferred_dependencies[root] = (id(tab.editor), self.window.selected_project_scope,
+                                             purpose, immediate, warning, user, reason, manager_only)
+        self.window.statusBar().showMessage("正在更新项目依赖；完成后继续已请求的编译。", 4000)
+        self.window._sync_compile_indicators_to_active_root()
+        self.window.dependencies.refresh_memberships()
+
+    def resume_dependencies(self):
+        window = self.window
+        if window.dependencies._closed.is_set() or not window.dependencies.memberships_current:
+            return
+        pending, self._deferred_dependencies = self._deferred_dependencies, {}
+        if window.block_mode_action.isChecked():
+            return
+        for root, (identity, scope, purpose, immediate, warning, user, reason, manager_only) in pending.items():
+            tab = window.tabs.get(identity)
+            if tab is None or scope != window.selected_project_scope or window._compile_root_for_tab(tab) != root:
+                continue
+            if manager_only:
+                self.compile_for_root(root, purpose, reason=reason, immediate=immediate, _dependencies_checked=True)
+            else:
+                self.compile_current(immediate=immediate, show_missing_warning=warning, purpose=purpose,
+                                     user_initiated=user, _tab_id=identity, _reason=reason, _dependencies_checked=True)
+        window._sync_compile_indicators_to_active_root()
+
+    def compile_for_root(self, root, purpose, *, reason, immediate=False, _dependencies_checked=False):
+        window = self.window
+        if not window.auto_compile_action.isChecked() or root not in window.compile_authorized_roots:
+            return
+        for tab in self.window.tabs.values():
+            if tab.manager is not None and tab.manager.root_file == root:
+                if (purpose is BuildPurpose.FINAL and not _dependencies_checked
+                        and window.dependencies.memberships_current):
+                    window.dependencies.refresh_memberships(force=True)
+                if not window.dependencies.memberships_current:
+                    self._defer_dependencies(tab, root, purpose, immediate, False, False, reason, True)
+                    return
+                if not window.documents.flush_root_documents(root):
+                    return
+                if not window.dependencies.memberships_current:
+                    self._defer_dependencies(tab, root, purpose, immediate, False, False, reason, True)
+                    return
+                self.sync_input_revision(root)
+                if immediate:
+                    tab.manager.compile_async(purpose)
+                else:
+                    tab.manager.schedule_compile(reason, purpose)
+                return
 
     def stop_current(self) -> None:
         window = self.window
         tab = window.current_tab()
+        root = window._compile_root_for_tab(tab)
+        waiting = self._deferred_dependencies.pop(root, None)
+        if waiting is not None and (not tab or not tab.manager or not tab.manager.is_busy):
+            window._sync_compile_indicators_to_active_root()
+            window.statusBar().showMessage("已取消等待依赖更新的编译。", 3000)
+            return
         if not tab or not tab.manager:
             window.statusBar().showMessage("当前没有正在运行的编译。", 3000)
             return
@@ -219,6 +300,8 @@ class CompileController:
     # --- compile signal slots ----------------------------------------------
 
     def _is_active_root(self, root_file: Path | str) -> bool:
+        if getattr(self.window, "block_session", None) is not None and self.window.block_mode_action.isChecked():
+            return False
         active = self.window._compile_root_for_tab(self.window.current_tab())
         return active is not None and active == normalize_path(root_file)
 
@@ -330,6 +413,10 @@ class CompileController:
             window.append_log(f"已忽略过期的编译结果：{result.root_file.name}")
             window._update_pdf_action_state()
             return
+        if result.ok and result.pdf_identity is not None:
+            self._pdf_identities[(root, result.purpose)] = (result.build_id, result.pdf_file, result.pdf_identity)
+            while len(self._pdf_identities) > 64:
+                self._pdf_identities.pop(next(iter(self._pdf_identities)))
         evidence = final_build_evidence(result)
         if evidence is not None:
             self._final_evidence.pop(root, None)
@@ -364,14 +451,23 @@ class CompileController:
         if is_current:
             window.statusBar().showMessage(headline, 4000 if result.ok else 6000)
             self.show_errors(result)
-            window.run_project_check(result.errors if not result.ok else [], switch_to_panel=not result.ok)
-            window.update_word_count()
+            window.run_project_check(result.errors if not result.ok else [], switch_to_panel=False)
+            if not result.ok:
+                from app.gui.main_window_layout import show_console
+                show_console(window, window.diagnostic_panel, error_notice=True)
+            if result.ok and result.purpose is BuildPurpose.PREVIEW:
+                # Let the newly loaded PDF paint before background text parsing.
+                window.word_counts.schedule(delay_ms=1000)
+            else:
+                window.update_word_count()
         if result.purpose is BuildPurpose.FINAL and hasattr(window, "pdf_export"):
             window.pdf_export.handle_compile_result(result, record)
         window._update_pdf_action_state()
 
     def update_timer(self) -> None:
         window = self.window
+        if getattr(window, "block_session", None) is not None and window.block_mode_action.isChecked():
+            return
         if window.compile_started_at is None:
             return
         elapsed = time.perf_counter() - window.compile_started_at
@@ -403,6 +499,9 @@ class CompileController:
         index = window.bottom_tabs.indexOf(window.error_table)
         if index >= 0:
             window.bottom_tabs.setTabText(index, f"错误 {error_count}" if error_count else "错误")
+        if error_count:
+            from app.gui.main_window_layout import show_console
+            show_console(window, window.error_table, error_notice=True)
 
     def show_toolchain_status(self) -> None:
         window = self.window
@@ -493,6 +592,8 @@ class CompileController:
     ) -> None:
         """Invalidate queued/active callbacks belonging to one manager instance."""
         window = self.window
+        for purpose in BuildPurpose:
+            self._pdf_identities.pop((manager.root_file, purpose), None)
         owned_keys = [
             key for key, owner in window.compile_build_owners.items() if owner is manager
         ]
@@ -521,6 +622,7 @@ class CompileController:
     def retire_manager(self, manager: CompileManager, *, timeout: float = 1.5) -> bool:
         """Revoke GUI ownership before waiting for a manager to stop."""
         window = self.window
+        self._deferred_dependencies.pop(manager.root_file, None)
         if window.compile_managers.get(manager.root_file) is manager:
             window.compile_managers.pop(manager.root_file, None)
         self.invalidate_manager_builds(manager)

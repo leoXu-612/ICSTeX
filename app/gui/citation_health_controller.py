@@ -56,7 +56,7 @@ class CitationHealthController(QObject):
         window = self.window
         return (window.selected_project_scope, self._root, id(window.current_tab()),
                 window.block_mode_action.isChecked(),
-                tuple((tab.path, id(tab.editor), tab.editor.document().revision(), tab.modified,
+                tuple((tab.path, id(tab.editor), tab.editor.source_revision, tab.modified,
                        tab.dirty, tab.external_conflict) for tab in window.tabs.values()),
                 window.dependencies.generation_for(self._root) if self._root else 0)
 

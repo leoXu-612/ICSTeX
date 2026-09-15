@@ -3,9 +3,10 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal, QSignalBlocker
-from PySide6.QtGui import QFont
+from PySide6.QtCore import Qt, Signal, QSignalBlocker, QTimer, Slot, QEvent
+from PySide6.QtGui import QFont, QTextCursor
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QCheckBox,
     QApplication,
     QComboBox,
@@ -27,6 +28,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSpinBox,
     QTableWidgetItem,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -46,6 +48,7 @@ from app.core.latex_insertions import (
 )
 from app.core.table_clipboard import parse_grid
 from app.gui.table_grid import TableGrid
+from app.gui.theme import PRIMARY_BUTTON_STATE_STYLE
 
 
 class InsertPanel(QWidget):
@@ -74,7 +77,6 @@ class InsertPanel(QWidget):
             ("公式", self.equationRequested),
             ("列表", self.listRequested),
             ("章节标题", self.sectionRequested),
-            ("分段函数", self.casesRequested),
             ("引用块", self.quoteRequested),
         ]
         for label, signal in tools:
@@ -103,6 +105,7 @@ class TemplatesPanel(QWidget):
 
         create_button = _tool_button("用所选模板新建")
         create_button.setObjectName("primaryButton")
+        create_button.setStyleSheet(PRIMARY_BUTTON_STATE_STYLE)
         create_button.clicked.connect(self._emit_create)
         layout.addWidget(create_button)
 
@@ -322,8 +325,9 @@ SideBySideFigureDialog = FigureLayoutDialog
 
 
 class TableDialog(QDialog):
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, parent: QWidget | None = None, *, validate_target: Callable[[], str] | None = None) -> None:
         super().__init__(parent)
+        self._validate_target = validate_target
         self.setWindowTitle("插入表格")
         self.resize(840, 660)
         self._loading = True
@@ -353,6 +357,9 @@ class TableDialog(QDialog):
         self.label_edit.setPlaceholderText("例如 tab:results")
         self.preview_table = TableGrid()
         self.status_label = QLabel()
+        self.target_error_label = QLabel()
+        self.target_error_label.setWordWrap(True)
+        self.target_error_label.hide()
         self.undo_button = QPushButton("撤销")
         self.redo_button = QPushButton("重做")
         self.undo_button.clicked.connect(self.undo)
@@ -374,6 +381,15 @@ class TableDialog(QDialog):
             signal.connect(self._record_change)
         self.preview_table.itemSelectionChanged.connect(self._update_status)
         self._update_status()
+
+    def accept(self) -> None:
+        error = self._validate_target() if self._validate_target is not None else ""
+        if error:
+            self.target_error_label.setText(error)
+            self.target_error_label.show()
+            self.preview_check.setChecked(True)
+            return
+        super().accept()
 
     def values(self) -> TableSpec:
         headers = tuple(self._cell_text(0, column) for column in range(self.columns_spin.value()))
@@ -440,9 +456,11 @@ class TableDialog(QDialog):
         layout.addWidget(self.preview_check)
         layout.addWidget(self.source_preview)
         layout.addWidget(self.status_label)
+        layout.addWidget(self.target_error_label)
         buttons = _buttons(self)
         buttons.button(QDialogButtonBox.StandardButton.Ok).setText("插入表格")
         buttons.button(QDialogButtonBox.StandardButton.Ok).setObjectName("primaryButton")
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setStyleSheet(PRIMARY_BUTTON_STATE_STYLE)
         buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("取消")
         layout.addWidget(buttons)
         for button in self.findChildren(QPushButton):
@@ -633,8 +651,69 @@ class HyperlinkDialog(QDialog):
         return HyperlinkSpec(text=self.text_edit.text().strip(), url=self.url_edit.text().strip())
 
 
+class _FocusScrollArea(QScrollArea):
+    """Reveal focused descendants after keyboard entry or layout resizing."""
+
+    def __init__(self):
+        super().__init__()
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._focus_timer = QTimer(self)
+        self._focus_timer.setSingleShot(True)
+        self._focus_timer.timeout.connect(self._reveal_focus)
+        self._text_end = False
+        QApplication.instance().focusChanged.connect(self._focus_changed)
+
+    @Slot(QWidget, QWidget)
+    def _focus_changed(self, _previous, current):
+        self._text_end = False
+        if current is not None and self.widget() is not None and self.widget().isAncestorOf(current):
+            self.queueFocusReveal()
+
+    def followReadOnlyText(self, editor):
+        editor.installEventFilter(self)
+        editor.verticalScrollBar().valueChanged.connect(self.queueFocusReveal)
+
+    def eventFilter(self, watched, event):
+        if event.type() == QEvent.Type.KeyPress:
+            self._text_end = event.key() == Qt.Key.Key_End
+            self.queueFocusReveal()
+        return super().eventFilter(watched, event)
+
+    @Slot()
+    def queueFocusReveal(self):
+        self._focus_timer.start(0)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._focus_timer.start(0)
+
+    @Slot()
+    def _reveal_focus(self):
+        current = QApplication.focusWidget()
+        if current is not None and self.widget() is not None and self.widget().isAncestorOf(current):
+            if isinstance(current, QAbstractItemView) and current.currentIndex().isValid():
+                rect = current.visualRect(current.currentIndex())
+                if rect.isValid():
+                    position = current.viewport().mapTo(self.widget(), rect.center())
+                    self.ensureVisible(position.x(), position.y(), 0, (rect.height() + 1) // 2)
+                    return
+            if isinstance(current, (QTextEdit, QPlainTextEdit)) and current.isReadOnly():
+                bar = current.verticalScrollBar()
+                at_end = bar.value() == bar.maximum() and (bar.maximum() > 0 or self._text_end)
+                cursor = QTextCursor(current.document())
+                cursor.movePosition(QTextCursor.MoveOperation.End if at_end else QTextCursor.MoveOperation.Start)
+                rect = current.cursorRect(cursor)
+                if not current.viewport().rect().contains(rect):
+                    rect = current.viewport().rect()
+                    rect.setHeight(min(rect.height(), current.fontMetrics().height()))
+                position = current.viewport().mapTo(self.widget(), rect.center())
+                self.ensureVisible(position.x(), position.y(), 0, (rect.height() + 1) // 2)
+                return
+            self.ensureWidgetVisible(current)
+
+
 def scrollable_panel(widget: QWidget) -> QScrollArea:
-    area = QScrollArea()
+    area = _FocusScrollArea()
     area.setObjectName("sidebarScroll")
     area.setWidgetResizable(True)
     area.setFrameShape(QFrame.Shape.NoFrame)

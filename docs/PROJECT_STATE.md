@@ -1,12 +1,18 @@
 # ICSTeX Project State
 
-更新时间：2026-09-11（Asia/Taipei）
+更新时间：2026-09-15（Beta 2 手动下载发布快照）
 
 本文件是当前已验证状态的权威来源；历史证据写入 `PROJECT_LOG.md`，未来计划写入
 `docs/ROADMAP.md`，长期约束写入 `docs/DECISION_LOG.md`。
 
 ## Product and Source State
 
+- 本发布快照为macOS arm64手动安装Beta 2，源码和安装程序身份以
+  `release/BUILD_RECEIPT.json`为准。当前app摘要a8bb8ee6、app+tests摘要e619e6d1，与
+  权威开发工作区通过1743项preflight的输入一致；另在本快照通过网站专项、版本/资产
+  一致性和编译检查。新DMG/ZIP解包程序与已验证本机程序19fc3696一致，使用ad-hoc签名。
+  本包不包含公开更新runtime；自动升级、多实例安装协调、Windows Beta 2及公证仍未交付。
+  本节以下是从开发基线继承的历史状态，不作为此手动发布的当前制品声明。
 - 权威工作区：本仓库根目录；Beta 2 源码与下一代开发说明已于 2026-09-10
   同步至 GitHub 的 `release/2.1`，源码提交为 `fef3731`。
   此后 V1 本地开发已完成 M0、M1 只读纵向切片，M2 已实现项目配置、创建/工作区

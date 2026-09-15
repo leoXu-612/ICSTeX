@@ -10,6 +10,12 @@ The repository does not vendor the SDKs. Maintainer public configuration for
 the macOS arm64 Beta candidate is in `release/updates/macos-arm64-beta.json`.
 Its presence does not enable ordinary builds or establish activation acceptance.
 
+The current bounded preparation is tracked in
+[`docs/UPDATE_ACTIVATION_PREPARATION.md`](../docs/UPDATE_ACTIVATION_PREPARATION.md).
+After opt-in, the client checks after startup with a short restart cooldown, then
+daily while running. The installation-lifetime exclusion gate below remains open;
+do not publish the old candidate as the newer performance/UI source.
+
 ## 1. Release prerequisites
 
 Before enabling a runtime, establish a separately authorized release with:

@@ -19,6 +19,12 @@ def _app() -> QApplication:
     return instance
 
 
+def setUpModule():
+    # This module must also be runnable alone, before any other GUI test.
+    global _application
+    _application = _app()
+
+
 class BreakpointTests(TestCase):
     def test_resolution(self) -> None:
         self.assertEqual(resolve_layout_mode(1200), "wide")
@@ -60,6 +66,21 @@ class WelcomeReflowTests(TestCase):
         self.assertTrue(self.page.scroll.widgetResizable())
         self.assertIsNotNone(self.page.scroll.widget())
 
+    def test_welcome_reflow_clears_unused_columns_and_keeps_button_focus(self):
+        self.page.resize(1440, 900)
+        self.page.show()
+        self.page.activateWindow()
+        _app().processEvents()
+        button = self.page.open_file_button
+        button.setFocus(Qt.FocusReason.TabFocusReason)
+        self.assertTrue(button.hasFocus())
+        for mode, action_columns, card_columns in (("medium", 2, 1), ("narrow", 1, 1), ("wide", 4, 2)):
+            self.page._apply_layout_mode(mode)
+            for grid, columns in ((self.page.action_grid, action_columns), (self.page.cards_grid, card_columns)):
+                self.assertEqual([grid.columnStretch(i) for i in range(grid.columnCount())],
+                                 [1] * columns + [0] * (grid.columnCount() - columns))
+            self.assertTrue(button.hasFocus(), mode)
+
 
 class TabBarTests(TestCase):
     def test_source_tabs_configured(self) -> None:
@@ -89,6 +110,7 @@ class PdfToolbarResponsiveTests(TestCase):
         from app.gui.pdf_panel import PdfPanel
 
         panel = PdfPanel()
+        panel._toolbar.show()  # Exercise the toolbar itself; empty PDFs hide it.
         panel.show()
         panel.resize(500, 700)
         QApplication.processEvents()
@@ -102,6 +124,50 @@ class PdfToolbarResponsiveTests(TestCase):
         self.assertFalse(panel._more_button.isVisibleTo(panel))
         self.assertTrue(panel._secondary_panel.isVisibleTo(panel))
         panel.close()
+
+
+class EditorPdfPreferenceTests(TestCase):
+    def test_height_only_reflow_does_not_reapply_splitter_sizes(self):
+        from unittest.mock import patch
+        from PySide6.QtCore import QEvent
+        from PySide6.QtWidgets import QWidget
+        from app.gui.responsive.editor_pdf_area import EditorPdfArea
+        area = EditorPdfArea(QWidget(), QWidget())
+        try:
+            area.resize(1200, 600)
+            area.show()
+            QApplication.processEvents()
+            with patch.object(area.splitter, "setSizes", wraps=area.splitter.setSizes) as apply:
+                for height in (610, 620, 600):
+                    area.resize(1200, height)
+                    QApplication.processEvents()
+                apply.assert_not_called()
+        finally:
+            area.close()
+            area.deleteLater()
+            QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_default_ratio_is_not_replaced_by_different_child_minimums(self):
+        from PySide6.QtCore import QEvent
+        from PySide6.QtWidgets import QWidget
+        from app.gui.responsive.editor_pdf_area import EditorPdfArea
+        editor, pdf = QWidget(), QWidget()
+        editor.setMinimumWidth(100)
+        pdf.setMinimumWidth(300)
+        area = EditorPdfArea(editor, pdf)
+        try:
+            area.show()
+            for width in (1200, 1600, 1200):
+                area.resize(width, 600)
+                QApplication.processEvents()
+                sizes = area.splitter.sizes()
+                self.assertEqual(sizes[0], round(sum(sizes) * 3 / 5))
+                self.assertGreaterEqual(sizes[1], 300)
+                self.assertEqual(area._wide_sizes, [3, 2])
+        finally:
+            area.close()
+            area.deleteLater()
+            QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
 class MainToolbarStructureTests(TestCase):
@@ -123,7 +189,9 @@ class MainToolbarStructureTests(TestCase):
         self.assertIsNotNone(toolbar)
         action_texts = [action.text() for action in toolbar.actions()]
         self.assertIn("保存", action_texts)
-        self.assertIn("编译", action_texts)
-        self.assertEqual(toolbar.toolButtonStyle(), Qt.ToolButtonStyle.ToolButtonIconOnly)
+        self.assertIn("正式编译", action_texts)
+        self.assertIn(window.compile_action, toolbar.actions())
+        self.assertEqual(toolbar.widgetForAction(window.compile_action).defaultAction(), window.compile_action)
+        self.assertEqual(toolbar.toolButtonStyle(), Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         window.close()
         tmp.cleanup()

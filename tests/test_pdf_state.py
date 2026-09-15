@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
+from unittest.mock import patch
 
 from app.core.compiler import CompileOutcome
 from app.core.pdf_state import (
@@ -34,6 +35,24 @@ class PdfStateStoreTests(TestCase):
     def test_records_are_keyed_by_normalized_root(self) -> None:
         alias = Path(self._tmp.name) / "sub" / ".." / "main.tex"
         self.assertIs(self.store.record_for(self.root), self.store.record_for(alias))
+
+    def test_registered_root_edits_do_not_resolve_paths_again(self) -> None:
+        record = self.store.record_for(self.root)
+        with patch("app.core.pdf_state.normalize_path", side_effect=AssertionError("unexpected disk lookup")):
+            for _ in range(30):
+                self.assertIs(self.store.mark_edited(record.root_file), record)
+        self.assertEqual(record.source_revision, 30)
+
+    def test_unregistered_symlink_alias_is_resolved_on_each_lookup(self) -> None:
+        alias = self.root.with_name("alias.tex")
+        other = self.root.with_name("other.tex")
+        other.write_text("other", encoding="utf-8")
+        alias.symlink_to(self.root)
+        first = self.store.record_for(alias)
+        alias.unlink()
+        alias.symlink_to(other)
+        self.assertIsNot(self.store.record_for(alias), first)
+        self.assertIs(self.store.record_for(self.root), first)
 
     def test_edit_marks_dirty_from_any_state(self) -> None:
         for prepare in (

@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 from app.gui.assets import app_cover_path
 from app.gui.icons import icon
 from app.gui.main_window_support import set_dynamic_property
+from app.gui.theme import PRIMARY_BUTTON_STATE_STYLE
 from app.gui.responsive.helpers import (
     layout_reflow,
     resolve_layout_mode,
@@ -102,6 +103,7 @@ class WelcomePage(QWidget):
         self.action_grid.setSpacing(10)
         self.new_project_button = QPushButton("新建项目")
         self.new_project_button.setObjectName("primaryButton")
+        self.new_project_button.setStyleSheet(PRIMARY_BUTTON_STATE_STYLE)
         self.open_file_button = QPushButton("打开 .tex")
         self.open_folder_button = QPushButton("打开项目文件夹")
         self.guide_button = QPushButton("新手导引")

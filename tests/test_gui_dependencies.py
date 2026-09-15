@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import threading
+import sys
 import time
 from unittest import TestCase
 from unittest.mock import patch
@@ -87,7 +88,336 @@ class GuiDependencyTests(TestCase):
         self.assertFalse(self.window.compile_authorized_roots)
         self.assertTrue({self.source, self.child, self.bib}.issubset(self.window.file_watcher._files))
         self.assertIn(self.root / "article.cls", self.window.file_watcher._files)
+
+    def test_source_edit_reuses_the_open_tabs_path_identity(self) -> None:
+        record = self.window.pdf_state.record_for(self.source)
+        before = record.source_revision
+        with patch("app.gui.main_window.normalize_path",
+                   side_effect=AssertionError("Do not resolve an open tab again during typing")):
+            self.window._mark_source_edited(self.tab)
+        self.assertEqual(record.source_revision, before + 1)
+        self.assertEqual(record.freshness, PdfFreshness.DIRTY)
+
+    def test_typing_burst_defers_background_scans_until_pause(self) -> None:
+        from PySide6.QtTest import QTest
+        self.assertTrue(wait_until(lambda: not self.window.word_counts.is_busy))
+        with patch.object(self.window.dependencies, "_start_membership") as membership, \
+             patch.object(self.window.word_counts, "_launch") as count:
+            for _ in range(3):
+                self.tab.editor.insertPlainText("x")
+                QTest.qWait(260)
+                membership.assert_not_called()
+                count.assert_not_called()
+            self.assertTrue(wait_until(lambda: membership.called and count.called, timeout=1))
+            self.assertEqual(membership.call_count, 1)
+            self.assertEqual(count.call_count, 1)
+
+    def test_save_boundary_keeps_the_tabs_parent_path_canonical(self) -> None:
+        folder = self.root / "nested"
+        folder.mkdir()
+        alias = folder / ".." / "saved.tex"
+        original = self.source.read_bytes()
+        self.assertTrue(self.window.documents.save_tab(self.tab, alias))
+        self.assertEqual(self.tab.path, self.root / "saved.tex")
+        self.assertEqual(self.window.local_save_contents[self.tab.path], self.tab.editor.toPlainText())
+        self.assertEqual(self.tab.path.read_text(encoding="utf-8"), self.tab.editor.toPlainText())
+        self.assertEqual(self.source.read_bytes(), original)
+
+    def test_replaced_child_symlink_still_invalidates_its_open_buffer_owners(self) -> None:
+        first = self._manager()
+        second_path = self.root / "second.tex"
+        second_path.write_text("\\documentclass{article}\n\\input{child}", encoding="utf-8")
+        self.window.open_file(second_path)
+        second = self._manager(self.window.current_tab())
+        self.window.open_file(self.child)
+        child_tab = self.window.current_tab()
+        self.assertTrue(wait_until(lambda: not self.window.dependencies.is_busy))
+        owners = {first.root_file, second.root_file}
+        self.assertEqual(len(owners), 2)
+        self.assertTrue(owners.issubset(self.window.dependencies.roots_for(self.child)))
+        before = {root: self.window.pdf_state.record_for(root).source_revision for root in owners}
+        with TemporaryDirectory() as outside:
+            replacement = Path(outside) / "unrelated.tex"
+            replacement.write_bytes(b"Unrelated synthetic original")
+            self.child.unlink()
+            self.child.symlink_to(replacement)
+            with patch.object(self.window.dependencies, "roots_for",
+                              wraps=self.window.dependencies.roots_for) as lookup:
+                self.window._mark_source_edited(child_tab)
+            lookup.assert_called_once_with(self.child)
+            for root in owners:
+                record = self.window.pdf_state.record_for(root)
+                self.assertEqual(record.source_revision, before[root] + 1)
+                self.assertEqual(record.freshness, PdfFreshness.DIRTY)
+            self.assertEqual(child_tab.path, self.child)
+            self.assertEqual(child_tab.editor.toPlainText(), "one")
+            self.assertEqual(replacement.read_bytes(), b"Unrelated synthetic original")
         self.assertFalse(any(".latex_build" in path.parts for path in self.window.file_watcher._files))
+
+    def test_membership_scan_never_runs_on_gui_thread(self) -> None:
+        from app.gui import dependency_controller
+        original = dependency_controller.static_dependencies
+        threads = []
+
+        def observed(*args, **kwargs):
+            threads.append(threading.get_ident())
+            return original(*args, **kwargs)
+
+        with patch.object(dependency_controller, "static_dependencies", side_effect=observed):
+            self.tab.editor.insertPlainText("% new revision\n")
+            self.window.dependencies.refresh_memberships()
+            self.assertTrue(wait_until(lambda: not self.window.dependencies.is_busy))
+        self.assertTrue(threads)
+        self.assertNotIn(threading.get_ident(), threads)
+
+    def test_ready_automatic_preview_does_not_force_another_membership_job(self):
+        manager = self._manager()
+        self.window.dependencies.refresh_memberships(force=True)
+        self.assertTrue(wait_until(lambda: not self.window.dependencies.is_busy))
+        self.assertTrue(self.window.dependencies.memberships_current)
+        self.window.auto_compile_action.setChecked(True)
+        self.window.compile_authorized_roots.add(manager.root_file)
+        with patch.object(self.window.dependencies, "refresh_memberships") as refresh, \
+                patch.object(manager, "compile_async") as compiled:
+            self.window.compile.compile_for_root(
+                manager.root_file, BuildPurpose.PREVIEW, reason="automatic edit", immediate=True)
+            compiled.assert_called_once_with(BuildPurpose.PREVIEW)
+            refresh.assert_not_called()
+
+    def test_pending_automatic_compile_defers_background_count_but_not_explicit_count(self):
+        manager = self._manager()
+        self.assertTrue(wait_until(lambda: not self.window.dependencies.is_busy
+                                  and not self.window.word_counts.is_busy))
+        self.window.auto_compile_action.setChecked(True)
+        self.window.compile_authorized_roots.add(manager.root_file)
+        self.tab.editor.insertPlainText("New text ")
+        with patch.object(self.window.word_counts, "_launch") as launch:
+            self.window.update_word_count()
+            launch.assert_not_called()
+            self.assertTrue(self.window.word_counts._timer.isActive())
+            self.window.update_word_count(force=True)
+            launch.assert_called_once()
+
+    def test_own_save_does_not_replace_immediate_preview_with_external_debounce(self):
+        manager = self._manager()
+        self.window.dependencies.refresh_memberships(force=True)
+        self.assertTrue(wait_until(lambda: not self.window.dependencies.is_busy))
+        self.window.auto_compile_action.setChecked(True)
+        self.window.compile_authorized_roots.add(manager.root_file)
+        generation = self.window.dependencies.generation_for(manager.root_file)
+        self.tab.editor.insertPlainText("New text ")
+        with patch.object(manager, "compile_async") as immediate, \
+                patch.object(manager, "schedule_compile") as scheduled:
+            self.assertTrue(self.window.flush_pending_save(self.tab))
+            self.assertTrue(wait_until(lambda: not self.window.dependencies.is_busy))
+            immediate.assert_called_once_with(BuildPurpose.PREVIEW)
+            scheduled.assert_not_called()
+        self.assertEqual(self.window.dependencies.generation_for(manager.root_file), generation)
+
+    def test_scheduled_compile_keeps_count_deferred_until_cancelled(self):
+        manager = self._manager()
+        self.assertTrue(wait_until(lambda: not self.window.word_counts.is_busy))
+        self.window.auto_compile_action.setChecked(True)
+        self.window.compile_authorized_roots.add(manager.root_file)
+        manager.debounce_ms = 60_000
+        manager.schedule_compile("external edit", BuildPurpose.PREVIEW)
+        self.addCleanup(manager.cancel_pending)
+        self.window.word_counts._cache.clear()
+        self.assertFalse(manager.is_busy)
+        with patch.object(self.window.word_counts, "_launch") as launch:
+            self.window.update_word_count()
+            launch.assert_not_called()
+            manager.cancel_pending()
+            self.window.update_word_count(force=True)
+            launch.assert_called_once()
+
+    def test_typing_uses_cached_root_without_disk_resolution(self) -> None:
+        with patch("app.gui.main_window.resolve_root_tex", wraps=__import__(
+                "app.core.paths", fromlist=["resolve_root_tex"]).resolve_root_tex) as resolve:
+            self.tab.editor.insertPlainText("% typing\n")
+            self.assertEqual(resolve.call_count, 0)
+
+    def _held_membership(self):
+        from app.gui import dependency_controller
+        entered, release = threading.Event(), threading.Event()
+        calls = []
+        original = dependency_controller.static_dependencies
+
+        def delayed(root, scope, buffers, **kwargs):
+            calls.append((root, buffers.get(root)))
+            if not entered.is_set():
+                entered.set()
+                release.wait(5)
+            return original(root, scope, buffers, **kwargs)
+
+        self.addCleanup(release.set)
+        return patch.object(dependency_controller, "static_dependencies", side_effect=delayed), entered, release, calls
+
+    def test_membership_worker_keeps_one_latest_snapshot_and_retains_old_watches(self):
+        held, entered, release, calls = self._held_membership()
+        source = self.source.read_text()
+        with held:
+            self.tab.editor.insertPlainText("% first snapshot\n")
+            self.window.dependencies.refresh_memberships()
+            self.assertTrue(wait_until(entered.is_set))
+            first = self.window.dependencies._membership_active
+            for index in range(10):
+                (self.root / f"new-{index}.tex").write_text(str(index))
+                self.tab.editor.setPlainText(source + f"\n\\input{{new-{index}.tex}}")
+                self.window.dependencies.refresh_memberships()
+                self.assertIs(self.window.dependencies._membership_active, first)
+            self.assertTrue(first.cancelled.is_set())
+            self.assertIn(self.child, self.window.file_watcher._files)
+            self.assertNotIn("new-9", dict(first.inputs.buffers)[self.source])
+            latest = self.window.dependencies._membership_pending
+            self.assertIn("new-9", dict(latest.inputs.buffers)[self.source])
+            release.set()
+            self.assertTrue(wait_until(lambda: not self.window.dependencies.is_busy))
+        self.assertEqual(len(calls), 2)
+        self.assertIn(self.root / "new-9.tex", self.window.dependencies.paths_for(self.source))
+        self.assertNotIn(self.root / "new-0.tex", self.window.dependencies.paths_for(self.source))
+
+    def test_manual_compile_waits_for_new_dependency_then_flushes_latest_child(self):
+        manager = self._manager()
+        self.assertTrue(wait_until(lambda: not self.window.dependencies.is_busy))
+        late = self.root / "late.tex"
+        late.write_text("saved child")
+        self.window.open_file(late)
+        late_tab = self.window.current_tab()
+        self.assertTrue(wait_until(lambda: not self.window.dependencies.is_busy))
+        self.window.editor_tabs.setCurrentIndex(self.window._index_for_tab_id(id(self.tab.editor)))
+        self.window.toolchain = LaTeXToolchain(None, sys.executable)
+        held, entered, release, _ = self._held_membership()
+        with held, patch.object(manager, "compile_async") as compiled:
+            self.tab.editor.insertPlainText("\\input{late.tex}\n")
+            self.window.dependencies.refresh_memberships()
+            self.assertTrue(wait_until(entered.is_set))
+            late_tab.editor.setPlainText("latest unsaved child")
+            self.window.compile_current(immediate=True, purpose=BuildPurpose.FINAL)
+            compiled.assert_not_called()
+            self.assertEqual(late.read_text(), "saved child")
+            self.assertEqual(len(self.window.compile._deferred_dependencies), 1)
+            release.set()
+            self.assertTrue(wait_until(lambda: not self.window.dependencies.is_busy))
+            compiled.assert_called_once_with(BuildPurpose.FINAL)
+        self.assertEqual(late.read_text(), "latest unsaved child")
+        self.assertFalse(self.window.compile._deferred_dependencies)
+
+    def test_stop_cancels_compile_waiting_for_graph_without_late_launch(self):
+        manager = self._manager()
+        self.window.toolchain = LaTeXToolchain(None, sys.executable)
+        self.assertTrue(wait_until(lambda: not self.window.dependencies.is_busy))
+        held, entered, release, _ = self._held_membership()
+        with held, patch.object(manager, "compile_async") as compiled:
+            self.tab.editor.insertPlainText("% waiting\n")
+            self.window.dependencies.refresh_memberships()
+            self.assertTrue(wait_until(entered.is_set))
+            self.window.compile_current(immediate=True)
+            self.assertTrue(self.window.compile._deferred_dependencies)
+            self.assertTrue(self.window.stop_compile_action.isEnabled())
+            self.window.stop_compile_action.trigger()
+            self.assertFalse(self.window.compile._deferred_dependencies)
+            self.assertFalse(self.window.stop_compile_action.isEnabled())
+            release.set()
+            self.assertTrue(wait_until(lambda: not self.window.dependencies.is_busy))
+            compiled.assert_not_called()
+
+    def test_compile_rechecks_disk_root_before_using_cached_membership_for_flush(self):
+        manager = self._manager()
+        late = self.root / "late.tex"
+        late.write_text("saved child")
+        self.window.open_file(late)
+        late_tab = self.window.current_tab()
+        late_tab.editor.setPlainText("latest child draft")
+        self.assertTrue(wait_until(lambda: not self.window.dependencies.is_busy))
+        self.window.editor_tabs.setCurrentIndex(self.window._index_for_tab_id(id(self.tab.editor)))
+        # The fixture intentionally suppresses watcher notifications. A cached
+        # graph is not independent proof that a new include is absent.
+        self.source.write_text(self.source.read_text() + "\n\\input{late.tex}")
+        self.window.toolchain = LaTeXToolchain(None, sys.executable)
+        with patch.object(manager, "compile_async") as compiled:
+            self.window.compile_current(immediate=True)
+            self.assertTrue(wait_until(lambda: not self.window.dependencies.is_busy))
+            self.assertEqual(late.read_text(), "latest child draft")
+            compiled.assert_called_once_with(BuildPurpose.FINAL)
+        self.assertIn("\\input{late.tex}", self.tab.editor.toPlainText())
+
+    def test_failed_membership_retains_watches_and_ends_pending_compile(self):
+        manager = self._manager()
+        self.window.toolchain = LaTeXToolchain(None, sys.executable)
+        self.assertTrue(wait_until(lambda: not self.window.dependencies.is_busy))
+        watched = set(self.window.file_watcher._files)
+        with patch("app.gui.dependency_controller.calculate_memberships", side_effect=OSError("synthetic read failure")), \
+             patch.object(manager, "compile_async") as compiled:
+            self.window.compile_current(immediate=True)
+            self.assertTrue(wait_until(lambda: not self.window.dependencies.is_busy))
+            compiled.assert_not_called()
+        self.assertFalse(self.window.compile._deferred_dependencies)
+        self.assertEqual(self.window.file_watcher._files, watched)
+        self.assertFalse(self.window.dependencies.memberships_current)
+
+    def test_closed_window_discards_membership_worker_result(self):
+        from app.gui import dependency_controller
+        done = threading.Event()
+        original = dependency_controller._membership_work
+
+        def tracked(*args):
+            try:
+                original(*args)
+            finally:
+                done.set()
+
+        held, entered, release, _ = self._held_membership()
+        with held, patch.object(dependency_controller, "_membership_work", side_effect=tracked):
+            self.tab.editor.insertPlainText("% close during calculation\n")
+            self.window.dependencies.refresh_memberships()
+            self.assertTrue(wait_until(entered.is_set))
+            controller = self.window.dependencies
+            with patch.object(controller, "_apply_memberships", wraps=controller._apply_memberships) as apply:
+                self.tab.modified = self.tab.dirty = False
+                self.assertTrue(self.window.close())
+                release.set()
+                self.assertTrue(done.wait(2))
+                self.app.processEvents()
+                apply.assert_not_called()
+            self.assertTrue(controller._closed.is_set())
+
+    def test_multiple_external_reloads_do_not_launch_overlapping_membership_jobs(self):
+        from app.gui import dependency_controller
+        self.window.open_file(self.child)
+        self.assertTrue(wait_until(lambda: not self.window.dependencies.is_busy))
+        self.source.write_text(self.source.read_text() + "\n% external root")
+        self.child.write_text("external child")
+        entered, release = threading.Event(), threading.Event()
+        original = dependency_controller.calculate_memberships
+        calls = []
+        controller = self.window.dependencies
+        start = controller._start_membership
+        started = []
+
+        def calculate(*args, **kwargs):
+            calls.append(True)
+            if len(calls) > 1:
+                entered.set()
+                release.wait(3)
+            return original(*args, **kwargs)
+
+        def launch(job):
+            started.append(job)
+            return start(job)
+
+        with patch.object(dependency_controller, "calculate_memberships", side_effect=calculate), \
+             patch.object(controller, "_start_membership", side_effect=launch):
+            try:
+                controller.refresh_memberships(force=True)
+                self.assertTrue(wait_until(entered.is_set))
+                # The first reply reloads two saved editors. The second job
+                # is still held, so the third snapshot must only be pending.
+                self.assertEqual(len(started), 2)
+                self.assertIsNotNone(controller._membership_pending)
+            finally:
+                release.set()
+                self.assertTrue(wait_until(lambda: not controller.is_busy))
 
     def test_unopened_same_size_edit_updates_stale_state_and_word_count_with_auto_off(self) -> None:
         manager = self._manager()
@@ -137,6 +467,7 @@ class GuiDependencyTests(TestCase):
         second = self._manager(other)
         self.window.open_file(self.child)
         self.window.close_tab(self.window.editor_tabs.currentIndex())
+        self.assertTrue(wait_until(lambda: not self.window.dependencies.is_busy))
         self.assertIn(self.child, self.window.file_watcher._files)
         self.assertEqual(self.window.dependencies.roots_for(self.child), frozenset({first.root_file, second.root_file}))
         self.assertTrue(wait_until(lambda: not self.window.dependencies.is_busy))
@@ -173,6 +504,7 @@ class GuiDependencyTests(TestCase):
         # the result. Only its immutable worker-captured inputs are authoritative.
         fls.write_text("INPUT replacement.csv\n")
         self.window.dependencies.accept_build(result)
+        self.assertTrue(wait_until(lambda: not self.window.dependencies.is_busy))
         self.assertIn(data, self.window.file_watcher._files)
         self.assertNotIn(self.root / "result.pdf", self.window.file_watcher._files)
         fls.write_text("INPUT replacement.csv\n")
@@ -209,6 +541,11 @@ class GuiDependencyTests(TestCase):
         child_tab.editor.setPlainText("unsaved child content")
         self.assertEqual(self.child.read_text(), "one")
         self.assertEqual(self.window.pdf_state.record_for(parent).source_revision, before + 1)
+        # Membership publication is intentionally asynchronous. The low-level
+        # save API refuses stale membership; the compile controller resumes
+        # its existing request once the current graph is available.
+        self.assertFalse(self.window.documents.flush_root_documents(manager.root_file))
+        self.assertTrue(wait_until(lambda: self.window.dependencies.memberships_current))
         self.assertTrue(self.window.documents.flush_root_documents(manager.root_file))
         self.assertEqual(self.child.read_text(), "unsaved child content")
         child_tab.editor.setPlainText("another local edit")
@@ -273,6 +610,7 @@ class GuiDependencyTests(TestCase):
                 self.window.compile_authorized_roots.add(manager.root_file)
                 self.window.close_tab(0)
                 self.assertNotIn(manager.root_file, self.window.compile_authorized_roots)
+                self.assertTrue(wait_until(lambda: not self.window.file_watcher.has_pending_memberships))
                 self.assertNotIn(self.child, self.window.file_watcher._files)
                 self.window.open_file(self.source)
                 reopened_revision = self.window.pdf_state.record_for(manager.root_file).source_revision

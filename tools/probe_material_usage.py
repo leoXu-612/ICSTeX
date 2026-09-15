@@ -26,6 +26,7 @@ from app.core.settings import AppSettings
 from app.gui.main_window import MainWindow
 from app.gui.theme import apply_theme
 from tools.probe_submission_check import wait_for
+from tools.probe_history_restore import visible_pdf_ink
 
 
 def image(path, color):
@@ -113,6 +114,14 @@ def main():
         (output / "material-final.pdf").write_bytes(payload)
         evidence["explicit_final_pdf_sha256"] = hashlib.sha256(payload).hexdigest()
         evidence["explicit_final_pdf_pages"] = window.pdf_panel._document.pageCount()
+        window.pdf_panel.fit_width()
+        wait_for(lambda: visible_pdf_ink(window) > 30)
+        text = " ".join(window.pdf_panel._document.getAllText(i).text()
+                        for i in range(window.pdf_panel._document.pageCount()))
+        assert "Synthetic images:" in " ".join(text.split()), text
+        wait_for(lambda: window.workspace.next_button.text() == "核对提交输入")
+        evidence["visible_final_and_extracted_image_text"] = True
+        assert window.grab().save(str(output / "material-final-window.png"))
         after_final = snapshot(project)
         assert all(after_final.get(path) == raw for path, raw in initial.items())
         extra_files = sorted(after_final.keys() - initial.keys())

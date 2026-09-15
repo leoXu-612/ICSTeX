@@ -8,7 +8,8 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QCoreApplication, QEvent
+from PySide6.QtCore import QCoreApplication, QEvent, Qt
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
 from app.core.citation_health import check_citations
@@ -61,6 +62,30 @@ class CitationHealthGuiTests(TestCase):
         self.assertIsNotNone(result)
         return result
 
+    def test_quick_library_explains_exact_read_path_without_importing_declared_library(self):
+        panel = self.window.references_panel
+        source_before, bib_before = self.root.read_bytes(), self.bib.read_bytes()
+        nested = self.scope / "bib/references.bib"
+        self.window.project_panels._refresh_domains({"references"})
+        self.assertEqual(panel.library_path.text(), str(nested))
+        self.assertTrue(panel.library_path.isReadOnly())
+        self.assertEqual(panel.table.rowCount(), 0)
+        self.assertIn("不代表项目没有引用", panel.status_label.text())
+        self.assertIn("检查引用", panel.status_label.text())
+        self.assertFalse(nested.exists())
+        flat = self.scope / "references.bib"
+        flat.write_text("@book{Flat,title={Synthetic flat library}}\n")
+        self.window.project_panels._refresh_domains({"references"})
+        self.assertEqual(panel.library_path.text(), str(flat))
+        self.assertEqual(panel.table.item(0, 0).text(), "Flat")
+        nested.parent.mkdir()
+        nested.write_text("@book{Nested,title={Synthetic nested library}}\n")
+        self.window.project_panels._refresh_domains({"references"})
+        self.assertEqual(panel.library_path.text(), str(nested))
+        self.assertEqual(panel.table.item(0, 0).text(), "Nested")
+        self.assertEqual(self.root.read_bytes(), source_before)
+        self.assertEqual(self.bib.read_bytes(), bib_before)
+
     def test_read_only_cross_file_check_navigates_and_preserves_checked_record(self):
         before = {p: p.read_bytes() for p in self.scope.rglob("*") if p.is_file()}
         with patch.object(self.window, "save_current", side_effect=AssertionError("read-only")), \
@@ -89,13 +114,97 @@ class CitationHealthGuiTests(TestCase):
         bib_tab.editor.insertPlainText("\n ")
         self.assertIsNone(self.window.references_panel.citation_report)
 
+    def test_preedit_and_cancel_preserve_report_until_actual_commit(self):
+        from PySide6.QtGui import QInputMethodEvent
+        report = self.inspect()
+        editor = self.window.current_tab().editor
+        before = {path: path.read_bytes() for path in (self.root, self.child, self.bib)}
+        for text in ("zhong", "zhongwen", ""):
+            QApplication.sendEvent(editor, QInputMethodEvent(text, []))
+            self.window.citations.reconcile()
+            self.assertIs(self.window.references_panel.citation_report, report)
+        self.assertEqual({path: path.read_bytes() for path in before}, before)
+        event = QInputMethodEvent()
+        event.setCommitString("\u4e2d\u6587")
+        QApplication.sendEvent(editor, event)
+        self.assertIsNone(self.window.references_panel.citation_report)
+
+    def test_repeated_report_refresh_repopulates_first_row_detail_and_locations(self):
+        report = self.inspect()
+        panel = self.window.references_panel
+        first = report.items[0]
+        self.assertTrue(first.locations)
+        for _ in range(2):
+            panel.set_citation_report(report, self.scope, "synthetic refresh")
+            self.assertIn(panel._CITATION_RULES[first.rule], panel.check_detail.toPlainText())
+            self.assertIn(first.key, panel.check_detail.toPlainText())
+            self.assertIn("synthetic refresh", panel.check_detail.toPlainText())
+            self.assertEqual(panel.check_locations.count(), len(first.locations))
+            self.assertTrue(panel.check_locate_button.isEnabled())
+            self.assertEqual(panel.health_table.item(0, 0).toolTip(), panel._CITATION_STATES[first.status])
+
+    def test_read_only_health_table_tabs_to_detail_and_location(self):
+        self.window.show()
+        self.window.set_toolbox_visible(True)
+        self.window.sidebar_tabs.setCurrentIndex(7)
+        report = self.inspect()
+        panel = self.window.references_panel
+        missing = next(i for i, item in enumerate(report.items) if item.rule == "citation_missing")
+        panel.health_table.setCurrentCell(missing, 0)
+        panel.health_table.setFocus(Qt.FocusReason.TabFocusReason)
+        self.app.processEvents()
+        QTest.keyClick(panel.health_table, Qt.Key.Key_Down)
+        self.assertNotEqual(panel.health_table.currentRow(), missing)
+        QTest.keyClick(panel.health_table, Qt.Key.Key_Up)
+        self.assertEqual(panel.health_table.currentRow(), missing)
+        QTest.keyClick(panel.health_table, Qt.Key.Key_Tab)
+        self.assertIs(self.app.focusWidget(), panel.check_detail)
+        QTest.keyClick(panel.check_detail, Qt.Key.Key_Backtab)
+        self.assertIs(self.app.focusWidget(), panel.health_table)
+        QTest.keyClick(panel.health_table, Qt.Key.Key_Backtab)
+        self.assertIs(self.app.focusWidget(), panel.check_refresh_button)
+        QTest.keyClick(panel.check_refresh_button, Qt.Key.Key_Tab)
+        QTest.keyClick(panel.health_table, Qt.Key.Key_Tab)
+        QTest.keyClick(panel.check_detail, Qt.Key.Key_Tab)
+        self.assertIs(self.app.focusWidget(), panel.check_locations)
+        QTest.keyClick(panel.check_locations, Qt.Key.Key_Tab)
+        self.assertIs(self.app.focusWidget(), panel.check_locate_button)
+        QTest.keyClick(panel.check_locate_button, Qt.Key.Key_Space)
+        self.assertEqual(self.window.current_tab().path, self.child)
+        self.assertEqual(self.window.current_tab().editor.textCursor().blockNumber(), 1)
+        self.assertFalse(self.window.compile_authorized_roots)
+
+    def test_read_only_library_table_tabs_to_insert_and_refresh(self):
+        self.window.show()
+        self.window.set_toolbox_visible(True)
+        self.window.sidebar_tabs.setCurrentIndex(7)
+        panel = self.window.references_panel
+        panel.set_references(["Known", "Unused"])
+        panel.table.setCurrentCell(0, 0)
+        panel.table.setFocus(Qt.FocusReason.TabFocusReason)
+        self.app.processEvents()
+        QTest.keyClick(panel.table, Qt.Key.Key_Tab)
+        self.assertIs(self.app.focusWidget(), panel.insert_button)
+        QTest.keyClick(panel.insert_button, Qt.Key.Key_Backtab)
+        self.assertIs(self.app.focusWidget(), panel.table)
+        QTest.keyClick(panel.table, Qt.Key.Key_Backtab)
+        self.assertIs(self.app.focusWidget(), panel.library_path)
+        QTest.keyClick(panel.library_path, Qt.Key.Key_Backtab)
+        self.assertIs(self.app.focusWidget(), panel.refresh_button)
+
     def test_external_change_and_navigation_recheck_reject_stale_line(self):
+        self.wait_for(lambda: not self.window.dependencies.is_busy)
         report = self.inspect()
         row = next(i for i, item in enumerate(report.items) if item.rule == "citation_missing")
+        changes = []
+        self.window.signals.external_changed.connect(changes.append)
         self.child.write_text("changed externally")
         self.window.citations.navigate(row, 0)
         self.assertEqual(self.window.current_tab().path, self.root)
         self.assertIsNone(self.window.references_panel.citation_report)
+        # B1 observation and the watcher's queued notification are separate.
+        # Request again only after the actual event and its new generation.
+        self.wait_for(lambda: str(self.child) in changes and not self.window.dependencies.is_busy)
         self.inspect()
         self.window.signals.external_changed.emit(str(self.bib))
         self.assertIsNone(self.window.references_panel.citation_report)
@@ -115,6 +224,11 @@ class CitationHealthGuiTests(TestCase):
     def test_close_discards_a_late_success(self):
         self._late_result("close")
 
+    def test_preedit_preserves_late_report_but_edit_undo_rejects_old_identity(self):
+        for action in ("preedit", "edit_undo"):
+            with self.subTest(action=action):
+                self._late_result(action)
+
     def _late_result(self, action):
         entered, release = threading.Event(), threading.Event()
         self.addCleanup(release.set)
@@ -131,11 +245,28 @@ class CitationHealthGuiTests(TestCase):
             self.wait_for(entered.is_set)
             if action == "cancel":
                 self.window.references_panel.check_cancel_button.click()
-            else:
+            elif action == "close":
                 self.window.close()
+            else:
+                from PySide6.QtGui import QInputMethodEvent
+                editor = self.window.current_tab().editor
+                if action == "preedit":
+                    QApplication.sendEvent(editor, QInputMethodEvent("zhong", []))
+                else:
+                    editor.blockSignals(True)
+                    try:
+                        editor.insertPlainText("changed ")
+                        editor.undo()
+                    finally:
+                        editor.blockSignals(False)
+                self.window.citations.reconcile()
             release.set()
             self.wait_for(lambda: not self.window.citations.is_busy)
-        self.assertIsNone(self.window.references_panel.citation_report)
+        if action == "preedit":
+            self.assertIsNotNone(self.window.references_panel.citation_report)
+            QApplication.sendEvent(editor, QInputMethodEvent())
+        else:
+            self.assertIsNone(self.window.references_panel.citation_report)
         self.assertEqual({p: p.read_bytes() for p in before}, before)
 
     def test_repeated_refresh_keeps_only_one_active_and_latest_pending(self):

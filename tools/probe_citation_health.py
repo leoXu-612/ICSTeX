@@ -24,6 +24,7 @@ from app.core.settings import AppSettings
 from app.gui.main_window import MainWindow
 from app.gui.theme import apply_theme
 from tools.probe_submission_check import wait_for
+from tools.probe_history_restore import visible_pdf_ink
 
 
 def close(window):
@@ -179,6 +180,13 @@ def main():
         assert evidence["bibtex_logs"], "Require actual BibTeX execution, not only a successful TeX PDF"
         assert all(path.read_bytes() == original for path, original in final_before.items())
         evidence["real_final_preserved_source_bytes"] = True
+        window.pdf_panel.fit_width()
+        wait_for(lambda: visible_pdf_ink(window) > 30)
+        text = " ".join(window.pdf_panel._document.getAllText(i).text()
+                        for i in range(window.pdf_panel._document.pageCount()))
+        assert "Synthetic citation" in " ".join(text.split()), text
+        wait_for(lambda: window.workspace.next_button.text() == "核对提交输入")
+        evidence["visible_final_and_extracted_citation_text"] = True
         assert window.grab().save(str(output / "citation-final-window.png"))
     finally:
         close(window)

@@ -133,6 +133,8 @@ class ApplicationUpdateControllerTests(unittest.TestCase):
         self.assertTrue(self.controller.automatic)
         self.assertTrue(self.controller._startup_timer.isActive())
         self.controller._automatic_tick()
+        self.factory.assert_not_called()
+        self.controller._startup_tick()
         self.backend.check.assert_called_once_with(user_initiated=False)
         self.controller._on_native_event("no_update")
         self.controller._automatic_tick()
@@ -140,6 +142,83 @@ class ApplicationUpdateControllerTests(unittest.TestCase):
         self.controller.set_automatic(False)
         self.assertFalse(self.controller._timer.isActive())
         self.assertFalse(self.controller._startup_timer.isActive())
+
+    def test_startup_checks_recent_day_once_after_restart_cooldown(self):
+        self.settings.setValue("updates/last_attempt", 99000.0)
+        self.controller.set_automatic(True)
+        self.controller._startup_tick()
+        self.backend.check.assert_called_once_with(user_initiated=False)
+        self.controller._on_native_event("no_update")
+        self.controller._automatic_tick()
+        self.assertEqual(self.backend.check.call_count, 1)
+        self.controller._now = lambda: 186400.0
+        self.controller._automatic_tick()
+        self.assertEqual(self.backend.check.call_count, 2)
+
+    def test_rapid_restart_defers_without_losing_startup_check(self):
+        self.settings.setValue("updates/last_attempt", 99900.0)
+        self.controller.set_automatic(True)
+        self.controller._startup_tick()
+        self.factory.assert_not_called()
+        self.assertTrue(self.controller._startup_check_pending)
+        self.controller._now = lambda: 100200.0
+        self.controller._automatic_tick()
+        self.backend.check.assert_called_once_with(user_initiated=False)
+
+    def test_failed_backend_initialization_is_counted_and_not_retried_each_tick(self):
+        self.factory.side_effect = RuntimeError("synthetic initialization failure")
+        self.controller.set_automatic(True)
+        self.controller._startup_tick()
+        self.assertEqual(float(self.settings.value("updates/last_attempt")), 100000.0)
+        self.assertFalse(self.controller._startup_check_pending)
+        self.controller._now = lambda: 100060.0
+        self.controller._automatic_tick()
+        self.factory.assert_called_once()
+        self.assertTrue(all(window.isVisible() and window.isEnabled() for window in self.windows))
+
+    def test_manual_check_consumes_pending_startup_check(self):
+        self.controller.set_automatic(True)
+        self.controller.check(user_initiated=True)
+        self.controller._on_native_event("no_update")
+        self.controller._startup_tick()
+        self.backend.check.assert_called_once_with(user_initiated=True)
+
+    def test_busy_work_defers_startup_until_a_later_idle_tick(self):
+        self.controller.set_automatic(True)
+        manager = SimpleNamespace(is_busy=True)
+        self.windows[0].compile_managers = {1: manager}
+        self.controller._startup_tick()
+        self.factory.assert_not_called()
+        manager.is_busy = False
+        self.windows[1].pdf_export._pending = {1: object()}
+        self.controller._automatic_tick()
+        self.factory.assert_not_called()
+        self.windows[1].pdf_export._pending.clear()
+        self.controller._automatic_tick()
+        self.backend.check.assert_called_once_with(user_initiated=False)
+
+    def test_modal_or_no_windows_defers_without_consuming_startup(self):
+        self.controller.set_automatic(True)
+        with patch.object(QApplication, "activeModalWidget", return_value=object()):
+            self.controller._startup_tick()
+        self.factory.assert_not_called()
+        with patch.object(self.controller, "_windows_provider", return_value=[]):
+            self.controller._automatic_tick()
+        self.factory.assert_not_called()
+        self.controller._automatic_tick()
+        self.backend.check.assert_called_once_with(user_initiated=False)
+
+    def test_disabling_consent_before_startup_or_late_timer_prevents_check(self):
+        self.controller.set_automatic(True)
+        self.controller.set_automatic(False)
+        self.controller._startup_tick()
+        self.factory.assert_not_called()
+
+    def test_repeated_start_does_not_postpone_startup_timer(self):
+        self.controller.set_automatic(True)
+        with patch.object(self.controller._startup_timer, "start") as start:
+            self.controller.start()
+        start.assert_not_called()
 
     def test_automatic_request_cannot_bypass_consent(self):
         self.controller.check(user_initiated=False)

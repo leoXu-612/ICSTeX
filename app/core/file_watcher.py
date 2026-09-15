@@ -44,6 +44,10 @@ class ExternalFileWatcher:
         self._profile_metadata_owners: set[object] = set()
         self._dir_watches: dict[Path, object] = {}
         self._known_signatures: dict[Path, FileSignature] = {}
+        self._pending_memberships: dict[object, tuple] = {}
+        self._membership_lock = threading.Lock()
+        self._applying_memberships = False
+        self._repair_start_lock = threading.Lock()
         self._lock = threading.RLock()
         # The native macOS FSEvents backend can terminate the whole process
         # when a watched directory is rapidly scheduled/unscheduled. ICSTeX
@@ -89,8 +93,20 @@ class ExternalFileWatcher:
             self._reconcile_watches()
 
     def set_paths(self, owner: object, paths: set[Path], *, canonical: bool = False,
-                  block_metadata: bool = False, project_profile: bool = False) -> None:
+                  block_metadata: bool = False, project_profile: bool = False,
+                  defer_metadata: bool = False) -> None:
         """Atomically replace one owner's membership, preserving other owners."""
+        if defer_metadata:
+            # GUI callers publish only immutable desired paths. Metadata and
+            # observer registration use the existing repair worker; never wait
+            # on its filesystem-I/O lock in the GUI thread.
+            with self._membership_lock:
+                if self._closed:
+                    return
+                self._pending_memberships[owner] = (set(paths), canonical, block_metadata, project_profile)
+            self._start_repair_worker()
+            self._repair_event.set()
+            return
         with self._lock:
             if self._closed:
                 return
@@ -116,6 +132,18 @@ class ExternalFileWatcher:
                     self._known_signatures[path] = self._signature(path)
                 self._files.add(path)
             self._reconcile_watches()
+
+    @property
+    def has_pending_memberships(self) -> bool:
+        with self._membership_lock:
+            return bool(self._pending_memberships or self._applying_memberships)
+
+    def _start_repair_worker(self) -> None:
+        with self._repair_start_lock:
+            if self._repair_thread is None and not self._closed:
+                self._repair_thread = threading.Thread(
+                    target=self._repair_loop, daemon=True, name="icstex-watch-repair")
+                self._repair_thread.start()
 
     @staticmethod
     def _nearest_directory(path: Path) -> Path:
@@ -164,10 +192,7 @@ class ExternalFileWatcher:
         if self._dir_watches and not self._started:
             self._observer.start()
             self._started = True
-            self._repair_thread = threading.Thread(
-                target=self._repair_loop, daemon=True, name="icstex-watch-repair",
-            )
-            self._repair_thread.start()
+            self._start_repair_worker()
 
     def _repair_loop(self) -> None:
         while True:
@@ -175,7 +200,17 @@ class ExternalFileWatcher:
             self._repair_event.clear()
             if self._closed:
                 return
-            self.reconcile()
+            with self._membership_lock:
+                pending, self._pending_memberships = self._pending_memberships, {}
+                self._applying_memberships = True
+            try:
+                for owner, (paths, canonical, block, profile) in pending.items():
+                    self.set_paths(owner, paths, canonical=canonical,
+                                   block_metadata=block, project_profile=profile)
+                self.reconcile()
+            finally:
+                with self._membership_lock:
+                    self._applying_memberships = False
 
     def schedule_reconcile(self, invalidated: str | None = None) -> None:
         # Watchdog dispatch holds its own lock. Do not acquire our membership
@@ -213,6 +248,8 @@ class ExternalFileWatcher:
             self._repair_event.set()
             started = self._started
             repair_thread = self._repair_thread
+        with self._membership_lock:
+            self._pending_memberships.clear()
         if started:
             self._observer.stop()
             self._observer.join(timeout=2)

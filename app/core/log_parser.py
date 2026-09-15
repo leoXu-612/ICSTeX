@@ -6,6 +6,7 @@ import re
 
 
 FILE_LINE_RE = re.compile(r"^(?P<file>.+?\.tex):(?P<line>\d+):\s*(?P<message>.+)$")
+LUAOTFLOAD_LINE_RE = re.compile(r"^\s*luaotfload\s*\|\s*[^:]+:\s*(?P<message>.*)$")
 
 
 @dataclass(frozen=True)
@@ -27,6 +28,33 @@ def parse_latex_errors(output: str, project_dir: str | Path | None = None) -> li
     lines = output.splitlines()
 
     for index, line in enumerate(lines):
+        loader_line = LUAOTFLOAD_LINE_RE.match(line)
+        if loader_line and loader_line.group("message").strip() == "FATAL ERROR":
+            details = []
+            for following in lines[index + 1:index + 9]:
+                detail_line = LUAOTFLOAD_LINE_RE.match(following)
+                if not detail_line:
+                    # TeX's log wraps the loader's quoted error without
+                    # repeating its prefix. Only extend that unfinished quote,
+                    # never a subsequent TeX error, source line or traceback.
+                    fragment = following.strip()
+                    if (details and details[-1].startswith('"') and not details[-1].endswith('".')
+                            and fragment and not FILE_LINE_RE.match(fragment)
+                            and not fragment.startswith(("!", "stack traceback:", "<"))
+                            and not re.match(r"l\.\d+", fragment)):
+                        details[-1] = _append_message_fragment(details[-1], fragment)
+                        continue
+                    break
+                detail = detail_line.group("message").lstrip("\u00d7 ").strip()
+                if detail == "FATAL ERROR":
+                    break
+                if detail:
+                    details.append(detail)
+            message = "; ".join(["luaotfload: FATAL ERROR", *details])
+            # Font-loader line numbers are not locations in the student's TeX.
+            errors.append(LaTeXError(message=message))
+            continue
+
         file_line = FILE_LINE_RE.match(line.strip())
         if file_line:
             raw_file = Path(file_line.group("file"))

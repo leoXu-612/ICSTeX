@@ -1,47 +1,33 @@
-# ICSTeX 2.1.0-beta.1 安装说明
+# ICSTeX 2.1.0-beta.2 安装说明
 
-## macOS Apple Silicon
+本次提供 macOS Apple Silicon（arm64）手动安装包，与已核验的本机测试版对应。
+应用内自动更新尚未启用；下载新版后需要自行安装。
 
-### 1. 安装 ICSTeX
+## 安装与升级
 
-1. 下载 `ICSTeX-2.1.0-beta.1-macos-arm64.dmg`（或同名 `.zip`）。
-2. 双击 DMG，将 `ICSTeX.app` 拖入“应用程序”文件夹。
-3. 首次启动：若出现“无法验证开发者”提示，右键（或按住 Control 点击）图标 → “打开” → 确认；
-   或前往 系统设置 → 隐私与安全性 → “仍要打开”。
+1. 下载 `ICSTeX-2.1.0-beta.2-macos-arm64.dmg`，或同名 ZIP。
+2. 已安装旧版时，先保存文档并退出全部 ICSTeX 窗口，保留旧应用和项目备份。
+3. 打开 DMG，把 `ICSTeX.app` 拖入“应用程序”文件夹；ZIP 用户先完整解压。
+4. 本包使用 ad-hoc 签名，未经 Apple 公证。若 macOS 阻止首次打开，请在
+   “系统设置 → 隐私与安全性”中查看并亲自确认。不要关闭系统安全保护。
+5. 启动后打开“帮助 → 环境医生”，确认本机 LaTeX 工具链可用。
 
-### 2. LaTeX 环境（必需）
+应用不包含 MacTeX、TeX Live、MiKTeX、pix2tex 模型或独立 OCR 运行环境。
+运行应用不需要另外安装 Python；编译 LaTeX 仍需自行安装本地 LaTeX 发行版。
 
-ICSTeX 不内置 LaTeX 发行版。请先安装：
+## 常用入口
 
-- MacTeX（推荐）或 BasicTeX：https://tug.org/mactex/
+- 编译器：macOS 顶部菜单“编译 → 编译器”，选择 Auto、pdfLaTeX、XeLaTeX 或 LuaLaTeX。
+- 控制台：工具栏“控制台”，查看日志、错误、字数及检查信息。
+- 项目支持：“帮助 → 在 GitHub 支持项目（Star）”，自愿打开仓库页面。
 
-安装后确认 `xelatex` / `pdflatex` 可用。
+## 校验与恢复
 
-### 3. 可选：本地公式识别（pix2tex）
+下载文件的 SHA-256 见 `SHA256SUMS.txt`；构建身份和范围见 `BUILD_RECEIPT.json`。
+如需恢复旧版，先退出应用，再使用保留的旧安装包。应用可重装不代表文稿可以回滚，
+请另行保留项目备份。
 
-公式识别为可选本地组件，安装包默认不包含：
+## Windows
 
-1. 打开 ICSTeX → 设置 → 可选工具 → 公式识别 (pix2tex)。
-2. 点击“安装”（首次安装约需数分钟，包含 Python 3.11 虚拟环境与模型下载，占用约 1.2 GB）。
-3. 安装完成后状态显示为可用；打开公式编辑器 → “图片识别…” 即可使用。
-
-卸载：在设置中点击“移除”即可删除对应运行环境。
-
-> 开发者提示：运行环境路径可用环境变量覆盖，例如
-> `ICSTEX_PIX2TEX_ENV=/path/to/pix2tex/venv`、`ICSTEX_RAPIDOCR_ENV=/path/to/rapidocr/venv`。
-
-### 4. 验证安装
-
-- 打开示例项目：`release/demo/Formula-Intelligence-Demo.zip`（解压后用 ICSTeX 打开 `main.tex`）。
-- 在公式编辑器输入 `\frac{a}{b}` 或使用“图片识别…”导入公式图片，确认可编译并生成 PDF。
-
-## Windows on ARM（ARM64 Developer Beta）
-
-1. 下载 `ICSTeX-2.1.0-beta.1-Windows-arm64.zip` 并解压到普通本地目录。
-2. 双击解压目录中的 `ICSTeX.exe`；运行应用不需要安装 Python。
-3. 安装 MiKTeX 或 TeX Live，重启 ICSTeX 后在“环境医生”检查 `latexmk`、
-   `pdflatex` 和 `texcount`。
-4. Windows SmartScreen 可能提示未知发布者；本 Beta 未做代码签名。
-
-此 ARM64 ZIP 不适用于常见 Intel/AMD x64 Windows 电脑。x64 ZIP 与 x64 Setup EXE
-必须在 x64 Windows-local 构建环境另行生成，不能通过改名 ARM64 制品替代。
+本次没有 Windows Beta 2 安装包。旧 Windows ARM64 Developer Beta 仍保留在
+GitHub 的历史 Release 中；它不能用于 Intel/AMD x64 Windows。

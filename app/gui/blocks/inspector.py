@@ -6,9 +6,10 @@ from dataclasses import replace
 from pathlib import Path
 import sys
 
-from PySide6.QtCore import QEvent, QSignalBlocker, Qt
-from PySide6.QtGui import QTextCursor, QTextDocument
+from PySide6.QtCore import QSignalBlocker, Qt
+from PySide6.QtGui import QKeySequence, QShortcut, QTextCursor, QTextDocument
 from PySide6.QtWidgets import (
+    QApplication,
     QComboBox,
     QDoubleSpinBox,
     QFormLayout,
@@ -28,6 +29,7 @@ from app.core.blocks.model import Block
 from app.core.blocks.property_draft import PropertyDraft, draft_conflict, find_layout, layout_gap_mm
 from app.gui.blocks.project_session import ProjectSession
 from app.gui.blocks.workspace_controller import BlockWorkspaceController
+from app.gui.blocks.presentation import BLOCK_LABELS, LAYOUT_LABELS, ALIGNMENT_LABELS, FALLBACK_LABELS
 from app.gui.insert_panel import scrollable_panel
 
 
@@ -50,6 +52,9 @@ class BlockInspector(QWidget):
 
         self.title = QLabel("未选择")
         self.title.setWordWrap(True)
+        self.title.setTextFormat(Qt.TextFormat.PlainText)
+        self.copy_identity_button = QPushButton("复制技术身份")
+        self.copy_identity_button.clicked.connect(self._copy_identity)
         self.alias_edit = QLineEdit()
         self.type_label = QLabel("")
         self.content_edit = QPlainTextEdit()
@@ -57,7 +62,6 @@ class BlockInspector(QWidget):
         self._empty_document.setDocumentLayout(QPlainTextDocumentLayout(self._empty_document))
         self.content_edit.setPlaceholderText("内容…")
         self.content_edit.setToolTip("Tab 插入制表符；Control+Tab 移到应用修改；Control+Shift+Tab 回到别名。")
-        self.content_edit.installEventFilter(self)
         self.heading_level = QComboBox()
         self.heading_level.addItems(["1", "2", "3", "4"])
         self.image_width = QDoubleSpinBox()
@@ -93,9 +97,11 @@ class BlockInspector(QWidget):
         self.layout_gap.setRange(0.0, 100.0)
         self.layout_gap.setSuffix(" mm")
         self.layout_alignment = QComboBox()
-        self.layout_alignment.addItems(["top", "middle", "bottom"])
+        for value, label in ALIGNMENT_LABELS.items():
+            self.layout_alignment.addItem(label, value)
         self.layout_fallback = QComboBox()
-        self.layout_fallback.addItems(["stackVertically", "error", "wrapRows", "normalizeWeights", "reduceGap"])
+        for value, label in FALLBACK_LABELS.items():
+            self.layout_fallback.addItem(label, value)
         self.layout_apply = QPushButton("应用布局属性")
         self.layout_apply.clicked.connect(self._apply_layout_edit)
         self.layout_discard = QPushButton("放弃此布局属性草稿…")
@@ -125,6 +131,7 @@ class BlockInspector(QWidget):
         body = QWidget()
         layout = QVBoxLayout(body)
         layout.addWidget(self.title)
+        layout.addWidget(self.copy_identity_button)
         layout.addWidget(self.draft_list)
         layout.addWidget(self.draft_status)
         self.pending_discard_button = QPushButton("放弃列表中所选草稿…")
@@ -139,6 +146,18 @@ class BlockInspector(QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(self.scroll)
+
+        # Register at shortcut dispatch: Cocoa may consume physical Control+Tab
+        # in its text-input path before delivering a widget KeyPress.
+        control = Qt.KeyboardModifier.MetaModifier if sys.platform == "darwin" else Qt.KeyboardModifier.ControlModifier
+        self._focus_apply_shortcut = QShortcut(QKeySequence(control | Qt.Key.Key_Tab), self.content_edit)
+        self._focus_alias_shortcut = QShortcut(
+            QKeySequence(control | Qt.KeyboardModifier.ShiftModifier | Qt.Key.Key_Tab), self.content_edit)
+        for shortcut in (self._focus_apply_shortcut, self._focus_alias_shortcut):
+            shortcut.setContext(Qt.ShortcutContext.WidgetShortcut)
+            shortcut.setAutoRepeat(False)
+        self._focus_apply_shortcut.activated.connect(self._focus_apply)
+        self._focus_alias_shortcut.activated.connect(self._focus_alias)
 
         session.selection.selection_changed.connect(self._on_selection)
         session.model_changed.connect(lambda _reason: self.refresh())
@@ -158,21 +177,13 @@ class BlockInspector(QWidget):
     def set_workspace(self, workspace) -> None:
         self.workspace = workspace
 
-    def eventFilter(self, watched, event) -> bool:
-        # On Cocoa Qt's MetaModifier is the physical Control key. Keep normal
-        # Tab/Undo/IME editing intact; this shortcut only moves focus, never applies.
-        control = Qt.KeyboardModifier.MetaModifier if sys.platform == "darwin" else Qt.KeyboardModifier.ControlModifier
-        if watched is self.content_edit and event.type() in (QEvent.Type.ShortcutOverride, QEvent.Type.KeyPress):
-            backward = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
-            modifiers = event.modifiers() & ~Qt.KeyboardModifier.ShiftModifier
-            if event.key() in (Qt.Key.Key_Tab, Qt.Key.Key_Backtab) and modifiers == control:
-                event.accept()
-                if event.type() == QEvent.Type.KeyPress:
-                    target = self.alias_edit if backward else self.apply_button
-                    self.scroll.ensureWidgetVisible(target)
-                    target.setFocus(Qt.FocusReason.ShortcutFocusReason)
-                return True
-        return super().eventFilter(watched, event)
+    def _focus_apply(self) -> None:
+        self.scroll.ensureWidgetVisible(self.apply_button)
+        self.apply_button.setFocus(Qt.FocusReason.ShortcutFocusReason)
+
+    def _focus_alias(self) -> None:
+        self.scroll.ensureWidgetVisible(self.alias_edit)
+        self.alias_edit.setFocus(Qt.FocusReason.ShortcutFocusReason)
 
     # --- selection handling ----------------------------------------------
     def _on_selection(self, context, _source: str) -> None:
@@ -187,6 +198,8 @@ class BlockInspector(QWidget):
             return
         self._loading = True
         try:
+            context = self.session.selection.current
+            self.copy_identity_button.setEnabled(bool(context.block_id or context.slot_id or context.layout_node_id))
             self._refresh_block()
             self._refresh_layout()
             self._refresh_draft_status()
@@ -242,14 +255,14 @@ class BlockInspector(QWidget):
             ):
                 widget.setEnabled(False)
             return
-        self.title.setText(f"{block.type}: {block.alias}")
+        self.title.setText(f"{block.alias} · {BLOCK_LABELS.get(block.type, '未知类型')}")
         if block.type == "formula":
             self.formula_info.setText(str((secondary.values if secondary else block.content).get("latexCache", "")))
         if (self._shown_block_id == block_id and self._block_template is not None
                 and (draft is not None or (self._block_template.base == block.to_dict()
                      and self._block_values(block.type) == self._block_template.initial))):
             return
-        self.type_label.setText(block.type)
+        self.type_label.setText(BLOCK_LABELS.get(block.type, "未知类型"))
         values = draft.values if draft is not None else {}
         self.alias_edit.setText(values.get("alias", block.alias))
         content = {**(block.content or {}), **{key: value for key, value in values.items() if key != "alias"}}
@@ -344,7 +357,8 @@ class BlockInspector(QWidget):
             self._layout_template = None
             self.layout_kind.setText("（未选择布局对象）")
             return
-        self.layout_kind.setText(f"{node.kind} · {node.id}")
+        self.layout_kind.setText(LAYOUT_LABELS.get(node.kind, "布局"))
+        self.layout_kind.setToolTip(f"{node.kind} · {node.id}")
         if (self._layout_template is not None and self._layout_template.target_id == node.id
                 and (draft is not None or (self._layout_template.base == node.to_dict()
                      and self._layout_values() == self._layout_template.initial))):
@@ -353,15 +367,20 @@ class BlockInspector(QWidget):
             "gap": layout_gap_mm(node),
             "alignment": node.alignment, "strategy": node.fallback.get("strategy", "stackVertically")}
         self.layout_gap.setValue(values["gap"])
-        self.layout_alignment.setCurrentText(values["alignment"])
-        self.layout_fallback.setCurrentText(values["strategy"])
+        self.layout_alignment.setCurrentIndex(self.layout_alignment.findData(values["alignment"]))
+        self.layout_fallback.setCurrentIndex(self.layout_fallback.findData(values["strategy"]))
         initial = self._layout_values()
         self._layout_template = draft or PropertyDraft("layout", node.id, f"布局 {node.kind}",
                                                        deepcopy(node.to_dict()), initial, initial)
 
     def _layout_values(self):
-        return {"gap": self.layout_gap.value(), "alignment": self.layout_alignment.currentText(),
-                "strategy": self.layout_fallback.currentText()}
+        return {"gap": self.layout_gap.value(), "alignment": self.layout_alignment.currentData(),
+                "strategy": self.layout_fallback.currentData()}
+
+    def _copy_identity(self):
+        context = self.session.selection.current
+        QApplication.clipboard().setText("\n".join(f"{name}: {value}" for name in
+            ("block_id", "slot_id", "layout_node_id") if (value := getattr(context, name))))
 
     def _layout_fields_changed(self, *_args):
         if not self._loading and self._layout_template is not None:

@@ -167,7 +167,11 @@ def parse_block_draft(payload):
 
 
 def saved_block_model(copy):
-    files = dict(copy.files)
+    return parse_saved_block_model(dict(copy.files))
+
+
+def parse_saved_block_model(files):
+    """Parse captured saved metadata without reopening mutable project files."""
     try:
         blocks = _json(files[".icstex/blocks.json"])
         layouts = _json(files[".icstex/layouts.json"])

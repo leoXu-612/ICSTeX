@@ -1,7 +1,8 @@
 # ICSTeX
 
-Current version: 2.1.0-beta.2. Current packaged release: 2.1.0-beta.1. The working source may be ahead of the packaged
-release; see [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) for the exact boundary.
+Current version: 2.1.0-beta.2. Current packaged release: 2.1.0-beta.2 for macOS arm64 manual installation.
+This release does not enable in-app automatic updates. See [`release/BUILD_RECEIPT.json`](release/BUILD_RECEIPT.json)
+for the exact packaged source identity and [`release/KNOWN_LIMITATIONS.md`](release/KNOWN_LIMITATIONS.md) for limits.
 
 ICSTeX - ICC Student's TeX - is local research-writing infrastructure for ICC
 students, delivered as a Python/PySide6 desktop application. It combines LaTeX
@@ -25,9 +26,9 @@ The newer working source and local development build also support double-clickin
 fast-preview PDF to locate its original project source with SyncTeX. Stale or
 rebuilding output cannot drive navigation. The source-to-PDF toolbar action still
 requires a current final PDF, and preview PDFs remain ineligible for export.
-Published release packages have not yet been updated with this follow-up.
+This follow-up is included in the macOS Beta 2 package; Windows remains on its historical Beta 1 build.
 
-The working source also adds “软件更新…” with opt-in daily checks and guarded
+The working source also adds “软件更新…” with opt-in startup/daily checks and guarded
 all-window save/exit, using Sparkle on macOS and WinSparkle on Windows. Source
 runs and ordinary builds remain offline and unconfigured; public in-app upgrades
 are not enabled. Maintainer integration and the signed-installation acceptance
@@ -56,7 +57,7 @@ check visibility. No course limits are supplied. Saving writes only
 `.icstex/project-profile.json`; it does not replace source, create suggested
 directories or change the active engine. Disabling retains the configuration.
 External conflicts and unknown formats preserve the original; cancel and reopen
-before retrying. These local source features are not in the published packages.
+before retrying. These GUI features are included in the macOS Beta 2 package.
 
 The local project wizard now previews Chinese-name destinations and templates,
 offers an explicit engine choice, and creates only new directories. First

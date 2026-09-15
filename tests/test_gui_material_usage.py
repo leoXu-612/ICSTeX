@@ -85,10 +85,28 @@ class MaterialUsageGuiTests(TestCase):
         draft.editor.insertPlainText(" more")
         self.assertIsNone(self.window.images_panel.material_report)
 
+    def test_preedit_and_cancel_preserve_report_until_actual_commit(self):
+        from PySide6.QtGui import QInputMethodEvent
+        report = self.inspect()
+        editor = self.window.current_tab().editor
+        before = {path: path.read_bytes() for path in (self.root, self.child, self.asset)}
+        for text in ("zhong", "zhongwen", ""):
+            QApplication.sendEvent(editor, QInputMethodEvent(text, []))
+            self.window.materials.reconcile()
+            self.assertIs(self.window.images_panel.material_report, report)
+        self.assertEqual({path: path.read_bytes() for path in before}, before)
+        event = QInputMethodEvent()
+        event.setCommitString("\u4e2d\u6587")
+        QApplication.sendEvent(editor, event)
+        self.assertIsNone(self.window.images_panel.material_report)
+
     def test_refresh_compares_prior_readable_digest_but_external_change_invalidates_view(self):
+        self.wait_for(lambda: not self.window.dependencies.is_busy)
         self.inspect()
+        changes = []
+        self.window.signals.external_changed.connect(changes.append)
         self.asset.write_bytes(b"changed bytes")
-        self.window.signals.external_changed.emit(str(self.asset))
+        self.wait_for(lambda: str(self.asset) in changes and not self.window.dependencies.is_busy)
         self.assertIsNone(self.window.images_panel.material_report)
         report = self.inspect()
         item = next(item for item in report.items if item.path == self.asset)
@@ -166,4 +184,3 @@ class MaterialUsageGuiTests(TestCase):
             release.set()
             self.wait_for(lambda: not self.window.materials.is_busy)
         self.assertEqual(len(calls), 2)
-

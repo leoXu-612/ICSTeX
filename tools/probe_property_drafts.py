@@ -130,7 +130,7 @@ def main():
             QTest.keyClicks(inspector.content_edit, "Native property draft")
             session.selection.select_layout_node(session.layout.id, source="native-property-qa")
             assert inspector.layout_gap.value() == 25.4
-            inspector.layout_alignment.setCurrentText("bottom")
+            inspector.layout_alignment.setCurrentIndex(inspector.layout_alignment.findData("bottom"))
             document = inspector.content_edit.document()
             session.selection.select_block(second.id, source="native-property-qa")
             session.selection.select_block(first.id, source="native-property-qa")

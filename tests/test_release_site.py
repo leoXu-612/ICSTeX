@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from html.parser import HTMLParser
@@ -22,6 +23,7 @@ class SiteHTMLInspector(HTMLParser):
         self.ids: list[str] = []
         self.heading_levels: list[int] = []
         self.images: list[dict[str, str | None]] = []
+        self.links: list[dict[str, str | None]] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attributes = dict(attrs)
@@ -31,6 +33,8 @@ class SiteHTMLInspector(HTMLParser):
             self.heading_levels.append(int(tag[1]))
         if tag == "img":
             self.images.append(attributes)
+        if tag == "a":
+            self.links.append(attributes)
 
 
 class ReleaseSiteTests(TestCase):
@@ -154,6 +158,42 @@ class ReleaseSiteTests(TestCase):
                 self.assertIn("alt", image, path)
                 self.assertTrue(image.get("width"), (path, image))
                 self.assertTrue(image.get("height"), (path, image))
+
+    def test_star_invitation_reuses_repository_link_without_gating_downloads(self) -> None:
+        html = self.read_text("website/index.html")
+        inspector = SiteHTMLInspector()
+        inspector.feed(html)
+        links = [link for link in inspector.links if link.get("id") == "support-project-link"]
+        self.assertEqual(len(links), 1)
+        link = links[0]
+        self.assertEqual(link.get("data-release-link"), "repository")
+        self.assertEqual(link.get("aria-disabled"), "true")
+        self.assertNotIn("href", link)
+        self.assertNotIn("data-release-download", link)
+        self.assertNotIn("onclick", link)
+        self.assertEqual(link.get("target"), "_blank")
+        self.assertEqual(set(link["rel"].split()), {"noopener", "noreferrer"})
+        self.assertIn("手动点 Star", link["aria-label"])
+        self.assertIn("完全自愿，不影响下载或使用", html)
+        self.assertNotIn("user/starred", self.read_text("website/app.js"))
+
+    def test_heading_scale_is_bounded_and_chinese_tracking_is_not_compressed(self) -> None:
+        css = self.read_text("website/styles.css")
+        for selector, maximum_rem in (("h1", 3.5), ("h2", 2.25), ("h3", 1.5)):
+            with self.subTest(selector=selector):
+                rule = re.search(r"(?m)^" + selector + r"\s*\{([^}]+)\}", css)
+                self.assertIsNotNone(rule)
+                declarations = rule.group(1)
+                cap = re.search(r"font-size:\s*clamp\([^;]*,\s*([0-9.]+)rem\)", declarations)
+                self.assertIsNotNone(cap)
+                self.assertLessEqual(float(cap.group(1)), maximum_rem)
+                if selector != "h1":
+                    self.assertRegex(declarations, r"letter-spacing:\s*0\s*;")
+                    line_height = re.search(r"line-height:\s*([0-9.]+)", declarations)
+                    self.assertGreaterEqual(float(line_height.group(1)), 1.3)
+        for selectors, declarations in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
+            if re.search(r"\bh[123]\b", selectors):
+                self.assertNotRegex(declarations, r"max-width:\s*[0-9.]+ch")
 
     def test_information_groups_and_static_architecture_are_bounded(self) -> None:
         html = self.read_text("website/index.html")

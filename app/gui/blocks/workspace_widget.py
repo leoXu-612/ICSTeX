@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QSignalBlocker, Signal, Qt
+from PySide6.QtCore import QSignalBlocker, Signal, Qt
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -19,14 +19,11 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QTabWidget,
-    QSplitter,
     QSizePolicy,
-    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
-from app.core.blocks.export_package import export_package
 from app.core.blocks.source_merge import MergeResult
 from app.gui.blocks.formula_tab import FormulaBlockTab
 from app.gui.blocks.layout_panel import BlockLayoutPanel
@@ -35,76 +32,9 @@ from app.gui.blocks.project_session import ProjectSession
 from app.gui.blocks.table_editor import TableEditor
 from app.gui.blocks.theme_settings import ThemeSettings
 from app.gui.responsive.helpers import ButtonFlowLayout, configure_tab_bar
+from app.gui.responsive.editor_pdf_area import EditorPdfArea as BlockPreviewArea
 from app.gui.insert_panel import scrollable_panel
-
-
-class BlockPreviewArea(QWidget):
-    """One editor/PDF pair: side by side when wide, explicit tabs when narrow.
-
-    Narrow mode only hides one splitter child; widgets are never recreated or
-    reparented by resizing, preserving editor focus and document/view state.
-    """
-
-    def __init__(self, editor, pdf):
-        super().__init__()
-        self.editor, self.pdf = editor, pdf
-        self._compact = None
-        self._show_pdf = False
-        self.switcher = QWidget()
-        self.switcher.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        row = QHBoxLayout(self.switcher)
-        row.setContentsMargins(0, 0, 0, 0)
-        self.editor_button = QToolButton()
-        self.editor_button.setText("编辑 Block")
-        self.pdf_button = QToolButton()
-        self.pdf_button.setText("查看 PDF")
-        for button in (self.editor_button, self.pdf_button):
-            button.setCheckable(True)
-            row.addWidget(button)
-        row.addStretch()
-        self.editor_button.clicked.connect(lambda: self.select_pdf(False))
-        self.pdf_button.clicked.connect(lambda: self.select_pdf(True))
-        self.splitter = QSplitter(Qt.Orientation.Horizontal)
-        self.splitter.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.splitter.setChildrenCollapsible(False)
-        self.splitter.addWidget(editor)
-        self.splitter.addWidget(pdf)
-        self.splitter.setStretchFactor(0, 3)
-        self.splitter.setStretchFactor(1, 2)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.switcher)
-        layout.addWidget(self.splitter)
-        self._arrange()
-
-    def select_pdf(self, selected):
-        self._show_pdf = selected
-        self._arrange()
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self._arrange()
-
-    def changeEvent(self, event):
-        super().changeEvent(event)
-        if event.type() in (QEvent.Type.FontChange, QEvent.Type.StyleChange) and hasattr(self, "splitter"):
-            self._arrange()
-
-    def _arrange(self):
-        compact = self.width() < max(720, self.fontMetrics().horizontalAdvance("M") * 60)
-        if compact and not self._compact:
-            from PySide6.QtWidgets import QApplication
-            focus = QApplication.focusWidget()
-            if focus is not None and self.pdf.isAncestorOf(focus):
-                self._show_pdf = True
-            elif focus is not None and self.editor.isAncestorOf(focus):
-                self._show_pdf = False
-        self._compact = compact
-        self.switcher.setVisible(compact)
-        self.editor.setVisible(not compact or not self._show_pdf)
-        self.pdf.setVisible(not compact or self._show_pdf)
-        self.editor_button.setChecked(not self._show_pdf)
-        self.pdf_button.setChecked(self._show_pdf)
+from app.gui.theme import PRIMARY_BUTTON_STATE_STYLE
 
 
 class BlockWorkspaceWidget(QWidget):
@@ -117,6 +47,7 @@ class BlockWorkspaceWidget(QWidget):
     def __init__(self, session: ProjectSession, *, merge_result: MergeResult | None = None,
                  show_compile_controls: bool = True, parent=None) -> None:
         super().__init__(parent)
+        self.setObjectName("blockWorkspace")
         self.session = session
         self.merge_result = merge_result
         self._selection_syncing = False
@@ -144,11 +75,14 @@ class BlockWorkspaceWidget(QWidget):
                               (self.theme_settings, "主题"), (self._build_export_tab(), "导出")):
             tabs.addTab(scrollable_panel(widget), label)
         configure_tab_bar(tabs)
+        tabs.tabBar().setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.tabs = tabs
 
         self.preview_label = QLabel("尚未生成 PDF")
         self.preview_label.setWordWrap(True)
         self.preview_button = QPushButton("正式编译")
+        self.preview_button.setObjectName("primaryButton")
+        self.preview_button.setStyleSheet(PRIMARY_BUTTON_STATE_STYLE)
         self.preview_button.clicked.connect(self.preview_requested)
         self.stop_button = QPushButton("停止编译")
         self.stop_button.setEnabled(False)
@@ -307,7 +241,7 @@ class BlockWorkspaceWidget(QWidget):
     def _on_slot_selection_changed(self) -> None:
         items = self.layout_panel.slot_list.selectedItems()
         if items:
-            instance_id = items[0].text().split(" -> ")[0]
+            instance_id = items[0].data(256)
             self.layout_selected.emit(instance_id)
 
     def _emit_edit_requested(self) -> None:
@@ -382,16 +316,12 @@ class BlockWorkspaceWidget(QWidget):
         widget = QWidget()
         box = QVBoxLayout(widget)
         box.addWidget(QLabel(f"项目目录：{self.session.project_dir or '（未指定）'}"))
-        button = QPushButton("导出可移植包…")
+        button = QPushButton("准备提交（PDF / 可选源码与报告）…")
+        self.delivery_button = button
 
         def do_export() -> None:
-            if self.session.project_dir is None:
-                return
-            target = QFileDialog.getExistingDirectory(self, "选择导出目标目录")
-            if not target:
-                return
-            result = export_package(self.session.project_dir, Path(target) / (self.session.project_dir.name + "-export"))
-            QMessageBox.information(self, "导出完成", f"已导出 {len(result.files)} 个文件。")
+            from app.gui.submission_delivery_dialog import show_submission_delivery
+            show_submission_delivery(self.window(), session=self.session)
 
         button.clicked.connect(do_export)
         box.addWidget(button)

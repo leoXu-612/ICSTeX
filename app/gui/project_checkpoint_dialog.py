@@ -10,15 +10,18 @@ from PySide6.QtGui import QDesktopServices
 from PySide6.QtCore import QUrl
 from PySide6.QtWidgets import (QApplication, QDialog, QFileDialog, QHBoxLayout, QLabel,
     QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QSplitter, QTreeWidget,
-    QTreeWidgetItem, QVBoxLayout)
+    QTreeWidgetItem, QVBoxLayout, QScrollArea, QWidget)
 from shiboken6 import isValid
 
 from app.core.project_checkpoint import (DraftInput, CheckpointCancelled, MAX_DRAFT_BYTES,
     MAX_DRAFTS, checkpoint_candidates, checkpoint_review, create_checkpoint, restore_checkpoint)
+from app.gui.responsive.helpers import ButtonFlowLayout
+from app.gui.theme import PRIMARY_BUTTON_STATE_STYLE
 
 
 def _windows(owner):
-    return tuple(dict.fromkeys([owner, *(widget for widget in QApplication.topLevelWidgets()
+    owners = [owner] if hasattr(owner, "documents") and hasattr(owner, "tabs") else []
+    return tuple(dict.fromkeys([*owners, *(widget for widget in QApplication.topLevelWidgets()
         if hasattr(widget, "documents") and hasattr(widget, "tabs") and isValid(widget))]))
 
 
@@ -28,7 +31,7 @@ def _belongs(path, project):
 
 class CaptureLease:
     """Pause only captured tabs/sessions; preserve their pre-existing save intent."""
-    def __init__(self, owner, project):
+    def __init__(self, owner, project, *, block_owners=()):
         self.project = project
         self.cancelled = threading.Event()
         self.tabs, self.sessions, self.connections, self.windows = [], [], [], []
@@ -65,33 +68,47 @@ class CaptureLease:
                         self.drafts.append(DraftInput(f"source-{wi}-{ti}", "source-text", target,
                                                      tab.editor.toPlainText().encode("utf-8")))
                 if session is not None:
-                    if session.compile_manager and (session.compile_manager.is_busy
-                            or session.compile_manager._scheduled_request is not None
-                            or session.compile_manager._pending_request is not None):
-                        raise ValueError("Block 项目正在编译；请先停止或等待完成。")
-                    if session._writes_paused or session._checkpoint_paused:
-                        raise ValueError("Block 项目已有保存/修复操作；请先完成或取消该操作。")
-                    pending = session.pause_writes()
-                    session._checkpoint_paused = True
-                    key = session._revision, session.editor_draft_revision
-                    self.sessions.append((session, pending, key))
-                    self._watch(session.model_changed)
-                    self._watch(session.editor_drafts_changed)
-                    self._watch(session.destroyed)
-                    if session.has_unsaved_changes:
-                        payload = {"format": "icstex-block-draft", "version": 1,
-                            "model": {"blocks": [b.to_dict() for b in session.registry.blocks()],
-                                      "layout": session.layout.to_dict() if session.layout else None,
-                                      "sources": [s.to_dict() for s in session.sources],
-                                      "document_theme": session.document_theme.to_dict()},
-                            "unapplied": [asdict(draft) for draft in session.editor_drafts.values()]}
-                        self.drafts.append(DraftInput(f"block-{wi}", "block-state", None,
-                            json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False).encode("utf-8")))
+                    self._capture_session(session, f"block-{wi}")
+            # Explicit standalone Block owners have no source tabs or MainWindow
+            # facade. Reuse the same session pause/identity rules without one.
+            for bi, (window, session) in enumerate(block_owners):
+                if session.project_dir != project or session._closed:
+                    continue
+                if window not in self.windows:
+                    self.windows.append(window)
+                    self._watch(window.destroyed)
+                self._capture_session(session, f"standalone-block-{bi}")
             if len(self.drafts) > MAX_DRAFTS or any(len(d.payload) > MAX_DRAFT_BYTES for d in self.drafts):
                 raise ValueError("草稿超过检查点上限；没有丢弃、截断或保存草稿。")
         except BaseException:
             self.release()
             raise
+
+    def _capture_session(self, session, draft_id):
+        if any(current is session for current, _, _ in self.sessions):
+            return
+        if session.compile_manager and (session.compile_manager.is_busy
+                or session.compile_manager._scheduled_request is not None
+                or session.compile_manager._pending_request is not None):
+            raise ValueError("Block 项目正在编译；请先停止或等待完成。")
+        if session._writes_paused or session._checkpoint_paused:
+            raise ValueError("Block 项目已有保存/修复操作；请先完成或取消该操作。")
+        pending = session.pause_writes()
+        session._checkpoint_paused = True
+        key = session._revision, session.editor_draft_revision
+        self.sessions.append((session, pending, key))
+        self._watch(session.model_changed)
+        self._watch(session.editor_drafts_changed)
+        self._watch(session.destroyed)
+        if session.has_unsaved_changes:
+            payload = {"format": "icstex-block-draft", "version": 1,
+                "model": {"blocks": [b.to_dict() for b in session.registry.blocks()],
+                          "layout": session.layout.to_dict() if session.layout else None,
+                          "sources": [s.to_dict() for s in session.sources],
+                          "document_theme": session.document_theme.to_dict()},
+                "unapplied": [asdict(draft) for draft in session.editor_drafts.values()]}
+            self.drafts.append(DraftInput(draft_id, "block-state", None,
+                json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False).encode("utf-8")))
 
     def _watch(self, signal, predicate=None):
         def cancel(*args):
@@ -167,7 +184,13 @@ class ProjectCheckpointDialog(QDialog):
         self.setWindowTitle("项目检查点 · 恢复为新目录" if restore else "项目检查点 · 文件与独立草稿")
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
         self.resize(880, 640)
-        outer = QVBoxLayout(self)
+        frame = QVBoxLayout(self)
+        self.scroller = QScrollArea()
+        self.scroller.setWidgetResizable(True)
+        body = QWidget()
+        self.scroller.setWidget(body)
+        frame.addWidget(self.scroller, 1)
+        outer = QVBoxLayout(body)
         self.status = QLabel("只处理用户选定的本地文件；不保存、编译、联网或覆盖原项目。")
         self.status.setWordWrap(True)
         self.status.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -186,8 +209,11 @@ class ProjectCheckpointDialog(QDialog):
         self.tree.setRootIsDecorated(False)
         self.tree.setColumnWidth(0, 140)
         self.tree.setColumnWidth(1, 360)
+        self.tree.setMinimumHeight(160)
         self.preview = QPlainTextEdit()
         self.preview.setReadOnly(True)
+        self.preview.setMinimumHeight(160)
+        self.preview.setTabChangesFocus(True)
         self.preview.setPlaceholderText("选择草稿查看独立恢复内容；预览不应用到项目。")
         splitter.addWidget(self.tree)
         splitter.addWidget(self.preview)
@@ -205,20 +231,24 @@ class ProjectCheckpointDialog(QDialog):
             "同目录副本不等于独立备份；目录可列出不证明云端文件已下载。单次最多 2000 文件、200 草稿、256 MiB。")
         self.policy.setWordWrap(True)
         outer.addWidget(self.policy)
-        bottom = QHBoxLayout()
-        self.reveal_button = QPushButton("显示已验证结果的位置")
+        bottom = ButtonFlowLayout()
+        self.reveal_button = QPushButton("显示结果位置")
         self.reveal_button.hide()
         self.resume_button = QPushButton("审阅恢复草稿并继续编辑…")
         self.resume_button.hide()
         self.action_button = QPushButton("审阅后恢复到新目录" if restore else "创建选定文件检查点")
         self.action_button.setDefault(False)
+        self.action_button.setObjectName("primaryButton")
+        self.action_button.setStyleSheet(PRIMARY_BUTTON_STATE_STYLE)
         self.close_button = QPushButton("取消 / 关闭")
         bottom.addWidget(self.reveal_button)
-        bottom.addStretch(1)
         bottom.addWidget(self.action_button)
         bottom.addWidget(self.close_button)
-        outer.addLayout(bottom)
-        outer.addWidget(self.resume_button)
+        bottom.addWidget(self.resume_button)
+        frame.addLayout(bottom)
+        for button in self.findChildren(QPushButton):
+            button.setAutoDefault(False)
+            button.setDefault(False)
         self.signals = _Signals(self)
         self.signals.finished.connect(self._finished, Qt.ConnectionType.QueuedConnection)
         self.open_button.clicked.connect(self.choose_archive if restore else self.add_files)
@@ -463,6 +493,23 @@ def show_project_checkpoint(window, *, restore=False):
 
 
 def checkpoint_close_guard(window):
+    delivery = getattr(QApplication.instance(), "_icstex_delivery_dialog", None)
+    if delivery is not None and isValid(delivery) and (delivery.window is window
+            or delivery.lease is not None and window in delivery.lease.windows):
+        delivery.reject()
+        if delivery.busy:
+            return False
+    migration = getattr(QApplication.instance(), "_icstex_migration_dialog", None)
+    if migration is not None and isValid(migration) and (migration.window is window
+            or migration.lease is not None and window in migration.lease.windows):
+        migration.reject()
+        if migration.busy:
+            return False
+    journal = getattr(QApplication.instance(), "_icstex_write_recovery_dialog", None)
+    if journal is not None and isValid(journal) and journal.window is window:
+        journal.reject()
+        if journal.busy:
+            return False
     recovery = getattr(QApplication.instance(), "_icstex_recovery_dialog", None)
     if recovery is not None and isValid(recovery) and recovery.window is window:
         recovery.reject()

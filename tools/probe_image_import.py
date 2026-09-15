@@ -21,6 +21,7 @@ from PySide6.QtCore import QCoreApplication, QEvent, QSettings
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
+from shiboken6 import isValid
 from app.core.blocks.assembly import build_latex_files
 from app.core.blocks.layout import block_slot
 from app.core.blocks.project_repository import load_project, save_project
@@ -37,9 +38,14 @@ from tools.probe_submission_check import wait_for
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
-    output = parser.parse_args().output.resolve()
+    parser.add_argument("--native", action="store_true", help="Explicitly permit the real Cocoa picker")
+    args = parser.parse_args()
+    if not args.native:
+        parser.error("This probe requires --native and QT_QPA_PLATFORM=cocoa")
+    output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     app = QApplication.instance() or QApplication([])
+    assert app.platformName() == "cocoa", "Native picker acceptance requires Cocoa"
     app.setApplicationName("ICSTeX V1 Image Import QA")
     apply_theme(app)
     digest = hashlib.sha256()
@@ -138,18 +144,35 @@ def main():
                 assets.unlink()
                 retained.rename(assets)
             assert _close_block_project(window)
-            reopened = load_project(project)
-            assert reopened["registry"].get(block.id).content["source"] == imported
+            reopened_state = load_project(project)
+            reopened = ProjectSession(**{key: reopened_state[key] for key in
+                ("registry", "layout", "sources", "document_theme", "project_dir")})
+            assert _install_session(window, reopened)
+            _set_block_mode(window, True)
+            reopened.selection.select_block(block.id, source="native-image-reopen-qa")
+            assert reopened.registry.get(block.id).content["source"] == imported
+            assert (project / imported).read_bytes() == chosen_bytes
+            assert not reopened.has_unsaved_changes and reopened.compile_manager is None
+            window.block_compile_action.trigger()
+            wait_for(lambda: reopened.last_result is not None)
+            assert reopened.last_result.ok, reopened.last_result
+            window.block_preview_area.pdf_button.click()
+            QTest.qWait(500)
+            assert window.grab().save(str(output / "reopened-image-final.png"))
+            reopened_pdf = reopened.last_result.pdf_file.read_bytes()
+            (output / "reopened-image-final.pdf").write_bytes(reopened_pdf)
+            report["reopened_final_sha256"] = hashlib.sha256(reopened_pdf).hexdigest()
             report["saved_project_reopens_with_the_selected_image"] = True
+            report["reopened_gui_session_compiles_actual_final"] = True
         finally:
             if window.block_session is not None:
                 _close_block_project(window, discard=True)
             for tab in window.tabs.values():
                 window.documents.cancel_save_timer(tab)
                 tab.modified = tab.dirty = False
-            window.close()
-            window.deleteLater()
+            assert window.close()
             QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+            assert not isValid(window)
     report["limits"] = ["No native Finder drag, IME, AX stress, Windows or human acceptance",
         "POSIX exclusive publication requires a supporting filesystem; unsupported publication fails closed",
         "Source metadata change detection is not an externally locked or cryptographically frozen copy",

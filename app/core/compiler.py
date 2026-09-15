@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import ExitStack
 from dataclasses import dataclass, field, replace
 from enum import Enum
 from itertools import count
@@ -8,6 +9,7 @@ import os
 from pathlib import Path
 import signal
 import subprocess
+import sys
 import threading
 import time
 from typing import Callable
@@ -15,6 +17,9 @@ from typing import Callable
 from app.core.latex_tools import LaTeXEngine, LaTeXToolchain, detect_toolchain
 from app.core.log_parser import LaTeXError, parse_latex_errors, parse_log_file, parse_reference_warnings
 from app.core.build_evidence import BuildInputEvidence, capture_compile_inputs, finish_compile_inputs
+from app.core.build_tool_versions import BuildToolVersions, capture_tool_versions
+from app.core.file_observation import file_signature
+from app.core.pdf_identity import PdfContentIdentity, capture_pdf_identity
 from app.core.paths import (
     build_dir_for,
     built_log_for,
@@ -23,6 +28,7 @@ from app.core.paths import (
     preview_build_dir_for,
 )
 from app.core.process_env import latex_subprocess_env
+from app.core.macos_compiler_sandbox import macos_sandbox_launch
 from app.core.project_dependencies import read_project_bytes, read_recorder_dependencies
 
 
@@ -104,6 +110,8 @@ class CompileResult:
     input_evidence: BuildInputEvidence | None = None
     warnings: tuple[LaTeXError, ...] = ()
     log_complete: bool = False
+    tool_versions: BuildToolVersions | None = None
+    pdf_identity: PdfContentIdentity | None = None
 
     @property
     def ok(self) -> bool:
@@ -205,6 +213,11 @@ class CompileManager:
     def is_busy(self) -> bool:
         """Whether a worker has launched or a compile is currently running."""
         return not self._idle_event.is_set()
+
+    @property
+    def is_scheduled(self) -> bool:
+        with self._lock:
+            return self._scheduled_request is not None or self._pending_request is not None
 
     @property
     def is_retired(self) -> bool:
@@ -399,10 +412,20 @@ class CompileManager:
                 )
                 if inputs is not None:
                     recorder = tuple(sorted(inputs.paths))
+            pdf_signature = file_signature(result.pdf_file) if result.ok else None
             evidence = (finish_compile_inputs(before, self.root_file, self.project_scope,
                                               recorder or (), result.pdf_file if result.ok else None)
                         if before is not None else None)
-            result = replace(result, job_key=request.key, recorder_inputs=recorder, input_evidence=evidence)
+            identity = None
+            if result.ok:
+                identity = (capture_pdf_identity(result.pdf_file, self.project_scope,
+                    observation=evidence.pdf, observed_from=pdf_signature) if evidence and evidence.pdf else
+                    capture_pdf_identity(result.pdf_file, self.project_scope))
+            versions = (capture_tool_versions(result.stdout, request.key.engine,
+                                              via_latexmk=bool(request.key.toolchain.latexmk))
+                        if selected is BuildPurpose.FINAL else None)
+            result = replace(result, job_key=request.key, recorder_inputs=recorder,
+                             input_evidence=evidence, tool_versions=versions, pdf_identity=identity)
             if self.on_finished:
                 self.on_finished(result)
             return result
@@ -474,6 +497,7 @@ class CompileManager:
         toolchain = key.toolchain if key is not None else self.toolchain
         engine = key.engine if key is not None else self.engine
         restricted_io = key.restricted_io if key is not None else self.restricted_io
+        project_scope = self.project_scope
         output_dir = key.output_dir if key is not None else self.output_dir_for(purpose)
         output_dir.mkdir(parents=True, exist_ok=True)
         pdf_file = built_pdf_for(self.root_file, output_dir)
@@ -524,9 +548,27 @@ class CompileManager:
             command_root = Path(os.path.relpath(self.root_file, self.root_file.parent))
             command_output = Path(os.path.relpath(output_dir, self.root_file.parent))
         command = toolchain.compile_command(command_root, command_output, engine)
+        if (purpose is BuildPurpose.PREVIEW and engine is LaTeXEngine.XELATEX
+                and toolchain.latexmk and not restricted_io):
+            # Lossless fast compression: preview latency matters more than a
+            # slightly smaller temporary PDF. FINAL retains the driver defaults.
+            command[1:1] = ["-e", '$xdvipdfmx = "xdvipdfmx -E -z 1 -o %D %O %S";']
+        if purpose is BuildPurpose.FINAL and toolchain.latexmk:
+            # A cache hit cannot bind the current input hashes to its old PDF.
+            # Re-run all rules without cleaning; PREVIEW remains incremental.
+            command.insert(1, "-g")
         self._log("运行命令：" + " ".join(command))
         timed_out = False
+        sandbox_context = ExitStack()
         try:
+            environment = self._compile_environment(preparation.overlay_dir, restricted_io=restricted_io)
+            if restricted_io and sys.platform == "darwin":
+                launch = sandbox_context.enter_context(macos_sandbox_launch(
+                    command, toolchain=toolchain, engine=engine,
+                    project_scope=project_scope, root_file=self.root_file,
+                    output_dir=output_dir, overlay_dir=preparation.overlay_dir,
+                ))
+                command, environment = launch.command, launch.environment
             popen_kwargs: dict[str, object] = {
                 "stdout": subprocess.PIPE,
                 "stderr": subprocess.PIPE,
@@ -534,8 +576,26 @@ class CompileManager:
                 "encoding": "utf-8",
                 "errors": "replace",
                 "cwd": self.root_file.parent,
-                "env": self._compile_environment(preparation.overlay_dir, restricted_io=restricted_io),
+                "env": environment,
             }
+            if restricted_io and sys.platform == "darwin":
+                popen_kwargs.update(stdin=subprocess.DEVNULL, close_fds=True)
+            with self._lock:
+                stop_requested = self._stop_requested or self._retired
+            if stop_requested:
+                return self._simple_result(
+                    build_id, CompileOutcome.STOPPED, returncode=-15,
+                    stderr="编译已在准备阶段停止。", purpose=purpose,
+                    duration_seconds=time.perf_counter() - start,
+                )
+            if timeout_seconds is not None:
+                timeout_seconds = max(0.0, timeout_seconds - (time.perf_counter() - start))
+                if timeout_seconds == 0:
+                    return self._simple_result(
+                        build_id, CompileOutcome.TIMEOUT, returncode=-15,
+                        stderr="编译准备超时，未启动编译器。", purpose=purpose,
+                        duration_seconds=time.perf_counter() - start,
+                    )
             if os.name == "nt":
                 # A new process group lets stop/timeout kill latexmk and the
                 # engine children it spawns (taskkill /T targets the tree).
@@ -550,10 +610,7 @@ class CompileManager:
                 self._process = process
                 stop_requested = self._stop_requested or self._retired
             if stop_requested:
-                try:
-                    process.terminate()
-                except OSError:
-                    pass
+                self._terminate_process(process)
             timed_out = False
             if timeout_seconds is None:
                 stdout, stderr = process.communicate()
@@ -577,6 +634,7 @@ class CompileManager:
                 purpose=purpose,
             )
         finally:
+            sandbox_context.close()
             with self._lock:
                 self._process = None
         with self._lock:
@@ -636,10 +694,10 @@ class CompileManager:
     ) -> dict[str, str]:
         environment = latex_subprocess_env(texinputs_prefix=overlay_dir)
         if self.restricted_io if restricted_io is None else restricted_io:
-            # TeX's paranoid mode rejects absolute and parent-path document IO
-            # while retaining reads from the working tree and installed TeX
-            # distribution.  This complements -no-shell-escape; it does not
-            # replace project-root validation at the caller boundary.
+            # TeX's paranoid mode rejects absolute and parent-path document IO.
+            # TeX-resolved inputs can remain available, but Lua io.open on an
+            # absolute distribution path can also be denied. This complements
+            # -no-shell-escape, not project-root validation at the caller.
             environment["openin_any"] = "p"
             environment["openout_any"] = "p"
         return environment

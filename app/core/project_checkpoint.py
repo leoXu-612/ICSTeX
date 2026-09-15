@@ -177,7 +177,7 @@ def _read_file(project, relative, cancelled=None):
 class _OutputParent:
     """Anchor one explicit existing output parent; never create its ancestors."""
 
-    def __init__(self, target):
+    def __init__(self, target, *, allow_empty=False):
         raw = Path(target).expanduser().absolute()
         self.path = raw.parent.resolve(strict=True)
         self.target = self.path / raw.name
@@ -185,6 +185,8 @@ class _OutputParent:
             raise ValueError("Choose a new output name")
         self.fd = None
         self.identity = None
+        self.allow_empty = allow_empty
+        self.consumed_empty_mode = None
 
     def __enter__(self):
         info = self.path.stat()
@@ -195,16 +197,56 @@ class _OutputParent:
             self.fd = os.open(self.path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         try:
             self.check()
+            if self.allow_empty:
+                self.consume_empty()
             self.absent()
         except BaseException:
-            self.__exit__(None, None, None)
+            self.__exit__(*sys.exc_info())
             raise
         return self
 
-    def __exit__(self, *_):
+    def __exit__(self, exc_type=None, *_):
+        if exc_type is not None and self.consumed_empty_mode is not None:
+            # Legacy callers may supply an empty staging directory. If its
+            # replacement fails, restore emptiness only where still absent.
+            try:
+                self.check()
+                os.mkdir(self.name(self.target.name), self.consumed_empty_mode, **self.kwargs)
+            except OSError:
+                pass  # Never overwrite a late owner or follow a replaced parent.
         if self.fd is not None:
             os.close(self.fd)
             self.fd = None
+
+    def consume_empty(self):
+        try:
+            info = os.stat(self.name(self.target.name), follow_symlinks=False, **self.kwargs)
+        except FileNotFoundError:
+            return
+        if (not stat.S_ISDIR(info.st_mode)
+                or (hasattr(self.target, "is_junction") and self.target.is_junction())):
+            raise FileExistsError("Only an absent target or an explicitly empty staging directory is allowed")
+        descriptor = None
+        try:
+            if self.fd is not None:
+                descriptor = os.open(self.target.name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                                     dir_fd=self.fd)
+                if _signature(os.fstat(descriptor)) != _signature(info):
+                    raise OSError("Empty staging directory changed")
+            with os.scandir(descriptor if descriptor is not None else self.target) as entries:
+                if next(entries, None) is not None:
+                    raise FileExistsError("Nonempty export target is never overwritten")
+            self.check()
+            current = os.stat(self.name(self.target.name), follow_symlinks=False, **self.kwargs)
+            if _signature(current) != _signature(info):
+                raise OSError("Empty staging directory changed before replacement")
+            # rmdir cannot remove a nonempty late owner. Actual output still uses
+            # the exclusive publication primitive, never replacement of a winner.
+            os.rmdir(self.name(self.target.name), **self.kwargs)
+            self.consumed_empty_mode = stat.S_IMODE(info.st_mode)
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
 
     @property
     def kwargs(self):
@@ -528,11 +570,12 @@ def _candidate_directory(project, directory):
             os.close(descriptor)
 
 
-def checkpoint_candidates(project, *, cancelled=None):
+def checkpoint_candidates(project, *, cancelled=None, extensions=None, include_metadata=True):
     """Bounded local name inventory, not dependency or cloud-availability proof."""
     project = Path(project).expanduser().resolve(strict=True)
-    extensions = {".tex", ".ltx", ".bib", ".sty", ".cls", ".bst", ".png", ".jpg",
-                  ".jpeg", ".svg", ".pdf", ".eps", ".csv", ".xlsx"}
+    extensions = ({".tex", ".ltx", ".bib", ".sty", ".cls", ".bst", ".png", ".jpg",
+                   ".jpeg", ".svg", ".pdf", ".eps", ".csv", ".xlsx"}
+                  if extensions is None else frozenset(extensions))
     paths, warnings, pending = [], [], [(project, 0)]
     visited = 0
     while pending:
@@ -564,7 +607,7 @@ def checkpoint_candidates(project, *, cancelled=None):
             raise
         except (OSError, ValueError):
             warnings.append("部分本地目录不可读或路径不兼容；可用性未知。")
-    for relative in sorted(_METADATA):
+    for relative in sorted(_METADATA) if include_metadata else ():
         path = project / relative
         # Actual opening, link refusal and availability are verified at capture.
         if path.exists() or path.is_symlink():
@@ -672,70 +715,97 @@ def restore_checkpoint(path, target, *, cancelled=None, expected_info=None) -> R
         with _verified_archive(path, cancelled) as (archive, info, check_archive):
             if expected_info is not None and info != expected_info:
                 raise ValueError("Checkpoint changed since review; no restore performed")
-            with _OutputParent(target) as parent:
-                name = f".icstex-restore.incomplete-{uuid.uuid4().hex}"
-                os.mkdir(parent.name(name), mode=0o700, **parent.kwargs)
-                directory = parent.path / name
-                owned_info = os.stat(parent.name(name), follow_symlinks=False, **parent.kwargs)
-                owned = (owned_info.st_dev, owned_info.st_ino)
-                directory_fd = None
-                try:
-                    if parent.fd is not None:
-                        directory_fd = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent.fd)
-                        opened = os.fstat(directory_fd)
-                        if (opened.st_dev, opened.st_ino) != owned:
-                            raise OSError("Restore staging directory changed")
-                    written = {}
-                    def write(relative, payload):
-                        observation = _write_restored(directory, relative, payload, directory_fd=directory_fd)
-                        written[relative] = (hashlib.sha256(payload).hexdigest(), observation)
-
-                    for entry in info.files:
-                        payload = _object_bytes(archive, entry.sha256, entry.size, cancelled)
-                        write("project/" + entry.path, payload)
-                    for entry in info.drafts:
-                        payload = _object_bytes(archive, entry.sha256, entry.size, cancelled)
-                        write("drafts/" + entry.id + _DRAFT_SUFFIX[entry.kind], payload)
-                    write("manifest.json", info.manifest())
-                    write("README.txt", (
-                        "Selected-file recovery copy. A directory named .icstex-restore.incomplete-*\n"
-                        "is NOT a published or accepted restore, even if it contains this file.\n"
-                        "Only after successful final publication, open project/ explicitly.\n"
-                        "Drafts in drafts/ are separate UTF-8 recovery copies; never applied automatically.\n"
-                        "Only manifest-listed files are covered. No permissions, timestamps, external\n"
-                        "dependencies or independent/cloud backup are implied. Original project unchanged.\n"
-                    ).encode("utf-8"))
-                    parent.check()
-                    current = directory.lstat()
-                    if not stat.S_ISDIR(current.st_mode) or (current.st_dev, current.st_ino) != owned:
-                        raise OSError("Restore staging directory changed")
-                    for relative, (digest, observation) in written.items():
-                        payload, current = _read_file(directory, relative, cancelled)
-                        if current != observation or hashlib.sha256(payload).hexdigest() != digest:
-                            raise OSError("Restored file changed before final publication")
-                    for relative, (_, observation) in written.items():
-                        _cancel(cancelled)
-                        _check_signature(directory, relative, observation)
-                    _verify_restored_tree(directory, written, directory_fd)
-                    check_archive()
-                    current = os.stat(parent.name(name), follow_symlinks=False, **parent.kwargs)
-                    if (current.st_dev, current.st_ino) != owned:
-                        raise OSError("Restore staging directory changed before publication")
-                    _cancel(cancelled)
-                    _rename_directory_exclusive(parent, name)
-                    return RestoreResult(parent.target, info)
-                finally:
-                    if directory_fd is not None:
-                        os.close(directory_fd)
-                    # Do not recursively delete a path substituted by another writer.
-                    # fd-safe cleanup only; on other platforms leave an explicitly
-                    # incomplete directory for manual inspection after failure.
-                    if parent.fd is not None and shutil.rmtree.avoids_symlink_attacks:
-                        try:
-                            current = os.stat(name, dir_fd=parent.fd, follow_symlinks=False)
-                            if (current.st_dev, current.st_ino) == owned:
-                                shutil.rmtree(name, dir_fd=parent.fd)
-                        except FileNotFoundError:
-                            pass
+            def payloads():
+                for entry in info.files:
+                    yield "project/" + entry.path, _object_bytes(archive, entry.sha256, entry.size, cancelled)
+                for entry in info.drafts:
+                    yield "drafts/" + entry.id + _DRAFT_SUFFIX[entry.kind], _object_bytes(
+                        archive, entry.sha256, entry.size, cancelled)
+            return _publish_restore(info, target, payloads(), cancelled=cancelled, check_source=check_archive)
     except (zipfile.BadZipFile, KeyError) as exc:
         raise ValueError("Checkpoint archive is corrupt or incomplete") from exc
+
+
+def _publish_restore(info, target, payloads, *, cancelled=None, check_source):
+    """Shared publication seam for validated archives and reviewed write journals.
+
+    Callers validate payload names, limits and provenance; this owns destination
+    staging, readback, final source validation and exclusive directory publication.
+    """
+    def complete_payloads():
+        yield from payloads
+        yield "manifest.json", info.manifest()
+        yield "README.txt", (
+            "Selected-file recovery copy. A directory named .icstex-restore.incomplete-*\n"
+            "is NOT a published or accepted restore, even if it contains this file.\n"
+            "Only after successful final publication, open project/ explicitly.\n"
+            "Drafts in drafts/ are separate UTF-8 recovery copies; never applied automatically.\n"
+            "Only manifest-listed files are covered. No permissions, timestamps, external\n"
+            "dependencies or independent/cloud backup are implied. Original project unchanged.\n"
+            "If recovery-evidence/ is present, read its decision report before editing.\n"
+        ).encode("utf-8")
+    return RestoreResult(_publish_payloads(target, complete_payloads(), cancelled=cancelled,
+                                          check_source=check_source), info)
+
+
+def _publish_payloads(target, payloads, *, cancelled=None, check_source,
+                      prefix=".icstex-restore.incomplete-", allow_empty=False):
+    """Shared exact-byte publication, without adding a recovery format to delivery.
+
+    Callers validate payload names, count/size limits and provenance. The existing
+    staging/readback/exclusive-publication and owned-cleanup rules stay unchanged.
+    """
+    if prefix not in {".icstex-restore.incomplete-", ".icstex-delivery.incomplete-"}:
+        raise ValueError("Unknown staging purpose")
+    with _OutputParent(target, allow_empty=allow_empty) as parent:
+        name = prefix + uuid.uuid4().hex
+        os.mkdir(parent.name(name), mode=0o700, **parent.kwargs)
+        directory = parent.path / name
+        owned_info = os.stat(parent.name(name), follow_symlinks=False, **parent.kwargs)
+        owned = (owned_info.st_dev, owned_info.st_ino)
+        directory_fd = None
+        try:
+            if parent.fd is not None:
+                directory_fd = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent.fd)
+                opened = os.fstat(directory_fd)
+                if (opened.st_dev, opened.st_ino) != owned:
+                    raise OSError("Restore staging directory changed")
+            written = {}
+            def write(relative, payload):
+                _cancel(cancelled)
+                observation = _write_restored(directory, relative, payload, directory_fd=directory_fd)
+                written[relative] = (hashlib.sha256(payload).hexdigest(), observation)
+
+            for relative, payload in payloads:
+                write(relative, payload)
+            parent.check()
+            current = directory.lstat()
+            if not stat.S_ISDIR(current.st_mode) or (current.st_dev, current.st_ino) != owned:
+                raise OSError("Restore staging directory changed")
+            for relative, (digest, observation) in written.items():
+                payload, current = _read_file(directory, relative, cancelled)
+                if current != observation or hashlib.sha256(payload).hexdigest() != digest:
+                    raise OSError("Restored file changed before final publication")
+            for relative, (_, observation) in written.items():
+                _cancel(cancelled)
+                _check_signature(directory, relative, observation)
+            _verify_restored_tree(directory, written, directory_fd)
+            check_source()
+            current = os.stat(parent.name(name), follow_symlinks=False, **parent.kwargs)
+            if (current.st_dev, current.st_ino) != owned:
+                raise OSError("Restore staging directory changed before publication")
+            _cancel(cancelled)
+            _rename_directory_exclusive(parent, name)
+            return parent.target
+        finally:
+            if directory_fd is not None:
+                os.close(directory_fd)
+            # Never recursively delete a substituted path. Non-fd-safe platforms
+            # retain an explicitly incomplete directory after failure.
+            if parent.fd is not None and shutil.rmtree.avoids_symlink_attacks:
+                try:
+                    current = os.stat(name, dir_fd=parent.fd, follow_symlinks=False)
+                    if (current.st_dev, current.st_ino) == owned:
+                        shutil.rmtree(name, dir_fd=parent.fd)
+                except FileNotFoundError:
+                    pass

@@ -36,6 +36,9 @@ class PreferencesController:
         window = self.window
         if not hasattr(window, "toolbox_dock"):
             return
+        if hasattr(window, "source_panels"):
+            window.source_panels.set_toolbox(visible)
+            return
         window.toolbox_dock.setVisible(visible)
 
     def sync_toolbox_action(self, visible: bool) -> None:
@@ -67,6 +70,7 @@ class PreferencesController:
         if label is None:
             return
         label.setText("自动编译" if enabled else "手动编译")
+        label.setToolTip(auto_compile_tooltip(self.window.preferences.fast_preview))
         set_dynamic_property(label, "state", "active" if enabled else "idle")
 
     # --- welcome page status -----------------------------------------------

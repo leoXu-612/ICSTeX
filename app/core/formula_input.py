@@ -104,7 +104,10 @@ class TemplateEditResult:
 
 @dataclass(frozen=True)
 class FinalTextEditPlan:
-    """Pure text replacement plan; execution belongs to the GUI layer."""
+    """Pure replacement plan in Python character indexes, including cursor_offset.
+
+    Execution and conversion to native editor coordinates belong to the GUI.
+    """
 
     start: int
     end: int

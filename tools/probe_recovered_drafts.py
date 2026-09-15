@@ -89,7 +89,7 @@ def install_block(window, project):
     return session
 
 
-def compile_and_check(window, kind, expected):
+def compile_and_check(window, kind, expected, *, scan_page=False):
     if kind == "block":
         window.block_compile_action.trigger()
         wait_for(lambda: window.block_session.last_result is not None and window.block_session.last_result.ok)
@@ -113,6 +113,16 @@ def compile_and_check(window, kind, expected):
         # into the page instead of treating a blank margin as renderer failure.
         bar = window.pdf_panel._view.verticalScrollBar()
         bar.setValue(bar.value() + max(1, bar.pageStep() // 3))
+    if scan_page:
+        # Image-first pages can put black captions below the first viewport.
+        # Move the actual scroll bar to reveal ink; preserve the same pixel and
+        # document-text assertions, rather than changing their thresholds.
+        bar = window.pdf_panel._view.verticalScrollBar()
+        for _ in range(16):
+            QTest.qWait(150)
+            if visible_pdf_ink(window) > 30 or bar.value() == bar.maximum():
+                break
+            bar.setValue(min(bar.maximum(), bar.value() + max(1, bar.pageStep() // 2)))
     wait_for(lambda: visible_pdf_ink(window) > 30, seconds=15)
     text = " ".join(window.pdf_panel._document.getAllText(i).text()
                     for i in range(window.pdf_panel._document.pageCount()))

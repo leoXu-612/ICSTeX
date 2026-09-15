@@ -8,6 +8,7 @@ the active editor.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -46,6 +47,7 @@ from app.core.project_tools import (
     reference_snippet,
 )
 from app.core.text_encoding import write_latex_text_atomic
+from app.core.text_positions import python_index_from_utf16, utf16_length
 from app.gui import bib_helpers
 from app.gui.formula_dialog import FormulaDialog
 from app.gui.drop_import_worker import DropCopyWorker
@@ -310,15 +312,41 @@ class InsertionActions:
             f"已插入{spec.layout.display_name}。",
         )
 
+    def _source_target_validator(self, tab: EditorTab) -> Callable[[], str]:
+        window = self.window
+        editor = tab.editor
+        revision = editor.source_revision
+        cursor = editor.textCursor()
+        target = (cursor.position(), cursor.anchor(), tab.path, window.selected_project_scope)
+
+        def validate_target() -> str:
+            if (not isValid(editor) or window.current_tab() is not tab
+                    or window.block_mode_action.isChecked() or tab.external_conflict
+                    or editor.source_revision != revision):
+                changed = True
+            else:
+                current = editor.textCursor()
+                changed = (current.position(), current.anchor(), tab.path, window.selected_project_scope) != target
+            if changed:
+                return ("编辑目标已变化或关闭，未修改源码。草稿仍保留；可复制预览中的 LaTeX，"
+                        "取消后在新位置重新打开。")
+            return ""
+
+        return validate_target
+
     def insert_table(self) -> None:
         window = self.window
         tab = window._ensure_editable_tab()
         if tab is None:
             return
-        dialog = TableDialog(window)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        values = dialog.values()
+        dialog = TableDialog(window, validate_target=self._source_target_validator(tab))
+        try:
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return
+            values = dialog.values()
+        finally:
+            if isValid(dialog):
+                dialog.deleteLater()
         self.insert_snippet(
             tab,
             table_snippet(values),
@@ -377,8 +405,12 @@ class InsertionActions:
         editor = tab.editor
         cursor = editor.textCursor()
         document = editor.toPlainText()
-        start = cursor.selectionStart()
-        end = cursor.selectionEnd()
+        start = python_index_from_utf16(document, cursor.selectionStart())
+        end = python_index_from_utf16(document, cursor.selectionEnd())
+        if start is None or end is None:
+            QMessageBox.information(window, "编辑公式", "选区不在完整字符边界；请重新选择，原文未修改。")
+            return
+        validate_target = self._source_target_validator(tab)
         if start == end:
             dialog = FormulaDialog(
                 window,
@@ -386,6 +418,7 @@ class InsertionActions:
                 start,
                 end,
                 seed_text=r"\begin{equation}\end{equation}",
+                validate_target=validate_target,
             )
         else:
             if parse_document_selection(document, start, end) is None:
@@ -396,7 +429,7 @@ class InsertionActions:
                     "原选区保持不变。",
                 )
                 return
-            dialog = FormulaDialog(window, document, start, end)
+            dialog = FormulaDialog(window, document, start, end, validate_target=validate_target)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         plan = dialog.plan()
@@ -417,8 +450,12 @@ class InsertionActions:
 
         window = self.window
         editor = tab.editor
+        if not isValid(editor):
+            return False
         current = editor.toPlainText()
-        if current[plan.start : plan.end] != plan.source_text:
+        if (not 0 <= plan.start <= plan.end <= len(current)
+                or current[plan.start : plan.end] != plan.source_text
+                or (plan.cursor_offset is not None and not 0 <= plan.cursor_offset <= len(plan.text))):
             QMessageBox.warning(
                 window,
                 "编辑公式",
@@ -440,26 +477,24 @@ class InsertionActions:
                 return False
 
         cursor = editor.textCursor()
+        replace_cursor = QTextCursor(editor.document())
+        replace_cursor.setPosition(utf16_length(current[:plan.start]))
+        replace_cursor.setPosition(utf16_length(current[:plan.end]), QTextCursor.MoveMode.KeepAnchor)
         cursor.beginEditBlock()
         try:
             if inserted_text:
-                package_cursor = editor.textCursor()
-                package_cursor.setPosition(update.insert_position)
+                package_cursor = QTextCursor(editor.document())
+                package_cursor.setPosition(utf16_length(current[:update.insert_position]))
                 package_cursor.insertText(inserted_text)
 
-            shift = len(inserted_text) if update is not None and update.insert_position <= plan.start else 0
-            new_start = plan.start + shift
-            new_end = plan.end + shift
-            replace_cursor = editor.textCursor()
-            replace_cursor.setPosition(new_start)
-            replace_cursor.setPosition(new_end, QTextCursor.MoveMode.KeepAnchor)
+            new_start = replace_cursor.selectionStart()
             replace_cursor.insertText(plan.text)
 
             final_cursor = editor.textCursor()
             if plan.cursor_offset is not None:
-                final_cursor.setPosition(new_start + plan.cursor_offset)
+                final_cursor.setPosition(new_start + utf16_length(plan.text[:plan.cursor_offset]))
             else:
-                final_cursor.setPosition(new_start + len(plan.text))
+                final_cursor.setPosition(new_start + utf16_length(plan.text))
             editor.setTextCursor(final_cursor)
         finally:
             cursor.endEditBlock()
@@ -684,16 +719,21 @@ class InsertionActions:
         cursor_offset: int | None = None,
         block: bool = True,
     ) -> None:
-        self.ensure_packages(tab, packages)
-        self.window.apply_editor_options(tab.editor)
-        text = snippet
-        adjusted_offset = cursor_offset
-        if block:
-            prefix, suffix = self._block_padding(tab.editor)
-            text = f"{prefix}{snippet}{suffix}"
-            if adjusted_offset is not None:
-                adjusted_offset += len(prefix)
-        tab.editor.insert_latex_snippet(text, adjusted_offset)
+        transaction = tab.editor.textCursor()
+        transaction.beginEditBlock()
+        try:
+            self.ensure_packages(tab, packages)
+            self.window.apply_editor_options(tab.editor)
+            text = snippet
+            adjusted_offset = cursor_offset
+            if block:
+                prefix, suffix = self._block_padding(tab.editor)
+                text = f"{prefix}{snippet}{suffix}"
+                if adjusted_offset is not None:
+                    adjusted_offset += len(prefix)
+            tab.editor.insert_latex_snippet(text, adjusted_offset)
+        finally:
+            transaction.endEditBlock()
         self.window.apply_editor_options(tab.editor)
         tab.editor.ensureCursorVisible()
         tab.editor.setFocus()
@@ -709,22 +749,26 @@ class InsertionActions:
         if update.text == old_text:
             return
 
-        old_position = cursor.position()
-        editor.setPlainText(update.text)
+        # Keep Qt's tracked cursor (including selection direction) and Undo
+        # history. PackageUpdate indexes Python characters; Qt uses UTF-16.
+        package_cursor = QTextCursor(editor.document())
+        package_cursor.setPosition(utf16_length(old_text[:update.insert_position]))
+        package_cursor.beginEditBlock()
+        try:
+            package_cursor.insertText(update.inserted_text)
+        finally:
+            package_cursor.endEditBlock()
         self.window.apply_editor_options(editor)
-        new_position = old_position
-        if old_position >= update.insert_position:
-            new_position += len(update.inserted_text)
-        cursor = editor.textCursor()
-        cursor.setPosition(min(new_position, len(update.text)))
         editor.setTextCursor(cursor)
 
     @staticmethod
     def _block_padding(editor: LaTeXEditor) -> tuple[str, str]:
-        text = editor.toPlainText()
-        cursor_position = editor.textCursor().position()
-        prefix = "" if cursor_position == 0 or text[cursor_position - 1] == "\n" else "\n"
-        suffix = "" if cursor_position >= len(text) or text[cursor_position : cursor_position + 1] == "\n" else "\n"
+        cursor = editor.textCursor()
+        end = cursor.selectionEnd()
+        cursor.setPosition(cursor.selectionStart())
+        prefix = "" if cursor.atBlockStart() else "\n"
+        cursor.setPosition(end)
+        suffix = "" if cursor.atBlockEnd() else "\n"
         return prefix, suffix
 
     @staticmethod

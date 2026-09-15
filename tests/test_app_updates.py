@@ -100,6 +100,13 @@ class UpdateConfigurationTests(unittest.TestCase):
         self.assertTrue(automatic_check_due(100, 86500))
         self.assertTrue(automatic_check_due(200, 100))
 
+    def test_startup_check_uses_short_restart_cooldown_not_daily_limit(self):
+        self.assertFalse(automatic_check_due(100, 399, startup=True))
+        self.assertTrue(automatic_check_due(100, 400, startup=True))
+        self.assertFalse(automatic_check_due(100, 400))
+        self.assertTrue(automatic_check_due(0, 100, startup=True))
+        self.assertTrue(automatic_check_due(200, 100, startup=True))
+
 
 class UpdateInstanceProbeTests(unittest.TestCase):
     def test_source_process_does_not_query_process_list(self):

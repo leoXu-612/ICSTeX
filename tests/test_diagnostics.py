@@ -19,6 +19,17 @@ from app.core.log_parser import LaTeXError
 
 
 class DiagnosticsTests(TestCase):
+    def test_luaotfload_fatal_is_toolchain_error_without_source_fix_or_location(self) -> None:
+        raw = 'luaotfload: FATAL ERROR; Failed to load module multiscript'
+        diagnostic = explain_latex_error(LaTeXError(raw), root_file=Path('/tmp/project/main.tex'))
+        self.assertEqual(diagnostic.severity, SEVERITY_ERROR)
+        self.assertEqual(diagnostic.title, 'LuaLaTeX 字体组件失败')
+        self.assertIn('文件访问', diagnostic.message)
+        self.assertIsNone(diagnostic.fix)
+        self.assertIsNone(diagnostic.file)
+        self.assertIsNone(diagnostic.line)
+        self.assertEqual(diagnostic.raw_message, raw)
+
     def test_explains_undefined_control_sequence_with_package_fix(self) -> None:
         diagnostic = explain_latex_error(LaTeXError("Undefined control sequence. \\includegraphics", line=12))
 

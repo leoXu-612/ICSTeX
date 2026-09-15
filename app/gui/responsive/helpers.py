@@ -46,16 +46,12 @@ def configure_tab_bar(tab_widget: QTabWidget) -> None:
 def layout_reflow(widget: QWidget, grid, widgets: list, columns: int) -> None:
     """Place ``widgets`` into ``grid`` in ``columns`` columns (instance-stable)."""
     while grid.count():
-        item = grid.takeAt(0)
-        child = item.widget()
-        if child is not None:
-            grid.removeWidget(child)
-            child.setParent(widget)
+        grid.takeAt(0)
     for index, child in enumerate(widgets):
         row, column = divmod(index, columns)
         grid.addWidget(child, row, column)
-    for column in range(columns):
-        grid.setColumnStretch(column, 1)
+    for column in range(max(columns, grid.columnCount())):
+        grid.setColumnStretch(column, 1 if column < columns else 0)
 
 
 class ButtonFlowLayout(QLayout):

@@ -40,6 +40,10 @@ from app.core.latex_outline import OutlineItem
 from app.core.project_search import ProjectSearchResult
 from app.core.project_tools import (BibEntrySpec, LabelInfo, ProjectInitSpec,
                                     initialize_project, sanitize_project_name)
+from app.gui.responsive.helpers import ButtonFlowLayout
+from app.gui.table_navigation import enable_table_key_activation
+from app.gui.dialog_combo_box import DialogComboBox
+from app.gui.theme import PRIMARY_BUTTON_STATE_STYLE
 
 
 _IMAGE_THUMBNAIL_SIZE = QSize(44, 44)
@@ -112,10 +116,10 @@ class ProjectWizardDialog(QDialog):
         self._templates = {template.key: template for template in all_templates()}
         self.parent_edit = QLineEdit(str(Path.home()))
         self.name_edit = QLineEdit("LaTeX 项目")
-        self.template_combo = QComboBox()
+        self.template_combo = DialogComboBox()
         for template in self._templates.values():
             self.template_combo.addItem(template.title, template.key)
-        self.engine_combo = QComboBox()
+        self.engine_combo = DialogComboBox()
         for engine in LaTeXEngine:
             self.engine_combo.addItem(engine.display_name, engine.value)
         self.engine_combo.setCurrentIndex(self.engine_combo.findData(LaTeXEngine.AUTO.value))
@@ -331,7 +335,7 @@ class ReferencesPanel(QWidget):
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
 
-        buttons = QHBoxLayout()
+        buttons = ButtonFlowLayout()
         self.add_button = QPushButton("添加")
         self.import_button = QPushButton("导入")
         self.refresh_button = QPushButton("刷新")
@@ -340,9 +344,16 @@ class ReferencesPanel(QWidget):
         buttons.addWidget(self.refresh_button)
         layout.addLayout(buttons)
 
+        self.library_path = QLineEdit()
+        self.library_path.setReadOnly(True)
+        self.library_path.setAccessibleName("快捷库实际读取路径")
+        self.library_path.setPlaceholderText("打开已保存文档后显示快捷库路径")
+        layout.addWidget(self.library_path)
+
         self.table = QTableWidget(0, 1)
         self.table.setHorizontalHeaderLabels(["Bib key"])
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table.setTabKeyNavigation(False)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setShowGrid(False)
         self.table.verticalHeader().setVisible(False)
@@ -354,16 +365,18 @@ class ReferencesPanel(QWidget):
 
         self.insert_button = QPushButton("插入 cite")
         self.insert_button.setObjectName("primaryButton")
+        self.insert_button.setStyleSheet(PRIMARY_BUTTON_STATE_STYLE)
         layout.addWidget(self.insert_button)
 
-        self.check_button = QPushButton("检查项目引用（只读）")
+        self.check_button = QPushButton("检查引用")
+        self.check_button.setToolTip("只读检查当前项目引用；不保存、不编译、不联网。")
         self.check_button.clicked.connect(self.checkRequested.emit)
         layout.addWidget(self.check_button)
         self.reference_tabs.addTab(library, "快捷库")
 
         health = QWidget()
         health_layout = QVBoxLayout(health)
-        health_buttons = QHBoxLayout()
+        health_buttons = ButtonFlowLayout()
         self.check_refresh_button = QPushButton("重新检查")
         self.check_refresh_button.clicked.connect(self.checkRequested.emit)
         self.check_cancel_button = QPushButton("取消")
@@ -372,13 +385,19 @@ class ReferencesPanel(QWidget):
         health_buttons.addWidget(self.check_cancel_button)
         health_layout.addLayout(health_buttons)
         self.check_status = QLabel("尚未检查；不保存、不编译、不联网。")
+        self.check_status.setTextFormat(Qt.TextFormat.PlainText)
         self.check_status.setWordWrap(True)
         health_layout.addWidget(self.check_status)
         self.health_table = QTableWidget(0, 3)
         self.health_table.setHorizontalHeaderLabels(["状态", "规则", "Bib key"])
         self.health_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.health_table.setTabKeyNavigation(False)
         self.health_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.health_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.health_table.setWordWrap(False)
+        self.health_table.verticalHeader().setVisible(False)
+        self.health_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        self.health_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.health_table.itemSelectionChanged.connect(self._show_citation_detail)
         health_layout.addWidget(self.health_table)
         self.check_detail = QPlainTextEdit()
@@ -394,6 +413,7 @@ class ReferencesPanel(QWidget):
         self.reference_tabs.addTab(health, "引用检查")
         self.citation_report = None
         self._citation_scope = None
+        self._citation_checked_at = ""
         self.set_check_pending("尚未检查；不保存、不编译、不联网。")
 
         self.add_button.clicked.connect(self.addReferenceRequested.emit)
@@ -402,13 +422,16 @@ class ReferencesPanel(QWidget):
         self.insert_button.clicked.connect(self._emit_cite)
         self.table.cellDoubleClicked.connect(lambda _row, _column: self._emit_cite())
 
-    def set_references(self, keys: list[str], undefined: set[str] | None = None) -> None:
+    def set_references(self, keys: list[str], undefined: set[str] | None = None, *, library_path: Path | None = None) -> None:
+        self.library_path.setText(str(library_path) if library_path is not None else "")
         self.table.setRowCount(0)
         for key in keys:
             row = self.table.rowCount()
             self.table.insertRow(row)
             self.table.setItem(row, 0, QTableWidgetItem(key))
-        self.status_label.setText(f"约定位置快捷库：{len(keys)} 条；项目引用状态请主动检查。")
+        message = f"快捷库：{len(keys)} 条。" if keys else "此快捷库未读取到条目；不代表项目没有引用。"
+        self.status_label.setText(message + "本面板按当前文件目录读取 bib/references.bib 或 references.bib。"
+            "点“检查引用”查看项目实际声明的文献库；不会自动合并或更改写入位置。")
         self.status_label.setWordWrap(True)
 
     _CITATION_RULES = {
@@ -436,27 +459,36 @@ class ReferencesPanel(QWidget):
 
     def set_check_pending(self, message, *, busy=False):
         self.citation_report = None
+        self._citation_checked_at = ""
         self.health_table.setRowCount(0)
         self.check_detail.setPlainText(message)
         self.check_status.setText(message)
+        self.check_status.setToolTip(message)
         self.check_locations.clear()
         self.check_locate_button.setEnabled(False)
         self.check_cancel_button.setEnabled(busy)
 
     def set_citation_report(self, report, scope, checked_at):
         self._citation_scope = scope
+        self._citation_checked_at = checked_at
         self.citation_report = report
         self.health_table.blockSignals(True)
+        self.health_table.clearSelection()
         self.health_table.setRowCount(len(report.items))
         for row, item in enumerate(report.items):
             for column, value in enumerate((self._CITATION_STATES.get(item.status, item.status),
                                             self._CITATION_RULES.get(item.rule, item.rule), item.key)):
-                self.health_table.setItem(row, column, QTableWidgetItem(value))
+                cell = QTableWidgetItem(value)
+                cell.setToolTip(value)
+                self.health_table.setItem(row, column, cell)
         self.health_table.blockSignals(False)
         scope_label = "已检查支持的静态语法" if report.complete else "存在未解析或缺失输入"
-        self.check_status.setText(f"检查记录：{checked_at}\n{scope_label}；不是编译结果或学术合规证明。")
+        # Keep long timestamps/root names in the wrapping, copyable detail.
+        # QLabel's longest-token minimum otherwise widens the whole dock.
+        self.check_status.setText(f"检查完成 · {scope_label}；不是编译结果或学术合规证明。")
+        self.check_status.setToolTip(f"检查记录：{checked_at}")
         self.check_cancel_button.setEnabled(False)
-        self.check_detail.setPlainText(f"输入身份：{report.input_id}\n选择规则查看位置。")
+        self.check_detail.setPlainText(f"检查记录：{checked_at}\n输入身份：{report.input_id}\n选择规则查看位置。")
         self.check_locations.clear()
         self.check_locate_button.setEnabled(False)
         if report.items:
@@ -472,7 +504,7 @@ class ReferencesPanel(QWidget):
         title = self._CITATION_RULES.get(item.rule, item.rule)
         self.check_detail.setPlainText(
             f"{title} · {item.key}\n{self._CITATION_HELP.get(item.rule, title)}\n"
-            f"技术记录：{item.message}\n输入身份：{report.input_id}\n"
+            f"技术记录：{item.message}\n检查记录：{self._citation_checked_at}\n输入身份：{report.input_id}\n"
             "只读检查；不展开任意宏，不评价文献真实性。未使用仅是静态建议，不自动删除。\n"
             "单文件 4 MiB、累计输入 32 MiB、2000 个输入；引用/条目、字段和关联各有 10000 项上限。\n"
             "缓冲区按本次内容检查，磁盘输入在结束前复核；这不是冻结备份。")
@@ -480,7 +512,9 @@ class ReferencesPanel(QWidget):
         for location in item.locations:
             label = location.path.relative_to(self._citation_scope).as_posix()
             mode = "缓冲区" if modes.get(location.path) == "buffer" else "磁盘/依赖位置"
-            self.check_locations.addItem(QListWidgetItem(f"{label}:{location.line} · {mode}"))
+            entry = QListWidgetItem(f"{label}:{location.line} · {mode}")
+            entry.setToolTip(entry.text())
+            self.check_locations.addItem(entry)
         self.check_locate_button.setEnabled(bool(item.locations))
         if item.locations:
             self.check_locations.setCurrentRow(0)
@@ -514,10 +548,16 @@ class OutlinePanel(QWidget):
         self.table = QTableWidget(0, 3)
         self.table.setHorizontalHeaderLabels(["标题", "类型", "行号"])
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table.setTabKeyNavigation(False)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setShowGrid(False)
+        self.table.setWordWrap(False)
         self.table.verticalHeader().setVisible(False)
+        self.table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self.table.horizontalHeader().setStretchLastSection(False)
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        for column in (1, 2):
+            self.table.horizontalHeader().setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
         layout.addWidget(self.table)
 
         self.status_label = QLabel("未加载大纲")
@@ -526,17 +566,29 @@ class OutlinePanel(QWidget):
 
         self.refresh_button.clicked.connect(self.refreshRequested.emit)
         self.table.cellDoubleClicked.connect(lambda row, _column: self._emit_jump(row))
+        self.table.cellActivated.connect(lambda row, _column: self._emit_jump(row))
+        enable_table_key_activation(self.table)
+        self.table.setToolTip("方向键移动，空格选中当前行，Return/Enter 定位；Tab 切换控件。")
 
     def set_outline(self, items: list[OutlineItem]) -> None:
+        current = self.table.item(self.table.currentRow(), 0)
+        selected_line = current.data(Qt.ItemDataRole.UserRole) if current is not None else None
+        scroll = self.table.verticalScrollBar().value()
         self.table.setRowCount(0)
         for item in items:
             row = self.table.rowCount()
             self.table.insertRow(row)
             title = QTableWidgetItem(f"{'  ' * max(0, item.level - 2)}{item.title}")
             title.setData(Qt.ItemDataRole.UserRole, item.line)
+            title.setToolTip(f"{item.title}\n{item.command} · 第 {item.line} 行")
             self.table.setItem(row, 0, title)
-            self.table.setItem(row, 1, QTableWidgetItem(item.command))
+            kind = {"part": "篇", "chapter": "章", "section": "节", "subsection": "小节",
+                    "subsubsection": "三级节", "paragraph": "段", "subparagraph": "子段"}.get(item.command, item.command)
+            self.table.setItem(row, 1, QTableWidgetItem(kind))
             self.table.setItem(row, 2, QTableWidgetItem(str(item.line)))
+            if item.line == selected_line:
+                self.table.setCurrentCell(row, 0)
+        self.table.verticalScrollBar().setValue(scroll)
         self.status_label.setText(f"{len(items)} 个章节" if items else "未找到 section/subsection")
 
     def _emit_jump(self, row: int) -> None:
@@ -565,6 +617,7 @@ class HistoryPanel(QWidget):
         self.refresh_button = QPushButton("刷新")
         self.restore_button = QPushButton("恢复")
         self.restore_button.setObjectName("primaryButton")
+        self.restore_button.setStyleSheet(PRIMARY_BUTTON_STATE_STYLE)
         buttons.addWidget(self.refresh_button)
         buttons.addWidget(self.restore_button)
         layout.addLayout(buttons)
@@ -572,6 +625,7 @@ class HistoryPanel(QWidget):
         self.table = QTableWidget(0, 3)
         self.table.setHorizontalHeaderLabels(["时间", "类型", "大小"])
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table.setTabKeyNavigation(False)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setShowGrid(False)
         self.table.verticalHeader().setVisible(False)
@@ -645,6 +699,7 @@ class ProjectSearchPanel(QWidget):
         self.table = QTableWidget(0, 3)
         self.table.setHorizontalHeaderLabels(["文件", "行号", "内容"])
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table.setTabKeyNavigation(False)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setShowGrid(False)
         self.table.verticalHeader().setVisible(False)
@@ -657,6 +712,9 @@ class ProjectSearchPanel(QWidget):
         self.search_button.clicked.connect(self._emit_search)
         self.search_edit.returnPressed.connect(self._emit_search)
         self.table.cellDoubleClicked.connect(lambda row, _column: self._emit_jump(row))
+        self.table.cellActivated.connect(lambda row, _column: self._emit_jump(row))
+        enable_table_key_activation(self.table)
+        self.table.setToolTip("方向键移动，空格选中当前行，Return/Enter 定位；Tab 切换控件。")
 
     def set_results(self, project_dir: Path, results: list[ProjectSearchResult]) -> None:
         self.table.setRowCount(0)
@@ -716,6 +774,7 @@ class ImagesPanel(QWidget):
         self.refresh_button = QPushButton("刷新")
         self.insert_button = QPushButton("插入")
         self.insert_button.setObjectName("primaryButton")
+        self.insert_button.setStyleSheet(PRIMARY_BUTTON_STATE_STYLE)
         buttons.addWidget(self.refresh_button)
         buttons.addWidget(self.insert_button)
         layout.addLayout(buttons)
@@ -723,6 +782,7 @@ class ImagesPanel(QWidget):
         self.table = QTableWidget(0, 3)
         self.table.setHorizontalHeaderLabels(["图片", "路径", "状态"])
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table.setTabKeyNavigation(False)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setShowGrid(False)
         self.table.verticalHeader().setVisible(False)
@@ -758,6 +818,7 @@ class ImagesPanel(QWidget):
         self.health_table = QTableWidget(0, 2)
         self.health_table.setHorizontalHeaderLabels(["素材 / 引用", "状态"])
         self.health_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.health_table.setTabKeyNavigation(False)
         self.health_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.health_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.health_table.verticalHeader().setVisible(False)
@@ -897,6 +958,7 @@ class LabelsPanel(QWidget):
         self.table = QTableWidget(0, 3)
         self.table.setHorizontalHeaderLabels(["标签", "类型", "行号"])
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table.setTabKeyNavigation(False)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setShowGrid(False)
         self.table.verticalHeader().setVisible(False)

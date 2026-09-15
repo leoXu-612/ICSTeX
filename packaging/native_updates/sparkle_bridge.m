@@ -5,10 +5,12 @@
 typedef int (*CanShutdownCallback)(void);
 typedef void (*ShutdownCallback)(void);
 typedef void (*EventCallback)(const char *);
+typedef int (*GuardCallback)(const char *);
 
 static CanShutdownCallback canShutdown;
 static ShutdownCallback requestShutdown;
 static EventCallback notifyEvent;
+static GuardCallback guardEvent;
 
 @interface ICSTeXUpdaterDelegate : NSObject <SPUUpdaterDelegate>
 @end
@@ -35,6 +37,11 @@ static EventCallback notifyEvent;
 - (void)updaterWillRelaunchApplication:(SPUUpdater *)updater {
     if (requestShutdown != NULL) requestShutdown();
 }
+- (void)updater:(SPUUpdater *)updater willExtractUpdate:(SUAppcastItem *)item {
+    // Journal and spawn before Sparkle starts its installer, including the
+    // install-on-normal-quit path that does not call canShutdown afterwards.
+    if (guardEvent != NULL) guardEvent("extracting");
+}
 - (void)updater:(SPUUpdater *)updater didFindValidUpdate:(SUAppcastItem *)item {
     if (notifyEvent != NULL) notifyEvent("available");
 }
@@ -48,6 +55,7 @@ static EventCallback notifyEvent;
     if (notifyEvent != NULL) notifyEvent("error");
 }
 - (void)updater:(SPUUpdater *)updater didFinishUpdateCycleForUpdateCheck:(SPUUpdateCheck)check error:(NSError *)error {
+    if (guardEvent != NULL) guardEvent("finished");
     if (notifyEvent != NULL) notifyEvent("finished");
 }
 @end
@@ -58,8 +66,8 @@ static ICSTeXUpdaterDelegate *delegate;
 __attribute__((visibility("default")))
 int icstex_update_init(const char *feed, const char *key, const char *sequence,
                       CanShutdownCallback canQuit, ShutdownCallback quit,
-                      EventCallback event) {
-    if (![NSThread isMainThread] || controller != nil || !feed || !key || !sequence || !canQuit || !quit) return 0;
+                      EventCallback event, GuardCallback guard) {
+    if (![NSThread isMainThread] || controller != nil || !feed || !key || !sequence || !canQuit || !quit || !guard) return 0;
     NSDictionary *info = NSBundle.mainBundle.infoDictionary;
     if (![info[@"SUFeedURL"] isEqualToString:@(feed)] ||
         ![info[@"SUPublicEDKey"] isEqualToString:@(key)] ||
@@ -71,6 +79,7 @@ int icstex_update_init(const char *feed, const char *key, const char *sequence,
     canShutdown = canQuit;
     requestShutdown = quit;
     notifyEvent = event;
+    guardEvent = guard;
     delegate = [ICSTeXUpdaterDelegate new];
     controller = [[SPUStandardUpdaterController alloc] initWithStartingUpdater:NO
                                                             updaterDelegate:delegate
@@ -86,6 +95,7 @@ int icstex_update_init(const char *feed, const char *key, const char *sequence,
         canShutdown = NULL;
         requestShutdown = NULL;
         notifyEvent = NULL;
+        guardEvent = NULL;
         return 0;
     }
     return 1;
@@ -105,6 +115,7 @@ void icstex_update_cleanup(void) {
     canShutdown = NULL;
     requestShutdown = NULL;
     notifyEvent = NULL;
+    guardEvent = NULL;
     controller.updater.automaticallyChecksForUpdates = NO;
     // Keep objects alive until process exit: an in-flight XPC callback may still
     // hold the updater. Null C callbacks make late notifications harmless.

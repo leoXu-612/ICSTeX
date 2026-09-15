@@ -1,7 +1,7 @@
 # Native application update release handoff
 
-This is a maintainer workflow, not an enabled service. Ordinary source runs and
-builds are offline. It does not authorize publishing, credentials, key creation,
+This is a maintainer workflow. The Beta 3 macOS arm64 release embeds the updater;
+ordinary source runs and unconfigured builds remain offline. It does not itself authorize publishing, credentials, key creation,
 Developer ID signing, notarization, or replacing an installed application.
 
 The client uses Sparkle 2.9.6 on macOS and WinSparkle 0.9.4 on Windows. Official
@@ -13,8 +13,9 @@ Its presence does not enable ordinary builds or establish activation acceptance.
 The current bounded preparation is tracked in
 [`docs/UPDATE_ACTIVATION_PREPARATION.md`](../docs/UPDATE_ACTIVATION_PREPARATION.md).
 After opt-in, the client checks after startup with a short restart cooldown, then
-daily while running. The installation-lifetime exclusion gate below remains open;
-do not publish the old candidate as the newer performance/UI source.
+daily while running. The installation-lifetime protocol and native Beta 3 evidence
+are described in `docs/UPDATE_INSTALLATION_GUARD.md`; do not publish an older
+candidate as the newer performance/UI source.
 
 ## 1. Release prerequisites
 

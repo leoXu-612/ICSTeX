@@ -1,5 +1,13 @@
 # Third-Party Notices
 
+## Sparkle (macOS application updates)
+
+The configured macOS build bundles unmodified [Sparkle 2.9.6](https://github.com/sparkle-project/Sparkle/releases/tag/2.9.6).
+Sparkle uses the MIT License and includes separately attributed components.
+The complete upstream copyright notices, permissions and external licenses are
+included at `ICSTeX.app/Contents/Resources/app/assets/updater-licenses/Sparkle-LICENSE`.
+ICSTeX's bridge and installation-lock helper are separate from the upstream SDK.
+
 ## Lucide Icons
 
 ICSTeX bundles a small modified-color subset of the

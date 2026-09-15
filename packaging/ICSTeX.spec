@@ -24,7 +24,7 @@ a = Analysis(
     ],
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=[str(ROOT / "packaging/runtime_hook_update_guard.py")] if UPDATE_RUNTIME else [],
     excludes=[],
     noarchive=False,
     optimize=0,

@@ -2,22 +2,22 @@
   "assets": [
     {
       "architecture": "Apple Silicon (arm64)",
-      "download_url": "https://github.com/leoXu-612/ICSTeX/releases/download/v2.1.0-beta.2/ICSTeX-2.1.0-beta.2-macos-arm64.dmg",
+      "download_url": "https://github.com/leoXu-612/ICSTeX/releases/download/v2.1.0-beta.3/ICSTeX-2.1.0-beta.3-macos-arm64.dmg",
       "kind": "DMG",
-      "name": "ICSTeX-2.1.0-beta.2-macos-arm64.dmg",
+      "name": "ICSTeX-2.1.0-beta.3-macos-arm64.dmg",
       "platform": "macOS",
       "primary_download": true,
-      "sha256": "934ca18aa00b4c62d7188ab5354e11c702f159871055ec05bac6f6dbdca4dd57",
+      "sha256": "15f9736cd7cc94902f1192b0beabfccd8e1981a9f16e564d221fb0cbafb5247a",
       "status": "verified"
     },
     {
       "architecture": "Apple Silicon (arm64)",
-      "download_url": "https://github.com/leoXu-612/ICSTeX/releases/download/v2.1.0-beta.2/ICSTeX-2.1.0-beta.2-macos-arm64.zip",
+      "download_url": "https://github.com/leoXu-612/ICSTeX/releases/download/v2.1.0-beta.3/ICSTeX-2.1.0-beta.3-macos-arm64.zip",
       "kind": "ZIP",
-      "name": "ICSTeX-2.1.0-beta.2-macos-arm64.zip",
+      "name": "ICSTeX-2.1.0-beta.3-macos-arm64.zip",
       "platform": "macOS",
       "primary_download": false,
-      "sha256": "2a13bceacb754458b4a81069bac17bc509631ef1b4df47ae32a7ed46c9d8a511",
+      "sha256": "5cf1413c257d1a6bb9c81dbe23e99a6a44821d5c8d6b5e7bbe926e1f8a65d341",
       "status": "verified"
     }
   ],
@@ -33,17 +33,18 @@
   "github_release_published": true,
   "github_repository_public": true,
   "limitations": [
-    "本次仅提供 macOS Apple Silicon（arm64）手动安装包，未经过 Developer ID 签名或 Apple 公证。",
-    "应用内自动更新尚未启用；升级前请保存文稿、退出旧版并保留备份。",
+    "本次仅提供 macOS Apple Silicon（arm64）版本，未经过 Developer ID 签名或 Apple 公证。",
+    "旧手动版需先安装本版一次；之后可在软件更新中开启检查，下载与保存退出安装仍需确认。",
+    "安装中断后先检查进程与应用完整性；未知交接可能需要重启 Mac。没有自动回滚，重要项目请保留备份。",
     "Windows 新版安装包尚未提供，旧 ARM64 Developer Beta 保留在历史 Release 中；不支持常见的 Windows x64 电脑。",
     "LaTeX 发行版和可选 OCR 组件需另行安装，公式识别结果仍需人工核对。",
     "这是 Beta 版本；系统输入法、辅助功能和全部历史原生崩溃尚未完成全面验收，重要项目请保留独立备份。"
   ],
-  "release_name": "写作响应与 PDF 预览改进",
-  "release_page_url": "https://github.com/leoXu-612/ICSTeX/releases/tag/v2.1.0-beta.2",
+  "release_name": "应用内更新与安装保护",
+  "release_page_url": "https://github.com/leoXu-612/ICSTeX/releases/tag/v2.1.0-beta.3",
   "releases_url": "https://github.com/leoXu-612/ICSTeX/releases",
   "repository": "leoXu-612/ICSTeX",
   "schema_version": 1,
-  "tag": "v2.1.0-beta.2",
-  "version": "2.1.0-beta.2"
+  "tag": "v2.1.0-beta.3",
+  "version": "2.1.0-beta.3"
 }

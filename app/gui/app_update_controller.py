@@ -220,6 +220,7 @@ class AppUpdateController(QObject):
             # callback. That dismissal must not revoke our prepared exit.
             return
         messages = {
+            "guard_error": "安装保护未能建立，未授权退出安装。请关闭其他 ICSTeX 实例；若更新曾被强制中断，请重新启动 Mac 后重试。",
             "available": "发现可用更新，请在原生更新窗口查看并确认下载。",
             "no_update": "本次未发现可安装的新版本。兼容性详情以原生更新窗口为准。",
             "error": "更新未完成。请查看原生更新窗口的错误信息，现有文档未被关闭。",
@@ -227,7 +228,7 @@ class AppUpdateController(QObject):
         }
         if event in messages:
             self.message = messages[event]
-        if event in ("no_update", "error", "cancelled", "finished"):
+        if event in ("no_update", "error", "guard_error", "cancelled", "finished"):
             self._installing = False
             self._checking = False
             self._release_prepared_windows()

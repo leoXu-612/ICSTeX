@@ -1,6 +1,6 @@
 # ICSTeX for Windows
 
-版本：2.1.0-beta.2
+版本：2.1.0-beta.3（源码版本；本次不构建 Windows）
 
 此处为源码版本。Beta 2 本轮仅验收 macOS arm64，Windows 未重建或开放更新；
 下列 Beta 1 文件名仍指既有制品，不代表提供 Beta 2 Windows 安装包。

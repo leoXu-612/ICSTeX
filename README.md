@@ -1,7 +1,8 @@
 # ICSTeX
 
-Current version: 2.1.0-beta.2. Current packaged release: 2.1.0-beta.2 for macOS arm64 manual installation.
-This release does not enable in-app automatic updates. See [`release/BUILD_RECEIPT.json`](release/BUILD_RECEIPT.json)
+Current version: 2.1.0-beta.3. Current packaged release: 2.1.0-beta.3 for macOS arm64.
+This release includes opt-in, signed in-app updates. Older manual builds need one manual bootstrap installation.
+See [`release/BUILD_RECEIPT.json`](release/BUILD_RECEIPT.json)
 for the exact packaged source identity and [`release/KNOWN_LIMITATIONS.md`](release/KNOWN_LIMITATIONS.md) for limits.
 
 ICSTeX - ICC Student's TeX - is local research-writing infrastructure for ICC
@@ -256,7 +257,7 @@ macOS:
 bash packaging/build_macos.sh
 ```
 
-This creates both `dist/ICSTeX-2.1.0-beta.2.dmg` and a latest alias at
+This creates both `dist/ICSTeX-2.1.0-beta.3.dmg` and a latest alias at
 `dist/ICSTeX.dmg`. Share the versioned DMG when distributing test builds.
 
 Windows:

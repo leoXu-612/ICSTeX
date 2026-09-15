@@ -1,33 +1,29 @@
-# ICSTeX 2.1.0-beta.2 安装说明
+# ICSTeX 2.1.0-beta.3 安装说明
 
-本次提供 macOS Apple Silicon（arm64）手动安装包，与已核验的本机测试版对应。
-应用内自动更新尚未启用；下载新版后需要自行安装。
+本次提供 macOS Apple Silicon（arm64）DMG/ZIP，包含应用内更新器。最低系统版本为 macOS 13。
 
-## 安装与升级
+## 首次安装或从旧手动版升级
 
-1. 下载 `ICSTeX-2.1.0-beta.2-macos-arm64.dmg`，或同名 ZIP。
-2. 已安装旧版时，先保存文档并退出全部 ICSTeX 窗口，保留旧应用和项目备份。
-3. 打开 DMG，把 `ICSTeX.app` 拖入“应用程序”文件夹；ZIP 用户先完整解压。
-4. 本包使用 ad-hoc 签名，未经 Apple 公证。若 macOS 阻止首次打开，请在
-   “系统设置 → 隐私与安全性”中查看并亲自确认。不要关闭系统安全保护。
-5. 启动后打开“帮助 → 环境医生”，确认本机 LaTeX 工具链可用。
+1. 下载 `ICSTeX-2.1.0-beta.3-macos-arm64.dmg`，或同名 ZIP，并核对 SHA-256。
+2. 保存文稿，退出全部旧 ICSTeX 实例，保留完整旧应用和项目备份。
+3. 打开 DMG，把 `ICSTeX.app` 拖入“应用程序”；ZIP 用户先完整解压。
+4. 当前为 ad-hoc 签名、未经 Apple 公证。若系统阻止首次打开，请核实来源后，在“系统设置 → 隐私与安全性”中亲自决定是否允许。不要关闭系统安全保护。
+5. 启动后在“ICSTeX → 软件更新…”中手动检查，或开启启动/每日检查。
 
-应用不包含 MacTeX、TeX Live、MiKTeX、pix2tex 模型或独立 OCR 运行环境。
-运行应用不需要另外安装 Python；编译 LaTeX 仍需自行安装本地 LaTeX 发行版。
+旧 Beta 1/Beta 2 手动包没有更新器，必须先手动安装本版一次。以后检查、下载、保存退出与重启安装可在应用内完成。自动检查默认关闭，不会自动同意下载或安装。
+
+## 更新与恢复
+
+发现新版后先确认下载，再确认安装。更新前处理全部窗口的未保存内容；取消会保留窗口。编译、导出、草稿对话框或其他实例未退出时不开始安装。
+
+安装期间请不要重复启动应用。安装器结束后先验证应用完整性，再允许新实例进入。安装中断后可等待安装器退出再重试；若系统提示交接状态未知，请重新启动 Mac 后重试。完整性检查失败时，用可信的完整旧安装包恢复应用。没有自动回滚或跨版本未保存草稿恢复。
 
 ## 常用入口
 
-- 编译器：macOS 顶部菜单“编译 → 编译器”，选择 Auto、pdfLaTeX、XeLaTeX 或 LuaLaTeX。
+- 编译器：“编译 → 编译器”，选择 Auto、pdfLaTeX、XeLaTeX 或 LuaLaTeX。
 - 控制台：工具栏“控制台”，查看日志、错误、字数及检查信息。
-- 项目支持：“帮助 → 在 GitHub 支持项目（Star）”，自愿打开仓库页面。
+- 支持项目：“帮助 → 在 GitHub 支持项目（Star）”，完全自愿。
 
-## 校验与恢复
+应用不包含 MacTeX、TeX Live、MiKTeX 或 OCR 模型；运行不需要另外安装 Python，编译仍需本地 LaTeX 发行版。下载摘要见 `SHA256SUMS.txt`，构建身份见 `BUILD_RECEIPT.json`。
 
-下载文件的 SHA-256 见 `SHA256SUMS.txt`；构建身份和范围见 `BUILD_RECEIPT.json`。
-如需恢复旧版，先退出应用，再使用保留的旧安装包。应用可重装不代表文稿可以回滚，
-请另行保留项目备份。
-
-## Windows
-
-本次没有 Windows Beta 2 安装包。旧 Windows ARM64 Developer Beta 仍保留在
-GitHub 的历史 Release 中；它不能用于 Intel/AMD x64 Windows。
+本次没有新的 Windows 或 Intel Mac 包。历史 Windows ARM64 包不能用于 Intel/AMD x64 Windows。

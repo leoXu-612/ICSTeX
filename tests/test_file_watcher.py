@@ -16,6 +16,7 @@ class ExternalFileWatcherTests(TestCase):
 
         watcher.handle_event_path("/tmp/project/main.log")
         watcher.handle_event_path("/tmp/project/.latex_build/main.tex")
+        watcher.handle_event_path("/tmp/project/.icstex/preview/main.tex")
         watcher.handle_event_path("/tmp/project/chapter.tex")
 
         self.assertEqual(changed, [])

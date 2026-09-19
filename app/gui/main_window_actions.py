@@ -73,6 +73,10 @@ def build_actions(window: "MainWindow") -> None:
     window.environment_doctor_action = QAction(icon("stethoscope"), "环境医生", window)
     window.feedback_bundle_action = QAction(icon("info"), "复制反馈包", window)
     window.feedback_bundle_action.setToolTip("复制环境、编译与项目诊断摘要，不包含论文正文。")
+    window.import_perf_action = QAction("导入性能诊断", window)
+    window.import_perf_action.setToolTip("查看最近图片导入事务的编译次数与各阶段耗时。")
+    window.block_project_action = QAction("Block 项目（MVP）", window)
+    window.block_project_action.setToolTip("打开 Block 模型化排版 MVP 控制台（布局/表格/同步/主题/导出）。")
     window.user_guide_action = QAction(icon("book-open"), "新手导引", window)
     window.word_count_action = QAction(icon("calculator"), "字数统计", window)
     window.sync_pdf_action = QAction(icon("refresh-cw"), "同步 PDF", window)
@@ -80,6 +84,10 @@ def build_actions(window: "MainWindow") -> None:
     window.settings_action = QAction(icon("settings"), "设置", window)
     window.find_action = QAction("查找", window)
     window.replace_action = QAction("查找替换", window)
+    window.formula_composer_action = QAction("编辑公式", window)
+    window.formula_composer_action.setToolTip(
+        "选中完整公式（$…$、\\(…\\)、\\[…\\]、equation 或 equation*）后打开公式编辑器。"
+    )
     window.find_action.setShortcut(QKeySequence.StandardKey.Find)
     window.replace_action.setShortcut(QKeySequence("Ctrl+H"))
     window.settings_action.setShortcut(QKeySequence("Ctrl+,"))
@@ -162,6 +170,8 @@ def build_actions(window: "MainWindow") -> None:
     edit_menu.addAction(window.find_action)
     edit_menu.addAction(window.replace_action)
     edit_menu.addSeparator()
+    edit_menu.addAction(window.formula_composer_action)
+    edit_menu.addSeparator()
     for action in (
         window.auto_item_action,
         window.auto_environment_action,
@@ -177,4 +187,6 @@ def build_actions(window: "MainWindow") -> None:
     help_menu.addAction(window.user_guide_action)
     help_menu.addAction(window.environment_doctor_action)
     help_menu.addAction(window.feedback_bundle_action)
+    help_menu.addAction(window.import_perf_action)
+    help_menu.addAction(window.block_project_action)
     window.update_recent_menu()

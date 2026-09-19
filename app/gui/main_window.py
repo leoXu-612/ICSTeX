@@ -281,6 +281,31 @@ class MainWindow(QMainWindow):
     def insert_equation(self) -> None:
         self.insertions.insert_equation()
 
+    def open_formula_composer(self) -> None:
+        self.insertions.open_formula_composer()
+
+    def show_import_perf_dialog(self) -> None:
+        from app.gui.import_perf_dialog import ImportPerfDialog
+
+        ImportPerfDialog(self).exec()
+
+    def show_block_project_dialog(self) -> None:
+        from PySide6.QtWidgets import QFileDialog
+
+        from app.core.blocks.project_io import load_block_project
+        from app.gui.blocks.project_dialog import BlockProjectDialog
+
+        directory = QFileDialog.getExistingDirectory(self, "选择 Block 项目目录")
+        if not directory:
+            return
+        project = load_block_project(directory)
+        BlockProjectDialog(
+            project["registry"],
+            layout=project["layout"],
+            document_theme=project["document_theme"],
+            project_dir=project["project_dir"],
+        ).exec()
+
     def insert_list(self) -> None:
         self.insertions.insert_list()
 

@@ -202,6 +202,13 @@ class PdfExportController:
             os.close(handle)
             shutil.copy2(source, temp_name)
             os.replace(temp_name, target)
+            try:
+                # Finder shows "Date Modified" = export time, not the build
+                # time preserved by copy2. This is cosmetic; a failure here
+                # must never fail a successful export.
+                os.utime(target, None)
+            except OSError:
+                pass
             temp_name = None
         except OSError as exc:
             self._report_error(f"PDF 导出失败：{exc}")

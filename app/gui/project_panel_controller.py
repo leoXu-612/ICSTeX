@@ -11,10 +11,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QImageReader
 
 from app.core.diagnostics import Diagnostic, analyze_project
 from app.core.history import list_snapshots
-from app.core.image_assets import scan_image_assets
+from app.core.asset_index import AssetIndex
+from app.core.import_metrics import import_metrics
 from app.core.latex_outline import scan_outline
 from app.core.log_parser import LaTeXError
 from app.core.project_search import search_project
@@ -32,9 +34,20 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from app.gui.main_window import MainWindow
 
 
+def _read_image_size(path: Path) -> tuple[int | None, int | None]:
+    """Read image dimensions from the header without a full decode."""
+
+    reader = QImageReader(str(path))
+    size = reader.size()
+    if size.isValid():
+        return size.width(), size.height()
+    return None, None
+
+
 class ProjectPanelController:
     def __init__(self, window: "MainWindow") -> None:
         self.window = window
+        self._asset_indexes: dict[Path, AssetIndex] = {}
 
     # --- diagnostics --------------------------------------------------------
 
@@ -167,7 +180,15 @@ class ProjectPanelController:
         tex_text = tab.editor.toPlainText()
         window.outline_panel.set_outline(scan_outline(tex_text))
         if tab.path:
-            window.images_panel.set_assets(scan_image_assets(tab.path.parent, current_text=tex_text))
+            index = self._asset_indexes.get(tab.path.parent)
+            if index is None:
+                index = AssetIndex(tab.path.parent)
+                index.load()
+                self._asset_indexes[tab.path.parent] = index
+            import_metrics.record_index_scan(full=not index.was_cached)
+            index.scan(read_metadata=_read_image_size)
+            index.save()
+            window.images_panel.set_assets(index.image_assets(current_text=tex_text))
             window.history_panel.set_snapshots(list_snapshots(tab.path))
         else:
             window.images_panel.set_assets([])

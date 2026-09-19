@@ -219,7 +219,7 @@ class FormulaModeTests(TestCase):
         with self.assertRaises(FrozenInstanceError):
             result.template = "sqrt"  # type: ignore[misc]
 
-        plan = FinalTextEditPlan(start=0, end=3, text="$x$")
+        plan = FinalTextEditPlan(start=0, end=3, source_text="$x$", text="$x$")
         with self.assertRaises(FrozenInstanceError):
             plan.text = "$y$"  # type: ignore[misc]
 
@@ -361,6 +361,7 @@ class FinalEditPlanTests(TestCase):
         assert plan is not None
         self.assertEqual(plan.start, start)
         self.assertEqual(plan.end, end)
+        self.assertEqual(plan.source_text, "$a+b$")
         self.assertEqual(plan.text, r"$\frac{a+b}{}$")
         self.assertEqual(plan.packages, ())
         self.assertEqual(plan.cursor_offset, 12)
@@ -393,6 +394,27 @@ class FinalEditPlanTests(TestCase):
         draft = FormulaDraft(mode=FormulaMode.INLINE_DOLLAR, body=r"\frac{a+b}{}")
         self.assertIsNone(final_edit_plan(document, 0, len(document), draft))
         self.assertIsNone(final_edit_plan(document, 0, 99, draft))
+
+    def test_plan_supports_insertion_at_cursor(self) -> None:
+        document = "Text here"
+        draft = FormulaDraft(mode=FormulaMode.EQUATION, body="")
+
+        plan = final_edit_plan(document, 4, 4, draft, body_cursor_offset=0)
+
+        self.assertIsNotNone(plan)
+        assert plan is not None
+        self.assertEqual(plan.start, 4)
+        self.assertEqual(plan.end, 4)
+        self.assertEqual(plan.source_text, "")
+        self.assertEqual(plan.text, r"\begin{equation}\end{equation}")
+        self.assertEqual(plan.packages, ())
+        self.assertEqual(plan.cursor_offset, len(r"\begin{equation}"))
+
+    def test_insertion_plan_rejects_malformed_draft(self) -> None:
+        document = "Text here"
+        draft = FormulaDraft(mode=FormulaMode.INLINE_DOLLAR, body="a$b")
+
+        self.assertIsNone(final_edit_plan(document, 4, 4, draft))
 
     def test_mode_change_rewrites_wrapper_but_not_body(self) -> None:
         source = FormulaDraft(mode=FormulaMode.INLINE_DOLLAR, body="a+b")

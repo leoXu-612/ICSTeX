@@ -9,7 +9,7 @@ import threading
 from tempfile import TemporaryDirectory
 from pathlib import Path
 import time
-from unittest import TestCase
+from unittest import TestCase, skipIf
 from unittest.mock import patch
 
 from app.core.compiler import (
@@ -92,6 +92,60 @@ class CompileManagerTests(TestCase):
         self.assertTrue(
             popen.call_args.kwargs["env"]["TEXINPUTS"].startswith(overlay.resolve().as_posix())
         )
+
+    def test_explicit_timeout_terminates_and_reports_timeout(self) -> None:
+        class HangingProcess:
+            returncode: int | None = None
+            terminated = False
+            killed = False
+
+            def communicate(self, timeout: float | None = None) -> tuple[str, str]:
+                if timeout is not None:
+                    time.sleep(0.2)
+                    raise subprocess.TimeoutExpired(cmd="latexmk", timeout=timeout)
+                self.returncode = -9
+                return "stdout", "stderr"
+
+            def terminate(self) -> None:
+                self.terminated = True
+
+            def wait(self, timeout: float | None = None) -> int:
+                if self.terminated:
+                    return self.returncode or 0
+                raise subprocess.TimeoutExpired(cmd="latexmk", timeout=timeout or 1)
+
+            def kill(self) -> None:
+                self.killed = True
+
+        with TemporaryDirectory() as directory:
+            tex = Path(directory) / "main.tex"
+            tex.write_text("\\documentclass{article}", encoding="utf-8")
+            manager = CompileManager(
+                tex,
+                toolchain=LaTeXToolchain(latexmk="/bin/latexmk", pdflatex=None, texcount=None, synctex=None),
+            )
+            process = HangingProcess()
+            with patch("app.core.compiler.subprocess.Popen", return_value=process):
+                start = time.monotonic()
+                result = manager.compile_now(timeout_seconds=0.05)
+                elapsed = time.monotonic() - start
+
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result.outcome, CompileOutcome.TIMEOUT)
+        self.assertLess(elapsed, 2.0)
+        self.assertTrue(process.terminated)
+
+    def test_timeout_cleanup_signals_children_even_after_leader_exit(self) -> None:
+        from unittest.mock import Mock, call
+        process = Mock()
+        process.wait.return_value = 0
+        with patch.object(CompileManager, "_signal_process_tree") as signal_tree:
+            CompileManager._terminate_process(process)
+        self.assertEqual(signal_tree.call_args_list, [
+            call(process, force=False, budget=0.5),
+            call(process, force=True, budget=0.5),
+        ])
 
     def test_pending_final_request_cannot_be_downgraded_by_preview(self) -> None:
         with TemporaryDirectory() as directory:
@@ -485,6 +539,47 @@ class CompileOutcomeTests(TestCase):
         self.assertFalse(manager.is_running)
 
     def test_no_compile_timeout_is_introduced(self) -> None:
-        # Stop remains the only control for a runaway compile.
-        source = inspect.getsource(CompileManager._run_compile)
-        self.assertNotIn("timeout", source)
+        # Normal compiles stay unbounded; timeout is an explicit opt-in only.
+        signature = inspect.signature(CompileManager.compile_now)
+        self.assertIsNone(signature.parameters["timeout_seconds"].default)
+
+    @skipIf(os.name == "nt", "process groups differ on Windows")
+    def test_timeout_kills_entire_process_tree(self) -> None:
+        # A real driver (like latexmk) spawns an engine child that inherits the
+        # stdout/stderr pipes. Killing only the driver would leave the engine
+        # holding the pipe open, so the post-timeout communicate() could block
+        # forever (the observed 28-minute macOS CI hang). The timeout must
+        # terminate the whole process tree.
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            tex = root / "main.tex"
+            tex.write_text("\\documentclass{article}", encoding="utf-8")
+            driver = root / "fake_compiler.py"
+            driver.write_text(
+                "import subprocess, sys\n"
+                "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])\n"
+                "open('grandchild.pid', 'w').write(str(child.pid))\n"
+                "child.wait()\n",
+                encoding="utf-8",
+            )
+            manager = CompileManager(
+                tex,
+                # Use the test interpreter, not an unrelated python3 on PATH.
+                toolchain=PythonToolchain(latexmk=None, pdflatex=sys.executable),
+            )
+
+            result = manager.compile_now(timeout_seconds=1.0)
+
+            self.assertIsNotNone(result)
+            assert result is not None
+            self.assertEqual(result.outcome, CompileOutcome.TIMEOUT)
+            grandchild_pid = int((root / "grandchild.pid").read_text(encoding="utf-8").strip())
+            dead = False
+            for _ in range(30):
+                try:
+                    os.kill(grandchild_pid, 0)
+                except ProcessLookupError:
+                    dead = True
+                    break
+                time.sleep(0.1)
+            self.assertTrue(dead, "engine child survived the compile timeout")

@@ -20,6 +20,12 @@ IGNORED_SUFFIXES = {
     ".fdb_latexmk",
     ".synctex",
     ".gz",
+    ".bbl",
+    ".bcf",
+    ".blg",
+    ".run.xml",
+    ".tmp",
+    ".importing",
 }
 
 
@@ -70,7 +76,11 @@ class ExternalFileWatcher:
         file_path = Path(path).expanduser().resolve()
         if file_path not in self._files:
             return
-        if ".latex_build" in file_path.parts or file_path.suffix.lower() in IGNORED_SUFFIXES:
+        if (
+            ".latex_build" in file_path.parts
+            or ".icstex" in file_path.parts
+            or file_path.suffix.lower() in IGNORED_SUFFIXES
+        ):
             return
         self._on_change(file_path)
 

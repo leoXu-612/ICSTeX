@@ -456,6 +456,59 @@ must link here instead of repeating old task details.
   version metadata, or generated artifact changed. Verification passed:
   compileall clean and all 372 offscreen tests OK.
 
+## 2026-08-07 - Modular Layout Block MVP (feature/modular-layout-mvp)
+
+- Implemented the modular Block layout MVP per the deep-research task checklist:
+  `app/core/blocks/` data model, six JSON Schemas (Draft 2020-12), atomic
+  store/migration, table import (CSV/clipboard/XLSX), four table LaTeX
+  strategies, three-way source merge, DocumentTheme-to-.sty rendering, compile
+  timeout, block source mapping, portable export, and the 2×2 demo.
+- Added `app/gui/blocks/` console: table editor, layout panel (drag reorder/
+  undo/inspector), merge dialog, theme settings, formula tab, six-tab project
+  dialog, existing-project loader, and a MainWindow help-menu entry.
+- Added `tools/run_mvp_ci.sh` local CI simulation and
+  `docs/modular-layout-mvp-report.md` final report.
+- Verification (2026-08-07, local authority): compileall clean, ubuntu subset
+  72 tests OK, full suite 619 tests OK, demo builds and compiles
+  (xelatex/ctex), export package verified in a clean temp directory.
+- GitHub Actions remains the only open gate: the ubuntu job previously passed
+  (22s); macOS full-suite hardening (job timeout, `-v`, `timeout_seconds=300`)
+  is committed. Push is paused per maintainer instruction until Actions quota
+  is restored.
+
+## 2026-08-07 - macOS CI Hang Root Cause and Compile Tree-Kill Fix
+
+- Diagnosed the macOS runner hang from the timeout-cancelled run logs: the
+  suite stopped right after `test_blocks_gui`'s formula test and stayed silent
+  for 28 minutes; job cleanup found orphan `xetex` + `Python` processes.
+- Root cause: `BlockProjectDialog._build_pdf_sync` compiled without a timeout,
+  and timeout/stop termination killed only the direct child (latexmk), leaving
+  the xelatex engine child holding the stdout/stderr pipes so the subsequent
+  `communicate()` blocked forever.
+- Fix: compile processes now start in their own process group/session and are
+  terminated as a tree (POSIX `killpg` SIGTERM→SIGKILL; Windows
+  `taskkill /T /F`); the dialog preview compile gained a 300 s timeout.
+- Added regression test `test_timeout_kills_entire_process_tree` (verifies the
+  engine grandchild dies on timeout). Full suite: 620 tests OK locally.
+- GitHub billing/spending-limit remains the only gate for the remote run;
+  push stays paused per maintainer instruction.
+
+## 2026-08-07 - Block Console Acceptance Blocker Fix (DocumentTheme/AppTheme)
+
+- Acceptance found the "Block 项目（MVP）" console silently failed to open any
+  existing project: `load_block_project()` returns a `DocumentTheme`, which was
+  passed straight into the AppTheme-only `ThemeSettings`, raising
+  `AttributeError: 'DocumentTheme' object has no attribute 'tokens'` during
+  dialog construction (the console never appeared; unit tests never passed a
+  theme, so they missed it).
+- Fix: `BlockProjectDialog` now accepts a separate `document_theme` (loaded
+  document theme) and defensively falls back to a default `AppTheme` for the
+  settings tab when a non-AppTheme is passed as `theme`; the preview build now
+  honors the loaded document theme instead of a hardcoded one; the preview
+  preamble always loads `graphicx` so empty/text-only projects compile.
+- Added regression test `test_dialog_opens_with_loaded_document_theme`
+  (dialog opens with a loaded DocumentTheme, six tabs, preview PDF honors the
+  loaded theme). Full suite: 621 tests OK locally.
 ## 2026-09-19 — Lightweight GitHub Flow preparation
 
 - Isolated codex/github-workflow from origin/main 2ff24e9a; preserved the dirty
@@ -527,3 +580,22 @@ must link here instead of repeating old task details.
   main into the governance branch; reconciled the brief and retained both complete
   log entries. Updated CONTRIBUTING/state to the no-CI policy. Product app/tests
   are identical to the validated repair tree, not reimported from the dirty checkout.
+
+## 2026-09-19 — Integrate modular-layout PR with repaired main
+
+- Governance PR #2 merged as 3bbc8e4. Merged that main into the original PR #1
+  branch in an isolated worktree; resolved compiler, compiler-test imports and
+  log conflicts explicitly. Preserved both complete historical log sequences.
+- Kept Block/formula/import features and opt-in compile timeouts; retained main's
+  deadline-aware cancellation and isolated process-tree handling. Timeout cleanup
+  delegates to the same signaling helper, including hard cleanup after leader exit.
+- Added the post-leader-exit timeout orchestration regression. The first focused
+  run exposed an existing env-python fixture startup race; initial full624 passed,
+  but that did not waive the fixture failure. Pinned the fixture to sys.executable;
+  both targeted cases passed/1.012s. Final compileall and full624/104.266s passed
+  with stable app/tests and no remaining Git conflict entries. Qt warnings retained.
+- Actions remained disabled. No CI simulator, workflow, packaging, dependency
+  installation, installed-app replacement or student-document edit was performed.
+  The original dirty development checkout and release branches were preserved;
+  this integration covers the three open PRs, not unpublished development deltas.
+  Evidence: dated local icstex-merge-closeout logs; exact merge state is on GitHub.

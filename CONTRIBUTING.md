@@ -25,7 +25,7 @@ python3 -m app
 
 | 分支 | 用途 |
 | --- | --- |
-| `main` | 稳定开发主线；修改经 PR + CI 后进入 |
+| `main` | 稳定开发主线；修改经本地验证、PR 审阅后进入 |
 | `feature/<name>` | 新功能 |
 | `fix/<name>` | Bug 修复 |
 | `docs/<name>` | 文档 |
@@ -48,8 +48,9 @@ QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests
 
 PowerShell 中先执行 `$env:QT_QPA_PLATFORM="offscreen"`，再运行 unittest。
 发布准备才运行 `bash packaging/preflight.sh`；它不代替实际安装包和原生界面验收。
-现有 `ci.yml` 仍运行 Linux/macOS/Windows × Python 3.11/3.12 的完整测试；
-“快检查 / 发布检查”拆分留到后续，不以此文档降低现有测试要求。
+GitHub Actions 已按维护者决定关闭，`main` 没有 CI 必过门槛。现有 workflow 文件仅保留，
+不代表正在运行。验证在本地进行，并在 PR 中写明平台、命令、结果和未覆盖范围；
+未获维护者授权，不重新开启 Actions 或添加其他自动化来代替它。
 
 - 复用已有实现，不为小任务新增框架或依赖。纯规则在 `app/core`，Qt 编排在 `app/gui`。
 - 保存不能丢内容或移动光标；失败 PDF 必须标明过期，PREVIEW 不能冒充 FINAL。
@@ -62,7 +63,8 @@ PowerShell 中先执行 `$env:QT_QPA_PLATFORM="offscreen"`，再运行 unittest�
 没有截图需求写 N/A，未跑测试写原因；有关联 Issue 时写 `Closes #123`。
 模板是填写约定，不是 PR 正文自动校验器，本轮不增加这类 Actions。
 
-[`main` Ruleset](https://github.com/leoXu-612/ICSTeX/rules/23690757) 要求 PR、6 个 GitHub Actions CI 检查通过、分支与最新 `main` 同步、所有讨论解决；
+[`main` Ruleset](https://github.com/leoXu-612/ICSTeX/rules/23690757) 要求 PR 和所有讨论解决；
 禁止 force-push 和删除，无 bypass。暂不要求 approval（0 人），仍建议互相 Review。
 按 **Squash merge** 合并，标题建议 `feat: ...`、`fix: ...`、`docs: ...` 等。
-CI 因平台或账户问题未运行也不算通过；先解决阻塞，不跳过检查或直接 push。
+合并前先同步最新 `main`，处理实际冲突并验证整合结果。不能把“没有文本冲突”当成
+行为正确，也不能把旧 CI 失败改称通过；本地验证不足时明确说明，不直接 push 主线。

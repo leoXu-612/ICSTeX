@@ -1,22 +1,19 @@
 # FORCODEX.md
 
-Timestamp: 2026-09-19 (lightweight GitHub Flow)
+Timestamp: 2026-09-19 (reviewed merge closeout)
 
-## Bounded Assignment
+## Current Bounded Assignment
 
-Implement only main protection, a five-section PR template, Bug/Feature issue
-forms and CONTRIBUTING.md. Work from origin/main in codex/github-workflow;
-preserve the separate, dirty codex/v1-development checkout and existing PRs.
+The user authorized merging pending PRs after local validation. Repair PR #3
+is merged; finish workflow PR #2, then integrate modular-layout PR #1 against
+the updated main. Preserve both feature behavior and the cancellation/file-safety
+fixes when resolving conflicts; do not select an entire side blindly.
 
-Main requires PR + the existing six CI checks + resolved conversations, with
-zero required approvals, squash merging and no force-push/deletion/bypass.
-Do not split CI, add CODEOWNERS/Dependabot/release automation, migrate product
-code, alter release branches, pay bills or bypass failed checks.
+GitHub Actions is disabled and CI checks are not merge requirements. Use focused
+and full local tests, record exact evidence, and do not re-enable workflows.
+Main still requires PRs, resolved conversations and squash merge; no force-push,
+deletion or bypass. Never use admin merge to bypass these remaining rules.
 
-PR #2 is open. Unlike the older main run's billing restriction, the new hosted
-run starts normally: two process-stop tests fail on Linux/macOS; Windows was
-still running at handoff. Product/test repair requires a separate scoped task.
-Do not merge or bypass checks. Templates are not active on main until merged.
-
-Keep remote facts and validation in docs/PROJECT_STATE.md and append verified
-results to PROJECT_LOG.md. Current instructions are AGENTS.md and CONTRIBUTING.md.
+Preserve the dirty codex/v1-development checkout, release branches, existing
+artifacts and student files. Do not bulk-import unpublished features, package,
+deploy or replace the local application in this merge task.

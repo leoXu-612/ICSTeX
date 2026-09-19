@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from unittest import TestCase
 from unittest.mock import patch
 
@@ -101,6 +101,20 @@ class FeedbackBundleTests(TestCase):
         self.assertNotIn("/Users/student", bundle)
         self.assertIn("<project>", bundle)
         self.assertIn("main.tex", bundle)  # basename still useful for debugging
+
+    def test_windows_feedback_redacts_both_path_spellings(self) -> None:
+        from app.core.environment_doctor import _redact_sensitive
+        project = PureWindowsPath("C:/Users/student/PrivateProject/main.tex")
+        home = PureWindowsPath("C:/Users/student")
+        log = f"{project}\n{project.as_posix()}\n{home}/tools\n{home.as_posix()}/tools"
+        with patch("app.core.environment_doctor.Path") as host_path:
+            host_path.return_value = project
+            host_path.home.return_value = home
+            redacted = _redact_sensitive(log, project)
+        self.assertNotIn("student", redacted)
+        self.assertNotIn("PrivateProject", redacted)
+        self.assertEqual(redacted.count("<project>"), 2)
+        self.assertEqual(redacted.count("~/tools"), 2)
 
     def test_bundle_summarises_diagnostics_with_filenames_only(self) -> None:
         diagnostics = [

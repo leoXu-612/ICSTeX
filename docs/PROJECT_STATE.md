@@ -10,22 +10,18 @@
 
 - 本次治理分支从远端 `main` 的 `2ff24e9a48953b45024b8c7655f866cd3e63229d` 建立，
   不包含另一开发工作树中尚未提交的产品功能；不将 `main`、本机安装版与发布制品混为一谈。
-- `main - PR and CI` Ruleset（ID `23690757`）已 active，API 已确认直接应用到 `main`：
-  必须 PR、六个既有 `ci.yml` 检查、与主线同步及讨论解决；approval=0；只允许 squash，
+- `main - PR protection` Ruleset（ID `23690757`）已 active，API 已确认直接应用到 `main`：
+  必须 PR 及讨论解决；approval=0；只允许 squash，
   禁止 force-push/deletion，bypass 列表为空。未更改 `release/*` 或仓库协作者权限。
-- PR 模板、Bug/Feature 表单与贡献说明位于本治理分支，须经 PR 合并才在默认分支生效。
+- 本分支提供 PR 模板、Bug/Feature 表单与贡献说明，经 PR 合入默认分支后生效。
   复用现有 bug/enhancement 标签，优先级为表单字段；没有额外标签自动化或 PR 正文校验器。
-- PR #2 已提交。旧 main run `31268120524` 曾因账户付款/额度限制未启动，但新 PR run
-  `35417076078` 已实际运行，不再据旧记录要求付款。其 Linux/macOS Python 3.12 日志中
-  `test_stop_current_confirms_exit_before_returning` 和
-  `test_stop_current_kills_unresponsive_process` 失败（417 项、2 failures、3 skips）；
-  Python 3.11 两平台 job 也失败，Windows 在本次记录时仍运行。应用/测试源码无本轮
-  改动；该 CI 差异待独立排查，不关闭规则、不改断言或直接合并来绕过它。
-- 本轮不拆 CI、不打包/发布、不合并旧分支或导入本机未提交代码。旧产品段落只描述
-  此主线此前记录，不代表本机最新开发/安装状态。
-- 本治理分支本地 compileall、417 项 offscreen unittest（31.320 秒）通过，命令退出 0；
-  `app/`、`tests/` 与 `ci.yml` 均未改动，测试前后对应相同主线源码。两个 Issue YAML、
-  PR 五项标题、贡献说明链接与 diff 空白检查通过。本地通过不代替 GitHub required checks。
+- GitHub Actions 已关闭、required status checks 已移除；只进行本地验证，不再触发 CI。
+  旧运行及其失败记录保留，不把“关闭检查”写成“检查通过”。
+- 修复 PR #3 已以 `27582ca` 合入 main：完整本地 419 项/24.706 秒通过。治理分支已
+  合入这一基线，app/tests 与受测修复树逐项一致；仅协调文档，不重复修改产品。
+  两个 Issue YAML、PR 五项标题和贡献说明链接仍保留。下一项为整合旧功能 PR #1。
+- 本轮不打包/发布，不导入本机大量未提交功能。旧产品段落描述此主线的先前记录，
+  不代表本机最新开发/安装状态。
 
 ## Product Identity
 
@@ -43,6 +39,21 @@ LaTeX 编辑器。它应帮助学生可靠地创建、检查、编译和交付 I
 
 ## Current Source State
 
+- 2026-09-19 CI 修复：编译器在独立进程组运行；取消覆盖子进程并为强制终止后的
+  管道/worker 退出保留截止时间。父进程已退出但子进程仍持管道时，仍按原 PGID 终止。
+  Windows 使用有超时的 taskkill /T；停止成功继续以 worker 的 idle event 为准。
+- 清缓存先通过 worker/路径保护，再关闭 PDF 读句柄；删除失败时重新同步当前预览。
+  状态测试的伪 PDF 不再交给实际 Qt 解析器；真实子进程测试改用跨平台 Python 夹具，
+  退出确认/结果/文件字节断言保留。TEXINPUTS 断言按其实际正斜线约定比较。
+- 本地 compileall 通过；合并前最终完整 419 项/24.706 秒通过（退出 0）。
+  修复前新增的“忽略终止”和“父退出后子持管道”两个用例都稳定失败，修复后通过。
+  用户已关闭 GitHub Actions 并移除 CI 合并门槛；使用本地验证，不再触发托管检查。
+  本修复基于 main，不包含另一个工作树的未提交产品功能，不更换本机应用。
+- 第一轮修复 CI 中 Linux/macOS 四项已通过；Windows 日志定位到另一组 preview/final
+  状态夹具。该组同样隔离原生伪 PDF 读取，并让意外模态警告直接失败而不是挂起。
+- 后续 Windows 日志暴露的图片句柄、TeX 路径拼写、反馈包路径脱敏及 CRLF 回声问题
+  已补修；原隐私/不重复编译断言保留，原始文件字节不变。23 项相关本地测试通过，
+  并计入上述最终回归；按用户要求不再进行远端 Windows 复跑，不声称完整异机验收。
 - 权威工作区：`<HOME>/Desktop/Codex/ICS-Project-/ICSTeX`
 - 版本元数据：`0.2.7`
 - 技术栈：Python 3.11+、PySide6、本机 LaTeX distribution、PyInstaller

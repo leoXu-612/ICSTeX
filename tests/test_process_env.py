@@ -22,7 +22,7 @@ class ProcessEnvTests(TestCase):
             with patch.dict("app.core.process_env.os.environ", {"PATH": "/usr/bin:/bin"}, clear=True):
                 env = latex_subprocess_env()
 
-        self.assertIn("/Library/TeX/texbin", env["PATH"].split(":"))
+        self.assertIn("/Library/TeX/texbin", env["PATH"].split(os.pathsep))
 
     def test_preview_texinputs_prefix_preserves_existing_and_default_paths(self) -> None:
         overlay = Path("/tmp/project/.icstex/preview/assets")
@@ -34,7 +34,7 @@ class ProcessEnvTests(TestCase):
             env = latex_subprocess_env(texinputs_prefix=overlay)
 
         parts = env["TEXINPUTS"].split(os.pathsep)
-        self.assertEqual(parts[0], str(overlay.resolve()))
+        self.assertEqual(parts[0], overlay.resolve().as_posix())
         self.assertEqual(parts[1], "/custom/tex")
 
     def test_preview_texinputs_keeps_default_search_when_unset(self) -> None:

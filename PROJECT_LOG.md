@@ -483,3 +483,47 @@ must link here instead of repeating old task details.
   (2 failures,3 skips); their Python3.11 jobs failed too, Windows remained running.
   This docs-only PR did not change those app/tests trees. Updated the current
   handoff and PR body; did not change billing, weaken tests, bypass CI or merge.
+## 2026-09-19 — Repair process-stop CI and observed Windows blockers
+
+- Reproduced both exhausted post-kill deadline and a surviving child holding the
+  output pipe with real Python subprocess fixtures on the unchanged main compiler.
+  Both regression cases failed before the fix; no stop-success assertion removed.
+- Launch isolated compile process groups. POSIX cancellation targets the original
+  PGID even after its leader exits; Windows uses bounded taskkill /T before losing
+  parent ancestry. Reserve time for force termination and worker/pipe drain;
+  only the existing idle event authorizes a successful stop/cache cleanup.
+- Replaced Unix-only shell test programs with real portable Python processes;
+  wait for fixture readiness and retain native exit/result checks. Normalize the
+  TEXINPUTS expectations to its existing forward-slash contract, not host separators.
+- Cancelled only the two obsolete, failed PR #2 runs after Windows had hung for
+  over an hour. Retained their logs: Windows was stuck in cache-clearing PDF state
+  tests. Clear the active PDF reader after safety guards and before deleting cache;
+  restore panel synchronization on failure. State-only malformed-PDF fixtures mock
+  native parsing and close their reader before temporary-directory cleanup.
+- Added a 15-minute CI job bound; retained all six existing jobs and full discovery.
+  Local compileall passed;60 focused tests/6.117s and418 full tests/26.354s passed.
+  GUI state mocks do not establish native rendering acceptance. Hosted checks are
+  the merge gate; no bypass, release, dependency upgrade or installation performed.
+- Work is isolated in codex/ci-process-stop from main; the dirty development tree
+  and student files remain untouched. Evidence is retained under the dated local
+  icstex-ci-process-stop directory; CI logs remain attached to the relevant runs.
+- First repair CI passed all Linux/macOS jobs; the duplicate push run was cancelled
+  to retrieve Windows logs, which showed the next preview/final state-fixture suite
+  blocked. Applied the same malformed-PDF parser boundary there and made unexpected
+  warning dialogs fail fast in both state suites. No renderer assertion removed.
+  Final local full418/19.702s and compileall passed after that fixture correction.
+- Merge closeout under the user's new no-CI policy: released native image test
+  handles, corrected literal TeX paths, scrubbed native/forward-slash feedback
+  paths, and compared CRLF save echoes in Qt's LF view without rewriting bytes.
+  The 23 focused tests passed; final compileall and full419/24.706s passed on the
+  repair source before merge. No hosted run was triggered after Actions disablement.
+  Existing remote failure history is retained, not relabelled as Windows acceptance.
+
+## 2026-09-19 — Local-only workflow merge closeout
+
+- User disabled GitHub Actions and removed required CI checks. Main retains PR,
+  resolved conversations, zero approvals, squash-only, no force-push/deletion/bypass.
+- Repair PR #3 merged as 27582ca after local419/24.706s validation. Merged that
+  main into the governance branch; reconciled the brief and retained both complete
+  log entries. Updated CONTRIBUTING/state to the no-CI policy. Product app/tests
+  are identical to the validated repair tree, not reimported from the dirty checkout.

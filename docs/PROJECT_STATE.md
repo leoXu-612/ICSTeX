@@ -1,10 +1,27 @@
 # ICSTeX Project State
 
-更新时间：2026-08-01（Asia/Taipei）
+治理状态更新时间：2026-09-19（Asia/Taipei）；下述旧产品记录尚未进行全量重审。
 
 本文件是 ICSTeX **当前已验证状态**的权威来源。它记录现在成立的事实，
 不记录任务经过；完成历史写入 `PROJECT_LOG.md`，长期决策写入
 `docs/DECISION_LOG.md`，未来计划写入 `docs/ROADMAP.md`。
+
+## GitHub Workflow State
+
+- 本次治理分支从远端 `main` 的 `2ff24e9a48953b45024b8c7655f866cd3e63229d` 建立，
+  不包含另一开发工作树中尚未提交的产品功能；不将 `main`、本机安装版与发布制品混为一谈。
+- `main - PR protection` Ruleset（ID `23690757`）已 active，API 已确认直接应用到 `main`：
+  必须 PR 及讨论解决；approval=0；只允许 squash，
+  禁止 force-push/deletion，bypass 列表为空。未更改 `release/*` 或仓库协作者权限。
+- 本分支提供 PR 模板、Bug/Feature 表单与贡献说明，经 PR 合入默认分支后生效。
+  复用现有 bug/enhancement 标签，优先级为表单字段；没有额外标签自动化或 PR 正文校验器。
+- GitHub Actions 已关闭、required status checks 已移除；只进行本地验证，不再触发 CI。
+  旧运行及其失败记录保留，不把“关闭检查”写成“检查通过”。
+- 修复 PR #3 已以 `27582ca` 合入 main：完整本地 419 项/24.706 秒通过。治理分支已
+  合入这一基线，app/tests 与受测修复树逐项一致；仅协调文档，不重复修改产品。
+  两个 Issue YAML、PR 五项标题和贡献说明链接仍保留。下一项为整合旧功能 PR #1。
+- 本轮不打包/发布，不导入本机大量未提交功能。旧产品段落描述此主线的先前记录，
+  不代表本机最新开发/安装状态。
 
 ## Product Identity
 

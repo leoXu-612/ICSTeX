@@ -1,0 +1,50 @@
+name: Bug report / 问题反馈
+description: 报告一个可复现的问题。
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: input
+    id: environment
+    attributes:
+      label: 版本与环境
+      description: ICSTeX 版本、系统；涉及编译时补充引擎和 TeX 环境。
+      placeholder: ICSTeX 版本 / macOS 或 Windows / XeLaTeX
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 如何复现
+      description: 从打开程序开始，按顺序说明操作；尽量使用最小示例。
+    validations:
+      required: true
+  - type: textarea
+    id: expected_actual
+    attributes:
+      label: 预期结果与实际结果
+      description: 是否涉及丢失内容、保存冲突、旧 PDF 或编译异常？
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 建议优先级
+      options:
+        - P0 — 数据丢失或严重安全问题
+        - P1 — 主要功能不可用
+        - P2 — 一般问题，有替代办法
+        - P3 — 小问题或体验改善
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 最小示例、日志或截图（可选）
+      description: 只提供与问题相关的片段，先删掉个人路径、身份信息和论文正文。
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我没有附上真实论文、密钥或未经授权的个人资料。
+          required: true

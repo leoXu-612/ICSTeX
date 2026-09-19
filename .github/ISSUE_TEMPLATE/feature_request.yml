@@ -1,0 +1,42 @@
+name: Feature request / 功能建议
+description: 描述学生写作中的实际需求。
+title: "[Feature] "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 想解决什么问题
+      description: 现在完成哪一步很费力，或无法完成？
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: 希望达到什么效果
+      description: 用实际操作描述结果，不必先设计技术方案。
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 怎样算完成
+      description: 给出可以验证的操作和结果。
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 现有办法与限制（可选）
+      description: 是否能复用已有功能？最小可用方案是什么？
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 建议优先级
+      options:
+        - P0 — 紧急阻塞
+        - P1 — 重要
+        - P2 — 一般
+        - P3 — 可延后
+    validations:
+      required: true

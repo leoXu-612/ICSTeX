@@ -456,6 +456,33 @@ must link here instead of repeating old task details.
   version metadata, or generated artifact changed. Verification passed:
   compileall clean and all 372 offscreen tests OK.
 
+## 2026-09-19 — Lightweight GitHub Flow preparation
+
+- Isolated codex/github-workflow from origin/main 2ff24e9a; preserved the dirty
+  codex/v1-development checkout, existing PR #1, all product code and releases.
+- Activated main Ruleset 23690757: PR, six observed GitHub Actions check names
+  bound to integration15368, up-to-date base, resolved conversations, zero required
+  approvals, squash only, no force-push/deletion/bypass. Read back effective rules.
+- Added a five-section PR template, two Chinese-friendly Bug/Feature forms using
+  existing labels, and one-page CONTRIBUTING.md. Priority is a form field, not
+  new label automation. Template prose is a convention, not a new CI body validator.
+- Corrected only stale Git/path guidance in AGENTS and linked the contribution
+  workflow; updated this branch's bounded brief and governance-state section.
+  No CI split, release-branch protection, CODEOWNERS, Dependabot or deployment.
+- Local compileall and full offscreen unittest passed:417 tests/31.320s, exit0.
+  App/tests tree IDs d10ae9d87d519aff915992cef9c1a102ae1ee47f /
+  b3838ce478c9a86fdb768ac6e7f09defc0061354 unchanged; workflows unchanged.
+  Issue YAML/fields, PR sections, contribution links and diff checks passed.
+- Existing main Actions run31268120524 failed before jobs started: GitHub reports
+  failed account payments or a spending-limit restriction. Owner action is needed;
+  no billing change, CI bypass or merge performed. Templates await PR merge before
+  becoming active on main. Local evidence is retained separately from this PR.
+- Follow-up evidence after opening PR #2 supersedes the initial billing diagnosis:
+  new PR run35417076078 actually started. Linux/macOS Python3.12 each ran417 tests
+  and failed the existing stop_current confirms-exit/kills-unresponsive cases
+  (2 failures,3 skips); their Python3.11 jobs failed too, Windows remained running.
+  This docs-only PR did not change those app/tests trees. Updated the current
+  handoff and PR body; did not change billing, weaken tests, bypass CI or merge.
 ## 2026-09-19 — Repair process-stop CI and observed Windows blockers
 
 - Reproduced both exhausted post-kill deadline and a surviving child holding the
@@ -491,3 +518,12 @@ must link here instead of repeating old task details.
   The 23 focused tests passed; final compileall and full419/24.706s passed on the
   repair source before merge. No hosted run was triggered after Actions disablement.
   Existing remote failure history is retained, not relabelled as Windows acceptance.
+
+## 2026-09-19 — Local-only workflow merge closeout
+
+- User disabled GitHub Actions and removed required CI checks. Main retains PR,
+  resolved conversations, zero approvals, squash-only, no force-push/deletion/bypass.
+- Repair PR #3 merged as 27582ca after local419/24.706s validation. Merged that
+  main into the governance branch; reconciled the brief and retained both complete
+  log entries. Updated CONTRIBUTING/state to the no-CI policy. Product app/tests
+  are identical to the validated repair tree, not reimported from the dirty checkout.

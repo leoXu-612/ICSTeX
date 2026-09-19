@@ -309,9 +309,49 @@ class CompileManager:
                 return False
             self._stop_requested = True
             process = self._process
-        if process is not None and process.poll() is None:
-            self._terminate_process(process)
+        if process is not None:
+            remaining = max(0.0, deadline - time.monotonic())
+            self._signal_process_tree(process, force=False, budget=remaining)
+            # Reserve time for hard termination AND worker/pipe cleanup. Waiting
+            # out the entire deadline before kill() can never confirm completion.
+            grace = min(remaining / 2, max(0.0, deadline - time.monotonic()))
+            if self.wait_until_idle(grace):
+                return True
+            self._signal_process_tree(process, force=True,
+                                      budget=max(0.0, deadline - time.monotonic()))
         return self.wait_until_idle(max(0.0, deadline - time.monotonic()))
+
+    @staticmethod
+    def _signal_process_tree(process: subprocess.Popen[str], *, force: bool, budget: float) -> None:
+        """Signal only our isolated compile tree; the idle event proves completion."""
+        pid = getattr(process, "pid", None)
+        if isinstance(pid, int) and os.name != "nt":
+            try:
+                # Popen creates a session whose PGID is pid. Do not use getpgid:
+                # the leader may have exited while a child still holds a pipe.
+                os.killpg(pid, signal.SIGKILL if force else signal.SIGTERM)
+                return
+            except ProcessLookupError:
+                return  # No remaining members of our group.
+            except OSError:
+                pass
+        elif isinstance(pid, int) and os.name == "nt" and budget > 0:
+            try:
+                # Kill the tree before its parent disappears. terminate() alone
+                # loses the ancestry needed by taskkill and can orphan engines.
+                result = subprocess.run(
+                    ["taskkill", "/PID", str(pid), "/T", "/F"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    timeout=budget, check=False, creationflags=subprocess.CREATE_NO_WINDOW,
+                )
+                if result.returncode == 0:
+                    return
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        try:
+            (process.kill if force else process.terminate)()
+        except OSError:
+            pass  # Exit races are expected; never turn this into an idle claim.
 
     def wait_until_idle(self, timeout: float = 1.5) -> bool:
         return self._idle_event.wait(max(0.0, timeout))
@@ -381,34 +421,23 @@ class CompileManager:
         self._log("运行命令：" + " ".join(command))
         timed_out = False
         try:
-            popen_kwargs: dict[str, object] = {
-                "stdout": subprocess.PIPE,
-                "stderr": subprocess.PIPE,
-                "text": True,
-                "encoding": "utf-8",
-                "errors": "replace",
-                "cwd": self.root_file.parent,
-                "env": latex_subprocess_env(texinputs_prefix=preparation.overlay_dir),
-            }
-            if os.name == "nt":
-                # A new process group lets stop/timeout kill latexmk and the
-                # engine children it spawns (taskkill /T targets the tree).
-                popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
-            else:
-                # Session leader: os.killpg(pid, SIGTERM/SIGKILL) covers the
-                # whole driver+engine tree so engine children cannot survive
-                # and hold the stdout/stderr pipes open after a timeout.
-                popen_kwargs["start_new_session"] = True
-            process = subprocess.Popen(command, **popen_kwargs)
+            process = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                cwd=self.root_file.parent,
+                env=latex_subprocess_env(texinputs_prefix=preparation.overlay_dir),
+                **({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt"
+                   else {"start_new_session": True}),
+            )
             with self._lock:
                 self._process = process
                 stop_requested = self._stop_requested or self._retired
             if stop_requested:
-                try:
-                    process.terminate()
-                except OSError:
-                    pass
-            timed_out = False
+                self._signal_process_tree(process, force=True, budget=1.0)
             if timeout_seconds is None:
                 stdout, stderr = process.communicate()
             else:
@@ -480,62 +509,14 @@ class CompileManager:
 
     @staticmethod
     def _terminate_process(process: subprocess.Popen[str]) -> None:
-        """Terminate the whole compile tree, not just the direct child.
-
-        latexmk drives engine children (xelatex/pdflatex) that inherit the
-        stdout/stderr pipes. Killing only the driver leaves the engine holding
-        the pipe write ends open, so a subsequent communicate() can block
-        forever waiting for EOF.
-        """
-        process_pid = getattr(process, "pid", None)
-        group_kill = process_pid is not None and os.name != "nt"
-        windows_tree_kill = process_pid is not None and os.name == "nt"
-        if group_kill:
-            try:
-                os.killpg(os.getpgid(process_pid), signal.SIGTERM)
-            except OSError:
-                group_kill = False
-        if windows_tree_kill:
-            try:
-                subprocess.run(
-                    ["taskkill", "/pid", str(process_pid), "/T", "/F"],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    check=False,
-                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                )
-            except OSError:
-                windows_tree_kill = False
-        if not group_kill and not windows_tree_kill:
-            try:
-                process.terminate()
-            except OSError:
-                pass
+        """Timeout cleanup shares cancellation's isolated-tree signaling rules."""
+        CompileManager._signal_process_tree(process, force=False, budget=0.5)
         try:
-            process.wait(timeout=1.0)
+            process.wait(timeout=0.5)
         except subprocess.TimeoutExpired:
-            if group_kill:
-                try:
-                    os.killpg(os.getpgid(process_pid), signal.SIGKILL)
-                    return
-                except OSError:
-                    pass
-            if windows_tree_kill:
-                try:
-                    subprocess.run(
-                        ["taskkill", "/pid", str(process_pid), "/T", "/F"],
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                        check=False,
-                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                    )
-                    return
-                except OSError:
-                    pass
-            try:
-                process.kill()
-            except OSError:
-                pass
+            pass
+        # A reaped leader does not prove that child-held output pipes closed.
+        CompileManager._signal_process_tree(process, force=True, budget=0.5)
 
     def _simple_result(
         self,

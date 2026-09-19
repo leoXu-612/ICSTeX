@@ -1,10 +1,34 @@
 # ICSTeX Project State
 
-更新时间：2026-08-01（Asia/Taipei）
+治理状态更新时间：2026-09-19（Asia/Taipei）；下述旧产品记录尚未进行全量重审。
 
 本文件是 ICSTeX **当前已验证状态**的权威来源。它记录现在成立的事实，
 不记录任务经过；完成历史写入 `PROJECT_LOG.md`，长期决策写入
 `docs/DECISION_LOG.md`，未来计划写入 `docs/ROADMAP.md`。
+
+## GitHub Workflow State
+
+- 本次治理分支从远端 `main` 的 `2ff24e9a48953b45024b8c7655f866cd3e63229d` 建立，
+  不包含另一开发工作树中尚未提交的产品功能；不将 `main`、本机安装版与发布制品混为一谈。
+- `main - PR protection` Ruleset（ID `23690757`）已 active，API 已确认直接应用到 `main`：
+  必须 PR 及讨论解决；approval=0；只允许 squash，
+  禁止 force-push/deletion，bypass 列表为空。未更改 `release/*` 或仓库协作者权限。
+- 本分支提供 PR 模板、Bug/Feature 表单与贡献说明，经 PR 合入默认分支后生效。
+  复用现有 bug/enhancement 标签，优先级为表单字段；没有额外标签自动化或 PR 正文校验器。
+- GitHub Actions 已关闭、required status checks 已移除；只进行本地验证，不再触发 CI。
+  旧运行及其失败记录保留，不把“关闭检查”写成“检查通过”。
+- 修复 PR #3 已以 `27582ca` 合入 main：完整本地 419 项/24.706 秒通过。治理分支已
+  合入这一基线，app/tests 与受测修复树逐项一致；仅协调文档，不重复修改产品。
+  两个 Issue YAML、PR 五项标题和贡献说明链接已随 PR #2 合入 main（`3bbc8e4`）。
+- 旧功能 PR #1 已在隔离分支整合到该 main，保留 Block MVP、公式编辑、素材导入和
+  显式编译超时；取消与超时共用进程树信号规则，未恢复旧的父进程单独终止逻辑。
+  编译器、测试 imports 和日志的实际冲突已逐段处理，两边历史记录均保留。
+- 最终 compileall 和完整本地回归通过：624 项/104.266 秒，退出 0；受测 app/tests
+  在测试后未变化。专项中发现的旧 PATH Python 夹具已改用当前解释器，相关两个
+  用例通过；旧编译结果、进程退出、隐私和文件字节断言未降低。保留 Qt 字体/离屏提示。
+  这是本地合并验证，不是安装包发布或新的远端 Windows 验收；Actions 仍关闭。
+- 本轮不打包/发布，不导入本机大量未提交功能。旧产品段落描述此主线的先前记录，
+  不代表本机最新开发/安装状态。
 
 ## Product Identity
 
@@ -22,6 +46,21 @@ LaTeX 编辑器。它应帮助学生可靠地创建、检查、编译和交付 I
 
 ## Current Source State
 
+- 2026-09-19 CI 修复：编译器在独立进程组运行；取消覆盖子进程并为强制终止后的
+  管道/worker 退出保留截止时间。父进程已退出但子进程仍持管道时，仍按原 PGID 终止。
+  Windows 使用有超时的 taskkill /T；停止成功继续以 worker 的 idle event 为准。
+- 清缓存先通过 worker/路径保护，再关闭 PDF 读句柄；删除失败时重新同步当前预览。
+  状态测试的伪 PDF 不再交给实际 Qt 解析器；真实子进程测试改用跨平台 Python 夹具，
+  退出确认/结果/文件字节断言保留。TEXINPUTS 断言按其实际正斜线约定比较。
+- 本地 compileall 通过；合并前最终完整 419 项/24.706 秒通过（退出 0）。
+  修复前新增的“忽略终止”和“父退出后子持管道”两个用例都稳定失败，修复后通过。
+  用户已关闭 GitHub Actions 并移除 CI 合并门槛；使用本地验证，不再触发托管检查。
+  本修复基于 main，不包含另一个工作树的未提交产品功能，不更换本机应用。
+- 第一轮修复 CI 中 Linux/macOS 四项已通过；Windows 日志定位到另一组 preview/final
+  状态夹具。该组同样隔离原生伪 PDF 读取，并让意外模态警告直接失败而不是挂起。
+- 后续 Windows 日志暴露的图片句柄、TeX 路径拼写、反馈包路径脱敏及 CRLF 回声问题
+  已补修；原隐私/不重复编译断言保留，原始文件字节不变。23 项相关本地测试通过，
+  并计入上述最终回归；按用户要求不再进行远端 Windows 复跑，不声称完整异机验收。
 - 权威工作区：`<HOME>/Desktop/Codex/ICS-Project-/ICSTeX`
 - 版本元数据：`0.2.7`
 - 技术栈：Python 3.11+、PySide6、本机 LaTeX distribution、PyInstaller

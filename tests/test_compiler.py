@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import inspect
 import os
+import signal
 import subprocess
+import sys
 import threading
 from tempfile import TemporaryDirectory
 from pathlib import Path
@@ -20,7 +22,38 @@ from app.core.compiler import (
 from app.core.latex_tools import LaTeXEngine, LaTeXToolchain
 
 
+class PythonToolchain(LaTeXToolchain):
+    """Use a real portable process; only replace the external compiler command."""
+    def compile_command(self, root_file, output_dir, engine=LaTeXEngine.AUTO):
+        return [sys.executable, "-u", str(root_file.parent / "fake_compiler.py")]
+
+
+def python_manager(tex: Path, script: str) -> CompileManager:
+    (tex.parent / "fake_compiler.py").write_text(
+        "import os, signal, subprocess, sys, time\nfrom pathlib import Path\n" + script + "\n",
+        encoding="utf-8",
+    )
+    return CompileManager(tex, toolchain=PythonToolchain(latexmk=None, pdflatex=sys.executable), debounce_ms=1)
+
+
 class CompileManagerTests(TestCase):
+    def _started_manager(self, body: str):
+        temporary = TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        tex = root / "main.tex"
+        tex.write_text("\\documentclass{article}", encoding="utf-8")
+        manager = python_manager(tex, body)
+        self.addCleanup(lambda: manager.retire(3))
+        manager.compile_async()
+        ready = root / "ready"
+        deadline = time.monotonic() + 5
+        while not ready.exists() and manager.is_busy and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertTrue(ready.exists(), "fixture did not finish process/signal setup")
+        self.assertIsNotNone(manager._process)
+        return manager, manager._process, ready
+
     def test_preview_uses_separate_output_and_overlay_environment(self) -> None:
         with TemporaryDirectory() as directory:
             root = Path(directory)
@@ -57,7 +90,7 @@ class CompileManagerTests(TestCase):
         self.assertNotEqual(result.output_dir, manager.output_dir)
         self.assertEqual(result.preview_fidelity, "proxy")
         self.assertTrue(
-            popen.call_args.kwargs["env"]["TEXINPUTS"].startswith(str(overlay.resolve()))
+            popen.call_args.kwargs["env"]["TEXINPUTS"].startswith(overlay.resolve().as_posix())
         )
 
     def test_explicit_timeout_terminates_and_reports_timeout(self) -> None:
@@ -102,6 +135,17 @@ class CompileManagerTests(TestCase):
         self.assertEqual(result.outcome, CompileOutcome.TIMEOUT)
         self.assertLess(elapsed, 2.0)
         self.assertTrue(process.terminated)
+
+    def test_timeout_cleanup_signals_children_even_after_leader_exit(self) -> None:
+        from unittest.mock import Mock, call
+        process = Mock()
+        process.wait.return_value = 0
+        with patch.object(CompileManager, "_signal_process_tree") as signal_tree:
+            CompileManager._terminate_process(process)
+        self.assertEqual(signal_tree.call_args_list, [
+            call(process, force=False, budget=0.5),
+            call(process, force=True, budget=0.5),
+        ])
 
     def test_pending_final_request_cannot_be_downgraded_by_preview(self) -> None:
         with TemporaryDirectory() as directory:
@@ -213,92 +257,55 @@ class CompileManagerTests(TestCase):
         self.assertIn("XeLaTeX 不在 PATH 中", result.stderr)
 
     def test_running_compile_can_be_stopped(self) -> None:
-        with TemporaryDirectory() as directory:
-            root = Path(directory)
-            tex = root / "main.tex"
-            tex.write_text("\\documentclass{article}", encoding="utf-8")
-            fake_compiler = root / "fake-pdflatex.sh"
-            fake_compiler.write_text("#!/bin/sh\nsleep 10\n", encoding="utf-8")
-            fake_compiler.chmod(0o755)
-            manager = CompileManager(
-                tex,
-                toolchain=LaTeXToolchain(latexmk=None, pdflatex=str(fake_compiler), texcount=None, synctex=None),
-                debounce_ms=1,
-            )
-
-            manager.compile_async()
-            stopped = False
-            deadline = time.monotonic() + 2
-            while time.monotonic() < deadline:
-                if manager.stop_current():
-                    stopped = True
-                    break
-                time.sleep(0.05)
-
-            self.assertTrue(stopped)
-            deadline = time.monotonic() + 2
-            while manager.is_running and time.monotonic() < deadline:
-                time.sleep(0.05)
-            self.assertFalse(manager.is_running)
+        manager, process, _ = self._started_manager("Path('ready').touch()\ntime.sleep(120)")
+        self.assertTrue(manager.stop_current())
+        self.assertFalse(manager.is_running)
+        self.assertIsNotNone(process.poll())
 
     def test_stop_current_confirms_exit_before_returning(self) -> None:
         # A real LaTeX run is latexmk driving child pdflatex/bibtex processes.
         # stop_current() must not return until the process is actually gone,
         # otherwise callers that immediately rmtree() the build dir can race
         # with a still-writing process (see clean_build_cache()).
-        with TemporaryDirectory() as directory:
-            root = Path(directory)
-            tex = root / "main.tex"
-            tex.write_text("\\documentclass{article}", encoding="utf-8")
-            fake_compiler = root / "fake-pdflatex.sh"
-            fake_compiler.write_text("#!/bin/sh\nsleep 10\n", encoding="utf-8")
-            fake_compiler.chmod(0o755)
-            manager = CompileManager(
-                tex,
-                toolchain=LaTeXToolchain(latexmk=None, pdflatex=str(fake_compiler), texcount=None, synctex=None),
-                debounce_ms=1,
-            )
-
-            manager.compile_async()
-            deadline = time.monotonic() + 2
-            while manager._process is None and time.monotonic() < deadline:
-                time.sleep(0.02)
-            pid = manager._process.pid
-
-            stopped = manager.stop_current()
-
-            self.assertTrue(stopped)
+        manager, process, _ = self._started_manager("Path('ready').touch()\ntime.sleep(120)")
+        self.assertTrue(manager.stop_current())
+        self.assertIsNotNone(process.poll())
+        self.assertTrue(manager.wait_until_idle(0))
+        if os.name != "nt":
             with self.assertRaises(ProcessLookupError):
-                os.kill(pid, 0)
+                os.kill(process.pid, 0)
 
     def test_stop_current_kills_unresponsive_process(self) -> None:
-        with TemporaryDirectory() as directory:
-            root = Path(directory)
-            tex = root / "main.tex"
-            tex.write_text("\\documentclass{article}", encoding="utf-8")
-            fake_compiler = root / "fake-pdflatex.sh"
-            fake_compiler.write_text(
-                "#!/bin/sh\ntrap '' TERM\nsleep 10\n",
-                encoding="utf-8",
-            )
-            fake_compiler.chmod(0o755)
-            manager = CompileManager(
-                tex,
-                toolchain=LaTeXToolchain(latexmk=None, pdflatex=str(fake_compiler), texcount=None, synctex=None),
-                debounce_ms=1,
-            )
+        manager, process, _ = self._started_manager(
+            "signal.signal(signal.SIGTERM, signal.SIG_IGN)\nPath('ready').touch()\ntime.sleep(120)"
+        )
+        started = time.monotonic()
+        self.assertTrue(manager.stop_current(timeout=0.3))
+        self.assertLess(time.monotonic() - started, 1.0)
+        self.assertIsNotNone(process.poll())
+        self.assertTrue(manager.wait_until_idle(0))
 
-            manager.compile_async()
-            deadline = time.monotonic() + 2
-            while manager._process is None and time.monotonic() < deadline:
-                time.sleep(0.02)
-            pid = manager._process.pid
-
-            stopped = manager.stop_current(timeout=0.3)
-
-            self.assertTrue(stopped)
-            with self.assertRaises(ProcessLookupError):
-                os.kill(pid, 0)
+    def test_stop_kills_child_holding_pipe_after_parent_exits(self):
+        child_code = "import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); print('ready',flush=True); time.sleep(120)"
+        manager, process, ready = self._started_manager(
+            f"child = subprocess.Popen([sys.executable, '-u', '-c', {child_code!r}], stdout=subprocess.PIPE)\n"
+            "assert child.stdout.readline().strip() == b'ready'\n"
+            "Path('ready').write_text(str(child.pid))\ntime.sleep(120)"
+        )
+        child_pid = int(ready.read_text())
+        try:
+            self.assertTrue(manager.stop_current(timeout=1.5))
+            self.assertIsNotNone(process.poll())
+            self.assertTrue(manager.wait_until_idle(0), "inherited stderr must be closed before success")
+        finally:
+            # Fixture-owned child cleanup also runs against the pre-fix implementation.
+            if os.name == "nt":
+                subprocess.run(["taskkill", "/PID", str(child_pid), "/T", "/F"], capture_output=True, timeout=5)
+            else:
+                try:
+                    os.kill(child_pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
 
     def test_stop_during_preview_preparation_waits_and_skips_subprocess(self) -> None:
         with TemporaryDirectory() as directory:
@@ -383,19 +390,18 @@ class CompileOutcomeTests(TestCase):
         self.tex.write_text("\\documentclass{article}", encoding="utf-8")
 
     def _fake_manager(self, script_body: str) -> CompileManager:
-        fake_compiler = self.root_dir / "fake-pdflatex.sh"
-        fake_compiler.write_text(f"#!/bin/sh\n{script_body}\n", encoding="utf-8")
-        fake_compiler.chmod(0o755)
-        return CompileManager(
-            self.tex,
-            toolchain=LaTeXToolchain(latexmk=None, pdflatex=str(fake_compiler), texcount=None, synctex=None),
-            debounce_ms=1,
-        )
+        manager = python_manager(self.tex, script_body)
+        self.addCleanup(lambda: manager.retire(3))
+        return manager
 
     def _stop_and_collect(self, manager: CompileManager, ready_marker: Path | None = None) -> CompileResult:
         results: list[CompileResult] = []
         manager.on_finished = results.append
         manager.compile_async()
+        deadline = time.monotonic() + 5
+        while manager._process is None and manager.is_busy and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertIsNotNone(manager._process, "stop classification requires a launched process")
         if ready_marker is not None:
             deadline = time.monotonic() + 2
             while not ready_marker.exists() and time.monotonic() < deadline:
@@ -443,27 +449,27 @@ class CompileOutcomeTests(TestCase):
         self.assertFalse(result.ok)
 
     def test_nonzero_exit_is_latex_error(self) -> None:
-        manager = self._fake_manager("exit 1")
+        manager = self._fake_manager("sys.exit(1)")
         result = manager.compile_now()
         assert result is not None
         self.assertEqual(result.outcome, CompileOutcome.LATEX_ERROR)
 
     def test_zero_exit_without_pdf_is_output_missing(self) -> None:
-        manager = self._fake_manager("exit 0")
+        manager = self._fake_manager("sys.exit(0)")
         result = manager.compile_now()
         assert result is not None
         self.assertEqual(result.outcome, CompileOutcome.OUTPUT_MISSING)
         self.assertFalse(result.ok)
 
     def test_zero_exit_with_empty_pdf_is_output_missing(self) -> None:
-        manager = self._fake_manager("mkdir -p .latex_build && : > .latex_build/main.pdf")
+        manager = self._fake_manager("Path('.latex_build/main.pdf').touch()")
         result = manager.compile_now()
         assert result is not None
         self.assertEqual(result.outcome, CompileOutcome.OUTPUT_MISSING)
 
     def test_valid_pdf_is_success(self) -> None:
         manager = self._fake_manager(
-            "mkdir -p .latex_build && printf '%%PDF-1.4 fake' > .latex_build/main.pdf"
+            "Path('.latex_build/main.pdf').write_bytes(b'%PDF-1.4 fake')"
         )
         result = manager.compile_now()
         assert result is not None
@@ -471,16 +477,19 @@ class CompileOutcomeTests(TestCase):
         self.assertTrue(result.ok)
 
     def test_user_stop_with_negative_returncode_is_stopped(self) -> None:
-        manager = self._fake_manager("sleep 10")
+        manager = self._fake_manager("time.sleep(120)")
         result = self._stop_and_collect(manager)
         self.assertEqual(result.outcome, CompileOutcome.STOPPED)
-        self.assertLess(result.returncode, 0)
+        if os.name == "nt":
+            self.assertGreater(result.returncode, 0)
+        else:
+            self.assertLess(result.returncode, 0)
 
     def test_user_stop_with_positive_returncode_is_stopped(self) -> None:
         # Windows terminate() produces a positive exit code. Mock the process
         # result directly so this test is about ICSTeX classification, not
         # platform-specific /bin/sh signal timing.
-        manager = self._fake_manager("exit 0")
+        manager = self._fake_manager("sys.exit(0)")
 
         class FakeProcess:
             returncode = 3
@@ -497,7 +506,7 @@ class CompileOutcomeTests(TestCase):
         self.assertGreater(result.returncode, 0)
 
     def test_internal_failure_is_internal_error_and_does_not_raise(self) -> None:
-        manager = self._fake_manager("exit 0")
+        manager = self._fake_manager("sys.exit(0)")
         results: list[CompileResult] = []
         manager.on_finished = results.append
         with patch.object(CompileManager, "_run_compile", side_effect=RuntimeError("boom")), self.assertLogs(
@@ -510,7 +519,7 @@ class CompileOutcomeTests(TestCase):
         self.assertEqual(results, [result])
 
     def test_second_compile_while_running_queues_instead_of_running_parallel(self) -> None:
-        manager = self._fake_manager("sleep 5")
+        manager = self._fake_manager("time.sleep(120)")
         manager.compile_async()
         deadline = time.monotonic() + 2
         while not manager.is_running and time.monotonic() < deadline:
@@ -545,24 +554,18 @@ class CompileOutcomeTests(TestCase):
             root = Path(directory)
             tex = root / "main.tex"
             tex.write_text("\\documentclass{article}", encoding="utf-8")
-            driver = root / "fake-driver.py"
+            driver = root / "fake_compiler.py"
             driver.write_text(
-                "#!/usr/bin/env python3\n"
                 "import subprocess, sys\n"
                 "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])\n"
                 "open('grandchild.pid', 'w').write(str(child.pid))\n"
                 "child.wait()\n",
                 encoding="utf-8",
             )
-            driver.chmod(0o755)
             manager = CompileManager(
                 tex,
-                toolchain=LaTeXToolchain(
-                    latexmk=str(driver),
-                    pdflatex=None,
-                    texcount=None,
-                    synctex=None,
-                ),
+                # Use the test interpreter, not an unrelated python3 on PATH.
+                toolchain=PythonToolchain(latexmk=None, pdflatex=sys.executable),
             )
 
             result = manager.compile_now(timeout_seconds=1.0)

@@ -210,10 +210,13 @@ class DocumentLifecycle:
             )
             window._watch_file(path)
             return
-        if disk_text == tab.editor.toPlainText():
+        # Qt exposes paragraph breaks as LF. Compare that view for save echoes
+        # without rewriting the original file's CRLF/CR bytes or moving its cursor.
+        editor_disk_text = disk_text.replace("\r\n", "\n").replace("\r", "\n")
+        if editor_disk_text == tab.editor.toPlainText():
             window._watch_file(path)
             return
-        if disk_text == window.local_save_contents.get(path):
+        if editor_disk_text == window.local_save_contents.get(path):
             # The watcher woke up on our own save; the editor has moved on
             # since (more typing), so this is an echo, not an external edit.
             window._watch_file(path)

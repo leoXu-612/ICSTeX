@@ -509,3 +509,93 @@ must link here instead of repeating old task details.
 - Added regression test `test_dialog_opens_with_loaded_document_theme`
   (dialog opens with a loaded DocumentTheme, six tabs, preview PDF honors the
   loaded theme). Full suite: 621 tests OK locally.
+## 2026-09-19 — Lightweight GitHub Flow preparation
+
+- Isolated codex/github-workflow from origin/main 2ff24e9a; preserved the dirty
+  codex/v1-development checkout, existing PR #1, all product code and releases.
+- Activated main Ruleset 23690757: PR, six observed GitHub Actions check names
+  bound to integration15368, up-to-date base, resolved conversations, zero required
+  approvals, squash only, no force-push/deletion/bypass. Read back effective rules.
+- Added a five-section PR template, two Chinese-friendly Bug/Feature forms using
+  existing labels, and one-page CONTRIBUTING.md. Priority is a form field, not
+  new label automation. Template prose is a convention, not a new CI body validator.
+- Corrected only stale Git/path guidance in AGENTS and linked the contribution
+  workflow; updated this branch's bounded brief and governance-state section.
+  No CI split, release-branch protection, CODEOWNERS, Dependabot or deployment.
+- Local compileall and full offscreen unittest passed:417 tests/31.320s, exit0.
+  App/tests tree IDs d10ae9d87d519aff915992cef9c1a102ae1ee47f /
+  b3838ce478c9a86fdb768ac6e7f09defc0061354 unchanged; workflows unchanged.
+  Issue YAML/fields, PR sections, contribution links and diff checks passed.
+- Existing main Actions run31268120524 failed before jobs started: GitHub reports
+  failed account payments or a spending-limit restriction. Owner action is needed;
+  no billing change, CI bypass or merge performed. Templates await PR merge before
+  becoming active on main. Local evidence is retained separately from this PR.
+- Follow-up evidence after opening PR #2 supersedes the initial billing diagnosis:
+  new PR run35417076078 actually started. Linux/macOS Python3.12 each ran417 tests
+  and failed the existing stop_current confirms-exit/kills-unresponsive cases
+  (2 failures,3 skips); their Python3.11 jobs failed too, Windows remained running.
+  This docs-only PR did not change those app/tests trees. Updated the current
+  handoff and PR body; did not change billing, weaken tests, bypass CI or merge.
+## 2026-09-19 — Repair process-stop CI and observed Windows blockers
+
+- Reproduced both exhausted post-kill deadline and a surviving child holding the
+  output pipe with real Python subprocess fixtures on the unchanged main compiler.
+  Both regression cases failed before the fix; no stop-success assertion removed.
+- Launch isolated compile process groups. POSIX cancellation targets the original
+  PGID even after its leader exits; Windows uses bounded taskkill /T before losing
+  parent ancestry. Reserve time for force termination and worker/pipe drain;
+  only the existing idle event authorizes a successful stop/cache cleanup.
+- Replaced Unix-only shell test programs with real portable Python processes;
+  wait for fixture readiness and retain native exit/result checks. Normalize the
+  TEXINPUTS expectations to its existing forward-slash contract, not host separators.
+- Cancelled only the two obsolete, failed PR #2 runs after Windows had hung for
+  over an hour. Retained their logs: Windows was stuck in cache-clearing PDF state
+  tests. Clear the active PDF reader after safety guards and before deleting cache;
+  restore panel synchronization on failure. State-only malformed-PDF fixtures mock
+  native parsing and close their reader before temporary-directory cleanup.
+- Added a 15-minute CI job bound; retained all six existing jobs and full discovery.
+  Local compileall passed;60 focused tests/6.117s and418 full tests/26.354s passed.
+  GUI state mocks do not establish native rendering acceptance. Hosted checks are
+  the merge gate; no bypass, release, dependency upgrade or installation performed.
+- Work is isolated in codex/ci-process-stop from main; the dirty development tree
+  and student files remain untouched. Evidence is retained under the dated local
+  icstex-ci-process-stop directory; CI logs remain attached to the relevant runs.
+- First repair CI passed all Linux/macOS jobs; the duplicate push run was cancelled
+  to retrieve Windows logs, which showed the next preview/final state-fixture suite
+  blocked. Applied the same malformed-PDF parser boundary there and made unexpected
+  warning dialogs fail fast in both state suites. No renderer assertion removed.
+  Final local full418/19.702s and compileall passed after that fixture correction.
+- Merge closeout under the user's new no-CI policy: released native image test
+  handles, corrected literal TeX paths, scrubbed native/forward-slash feedback
+  paths, and compared CRLF save echoes in Qt's LF view without rewriting bytes.
+  The 23 focused tests passed; final compileall and full419/24.706s passed on the
+  repair source before merge. No hosted run was triggered after Actions disablement.
+  Existing remote failure history is retained, not relabelled as Windows acceptance.
+
+## 2026-09-19 — Local-only workflow merge closeout
+
+- User disabled GitHub Actions and removed required CI checks. Main retains PR,
+  resolved conversations, zero approvals, squash-only, no force-push/deletion/bypass.
+- Repair PR #3 merged as 27582ca after local419/24.706s validation. Merged that
+  main into the governance branch; reconciled the brief and retained both complete
+  log entries. Updated CONTRIBUTING/state to the no-CI policy. Product app/tests
+  are identical to the validated repair tree, not reimported from the dirty checkout.
+
+## 2026-09-19 — Integrate modular-layout PR with repaired main
+
+- Governance PR #2 merged as 3bbc8e4. Merged that main into the original PR #1
+  branch in an isolated worktree; resolved compiler, compiler-test imports and
+  log conflicts explicitly. Preserved both complete historical log sequences.
+- Kept Block/formula/import features and opt-in compile timeouts; retained main's
+  deadline-aware cancellation and isolated process-tree handling. Timeout cleanup
+  delegates to the same signaling helper, including hard cleanup after leader exit.
+- Added the post-leader-exit timeout orchestration regression. The first focused
+  run exposed an existing env-python fixture startup race; initial full624 passed,
+  but that did not waive the fixture failure. Pinned the fixture to sys.executable;
+  both targeted cases passed/1.012s. Final compileall and full624/104.266s passed
+  with stable app/tests and no remaining Git conflict entries. Qt warnings retained.
+- Actions remained disabled. No CI simulator, workflow, packaging, dependency
+  installation, installed-app replacement or student-document edit was performed.
+  The original dirty development checkout and release branches were preserved;
+  this integration covers the three open PRs, not unpublished development deltas.
+  Evidence: dated local icstex-merge-closeout logs; exact merge state is on GitHub.

@@ -53,6 +53,7 @@ class ImageProxyCacheTests(TestCase):
             proxy_size = proxy_reader.size()
             self.assertLessEqual(max(proxy_size.width(), proxy_size.height()), MAX_PROXY_EDGE)
             self.assertTrue(proxy_reader.read().hasAlphaChannel())
+            proxy_reader.setFileName("")  # Release the native file before Windows temp cleanup.
             self.assertEqual(proxy.suffix, source.suffix)
             self.assertEqual(
                 {path.suffix.lower() for path in overlay.rglob("*") if path.is_file()},
@@ -235,7 +236,7 @@ class ImageProxyCacheTests(TestCase):
                 "\n".join(
                     (
                         "\\includegraphics{./figures/dot.png}",
-                        f"\\includegraphics{{{absolute_image}}}",
+                        f"\\includegraphics{{{absolute_image.as_posix()}}}",
                         "\\includegraphics{figures/chart.pdf}",
                         "\\includegraphics{figures/missing.png}",
                     )
@@ -262,6 +263,7 @@ class ImageProxyCacheTests(TestCase):
             image.fill(QColor("green"))
             writer = QImageWriter(str(no_density), b"png")
             self.assertTrue(writer.write(image), writer.errorString())
+            writer.setFileName("")
             self._remove_png_density(no_density)
 
             explicit_image = QImageReader(str(explicit)).read()

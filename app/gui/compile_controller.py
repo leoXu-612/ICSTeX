@@ -154,6 +154,9 @@ class CompileController:
             QMessageBox.warning(window, "拒绝清理", f"预览目录看起来不安全：{preview_dir}")
             return False
         try:
+            # Windows will not delete a PDF held open by QPdfDocument. Only
+            # release the active cache after its worker and path guards pass.
+            window.pdf_panel.clear_pdf()
             if output_dir.exists():
                 shutil.rmtree(output_dir)
                 window.append_log(f"已清理缓存：{output_dir}")
@@ -163,6 +166,7 @@ class CompileController:
                 shutil.rmtree(preview_dir)
                 window.append_log(f"已清理快速预览缓存：{preview_dir}")
         except OSError as exc:
+            window._sync_pdf_panel_to_active_root()
             QMessageBox.warning(window, "清理缓存失败", str(exc))
             return False
         if root is not None:

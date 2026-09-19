@@ -1438,11 +1438,19 @@ class GuiPdfStateTests(TestCase):
         self.addCleanup(self._tmp.cleanup)
         self.dir = Path(self._tmp.name)
         self.window = MainWindow(settings_store=isolated_settings())
+        if self.window.pdf_panel._document is not None:
+            # These deliberately incomplete PDF bytes exercise ownership/state,
+            # not Qt parsing. Keep real filesystem assertions without retaining
+            # a native reader handle over fixture overwrites on Windows.
+            loader = patch.object(self.window.pdf_panel._document, "load")
+            loader.start()
+            self.addCleanup(loader.stop)
         self.window._watch_file = lambda _path: None  # type: ignore[method-assign]
         self.window.auto_compile_action.setChecked(False)
         self.addCleanup(self._close_window)
 
     def _close_window(self) -> None:
+        self.window.pdf_panel.clear_pdf()
         for tab in self.window.tabs.values():
             tab.modified = False
             tab.dirty = False
@@ -1844,7 +1852,13 @@ class GuiPdfStateTests(TestCase):
         self._finish_success(tab, 1)
         self.assertTrue(self.window.export_pdf_action.isEnabled())
 
-        self.assertTrue(self.window.clean_build_cache())
+        import shutil
+        original_rmtree = shutil.rmtree
+        def delete_after_reader_close(path):
+            self.assertIsNone(self.window.pdf_panel.current_pdf)
+            original_rmtree(path)
+        with patch("app.gui.compile_controller.shutil.rmtree", side_effect=delete_after_reader_close):
+            self.assertTrue(self.window.clean_build_cache())
 
         self.assertIsNone(self.window.pdf_panel.current_pdf)
         self.assertEqual(self._banner(), "尚未编译")

@@ -455,3 +455,28 @@ must link here instead of repeating old task details.
 - Documentation and agent-instruction change only; no application source,
   version metadata, or generated artifact changed. Verification passed:
   compileall clean and all 372 offscreen tests OK.
+
+## 2026-09-19 — Repair process-stop CI and observed Windows blockers
+
+- Reproduced both exhausted post-kill deadline and a surviving child holding the
+  output pipe with real Python subprocess fixtures on the unchanged main compiler.
+  Both regression cases failed before the fix; no stop-success assertion removed.
+- Launch isolated compile process groups. POSIX cancellation targets the original
+  PGID even after its leader exits; Windows uses bounded taskkill /T before losing
+  parent ancestry. Reserve time for force termination and worker/pipe drain;
+  only the existing idle event authorizes a successful stop/cache cleanup.
+- Replaced Unix-only shell test programs with real portable Python processes;
+  wait for fixture readiness and retain native exit/result checks. Normalize the
+  TEXINPUTS expectations to its existing forward-slash contract, not host separators.
+- Cancelled only the two obsolete, failed PR #2 runs after Windows had hung for
+  over an hour. Retained their logs: Windows was stuck in cache-clearing PDF state
+  tests. Clear the active PDF reader after safety guards and before deleting cache;
+  restore panel synchronization on failure. State-only malformed-PDF fixtures mock
+  native parsing and close their reader before temporary-directory cleanup.
+- Added a 15-minute CI job bound; retained all six existing jobs and full discovery.
+  Local compileall passed;60 focused tests/6.117s and418 full tests/26.354s passed.
+  GUI state mocks do not establish native rendering acceptance. Hosted checks are
+  the merge gate; no bypass, release, dependency upgrade or installation performed.
+- Work is isolated in codex/ci-process-stop from main; the dirty development tree
+  and student files remain untouched. Evidence is retained under the dated local
+  icstex-ci-process-stop directory; CI logs remain attached to the relevant runs.

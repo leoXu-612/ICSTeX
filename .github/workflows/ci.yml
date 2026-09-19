@@ -13,6 +13,7 @@ jobs:
   unit-tests:
     name: tests (${{ matrix.os }} / py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:

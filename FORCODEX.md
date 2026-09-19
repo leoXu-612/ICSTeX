@@ -1,29 +1,23 @@
 # FORCODEX.md
 
-Timestamp: 2026-08-01 (fast-preview source delta verified)
+Timestamp: 2026-09-19 (CI process-stop repair)
 
 This is Codex's current bounded brief. Replace it when the assignment changes;
 do not append completed-task history.
 
-## Current State
+## Current Bounded Assignment
 
-The verified source/artifact matrix is maintained in `docs/PROJECT_STATE.md`.
-The source contains reviewed post-0.2.7 UI/PDF/font and dual preview/final-build
-deltas, while all existing 0.2.7 artifacts predate those changes.
+Repair the CI failures blocking workflow PR #2 in codex/ci-process-stop, based
+on main. Preserve process-exit assertions, bounded waits and cache/file safety.
+Verify child-process pipe retention and timeout-budget exhaustion before fixing
+the existing stop path. Make process fixtures portable rather than skipping them.
 
-## Next Bounded Assignment
-
-Only when explicitly requested:
-
-1. Confirm the next release version; `0.2.8` is recommended over replacing 0.2.7.
-2. Synchronize source, packaging, README, and CHANGELOG metadata.
-3. Rebuild and verify the versioned macOS DMG and clean source archive.
-4. Build and launch-test the same version from a Windows-local path.
-5. Update `docs/PROJECT_STATE.md` and append one verified release result to
-   `PROJECT_LOG.md`.
-
-Freeze the currently verified feature set during that release task. Do not
-claim that an existing 0.2.7 artifact contains any post-0.2.7 delta.
+The cancelled Windows run also exposed PDF-state fixture handle retention and
+cache deletion before closing its viewer; scope includes these observed CI blockers.
+Do not rewrite PDF rendering, loosen assertions, install TeX on runners or bypass
+the six-check main ruleset. Run focused and full local tests, then all hosted jobs.
+Use a separate repair PR and only merge through green required checks; then resume
+the workflow PR. Preserve the unrelated dirty development checkout and releases.
 
 ## Required Context
 

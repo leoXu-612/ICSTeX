@@ -4,7 +4,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from itertools import count
 import logging
+import os
 from pathlib import Path
+import signal
 import subprocess
 import threading
 import time
@@ -293,20 +295,49 @@ class CompileManager:
                 return False
             self._stop_requested = True
             process = self._process
-        if process is not None and process.poll() is None:
+        if process is not None:
+            remaining = max(0.0, deadline - time.monotonic())
+            self._signal_process_tree(process, force=False, budget=remaining)
+            # Reserve time for hard termination AND worker/pipe cleanup. Waiting
+            # out the entire deadline before kill() can never confirm completion.
+            grace = min(remaining / 2, max(0.0, deadline - time.monotonic()))
+            if self.wait_until_idle(grace):
+                return True
+            self._signal_process_tree(process, force=True,
+                                      budget=max(0.0, deadline - time.monotonic()))
+        return self.wait_until_idle(max(0.0, deadline - time.monotonic()))
+
+    @staticmethod
+    def _signal_process_tree(process: subprocess.Popen[str], *, force: bool, budget: float) -> None:
+        """Signal only our isolated compile tree; the idle event proves completion."""
+        pid = getattr(process, "pid", None)
+        if isinstance(pid, int) and os.name != "nt":
             try:
-                process.terminate()
+                # Popen creates a session whose PGID is pid. Do not use getpgid:
+                # the leader may have exited while a child still holds a pipe.
+                os.killpg(pid, signal.SIGKILL if force else signal.SIGTERM)
+                return
+            except ProcessLookupError:
+                return  # No remaining members of our group.
             except OSError:
                 pass
-            remaining = max(0.0, deadline - time.monotonic())
+        elif isinstance(pid, int) and os.name == "nt" and budget > 0:
             try:
-                process.wait(timeout=remaining)
-            except subprocess.TimeoutExpired:
-                try:
-                    process.kill()
-                except OSError:
-                    pass
-        return self.wait_until_idle(max(0.0, deadline - time.monotonic()))
+                # Kill the tree before its parent disappears. terminate() alone
+                # loses the ancestry needed by taskkill and can orphan engines.
+                result = subprocess.run(
+                    ["taskkill", "/PID", str(pid), "/T", "/F"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    timeout=budget, check=False, creationflags=subprocess.CREATE_NO_WINDOW,
+                )
+                if result.returncode == 0:
+                    return
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        try:
+            (process.kill if force else process.terminate)()
+        except OSError:
+            pass  # Exit races are expected; never turn this into an idle claim.
 
     def wait_until_idle(self, timeout: float = 1.5) -> bool:
         return self._idle_event.wait(max(0.0, timeout))
@@ -378,15 +409,14 @@ class CompileManager:
                 errors="replace",
                 cwd=self.root_file.parent,
                 env=latex_subprocess_env(texinputs_prefix=preparation.overlay_dir),
+                **({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt"
+                   else {"start_new_session": True}),
             )
             with self._lock:
                 self._process = process
                 stop_requested = self._stop_requested or self._retired
             if stop_requested:
-                try:
-                    process.terminate()
-                except OSError:
-                    pass
+                self._signal_process_tree(process, force=True, budget=1.0)
             stdout, stderr = process.communicate()
             returncode = process.returncode
         except OSError as exc:

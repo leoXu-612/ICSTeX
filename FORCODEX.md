@@ -1,29 +1,25 @@
 # FORCODEX.md
 
-Timestamp: 2026-08-01 (fast-preview source delta verified)
+Timestamp: 2026-09-19 (CI process-stop repair)
 
 This is Codex's current bounded brief. Replace it when the assignment changes;
 do not append completed-task history.
 
-## Current State
+## Current Bounded Assignment
 
-The verified source/artifact matrix is maintained in `docs/PROJECT_STATE.md`.
-The source contains reviewed post-0.2.7 UI/PDF/font and dual preview/final-build
-deltas, while all existing 0.2.7 artifacts predate those changes.
+Repair the CI failures blocking workflow PR #2 in codex/ci-process-stop, based
+on main. Preserve process-exit assertions, bounded waits and cache/file safety.
+Verify child-process pipe retention and timeout-budget exhaustion before fixing
+the existing stop path. Make process fixtures portable rather than skipping them.
 
-## Next Bounded Assignment
-
-Only when explicitly requested:
-
-1. Confirm the next release version; `0.2.8` is recommended over replacing 0.2.7.
-2. Synchronize source, packaging, README, and CHANGELOG metadata.
-3. Rebuild and verify the versioned macOS DMG and clean source archive.
-4. Build and launch-test the same version from a Windows-local path.
-5. Update `docs/PROJECT_STATE.md` and append one verified release result to
-   `PROJECT_LOG.md`.
-
-Freeze the currently verified feature set during that release task. Do not
-claim that an existing 0.2.7 artifact contains any post-0.2.7 delta.
+The cancelled Windows run also exposed PDF-state fixture handle retention and
+cache deletion before closing its viewer; scope includes these observed CI blockers.
+Do not rewrite PDF rendering, loosen assertions or install TeX on runners.
+The user disabled GitHub Actions and removed required CI checks; use local tests
+and PR review only. Do not re-enable or trigger workflows.
+Finish the local cross-platform follow-up, merge repair PR #3, then integrate
+workflow PR #2 and modular-layout PR #1 without losing either side's behavior.
+Preserve the unrelated dirty development checkout, release branches and installed app.
 
 ## Required Context
 

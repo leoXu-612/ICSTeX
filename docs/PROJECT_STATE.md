@@ -1,10 +1,28 @@
 # ICSTeX Project State
 
-更新时间：2026-08-01（Asia/Taipei）
+治理状态更新时间：2026-09-19（Asia/Taipei）；下述旧产品记录尚未进行全量重审。
 
 本文件是 ICSTeX **当前已验证状态**的权威来源。它记录现在成立的事实，
 不记录任务经过；完成历史写入 `PROJECT_LOG.md`，长期决策写入
 `docs/DECISION_LOG.md`，未来计划写入 `docs/ROADMAP.md`。
+
+## GitHub Workflow State
+
+- 本次治理分支从远端 `main` 的 `2ff24e9a48953b45024b8c7655f866cd3e63229d` 建立，
+  不包含另一开发工作树中尚未提交的产品功能；不将 `main`、本机安装版与发布制品混为一谈。
+- `main - PR and CI` Ruleset（ID `23690757`）已 active，API 已确认直接应用到 `main`：
+  必须 PR、六个既有 `ci.yml` 检查、与主线同步及讨论解决；approval=0；只允许 squash，
+  禁止 force-push/deletion，bypass 列表为空。未更改 `release/*` 或仓库协作者权限。
+- PR 模板、Bug/Feature 表单与贡献说明位于本治理分支，须经 PR 合并才在默认分支生效。
+  复用现有 bug/enhancement 标签，优先级为表单字段；没有额外标签自动化或 PR 正文校验器。
+- 现有 main CI run `31268120524` 的六个 job 在执行前失败，GitHub annotation 明确报告
+  账户付款失败或消费额度限制。需要仓库所有者处理 Billing & plans；不能把本地通过
+  替代 required checks，不能为合并本 PR 关闭或绕过保护。
+- 本轮不拆 CI、不打包/发布、不合并旧分支或导入本机未提交代码。旧产品段落只描述
+  此主线此前记录，不代表本机最新开发/安装状态。
+- 本治理分支本地 compileall、417 项 offscreen unittest（31.320 秒）通过，命令退出 0；
+  `app/`、`tests/` 与 `ci.yml` 均未改动，测试前后对应相同主线源码。两个 Issue YAML、
+  PR 五项标题、贡献说明链接与 diff 空白检查通过。GitHub 托管 CI 未运行不等于测试通过。
 
 ## Product Identity
 

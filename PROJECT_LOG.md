@@ -455,3 +455,25 @@ must link here instead of repeating old task details.
 - Documentation and agent-instruction change only; no application source,
   version metadata, or generated artifact changed. Verification passed:
   compileall clean and all 372 offscreen tests OK.
+
+## 2026-09-19 — Lightweight GitHub Flow preparation
+
+- Isolated codex/github-workflow from origin/main 2ff24e9a; preserved the dirty
+  codex/v1-development checkout, existing PR #1, all product code and releases.
+- Activated main Ruleset 23690757: PR, six observed GitHub Actions check names
+  bound to integration15368, up-to-date base, resolved conversations, zero required
+  approvals, squash only, no force-push/deletion/bypass. Read back effective rules.
+- Added a five-section PR template, two Chinese-friendly Bug/Feature forms using
+  existing labels, and one-page CONTRIBUTING.md. Priority is a form field, not
+  new label automation. Template prose is a convention, not a new CI body validator.
+- Corrected only stale Git/path guidance in AGENTS and linked the contribution
+  workflow; updated this branch's bounded brief and governance-state section.
+  No CI split, release-branch protection, CODEOWNERS, Dependabot or deployment.
+- Local compileall and full offscreen unittest passed:417 tests/31.320s, exit0.
+  App/tests tree IDs d10ae9d87d519aff915992cef9c1a102ae1ee47f /
+  b3838ce478c9a86fdb768ac6e7f09defc0061354 unchanged; workflows unchanged.
+  Issue YAML/fields, PR sections, contribution links and diff checks passed.
+- Existing main Actions run31268120524 failed before jobs started: GitHub reports
+  failed account payments or a spending-limit restriction. Owner action is needed;
+  no billing change, CI bypass or merge performed. Templates await PR merge before
+  becoming active on main. Local evidence is retained separately from this PR.

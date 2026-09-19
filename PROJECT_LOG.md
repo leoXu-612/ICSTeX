@@ -477,3 +477,9 @@ must link here instead of repeating old task details.
   failed account payments or a spending-limit restriction. Owner action is needed;
   no billing change, CI bypass or merge performed. Templates await PR merge before
   becoming active on main. Local evidence is retained separately from this PR.
+- Follow-up evidence after opening PR #2 supersedes the initial billing diagnosis:
+  new PR run35417076078 actually started. Linux/macOS Python3.12 each ran417 tests
+  and failed the existing stop_current confirms-exit/kills-unresponsive cases
+  (2 failures,3 skips); their Python3.11 jobs failed too, Windows remained running.
+  This docs-only PR did not change those app/tests trees. Updated the current
+  handoff and PR body; did not change billing, weaken tests, bypass CI or merge.

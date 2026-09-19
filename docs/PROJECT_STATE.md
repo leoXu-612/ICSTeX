@@ -15,14 +15,17 @@
   禁止 force-push/deletion，bypass 列表为空。未更改 `release/*` 或仓库协作者权限。
 - PR 模板、Bug/Feature 表单与贡献说明位于本治理分支，须经 PR 合并才在默认分支生效。
   复用现有 bug/enhancement 标签，优先级为表单字段；没有额外标签自动化或 PR 正文校验器。
-- 现有 main CI run `31268120524` 的六个 job 在执行前失败，GitHub annotation 明确报告
-  账户付款失败或消费额度限制。需要仓库所有者处理 Billing & plans；不能把本地通过
-  替代 required checks，不能为合并本 PR 关闭或绕过保护。
+- PR #2 已提交。旧 main run `31268120524` 曾因账户付款/额度限制未启动，但新 PR run
+  `35417076078` 已实际运行，不再据旧记录要求付款。其 Linux/macOS Python 3.12 日志中
+  `test_stop_current_confirms_exit_before_returning` 和
+  `test_stop_current_kills_unresponsive_process` 失败（417 项、2 failures、3 skips）；
+  Python 3.11 两平台 job 也失败，Windows 在本次记录时仍运行。应用/测试源码无本轮
+  改动；该 CI 差异待独立排查，不关闭规则、不改断言或直接合并来绕过它。
 - 本轮不拆 CI、不打包/发布、不合并旧分支或导入本机未提交代码。旧产品段落只描述
   此主线此前记录，不代表本机最新开发/安装状态。
 - 本治理分支本地 compileall、417 项 offscreen unittest（31.320 秒）通过，命令退出 0；
   `app/`、`tests/` 与 `ci.yml` 均未改动，测试前后对应相同主线源码。两个 Issue YAML、
-  PR 五项标题、贡献说明链接与 diff 空白检查通过。GitHub 托管 CI 未运行不等于测试通过。
+  PR 五项标题、贡献说明链接与 diff 空白检查通过。本地通过不代替 GitHub required checks。
 
 ## Product Identity
 

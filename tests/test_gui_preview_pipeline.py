@@ -9,7 +9,7 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QSettings
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from app.core.compiler import BuildPurpose, CompileOutcome, CompileResult
 from app.core.latex_tools import LaTeXToolchain
@@ -42,11 +42,21 @@ class GuiPreviewPipelineTests(TestCase):
             )
         )
         self.window = MainWindow(settings_store=settings)
+        if self.window.pdf_panel._document is not None:
+            # Synthetic PDF bytes test preview/final ownership, not rendering.
+            loader = patch.object(self.window.pdf_panel._document, "load")
+            loader.start()
+            self.addCleanup(loader.stop)
+        warning = patch.object(QMessageBox, "warning", side_effect=AssertionError(
+            "Unexpected modal warning in preview pipeline test"))
+        warning.start()
+        self.addCleanup(warning.stop)
         self.window._watch_file = lambda _path: None  # type: ignore[method-assign]
         self.window.auto_compile_action.setChecked(False)
         self.addCleanup(self._close_window)
 
     def _close_window(self) -> None:
+        self.window.pdf_panel.clear_pdf()
         for tab in self.window.tabs.values():
             tab.modified = False
             tab.dirty = False

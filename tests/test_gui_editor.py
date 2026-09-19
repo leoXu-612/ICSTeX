@@ -1445,6 +1445,10 @@ class GuiPdfStateTests(TestCase):
             loader = patch.object(self.window.pdf_panel._document, "load")
             loader.start()
             self.addCleanup(loader.stop)
+        warning = patch.object(QMessageBox, "warning", side_effect=AssertionError(
+            "Unexpected modal warning in PDF state test"))
+        warning.start()
+        self.addCleanup(warning.stop)
         self.window._watch_file = lambda _path: None  # type: ignore[method-assign]
         self.window.auto_compile_action.setChecked(False)
         self.addCleanup(self._close_window)

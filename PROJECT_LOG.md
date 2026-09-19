@@ -480,3 +480,8 @@ must link here instead of repeating old task details.
 - Work is isolated in codex/ci-process-stop from main; the dirty development tree
   and student files remain untouched. Evidence is retained under the dated local
   icstex-ci-process-stop directory; CI logs remain attached to the relevant runs.
+- First repair CI passed all Linux/macOS jobs; the duplicate push run was cancelled
+  to retrieve Windows logs, which showed the next preview/final state-fixture suite
+  blocked. Applied the same malformed-PDF parser boundary there and made unexpected
+  warning dialogs fail fast in both state suites. No renderer assertion removed.
+  Final local full418/19.702s and compileall passed after that fixture correction.

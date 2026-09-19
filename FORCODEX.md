@@ -14,10 +14,12 @@ the existing stop path. Make process fixtures portable rather than skipping them
 
 The cancelled Windows run also exposed PDF-state fixture handle retention and
 cache deletion before closing its viewer; scope includes these observed CI blockers.
-Do not rewrite PDF rendering, loosen assertions, install TeX on runners or bypass
-the six-check main ruleset. Run focused and full local tests, then all hosted jobs.
-Use a separate repair PR and only merge through green required checks; then resume
-the workflow PR. Preserve the unrelated dirty development checkout and releases.
+Do not rewrite PDF rendering, loosen assertions or install TeX on runners.
+The user disabled GitHub Actions and removed required CI checks; use local tests
+and PR review only. Do not re-enable or trigger workflows.
+Finish the local cross-platform follow-up, merge repair PR #3, then integrate
+workflow PR #2 and modular-layout PR #1 without losing either side's behavior.
+Preserve the unrelated dirty development checkout, release branches and installed app.
 
 ## Required Context
 

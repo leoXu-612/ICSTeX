@@ -907,7 +907,8 @@ class GuiEditorTests(TestCase):
         with TemporaryDirectory() as directory:
             source = Path(directory) / "main.tex"
             text = "\n".join(f"Line {index}" for index in range(80))
-            source.write_text(text, encoding="utf-8")
+            original = text.replace("\n", "\r\n").encode("utf-8")
+            source.write_bytes(original)
             window = MainWindow(settings_store=isolated_settings())
             window.auto_compile_action.setChecked(False)
             window._watch_file = lambda _path: None  # type: ignore[method-assign]
@@ -923,6 +924,7 @@ class GuiEditorTests(TestCase):
 
             self.assertEqual(editor.textCursor().position(), len(text))
             compile_current.assert_not_called()
+            self.assertEqual(source.read_bytes(), original)
             window.close()
 
     def test_external_reload_preserves_cursor_position(self) -> None:

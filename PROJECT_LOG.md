@@ -485,3 +485,9 @@ must link here instead of repeating old task details.
   blocked. Applied the same malformed-PDF parser boundary there and made unexpected
   warning dialogs fail fast in both state suites. No renderer assertion removed.
   Final local full418/19.702s and compileall passed after that fixture correction.
+- Merge closeout under the user's new no-CI policy: released native image test
+  handles, corrected literal TeX paths, scrubbed native/forward-slash feedback
+  paths, and compared CRLF save echoes in Qt's LF view without rewriting bytes.
+  The 23 focused tests passed; final compileall and full419/24.706s passed on the
+  repair source before merge. No hosted run was triggered after Actions disablement.
+  Existing remote failure history is retained, not relabelled as Windows acceptance.

@@ -175,12 +175,15 @@ def build_feedback_bundle(
 
 def _redact_sensitive(text: str, project_file: Path | str | None) -> str:
     if project_file is not None:
-        project_dir = str(Path(project_file).parent)
-        if project_dir not in ("", "."):
-            text = text.replace(project_dir, "<project>")
-    home = str(Path.home())
-    if home:
-        text = text.replace(home, "~")
+        project_dir = Path(project_file).parent
+        for spelling in {str(project_dir), project_dir.as_posix()}:
+            if spelling not in ("", "."):
+                text = text.replace(spelling, "<project>")
+    home = Path.home()
+    # TeX can emit forward slashes even when the host's paths use backslashes.
+    for spelling in {str(home), home.as_posix()}:
+        if spelling:
+            text = text.replace(spelling, "~")
     return text
 
 

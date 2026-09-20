@@ -47,7 +47,7 @@
 - Vercel production deployment dpl_3rSnXMYS45Ke5Leo1Gc5eT9ZYFdX is READY. Both
   https://ics-tex.vercel.app and the old website-phi-beryl-92.vercel.app alias point there.
   The website visibly shows Beta 4 and correct DMG/ZIP hashes/links. Live release.json and
-  appcast bytes match the checked-in files; feed returns HTTP 200/application-xml with
+  appcast bytes match the checked-in files; feed returns HTTP 200/application/xml with
   max-age=0,must-revalidate. Actions remains disabled; there is no Git-triggered site deployment.
 - Collaborator's automatic discovery/download/install/restart remains pending actual other-device
   testing. Beta 3 users must opt into automatic checks; startup defers 30 seconds and a recent

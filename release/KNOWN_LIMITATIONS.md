@@ -1,4 +1,4 @@
-# ICSTeX 2.1.0-beta.3 — 已知限制
+# ICSTeX 2.1.0-beta.4 — 已知限制
 
 - 这是 macOS Apple Silicon（arm64）Beta，不是正式稳定版；未验收全部 macOS 版本和安装权限布局。
 - 使用 ad-hoc 签名，未经 Developer ID 签名或 Apple 公证。更新包和更新清单的 Ed25519 签名不等于 Apple 公证。

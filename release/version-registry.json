@@ -222,7 +222,7 @@
       "release_name": "应用内更新与安装保护",
       "release_date": "2026-09-15",
       "git_tag": "v2.1.0-beta.3",
-      "status": "current",
+      "status": "historical",
       "headline": "Mac 应用内更新、跨退出安装保护与中断恢复；默认离线，保留用户确认",
       "assets": [
         {
@@ -240,6 +240,37 @@
           "architecture": "Apple Silicon (arm64)",
           "kind": "ZIP",
           "sha256": "5cf1413c257d1a6bb9c81dbe23e99a6a44821d5c8d6b5e7bbe926e1f8a65d341",
+          "status": "verified",
+          "primary_download": false
+        }
+      ]
+    },
+    {
+      "version": "2.1.0-beta.4",
+      "major": 2,
+      "minor": 1,
+      "channel": "beta",
+      "release_name": "写作与公式体验更新",
+      "release_date": "2026-09-20",
+      "git_tag": "v2.1.0-beta.4",
+      "status": "current",
+      "headline": "公式导航与留白、快速预览双向定位、写作教程和工程 ZIP；保留确认式应用内更新",
+      "assets": [
+        {
+          "name": "ICSTeX-2.1.0-beta.4-macos-arm64.dmg",
+          "platform": "macOS",
+          "architecture": "Apple Silicon (arm64)",
+          "kind": "DMG",
+          "sha256": "cfcffab1e0b80f7c78df49fd953d4c4d213ab138a2735862306a9f7ed2821c94",
+          "status": "verified",
+          "primary_download": true
+        },
+        {
+          "name": "ICSTeX-2.1.0-beta.4-macos-arm64.zip",
+          "platform": "macOS",
+          "architecture": "Apple Silicon (arm64)",
+          "kind": "ZIP",
+          "sha256": "170696e77b5eca6b09fefe3bb4cdab95d2c4862c9ebe56589811220e4e01aa6a",
           "status": "verified",
           "primary_download": false
         }

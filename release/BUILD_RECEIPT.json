@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
-  "version": "2.1.0-beta.3",
-  "release_sequence": 210003,
+  "version": "2.1.0-beta.4",
+  "release_sequence": 210004,
   "distribution": "manual-bootstrap-and-sparkle-full-update",
   "platform": "macOS",
   "architecture": "arm64",
-  "application_source_sha256": "500675e9aa6246deef355bc68a80080d740ad121f6672916ddb4c34595e37a9d",
-  "application_tree_sha256": "23cec71f837382849f9a8b7930fbcfefd2cf66a56830f6023310af95b936fc59",
-  "executable_sha256": "fa4a83f83829a367c5760ccfe1a3f66776752212d3444fbd59c9b342f8f92ad4",
-  "matched_application_modules": 202,
+  "application_source_sha256": "ca778fe504893584d5fe6ece318876062b450268b8f662147832725e40dfebe6",
+  "application_tree_sha256": "633b6b20fa8eeb31f3d25fca7d74c12ef888051ac2253b89d1cd0dd103063e9a",
+  "executable_sha256": "7437b0af923d2362d6285aa2ff42ec267d08e1711e424e324aee8887712baf95",
+  "matched_application_modules": 208,
   "matched_entrypoint": true,
   "matched_assets": 36,
   "signing": "ad-hoc",
@@ -21,16 +21,24 @@
   "not_packaged": [
     "app.core.agent_concurrency",
     "app.core.agent_workspace",
-    "app.core.artifact_export",
     "app.core.blocks.demo",
     "app.core.blocks.export_package",
     "app.gui.formula_ocr.review_dialog",
     "app.mcp_server",
     "app.optional_tools.pix2tex.fake_worker",
-    "app.optional_tools.pix2tex.manifest",
     "app.optional_tools.pix2tex.worker_entry",
     "app.services.recognition.fake_worker",
     "app.services.recognition.models",
     "app.services.recognition.worker_entry"
-  ]
+  ],
+  "raw_worker_sources_verified": [
+    "worker_entry.py",
+    "manifest.py",
+    "protocol.py"
+  ],
+  "preflight": {
+    "tests": 1843,
+    "seconds": 321.019,
+    "exit_code": 0
+  }
 }

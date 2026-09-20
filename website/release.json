@@ -2,22 +2,22 @@
   "assets": [
     {
       "architecture": "Apple Silicon (arm64)",
-      "download_url": "https://github.com/leoXu-612/ICSTeX/releases/download/v2.1.0-beta.3/ICSTeX-2.1.0-beta.3-macos-arm64.dmg",
+      "download_url": "https://github.com/leoXu-612/ICSTeX/releases/download/v2.1.0-beta.4/ICSTeX-2.1.0-beta.4-macos-arm64.dmg",
       "kind": "DMG",
-      "name": "ICSTeX-2.1.0-beta.3-macos-arm64.dmg",
+      "name": "ICSTeX-2.1.0-beta.4-macos-arm64.dmg",
       "platform": "macOS",
       "primary_download": true,
-      "sha256": "15f9736cd7cc94902f1192b0beabfccd8e1981a9f16e564d221fb0cbafb5247a",
+      "sha256": "cfcffab1e0b80f7c78df49fd953d4c4d213ab138a2735862306a9f7ed2821c94",
       "status": "verified"
     },
     {
       "architecture": "Apple Silicon (arm64)",
-      "download_url": "https://github.com/leoXu-612/ICSTeX/releases/download/v2.1.0-beta.3/ICSTeX-2.1.0-beta.3-macos-arm64.zip",
+      "download_url": "https://github.com/leoXu-612/ICSTeX/releases/download/v2.1.0-beta.4/ICSTeX-2.1.0-beta.4-macos-arm64.zip",
       "kind": "ZIP",
-      "name": "ICSTeX-2.1.0-beta.3-macos-arm64.zip",
+      "name": "ICSTeX-2.1.0-beta.4-macos-arm64.zip",
       "platform": "macOS",
       "primary_download": false,
-      "sha256": "5cf1413c257d1a6bb9c81dbe23e99a6a44821d5c8d6b5e7bbe926e1f8a65d341",
+      "sha256": "170696e77b5eca6b09fefe3bb4cdab95d2c4862c9ebe56589811220e4e01aa6a",
       "status": "verified"
     }
   ],
@@ -40,11 +40,11 @@
     "LaTeX 发行版和可选 OCR 组件需另行安装，公式识别结果仍需人工核对。",
     "这是 Beta 版本；系统输入法、辅助功能和全部历史原生崩溃尚未完成全面验收，重要项目请保留独立备份。"
   ],
-  "release_name": "应用内更新与安装保护",
-  "release_page_url": "https://github.com/leoXu-612/ICSTeX/releases/tag/v2.1.0-beta.3",
+  "release_name": "写作与公式体验更新",
+  "release_page_url": "https://github.com/leoXu-612/ICSTeX/releases/tag/v2.1.0-beta.4",
   "releases_url": "https://github.com/leoXu-612/ICSTeX/releases",
   "repository": "leoXu-612/ICSTeX",
   "schema_version": 1,
-  "tag": "v2.1.0-beta.3",
-  "version": "2.1.0-beta.3"
+  "tag": "v2.1.0-beta.4",
+  "version": "2.1.0-beta.4"
 }

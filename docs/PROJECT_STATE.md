@@ -32,8 +32,11 @@
 - Candidate bundle matches 209 modules/entry and resources; arm64 ad-hoc integrity, ZIP CRC,
   DMG verification and archive signing passed. Executable SHA256:
   7437b0af923d2362d6285aa2ff42ec267d08e1711e424e324aee8887712baf95.
-  No Developer ID/notarization claim. Feed signing awaits the human Keychain authorization;
-  do not publish an unsigned feed or claim collaborator discovery/install acceptance.
+  No Developer ID/notarization claim. Human Keychain authorization completed; archive and
+  appcast Ed25519 signatures independently verify against the existing embedded public key.
+  Feed digest is 2300e564f8760b2847de848ee68697928df3d0d210314dc3b2bdd482aff3a352.
+  Release metadata consistency and all 17 website tests passed. Public activation and
+  collaborator discovery/install acceptance remain separate from these local checks.
 - Evidence is under the local icstex-beta4-release directory: preflight-final/result.json,
   package-receipt.json and build.log. Existing Qt/temp-path and libobjc build warnings remain.
 

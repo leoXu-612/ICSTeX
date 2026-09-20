@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
+from unittest.mock import patch
 
 from PySide6.QtCore import QSettings
 
@@ -48,3 +49,31 @@ class SettingsTests(TestCase):
         self.assertEqual(recent[0], paths[-2].resolve())
         self.assertEqual(len(recent), MAX_RECENT_ITEMS)
         self.assertEqual(len(set(recent)), len(recent))
+
+    def test_remembering_same_recent_item_does_not_rewrite_unchanged_settings(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            settings = AppSettings(QSettings(str(root / "recent.ini"), QSettings.Format.IniFormat))
+            first, second = root / "first.tex", root / "second.tex"
+            settings.add_recent_file(first)
+            settings.add_recent_project(root)
+            with patch.object(settings.settings, "setValue", wraps=settings.settings.setValue) as write, \
+                 patch.object(settings.settings, "sync", wraps=settings.settings.sync) as sync:
+                settings.add_recent_file(first)
+                settings.add_recent_project(root)
+            write.assert_not_called()
+            sync.assert_not_called()
+            settings.add_recent_file(second)
+            settings.add_recent_file(first)
+            self.assertEqual(settings.recent_files(), [first, second])
+
+    def test_recent_dedup_preserves_canonical_path_and_list_normalization(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            settings = AppSettings(QSettings(str(root / "recent.ini"), QSettings.Format.IniFormat))
+            source = root / "main.tex"
+            for stored in ([str(root / "nested" / ".." / "main.tex")], str(source)):
+                settings.settings.setValue("recent/files", stored)
+                settings.add_recent_file(source)
+                self.assertEqual(settings.settings.value("recent/files"), [str(source)])
+                self.assertEqual(settings.recent_files(), [source])

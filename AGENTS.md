@@ -18,8 +18,8 @@ This file contains the operational rules for any coding agent working on
 Document roles, precedence, promotion, and retirement rules are defined in
 `docs/MEMORY_MANAGEMENT.md`.
 
-If the current path is the old `Codex_Latex编译器` workspace, stop before
-editing and relaunch from the authoritative root.
+If the current directory is a legacy or backup copy, stop before editing and
+relaunch from the Git repository root.
 
 ## Product Boundary
 
@@ -108,8 +108,10 @@ to the relevant core test module.
 
 ## Repository Cautions
 
-- Determine branch, worktree and changes from live Git checks. Do not initialize
-  or replace a repository to work around a failed check.
+- Determine repository state from live Git checks. If a check fails, verify the
+  current path and known authoritative repository path before asking for
+  clarification; ask only if the target repository remains ambiguous. Do not
+  initialize or replace a repository to work around a failed check.
 - Follow `CONTRIBUTING.md`: one task per short-lived branch and PR; do not push
   directly to `main` or use a release branch for ordinary development.
 - Preserve unrelated user or agent changes in the shared workspace.

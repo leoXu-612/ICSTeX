@@ -1,0 +1,726 @@
+{
+  "app_python_tree_sha256": "e1bf4fa9720c84cae9bda909da55dd890103f85ec36561f3a3512500e6e647da",
+  "platform": "macOS-26.6.1-arm64-arm-64bit",
+  "qt_platform": "cocoa",
+  "display_sampling_interval_ms": 1,
+  "first_visible_definition": "Upper bound: nonblank viewport grab after native Paint; includes observation overhead, not compositor scanout",
+  "fixture": "Two deterministic 24 MP RGB noise images with red region, JPEG quality 93 and PNG; synthetic decode/IO stress, not a typical student project",
+  "trials": [
+    {
+      "trial": 0,
+      "original_bytes": {
+        "noise.jpg": 38624187,
+        "noise.png": 54240611
+      },
+      "image_preparation": {
+        "samples": [
+          {
+            "case": "cold",
+            "duration_ms": 652.657,
+            "proxy_count": 2,
+            "fallback_count": 0,
+            "phases": {
+              "hash": {
+                "calls": 6,
+                "ms": 105.732
+              },
+              "decode_scale": {
+                "calls": 2,
+                "ms": 403.494
+              },
+              "proxy_write_including_decode_hash": {
+                "calls": 2,
+                "ms": 590.18
+              }
+            }
+          },
+          {
+            "case": "warm",
+            "duration_ms": 42.151,
+            "proxy_count": 2,
+            "fallback_count": 0,
+            "phases": {
+              "hash": {
+                "calls": 4,
+                "ms": 40.872
+              }
+            }
+          },
+          {
+            "case": "warm",
+            "duration_ms": 43.505,
+            "proxy_count": 2,
+            "fallback_count": 0,
+            "phases": {
+              "hash": {
+                "calls": 4,
+                "ms": 42.162
+              }
+            }
+          },
+          {
+            "case": "warm",
+            "duration_ms": 42.14,
+            "proxy_count": 2,
+            "fallback_count": 0,
+            "phases": {
+              "hash": {
+                "calls": 4,
+                "ms": 40.818
+              }
+            }
+          },
+          {
+            "case": "warm",
+            "duration_ms": 43.065,
+            "proxy_count": 2,
+            "fallback_count": 0,
+            "phases": {
+              "hash": {
+                "calls": 4,
+                "ms": 41.737
+              }
+            }
+          },
+          {
+            "case": "warm",
+            "duration_ms": 41.982,
+            "proxy_count": 2,
+            "fallback_count": 0,
+            "phases": {
+              "hash": {
+                "calls": 4,
+                "ms": 40.794
+              }
+            }
+          }
+        ],
+        "warm_median_ms": 42.151,
+        "proxy_bytes": {
+          "noise.png": 4071111,
+          "noise.jpg": 478804
+        }
+      },
+      "visible_pdf": [
+        {
+          "case": "preview_cold_build",
+          "purpose": "preview",
+          "timeline_from_request_ms": {
+            "process_exit_observed": 1420.475,
+            "worker_result": 1423.026,
+            "artifact_callback": 1424.321,
+            "artifact_accepted": 1427.809,
+            "document_ready": 1434.675,
+            "first_paint_event": 1454.66,
+            "visible_content_observed": 1582.037
+          },
+          "proxy_cache_state": "warm; separate cold preparation measured above",
+          "exit_to_visible_ms": 161.562,
+          "pages": 2,
+          "red_samples": 425,
+          "pdf_bytes": 4561276,
+          "displayed_path_matches_result": true,
+          "purpose_output_isolated": true,
+          "forced_rebuild": false,
+          "rules": [
+            "xelatex",
+            "xelatex",
+            "xdvipdfmx"
+          ],
+          "pdf_sha256": "0d4093c8e35dd614b2bbcf71bce7a6a072327d99c570a3096aabe0bc0acfad5e",
+          "native_visible": true,
+          "screenshot_local_name": "trial-0/preview_cold_build.png"
+        },
+        {
+          "case": "preview_unchanged",
+          "purpose": "preview",
+          "timeline_from_request_ms": {
+            "process_exit_observed": 339.321,
+            "worker_result": 341.213,
+            "artifact_callback": 341.408,
+            "artifact_accepted": 343.806,
+            "document_ready": 345.634,
+            "first_paint_event": 354.148,
+            "visible_content_observed": 382.533
+          },
+          "proxy_cache_state": "warm; separate cold preparation measured above",
+          "exit_to_visible_ms": 43.212,
+          "pages": 2,
+          "red_samples": 425,
+          "pdf_bytes": 4561276,
+          "displayed_path_matches_result": true,
+          "purpose_output_isolated": true,
+          "forced_rebuild": false,
+          "rules": [],
+          "pdf_sha256": "0d4093c8e35dd614b2bbcf71bce7a6a072327d99c570a3096aabe0bc0acfad5e",
+          "native_visible": true,
+          "screenshot_local_name": "trial-0/preview_unchanged.png"
+        },
+        {
+          "case": "final_cold_build",
+          "purpose": "final",
+          "timeline_from_request_ms": {
+            "process_exit_observed": 2562.246,
+            "worker_result": 2657.867,
+            "artifact_callback": 2659.28,
+            "artifact_accepted": 2662.637,
+            "document_ready": 2683.433,
+            "first_paint_event": 2692.48,
+            "visible_content_observed": 3002.663
+          },
+          "proxy_cache_state": "warm; separate cold preparation measured above",
+          "exit_to_visible_ms": 440.417,
+          "pages": 2,
+          "red_samples": 425,
+          "pdf_bytes": 92785995,
+          "displayed_path_matches_result": true,
+          "purpose_output_isolated": true,
+          "forced_rebuild": true,
+          "rules": [
+            "xelatex",
+            "xelatex",
+            "xdvipdfmx"
+          ],
+          "pdf_sha256": "08384298fffcdfdca960be184a6105fc18379488e84a9bf8229bdc10fd15ee75",
+          "native_visible": true,
+          "screenshot_local_name": "trial-0/final_cold_build.png"
+        },
+        {
+          "case": "final_unchanged",
+          "purpose": "final",
+          "timeline_from_request_ms": {
+            "process_exit_observed": 2341.711,
+            "worker_result": 2424.752,
+            "artifact_callback": 2425.557,
+            "artifact_accepted": 2429.286,
+            "document_ready": 2454.364,
+            "first_paint_event": 2461.188,
+            "visible_content_observed": 2777.015
+          },
+          "proxy_cache_state": "warm; separate cold preparation measured above",
+          "exit_to_visible_ms": 435.304,
+          "pages": 2,
+          "red_samples": 425,
+          "pdf_bytes": 92785996,
+          "displayed_path_matches_result": true,
+          "purpose_output_isolated": true,
+          "forced_rebuild": true,
+          "rules": [
+            "xelatex",
+            "xdvipdfmx"
+          ],
+          "pdf_sha256": "cdd837670cd37b905e559859cfe60e7dd997a18b31b6937e0a1ffb2eb0d67c7c",
+          "native_visible": true,
+          "screenshot_local_name": "trial-0/final_unchanged.png"
+        },
+        {
+          "case": "preview_text_edit",
+          "purpose": "preview",
+          "timeline_from_request_ms": {
+            "process_exit_observed": 893.571,
+            "worker_result": 895.522,
+            "artifact_callback": 896.526,
+            "artifact_accepted": 899.209,
+            "document_ready": 902.643,
+            "first_paint_event": 907.308,
+            "visible_content_observed": 932.872
+          },
+          "proxy_cache_state": "warm; separate cold preparation measured above",
+          "exit_to_visible_ms": 39.301,
+          "pages": 2,
+          "red_samples": 425,
+          "pdf_bytes": 4561273,
+          "displayed_path_matches_result": true,
+          "purpose_output_isolated": true,
+          "forced_rebuild": false,
+          "rules": [
+            "xelatex",
+            "xdvipdfmx"
+          ],
+          "pdf_sha256": "383762e4cfdbbd366304874bb6bcce4dc348749c6b57b1242205de2365c0d946",
+          "native_visible": true,
+          "screenshot_local_name": "trial-0/preview_text_edit.png"
+        }
+      ],
+      "closed_window_destroyed": true
+    },
+    {
+      "trial": 1,
+      "original_bytes": {
+        "noise.jpg": 38624187,
+        "noise.png": 54240611
+      },
+      "image_preparation": {
+        "samples": [
+          {
+            "case": "cold",
+            "duration_ms": 619.018,
+            "proxy_count": 2,
+            "fallback_count": 0,
+            "phases": {
+              "hash": {
+                "calls": 6,
+                "ms": 90.857
+              },
+              "decode_scale": {
+                "calls": 2,
+                "ms": 387.93
+              },
+              "proxy_write_including_decode_hash": {
+                "calls": 2,
+                "ms": 577.486
+              }
+            }
+          },
+          {
+            "case": "warm",
+            "duration_ms": 61.059,
+            "proxy_count": 2,
+            "fallback_count": 0,
+            "phases": {
+              "hash": {
+                "calls": 4,
+                "ms": 59.134
+              }
+            }
+          },
+          {
+            "case": "warm",
+            "duration_ms": 55.846,
+            "proxy_count": 2,
+            "fallback_count": 0,
+            "phases": {
+              "hash": {
+                "calls": 4,
+                "ms": 54.039
+              }
+            }
+          },
+          {
+            "case": "warm",
+            "duration_ms": 60.867,
+            "proxy_count": 2,
+            "fallback_count": 0,
+            "phases": {
+              "hash": {
+                "calls": 4,
+                "ms": 58.803
+              }
+            }
+          },
+          {
+            "case": "warm",
+            "duration_ms": 63.907,
+            "proxy_count": 2,
+            "fallback_count": 0,
+            "phases": {
+              "hash": {
+                "calls": 4,
+                "ms": 62.003
+              }
+            }
+          },
+          {
+            "case": "warm",
+            "duration_ms": 62.695,
+            "proxy_count": 2,
+            "fallback_count": 0,
+            "phases": {
+              "hash": {
+                "calls": 4,
+                "ms": 60.505
+              }
+            }
+          }
+        ],
+        "warm_median_ms": 61.059,
+        "proxy_bytes": {
+          "noise.png": 4071111,
+          "noise.jpg": 478804
+        }
+      },
+      "visible_pdf": [
+        {
+          "case": "preview_cold_build",
+          "purpose": "preview",
+          "timeline_from_request_ms": {
+            "process_exit_observed": 1151.948,
+            "worker_result": 1153.873,
+            "artifact_callback": 1154.167,
+            "artifact_accepted": 1156.575,
+            "document_ready": 1157.815,
+            "first_paint_event": 1167.46,
+            "visible_content_observed": 1193.465
+          },
+          "proxy_cache_state": "warm; separate cold preparation measured above",
+          "exit_to_visible_ms": 41.517,
+          "pages": 2,
+          "red_samples": 425,
+          "pdf_bytes": 4561273,
+          "displayed_path_matches_result": true,
+          "purpose_output_isolated": true,
+          "forced_rebuild": false,
+          "rules": [
+            "xelatex",
+            "xelatex",
+            "xdvipdfmx"
+          ],
+          "pdf_sha256": "d3b4f0567b34f73988417627a6b5fecf0d1282284c664a1fd68250da6c2309c6",
+          "native_visible": true,
+          "screenshot_local_name": "trial-1/preview_cold_build.png"
+        },
+        {
+          "case": "preview_unchanged",
+          "purpose": "preview",
+          "timeline_from_request_ms": {
+            "process_exit_observed": 254.402,
+            "worker_result": 256.125,
+            "artifact_callback": 257.132,
+            "artifact_accepted": 259.491,
+            "document_ready": 261.031,
+            "first_paint_event": 269.177,
+            "visible_content_observed": 293.638
+          },
+          "proxy_cache_state": "warm; separate cold preparation measured above",
+          "exit_to_visible_ms": 39.236,
+          "pages": 2,
+          "red_samples": 425,
+          "pdf_bytes": 4561273,
+          "displayed_path_matches_result": true,
+          "purpose_output_isolated": true,
+          "forced_rebuild": false,
+          "rules": [],
+          "pdf_sha256": "d3b4f0567b34f73988417627a6b5fecf0d1282284c664a1fd68250da6c2309c6",
+          "native_visible": true,
+          "screenshot_local_name": "trial-1/preview_unchanged.png"
+        },
+        {
+          "case": "final_cold_build",
+          "purpose": "final",
+          "timeline_from_request_ms": {
+            "process_exit_observed": 2577.659,
+            "worker_result": 2662.219,
+            "artifact_callback": 2663.577,
+            "artifact_accepted": 2667.777,
+            "document_ready": 2706.715,
+            "first_paint_event": 2722.552,
+            "visible_content_observed": 3063.109
+          },
+          "proxy_cache_state": "warm; separate cold preparation measured above",
+          "exit_to_visible_ms": 485.451,
+          "pages": 2,
+          "red_samples": 425,
+          "pdf_bytes": 92785995,
+          "displayed_path_matches_result": true,
+          "purpose_output_isolated": true,
+          "forced_rebuild": true,
+          "rules": [
+            "xelatex",
+            "xelatex",
+            "xdvipdfmx"
+          ],
+          "pdf_sha256": "19ce3dc88f93446125176185213b2b3d201305a01148ad423778e53435b44942",
+          "native_visible": true,
+          "screenshot_local_name": "trial-1/final_cold_build.png"
+        },
+        {
+          "case": "final_unchanged",
+          "purpose": "final",
+          "timeline_from_request_ms": {
+            "process_exit_observed": 2313.763,
+            "worker_result": 2422.353,
+            "artifact_callback": 2422.813,
+            "artifact_accepted": 2426.73,
+            "document_ready": 2469.078,
+            "first_paint_event": 2478.302,
+            "visible_content_observed": 2808.934
+          },
+          "proxy_cache_state": "warm; separate cold preparation measured above",
+          "exit_to_visible_ms": 495.172,
+          "pages": 2,
+          "red_samples": 425,
+          "pdf_bytes": 92785997,
+          "displayed_path_matches_result": true,
+          "purpose_output_isolated": true,
+          "forced_rebuild": true,
+          "rules": [
+            "xelatex",
+            "xdvipdfmx"
+          ],
+          "pdf_sha256": "d8e48b6b12a0ba1ebece6f75fc1340d3c92f6a39df61792377e5d398aecc2789",
+          "native_visible": true,
+          "screenshot_local_name": "trial-1/final_unchanged.png"
+        },
+        {
+          "case": "preview_text_edit",
+          "purpose": "preview",
+          "timeline_from_request_ms": {
+            "process_exit_observed": 905.231,
+            "worker_result": 907.27,
+            "artifact_callback": 908.09,
+            "artifact_accepted": 910.798,
+            "document_ready": 914.188,
+            "first_paint_event": 916.15,
+            "visible_content_observed": 945.326
+          },
+          "proxy_cache_state": "warm; separate cold preparation measured above",
+          "exit_to_visible_ms": 40.095,
+          "pages": 2,
+          "red_samples": 425,
+          "pdf_bytes": 4561275,
+          "displayed_path_matches_result": true,
+          "purpose_output_isolated": true,
+          "forced_rebuild": false,
+          "rules": [
+            "xelatex",
+            "xdvipdfmx"
+          ],
+          "pdf_sha256": "700b732d0cef1e10f215adfd3934e12d3cf7f22dd5e5b7fccb011cea06294896",
+          "native_visible": true,
+          "screenshot_local_name": "trial-1/preview_text_edit.png"
+        }
+      ],
+      "closed_window_destroyed": true
+    },
+    {
+      "trial": 2,
+      "original_bytes": {
+        "noise.jpg": 38624187,
+        "noise.png": 54240611
+      },
+      "image_preparation": {
+        "samples": [
+          {
+            "case": "cold",
+            "duration_ms": 669.207,
+            "proxy_count": 2,
+            "fallback_count": 0,
+            "phases": {
+              "hash": {
+                "calls": 6,
+                "ms": 94.042
+              },
+              "decode_scale": {
+                "calls": 2,
+                "ms": 433.272
+              },
+              "proxy_write_including_decode_hash": {
+                "calls": 2,
+                "ms": 620.72
+              }
+            }
+          },
+          {
+            "case": "warm",
+            "duration_ms": 47.127,
+            "proxy_count": 2,
+            "fallback_count": 0,
+            "phases": {
+              "hash": {
+                "calls": 4,
+                "ms": 45.55
+              }
+            }
+          },
+          {
+            "case": "warm",
+            "duration_ms": 49.258,
+            "proxy_count": 2,
+            "fallback_count": 0,
+            "phases": {
+              "hash": {
+                "calls": 4,
+                "ms": 47.436
+              }
+            }
+          },
+          {
+            "case": "warm",
+            "duration_ms": 52.251,
+            "proxy_count": 2,
+            "fallback_count": 0,
+            "phases": {
+              "hash": {
+                "calls": 4,
+                "ms": 50.543
+              }
+            }
+          },
+          {
+            "case": "warm",
+            "duration_ms": 46.067,
+            "proxy_count": 2,
+            "fallback_count": 0,
+            "phases": {
+              "hash": {
+                "calls": 4,
+                "ms": 44.453
+              }
+            }
+          },
+          {
+            "case": "warm",
+            "duration_ms": 46.502,
+            "proxy_count": 2,
+            "fallback_count": 0,
+            "phases": {
+              "hash": {
+                "calls": 4,
+                "ms": 45.118
+              }
+            }
+          }
+        ],
+        "warm_median_ms": 47.127,
+        "proxy_bytes": {
+          "noise.png": 4071111,
+          "noise.jpg": 478804
+        }
+      },
+      "visible_pdf": [
+        {
+          "case": "preview_cold_build",
+          "purpose": "preview",
+          "timeline_from_request_ms": {
+            "process_exit_observed": 1712.182,
+            "worker_result": 1714.381,
+            "artifact_callback": 1715.349,
+            "artifact_accepted": 1718.183,
+            "document_ready": 1720.413,
+            "first_paint_event": 1732.505,
+            "visible_content_observed": 1766.689
+          },
+          "proxy_cache_state": "warm; separate cold preparation measured above",
+          "exit_to_visible_ms": 54.507,
+          "pages": 2,
+          "red_samples": 425,
+          "pdf_bytes": 4561273,
+          "displayed_path_matches_result": true,
+          "purpose_output_isolated": true,
+          "forced_rebuild": false,
+          "rules": [
+            "xelatex",
+            "xelatex",
+            "xdvipdfmx"
+          ],
+          "pdf_sha256": "0dcc22bd841153b0a8bedf71da25c0bd4a9364996d98fe4cf02239ce69037a5f",
+          "native_visible": true,
+          "screenshot_local_name": "trial-2/preview_cold_build.png"
+        },
+        {
+          "case": "preview_unchanged",
+          "purpose": "preview",
+          "timeline_from_request_ms": {
+            "process_exit_observed": 386.297,
+            "worker_result": 388.217,
+            "artifact_callback": 388.651,
+            "artifact_accepted": 391.307,
+            "document_ready": 393.209,
+            "first_paint_event": 402.997,
+            "visible_content_observed": 435.341
+          },
+          "proxy_cache_state": "warm; separate cold preparation measured above",
+          "exit_to_visible_ms": 49.044,
+          "pages": 2,
+          "red_samples": 425,
+          "pdf_bytes": 4561273,
+          "displayed_path_matches_result": true,
+          "purpose_output_isolated": true,
+          "forced_rebuild": false,
+          "rules": [],
+          "pdf_sha256": "0dcc22bd841153b0a8bedf71da25c0bd4a9364996d98fe4cf02239ce69037a5f",
+          "native_visible": true,
+          "screenshot_local_name": "trial-2/preview_unchanged.png"
+        },
+        {
+          "case": "final_cold_build",
+          "purpose": "final",
+          "timeline_from_request_ms": {
+            "process_exit_observed": 2858.551,
+            "worker_result": 2947.877,
+            "artifact_callback": 2948.565,
+            "artifact_accepted": 2951.963,
+            "document_ready": 2974.48,
+            "first_paint_event": 2983.757,
+            "visible_content_observed": 3292.671
+          },
+          "proxy_cache_state": "warm; separate cold preparation measured above",
+          "exit_to_visible_ms": 434.12,
+          "pages": 2,
+          "red_samples": 425,
+          "pdf_bytes": 92785995,
+          "displayed_path_matches_result": true,
+          "purpose_output_isolated": true,
+          "forced_rebuild": true,
+          "rules": [
+            "xelatex",
+            "xelatex",
+            "xdvipdfmx"
+          ],
+          "pdf_sha256": "391635dabfc44edcfe27f297704e6abe4db78bb5a61b1a9caeacf38f35890c9c",
+          "native_visible": true,
+          "screenshot_local_name": "trial-2/final_cold_build.png"
+        },
+        {
+          "case": "final_unchanged",
+          "purpose": "final",
+          "timeline_from_request_ms": {
+            "process_exit_observed": 2429.332,
+            "worker_result": 2514.588,
+            "artifact_callback": 2515.608,
+            "artifact_accepted": 2519.405,
+            "document_ready": 2544.355,
+            "first_paint_event": 2550.534,
+            "visible_content_observed": 2864.558
+          },
+          "proxy_cache_state": "warm; separate cold preparation measured above",
+          "exit_to_visible_ms": 435.226,
+          "pages": 2,
+          "red_samples": 425,
+          "pdf_bytes": 92785995,
+          "displayed_path_matches_result": true,
+          "purpose_output_isolated": true,
+          "forced_rebuild": true,
+          "rules": [
+            "xelatex",
+            "xdvipdfmx"
+          ],
+          "pdf_sha256": "f115626720b7e389b42df1df40c5c0ac2acd3a94928e006af0bf95c96b4a4efd",
+          "native_visible": true,
+          "screenshot_local_name": "trial-2/final_unchanged.png"
+        },
+        {
+          "case": "preview_text_edit",
+          "purpose": "preview",
+          "timeline_from_request_ms": {
+            "process_exit_observed": 893.5,
+            "worker_result": 895.526,
+            "artifact_callback": 896.062,
+            "artifact_accepted": 898.743,
+            "document_ready": 902.533,
+            "first_paint_event": 907.035,
+            "visible_content_observed": 934.401
+          },
+          "proxy_cache_state": "warm; separate cold preparation measured above",
+          "exit_to_visible_ms": 40.901,
+          "pages": 2,
+          "red_samples": 425,
+          "pdf_bytes": 4561275,
+          "displayed_path_matches_result": true,
+          "purpose_output_isolated": true,
+          "forced_rebuild": false,
+          "rules": [
+            "xelatex",
+            "xdvipdfmx"
+          ],
+          "pdf_sha256": "02ed97a58bae9aa8f56679f26b657ab1dd1caef0fc77816f59286d10a260694f",
+          "native_visible": true,
+          "screenshot_local_name": "trial-2/preview_text_edit.png"
+        }
+      ],
+      "closed_window_destroyed": true
+    }
+  ],
+  "app_hash_matches_after_run": true,
+  "screenshots_boundary": "Native captures remain local only; relative names locate the per-run evidence, not tracked images."
+}

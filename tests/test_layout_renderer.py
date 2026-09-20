@@ -40,7 +40,8 @@ class BlockRendererTests(TestCase):
         self.assertIn("% ICSTEX:BEGIN block=blk_text", render_block(text))
 
         raw = Block(id="blk_raw", type="rawLatex", alias="r", semantic=Semantic(role="raw-latex"), content=content_for_raw_latex(r"\textbf{ok}"))
-        self.assertIn(r"\textbf{ok}", render_block(raw))
+        self.assertNotIn(r"\textbf{ok}", render_block(raw))
+        self.assertIn("raw-latex blocked", render_block(raw))
 
         formula = Block(
             id="blk_f",
@@ -52,6 +53,51 @@ class BlockRendererTests(TestCase):
         rendered = render_block(formula)
         self.assertIn(r"\[", rendered)
         self.assertIn(r"\label{eq:x}", rendered)
+
+    def test_formula_uses_ast_not_tampered_cache(self) -> None:
+        content = FormulaBlockAdapter().content_for(r"E=mc^2")
+        content["latexCache"] = r"\input{/tmp/secret}"
+        block = Block(id="blk_f", type="formula", alias="eq", semantic=Semantic(role="equation"), content=content)
+
+        rendered = render_block(block)
+
+        self.assertIn("E=mc^2", rendered)
+        self.assertNotIn(r"\input", rendered)
+
+    def test_formula_blocks_unsafe_ast_command(self) -> None:
+        content = FormulaBlockAdapter().content_for("x")
+        content["ast"] = {"kind": "command", "latex": r"\input", "display": r"\input"}
+        block = Block(id="blk_f", type="formula", alias="eq", semantic=Semantic(role="equation"), content=content)
+
+        rendered = render_block(block)
+
+        self.assertIn("unsafe managed AST", rendered)
+        self.assertNotIn(r"\input{/", rendered)
+
+    def test_invalid_label_is_not_emitted(self) -> None:
+        block = Block(
+            id="blk_f",
+            type="formula",
+            alias="eq",
+            semantic=Semantic(role="equation", label=r"x}\input{/tmp/secret}"),
+            content=FormulaBlockAdapter().content_for("x"),
+        )
+
+        self.assertNotIn(r"\label", render_block(block))
+
+    def test_unsafe_image_source_is_not_emitted(self) -> None:
+        block = Block(
+            id="blk_img",
+            type="image",
+            alias="img",
+            semantic=Semantic(role="figure"),
+            content={"source": "../../private.png"},
+        )
+
+        rendered = render_block(block)
+
+        self.assertIn("unsafe source", rendered)
+        self.assertNotIn(r"\includegraphics", rendered)
 
     def test_render_is_deterministic(self) -> None:
         block = Block(id="blk_f", type="formula", alias="eq", semantic=Semantic(role="equation"), content=FormulaBlockAdapter().content_for(r"E=mc^2"))

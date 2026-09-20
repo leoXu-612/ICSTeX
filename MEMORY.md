@@ -5,8 +5,8 @@ project state, roadmap, decision history, or task log.
 
 ## Authoritative Context
 
-- Workspace: `<HOME>/Desktop/Codex/ICS-Project-/ICSTeX`
-- The old `Codex_Latex编译器` tree is rollback-only context.
+- Workspace: the current `ICSTeX` Git repository root.
+- Any legacy workspace is rollback-only context.
 - Current verified facts: `docs/PROJECT_STATE.md`
 - Future priorities: `docs/ROADMAP.md`
 - Long-term decisions: `docs/DECISION_LOG.md`

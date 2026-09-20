@@ -1,0 +1,216 @@
+{
+  "kind": "Read-only kpsewhich name-policy checks; no compile and no file-open/write attempt",
+  "platform": "macOS-26.6.1-arm64-arm-64bit",
+  "kpsewhich_version": "kpathsea version 6.4.1",
+  "restricted_environment": {
+    "openin_any": "p",
+    "openout_any": "p"
+  },
+  "resource_sha256_before_after": "049117ce26b9769fe2749b06eef51a50a89faef4a97764dd2d81daa715980700",
+  "checks": [
+    {
+      "environment": "current",
+      "child_overrides": {},
+      "name": "installed-resource",
+      "path": "/usr/local/texlive/2025/texmf-dist/tex/generic/unicode-data/ScriptExtensions.txt",
+      "operation": "in",
+      "returncode": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "environment": "current",
+      "child_overrides": {},
+      "name": "installed-resource",
+      "path": "/usr/local/texlive/2025/texmf-dist/tex/generic/unicode-data/ScriptExtensions.txt",
+      "operation": "out",
+      "returncode": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "environment": "current",
+      "child_overrides": {},
+      "name": "project-relative",
+      "path": "local-copy.txt",
+      "operation": "in",
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "environment": "current",
+      "child_overrides": {},
+      "name": "project-relative",
+      "path": "local-copy.txt",
+      "operation": "out",
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "environment": "current",
+      "child_overrides": {},
+      "name": "parent-sentinel",
+      "path": "../sentinel.txt",
+      "operation": "in",
+      "returncode": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "environment": "current",
+      "child_overrides": {},
+      "name": "parent-sentinel",
+      "path": "../sentinel.txt",
+      "operation": "out",
+      "returncode": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "environment": "candidate-TEXMFSYSVAR",
+      "child_overrides": {
+        "TEXMFSYSVAR": "/usr/local/texlive/2025/texmf-dist"
+      },
+      "name": "installed-resource",
+      "path": "/usr/local/texlive/2025/texmf-dist/tex/generic/unicode-data/ScriptExtensions.txt",
+      "operation": "in",
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "environment": "candidate-TEXMFSYSVAR",
+      "child_overrides": {
+        "TEXMFSYSVAR": "/usr/local/texlive/2025/texmf-dist"
+      },
+      "name": "installed-resource",
+      "path": "/usr/local/texlive/2025/texmf-dist/tex/generic/unicode-data/ScriptExtensions.txt",
+      "operation": "out",
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "environment": "candidate-TEXMFSYSVAR",
+      "child_overrides": {
+        "TEXMFSYSVAR": "/usr/local/texlive/2025/texmf-dist"
+      },
+      "name": "project-relative",
+      "path": "local-copy.txt",
+      "operation": "in",
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "environment": "candidate-TEXMFSYSVAR",
+      "child_overrides": {
+        "TEXMFSYSVAR": "/usr/local/texlive/2025/texmf-dist"
+      },
+      "name": "project-relative",
+      "path": "local-copy.txt",
+      "operation": "out",
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "environment": "candidate-TEXMFSYSVAR",
+      "child_overrides": {
+        "TEXMFSYSVAR": "/usr/local/texlive/2025/texmf-dist"
+      },
+      "name": "parent-sentinel",
+      "path": "../sentinel.txt",
+      "operation": "in",
+      "returncode": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "environment": "candidate-TEXMFSYSVAR",
+      "child_overrides": {
+        "TEXMFSYSVAR": "/usr/local/texlive/2025/texmf-dist"
+      },
+      "name": "parent-sentinel",
+      "path": "../sentinel.txt",
+      "operation": "out",
+      "returncode": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "environment": "candidate-TEXMFVAR",
+      "child_overrides": {
+        "TEXMFVAR": "/usr/local/texlive/2025/texmf-dist"
+      },
+      "name": "installed-resource",
+      "path": "/usr/local/texlive/2025/texmf-dist/tex/generic/unicode-data/ScriptExtensions.txt",
+      "operation": "in",
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "environment": "candidate-TEXMFVAR",
+      "child_overrides": {
+        "TEXMFVAR": "/usr/local/texlive/2025/texmf-dist"
+      },
+      "name": "installed-resource",
+      "path": "/usr/local/texlive/2025/texmf-dist/tex/generic/unicode-data/ScriptExtensions.txt",
+      "operation": "out",
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "environment": "candidate-TEXMFVAR",
+      "child_overrides": {
+        "TEXMFVAR": "/usr/local/texlive/2025/texmf-dist"
+      },
+      "name": "project-relative",
+      "path": "local-copy.txt",
+      "operation": "in",
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "environment": "candidate-TEXMFVAR",
+      "child_overrides": {
+        "TEXMFVAR": "/usr/local/texlive/2025/texmf-dist"
+      },
+      "name": "project-relative",
+      "path": "local-copy.txt",
+      "operation": "out",
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "environment": "candidate-TEXMFVAR",
+      "child_overrides": {
+        "TEXMFVAR": "/usr/local/texlive/2025/texmf-dist"
+      },
+      "name": "parent-sentinel",
+      "path": "../sentinel.txt",
+      "operation": "in",
+      "returncode": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "environment": "candidate-TEXMFVAR",
+      "child_overrides": {
+        "TEXMFVAR": "/usr/local/texlive/2025/texmf-dist"
+      },
+      "name": "parent-sentinel",
+      "path": "../sentinel.txt",
+      "operation": "out",
+      "returncode": 1,
+      "stdout": "",
+      "stderr": ""
+    }
+  ]
+}

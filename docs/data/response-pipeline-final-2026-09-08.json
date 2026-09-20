@@ -1,0 +1,399 @@
+{
+  "app_python_tree_sha256": "0ad9f48d485483ba88d11200be2b4ee65b44ffcc50e3342e99b1ac34cacb74ef",
+  "source_head": "f0f693542b6fe95121e719db3da804fc0679f9e5",
+  "environment": {
+    "platform": "macOS-26.6.1-arm64-arm-64bit",
+    "python": "3.12.6",
+    "pyside6": "6.11.1",
+    "watchdog": "6.0.0"
+  },
+  "scope": "Synthetic temporary projects; synchronous call and event-loop timings, not rendered-frame latency",
+  "word_count": [
+    {
+      "words": 4000,
+      "source_bytes": 24456,
+      "requested_mode": "structured",
+      "actual_mode": "fallback",
+      "samples_ms": [
+        57.946,
+        58.144,
+        57.629,
+        57.981,
+        57.417
+      ],
+      "median_ms": 57.946,
+      "max_ms": 58.144
+    },
+    {
+      "words": 4000,
+      "source_bytes": 24456,
+      "requested_mode": "texcount",
+      "actual_mode": "texcount",
+      "samples_ms": [
+        109.503,
+        116.115,
+        114.419,
+        110.842,
+        108.741
+      ],
+      "median_ms": 110.842,
+      "max_ms": 116.115
+    },
+    {
+      "words": 12000,
+      "source_bytes": 73256,
+      "requested_mode": "structured",
+      "actual_mode": "fallback",
+      "samples_ms": [
+        211.144,
+        221.156,
+        210.84,
+        214.398,
+        216.24
+      ],
+      "median_ms": 214.398,
+      "max_ms": 221.156
+    },
+    {
+      "words": 12000,
+      "source_bytes": 73256,
+      "requested_mode": "texcount",
+      "actual_mode": "texcount",
+      "samples_ms": [
+        355.74,
+        347.205,
+        335.203,
+        340.202,
+        335.763
+      ],
+      "median_ms": 340.202,
+      "max_ms": 355.74
+    },
+    {
+      "words": 40000,
+      "source_bytes": 244056,
+      "requested_mode": "structured",
+      "actual_mode": "fallback",
+      "samples_ms": [
+        1174.97,
+        1105.448,
+        1095.028,
+        1093.265,
+        1078.657
+      ],
+      "median_ms": 1095.028,
+      "max_ms": 1174.97
+    },
+    {
+      "words": 40000,
+      "source_bytes": 244056,
+      "requested_mode": "texcount",
+      "actual_mode": "texcount",
+      "samples_ms": [
+        1604.235,
+        1552.188,
+        1539.466,
+        1545.344,
+        1527.018
+      ],
+      "median_ms": 1545.344,
+      "max_ms": 1604.235
+    }
+  ],
+  "gui": {
+    "word_count": {
+      "samples_ms": [
+        0.897,
+        0.589,
+        0.511,
+        0.506,
+        0.495
+      ],
+      "median_ms": 0.511,
+      "max_ms": 0.897
+    },
+    "panel_refresh": {
+      "samples_ms": [
+        10.965,
+        4.496,
+        4.274,
+        4.327,
+        4.735
+      ],
+      "median_ms": 4.496,
+      "max_ms": 10.965
+    },
+    "watched_files": [
+      "article.cls",
+      "child",
+      "child.tex",
+      "main.tex",
+      "refs.bib"
+    ],
+    "unopened_child_watched": true,
+    "bibliography_watched": true,
+    "word_count_uncached_dispatch_ms": [
+      0.169,
+      0.29,
+      0.217,
+      0.166,
+      0.203
+    ],
+    "word_count_uncached_complete_ms": [
+      113.842,
+      115.191,
+      114.024,
+      114.364,
+      122.037
+    ],
+    "word_count_request_mode": "cached request; uncached dispatch/completion reported separately",
+    "edit_with_files_sidebar": {
+      "samples_ms": [
+        0.41,
+        0.237,
+        0.217,
+        0.208,
+        0.214,
+        0.215,
+        0.207,
+        0.205,
+        0.203,
+        0.204,
+        0.209,
+        0.207,
+        0.204,
+        0.205,
+        0.202
+      ],
+      "median_ms": 0.207,
+      "max_ms": 0.41
+    },
+    "edit_with_outline_sidebar": {
+      "samples_ms": [
+        0.22,
+        0.213,
+        0.213,
+        0.204,
+        0.205,
+        0.211,
+        0.201,
+        0.202,
+        0.207,
+        0.21,
+        0.206,
+        0.205,
+        0.208,
+        0.21,
+        0.21
+      ],
+      "median_ms": 0.208,
+      "max_ms": 0.22
+    },
+    "edit_with_visible_outline": {
+      "samples_ms": [
+        0.433,
+        0.264,
+        0.246,
+        0.239,
+        0.236,
+        0.236,
+        0.234,
+        0.234,
+        0.237,
+        0.238,
+        0.235,
+        0.232,
+        0.233,
+        0.231,
+        0.231
+      ],
+      "median_ms": 0.236,
+      "max_ms": 0.433
+    },
+    "outline_updates_during_edit_burst": 0,
+    "outline_updates_after_debounce": 1,
+    "asset_scans_for_text_edit_burst": 0,
+    "word_count_timer_lateness_ms": 18.345,
+    "external_tex_auto_off_scheduled_count": 0,
+    "external_tex_auto_toggle": false,
+    "external_tex_reloaded": true
+  },
+  "asset_scan": [
+    {
+      "ignored_files": 0,
+      "samples_ms": [
+        0.043,
+        0.022,
+        0.017,
+        0.015,
+        0.017
+      ],
+      "median_ms": 0.017,
+      "max_ms": 0.043
+    },
+    {
+      "ignored_files": 5000,
+      "samples_ms": [
+        0.075,
+        0.025,
+        0.021,
+        0.02,
+        0.02
+      ],
+      "median_ms": 0.021,
+      "max_ms": 0.075
+    }
+  ],
+  "compile": [
+    {
+      "trial": 0,
+      "case": "cold",
+      "duration_ms": 2006.817,
+      "rules": [
+        "xelatex",
+        "bibtex .latex_build/main",
+        "xelatex",
+        "bibtex .latex_build/main",
+        "xelatex",
+        "xdvipdfmx"
+      ],
+      "pages": 8,
+      "pdf_bytes": 15123,
+      "same_pdf_bytes_as_previous": false,
+      "safe_command": true
+    },
+    {
+      "trial": 0,
+      "case": "unchanged",
+      "duration_ms": 62.837,
+      "rules": [],
+      "pages": 8,
+      "pdf_bytes": 15123,
+      "same_pdf_bytes_as_previous": true,
+      "safe_command": true
+    },
+    {
+      "trial": 0,
+      "case": "identical_rewrite",
+      "duration_ms": 64.25,
+      "rules": [],
+      "pages": 8,
+      "pdf_bytes": 15123,
+      "same_pdf_bytes_as_previous": true,
+      "safe_command": true
+    },
+    {
+      "trial": 0,
+      "case": "text_edit",
+      "duration_ms": 802.398,
+      "rules": [
+        "xelatex",
+        "xdvipdfmx"
+      ],
+      "pages": 8,
+      "pdf_bytes": 15127,
+      "same_pdf_bytes_as_previous": false,
+      "safe_command": true
+    },
+    {
+      "trial": 1,
+      "case": "cold",
+      "duration_ms": 1927.718,
+      "rules": [
+        "xelatex",
+        "bibtex .latex_build/main",
+        "xelatex",
+        "bibtex .latex_build/main",
+        "xelatex",
+        "xdvipdfmx"
+      ],
+      "pages": 8,
+      "pdf_bytes": 15120,
+      "same_pdf_bytes_as_previous": false,
+      "safe_command": true
+    },
+    {
+      "trial": 1,
+      "case": "unchanged",
+      "duration_ms": 61.78,
+      "rules": [],
+      "pages": 8,
+      "pdf_bytes": 15120,
+      "same_pdf_bytes_as_previous": true,
+      "safe_command": true
+    },
+    {
+      "trial": 1,
+      "case": "identical_rewrite",
+      "duration_ms": 61.537,
+      "rules": [],
+      "pages": 8,
+      "pdf_bytes": 15120,
+      "same_pdf_bytes_as_previous": true,
+      "safe_command": true
+    },
+    {
+      "trial": 1,
+      "case": "text_edit",
+      "duration_ms": 794.722,
+      "rules": [
+        "xelatex",
+        "xdvipdfmx"
+      ],
+      "pages": 8,
+      "pdf_bytes": 15125,
+      "same_pdf_bytes_as_previous": false,
+      "safe_command": true
+    },
+    {
+      "trial": 2,
+      "case": "cold",
+      "duration_ms": 1912.211,
+      "rules": [
+        "xelatex",
+        "bibtex .latex_build/main",
+        "xelatex",
+        "bibtex .latex_build/main",
+        "xelatex",
+        "xdvipdfmx"
+      ],
+      "pages": 8,
+      "pdf_bytes": 15121,
+      "same_pdf_bytes_as_previous": false,
+      "safe_command": true
+    },
+    {
+      "trial": 2,
+      "case": "unchanged",
+      "duration_ms": 62.046,
+      "rules": [],
+      "pages": 8,
+      "pdf_bytes": 15121,
+      "same_pdf_bytes_as_previous": true,
+      "safe_command": true
+    },
+    {
+      "trial": 2,
+      "case": "identical_rewrite",
+      "duration_ms": 61.498,
+      "rules": [],
+      "pages": 8,
+      "pdf_bytes": 15121,
+      "same_pdf_bytes_as_previous": true,
+      "safe_command": true
+    },
+    {
+      "trial": 2,
+      "case": "text_edit",
+      "duration_ms": 790.331,
+      "rules": [
+        "xelatex",
+        "xdvipdfmx"
+      ],
+      "pages": 8,
+      "pdf_bytes": 15124,
+      "same_pdf_bytes_as_previous": false,
+      "safe_command": true
+    }
+  ]
+}

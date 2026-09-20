@@ -4,6 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest import TestCase
+from unittest.mock import patch
 
 from app.core.project_tools import (
     BIBLIOGRAPHY_LINE,
@@ -29,6 +30,64 @@ from app.core.project_tools import (
 
 
 class ProjectToolsTests(TestCase):
+    def test_new_project_preserves_chinese_name_and_selected_profile(self):
+        from app.core.project_profile import ProjectProfile, load_profile
+        with TemporaryDirectory() as directory:
+            profile = ProjectProfile(template="chinese_xelatex_article", engine="xelatex")
+            project = initialize_project(ProjectInitSpec(Path(directory), "中文 论文", "chinese_xelatex_article", profile))
+            self.assertEqual(project.root_dir.name, "中文 论文")
+            self.assertEqual(load_profile(project.root_dir).profile, profile)
+            self.assertIn("ctexart", project.tex_file.read_text())
+
+    def test_invalid_template_or_profile_creates_nothing(self):
+        from app.core.project_profile import ProjectProfile
+        with TemporaryDirectory() as directory:
+            parent = Path(directory)
+            for spec in (ProjectInitSpec(parent, "New", "not-a-template"),
+                         ProjectInitSpec(parent, "New", profile=ProjectProfile(word_min=-2))):
+                with self.assertRaises(ValueError):
+                    initialize_project(spec)
+                self.assertEqual(list(parent.iterdir()), [])
+
+    def test_existing_empty_nonempty_and_symlink_destinations_are_not_modified(self):
+        with TemporaryDirectory() as directory:
+            parent = Path(directory)
+            empty = parent / "Empty"
+            empty.mkdir()
+            full = parent / "Full"
+            full.mkdir()
+            (full / "main.tex").write_bytes(b"original")
+            link = parent / "Link"
+            link.symlink_to(empty, target_is_directory=True)
+            for path in (empty, full, link):
+                with self.subTest(path=path), self.assertRaises(FileExistsError):
+                    initialize_project(ProjectInitSpec(parent, path.name))
+            self.assertEqual(list(empty.iterdir()), [])
+            self.assertEqual((full / "main.tex").read_bytes(), b"original")
+            self.assertTrue(link.is_symlink())
+
+    def test_partial_creation_failure_is_explicit_and_preserves_foreign_file(self):
+        from app.core import project_tools
+        with TemporaryDirectory() as directory:
+            parent = Path(directory)
+            original = project_tools._write_new_project_file
+            def concurrent(path, root, payload):
+                path.write_bytes(b"external winner")
+                return original(path, root, payload)
+            with patch.object(project_tools, "_write_new_project_file", side_effect=concurrent):
+                with self.assertRaisesRegex(OSError, "未完成"):
+                    initialize_project(ProjectInitSpec(parent, "New"))
+            self.assertEqual((parent / "New" / "main.tex").read_bytes(), b"external winner")
+
+    def test_sanitized_names_are_single_components_and_not_windows_devices(self):
+        self.assertEqual(sanitize_project_name("中文 项目"), "中文 项目")
+        for name in ("CON", "nul.tex", "LPT1", "COM3.log", "..", "a/b\\c", "bad\0name"):
+            clean = sanitize_project_name(name)
+            self.assertNotIn("/", clean)
+            self.assertNotIn("\\", clean)
+            self.assertNotIn("\0", clean)
+            self.assertNotIn(clean.split(".")[0].upper(), {"CON", "NUL", "LPT1", "COM3"})
+
     def test_initialize_project_creates_main_assets_and_bib(self) -> None:
         with TemporaryDirectory() as directory:
             project = initialize_project(ProjectInitSpec(Path(directory), "Physics IA", "ib_ia_report"))
@@ -112,12 +171,17 @@ class ProjectToolsTests(TestCase):
         self.assertIn("title = {A useful paper title}", title.bibtex)
 
     def test_fetch_bib_online_doi_returns_real_bibtex(self) -> None:
-        opener = _fake_opener(b"@article{Real2024,\n  title = {Real Title}\n}")
+        requests = []
+        opener = _fake_opener(b"@article{Real2024,\n  title = {Real Title}\n}", requests=requests)
         result = fetch_bib_online("10.1000/example", opener=opener)
         assert result is not None
         self.assertEqual(result.source, "DOI（在线）")
         self.assertEqual(result.key, "Real2024")
         self.assertIn("Real Title", result.bibtex)
+        self.assertEqual(
+            requests[0].full_url,
+            "https://api.crossref.org/works/10.1000%2Fexample/transform/application/x-bibtex",
+        )
 
     def test_fetch_bib_online_arxiv_parses_atom(self) -> None:
         atom = (
@@ -134,6 +198,24 @@ class ProjectToolsTests(TestCase):
         self.assertIn("title = {A Great Paper}", result.bibtex)
         self.assertIn("author = {Ada Lovelace and Alan Turing}", result.bibtex)
         self.assertIn("year = {2021}", result.bibtex)
+
+    def test_fetch_bib_online_rejects_unexpected_final_host(self) -> None:
+        opener = _fake_opener(b"@article{x, title={x}}", final_url="http://127.0.0.1/private")
+
+        with self.assertRaisesRegex(OSError, "重定向"):
+            fetch_bib_online("10.1000/example", opener=opener)
+
+    def test_fetch_bib_online_rejects_oversized_response(self) -> None:
+        opener = _fake_opener(b"x" * (1024 * 1024 + 1))
+
+        with self.assertRaisesRegex(OSError, "过大"):
+            fetch_bib_online("10.1000/example", opener=opener)
+
+    def test_fetch_bib_online_rejects_dangerous_tex_metadata(self) -> None:
+        opener = _fake_opener(b"@article{x, title={\\input{/tmp/secret}}}")
+
+        with self.assertRaisesRegex(OSError, "不安全"):
+            fetch_bib_online("10.1000/example", opener=opener)
 
     def test_fetch_bib_online_returns_none_for_plain_title(self) -> None:
         self.assertIsNone(fetch_bib_online("Just a title", opener=_fake_opener(b"")))
@@ -155,8 +237,9 @@ class ProjectToolsTests(TestCase):
 
 
 class _FakeResponse:
-    def __init__(self, payload: bytes) -> None:
+    def __init__(self, payload: bytes, *, final_url: str | None = None) -> None:
         self._payload = payload
+        self._final_url = final_url
         self.headers = SimpleNamespace(get_content_charset=lambda: "utf-8")
 
     def __enter__(self) -> "_FakeResponse":
@@ -165,12 +248,17 @@ class _FakeResponse:
     def __exit__(self, *args: object) -> None:
         return None
 
-    def read(self) -> bytes:
-        return self._payload
+    def read(self, size: int = -1) -> bytes:
+        return self._payload if size < 0 else self._payload[:size]
+
+    def geturl(self) -> str | None:
+        return self._final_url
 
 
-def _fake_opener(payload: bytes):  # type: ignore[no-untyped-def]
-    def opener(_request, timeout=None):  # noqa: ARG001
-        return _FakeResponse(payload)
+def _fake_opener(payload: bytes, *, requests=None, final_url: str | None = None):  # type: ignore[no-untyped-def]
+    def opener(request, timeout=None):  # noqa: ARG001
+        if requests is not None:
+            requests.append(request)
+        return _FakeResponse(payload, final_url=final_url or request.full_url)
 
     return opener

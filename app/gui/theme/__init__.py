@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import sys
+import re
+from functools import lru_cache
 from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QPalette
 from PySide6.QtWidgets import QApplication
+
+from app.gui.theme.ui_metrics import SCALE_TIERS, TypographyMetrics, UiMetrics
+from app.gui.assets import asset_path
 
 
 # macOS exposes the complete built-in SF Mono family under the internal
@@ -35,20 +40,21 @@ CJK_SERIF_FONT_CANDIDATES = [
     "SimSun",
 ]
 
-COLOR_APP = "#f4f4f2"
+COLOR_APP = "#f6f6f4"
 COLOR_SURFACE = "#ffffff"
 COLOR_SURFACE_ALT = "#f8f8f6"
 COLOR_EDITOR = "#fcfcfb"
-COLOR_BORDER = "#d9d9d4"
+COLOR_BORDER = "#dcdcd7"
 COLOR_BORDER_SOFT = "#e8e8e4"
 COLOR_TEXT = "#202321"
 COLOR_TEXT_MUTED = "#666b67"
 COLOR_TEXT_FAINT = "#6f746f"
-COLOR_HOVER = "#eeeeeb"
-COLOR_PRESSED = "#e3e3df"
-COLOR_SELECTED = "#f3e8e6"
-COLOR_ACCENT = "#a93632"
-COLOR_ACCENT_HOVER = "#8f2c29"
+COLOR_HOVER = "#f4f4f1"
+COLOR_PRESSED = "#e8e8e3"
+COLOR_SELECTED = "#fdf1e0"
+COLOR_ACCENT = "#b45309"
+COLOR_ACCENT_HOVER = "#92400e"
+COLOR_ACCENT_PRESSED = "#78350f"
 COLOR_SUCCESS = "#2f7d4e"
 COLOR_WARNING = "#a7661b"
 COLOR_ERROR = "#b3261e"
@@ -62,14 +68,26 @@ COLOR_SYNTAX_OPTION = "#6f746f"
 COLOR_SYNTAX_MATH = "#7b526f"
 COLOR_SYNTAX_COMMENT = "#6c716b"
 
+PRIMARY_ACTION_FOCUS_STYLE = (
+    f"QToolButton:enabled:focus {{ border-color: {COLOR_TEXT}; }}"
+    f"QToolButton:enabled:pressed {{ background: {COLOR_ACCENT_PRESSED}; border-color: {COLOR_ACCENT_PRESSED}; }}"
+)
+PRIMARY_BUTTON_STATE_STYLE = (
+    f"QPushButton:enabled:focus {{ border-color: {COLOR_TEXT}; }}"
+    f"QPushButton:enabled:pressed {{ background: {COLOR_ACCENT_PRESSED}; border-color: {COLOR_ACCENT_PRESSED}; }}"
+    f"QPushButton:disabled {{ background: {COLOR_SURFACE_ALT}; border-color: {COLOR_BORDER_SOFT}; color: {COLOR_TEXT_FAINT}; }}"
+)
+FORMULA_PRIMARY_BUTTON_STYLE = PRIMARY_BUTTON_STATE_STYLE
+
 SPACE_1 = 4
 SPACE_2 = 8
 SPACE_3 = 12
 SPACE_4 = 16
-RADIUS_SMALL = 4
-RADIUS_MEDIUM = 6
-CONTROL_HEIGHT = 30
-PANEL_HEADER_HEIGHT = 36
+RADIUS_SMALL = 6
+RADIUS_MEDIUM = 10
+RADIUS_LARGE = 12
+CONTROL_HEIGHT = 32
+PANEL_HEADER_HEIGHT = 38
 
 _SYSTEM_SF_MONO_FONT_ID: int | None = None
 
@@ -111,7 +129,7 @@ def apply_theme(app: QApplication) -> None:
     if hasattr(app.styleHints(), "setColorScheme"):
         app.styleHints().setColorScheme(Qt.ColorScheme.Light)
     app.setPalette(light_palette())
-    app.setStyleSheet(stylesheet())
+    app.setStyleSheet(fixed_stylesheet())
 
 
 def light_palette() -> QPalette:
@@ -153,23 +171,43 @@ def light_palette() -> QPalette:
     return palette
 
 
-def stylesheet() -> str:
+def stylesheet(
+    metrics: UiMetrics | None = None,
+    typography: TypographyMetrics | None = None,
+) -> str:
+    metrics = metrics or UiMetrics(1.0)
+    typography = typography or TypographyMetrics(1.0)
+    fs_body = round(typography.body_pt)
+    fs_caption = round(typography.caption_pt)
+    fs_toolbar = round(typography.toolbar_pt)
+    fs_section = round(typography.section_title_pt)
+    fs_page = round(typography.page_title_pt)
+    fs_dialog_title = round(15 * metrics.scale)
+    fs_mono = round(typography.monospace_pt)
+    minh_control = metrics.control_height
+    minh_compact = metrics.compact_control_height
+    minh_row = metrics.row_height
+    minh_tab = round(32 * metrics.scale)
+    minh_tab_compact = round(26 * metrics.scale)
+    icon_large = metrics.large_icon_size
+    eng_min_width = round(112 * metrics.scale)
     ui_stack = _qss_font_stack(_ui_font_stack())
     editor_stack = _qss_font_stack(_editor_font_stack())
     heading_stack = _qss_font_stack(_heading_font_stack())
+    tab_close_icon = asset_path("icons/close.svg").as_posix()
     return f"""
     QMainWindow {{
         background: {COLOR_APP};
         color: {COLOR_TEXT};
         font-family: {ui_stack};
-        font-size: 12px;
+        font-size: {fs_body}px;
     }}
 
     QDialog {{
         background: {COLOR_SURFACE};
         color: {COLOR_TEXT};
         font-family: {ui_stack};
-        font-size: 12px;
+        font-size: {fs_body}px;
     }}
 
     QMenuBar {{
@@ -180,7 +218,7 @@ def stylesheet() -> str:
 
     QMenuBar::item {{
         border-radius: {RADIUS_SMALL}px;
-        padding: 5px 9px;
+        padding: 5px 11px;
         color: {COLOR_TEXT_MUTED};
     }}
 
@@ -193,13 +231,13 @@ def stylesheet() -> str:
         background: {COLOR_SURFACE};
         border: 1px solid {COLOR_BORDER};
         border-radius: {RADIUS_MEDIUM}px;
-        padding: 6px;
+        padding: 7px;
     }}
 
     QMenu::item {{
         border-radius: {RADIUS_SMALL}px;
         color: {COLOR_TEXT};
-        padding: 6px 24px;
+        padding: 7px 26px;
     }}
 
     QMenu::item:selected {{
@@ -234,8 +272,8 @@ def stylesheet() -> str:
         background: transparent;
         border: 1px solid transparent;
         border-radius: {RADIUS_SMALL}px;
-        padding: 4px 7px;
-        min-height: 22px;
+        padding: 5px 9px;
+        min-height: {minh_compact}px;
     }}
 
     QToolButton:hover {{
@@ -264,9 +302,129 @@ def stylesheet() -> str:
     }}
 
     QToolButton#primaryAction:disabled {{
-        background: #d8b5b2;
-        border-color: #d8b5b2;
+        background: #ecc9a8;
+        border-color: #ecc9a8;
         color: {COLOR_SURFACE};
+    }}
+
+    QToolBar#mainToolbar, QToolBar#workspaceToolbar {{
+        padding: 2px 8px;
+    }}
+
+    QPlainTextEdit#workspaceDetails {{
+        background: {COLOR_SURFACE_ALT};
+        color: {COLOR_TEXT};
+        font-family: {ui_stack};
+        font-size: {fs_body}px;
+        padding: 2px 6px;
+        border: 1px solid {COLOR_BORDER_SOFT};
+    }}
+
+    QWidget#submissionCheckPanel QPushButton {{
+        min-height: {max(0, minh_control - 8)}px;
+        padding: 3px 9px;
+    }}
+
+    QPushButton#mathCategoryButton, QPushButton#mathNumbersButton {{
+        min-height: {max(0, minh_compact - 16)}px;
+        padding: 2px 8px;
+    }}
+
+    QPushButton#mathCategoryButton:checked,
+    QWidget#submissionCheckPanel QPushButton:checked {{
+        background: {COLOR_SELECTED};
+        border-color: {COLOR_ACCENT};
+    }}
+
+    QWidget#submissionCheckPanel QPushButton:disabled {{
+        background: {COLOR_SURFACE_ALT};
+        border-color: {COLOR_BORDER_SOFT};
+        color: {COLOR_TEXT_FAINT};
+    }}
+
+    QLabel#submissionSummary {{
+        color: {COLOR_TEXT};
+        font-weight: 600;
+    }}
+
+    QPlainTextEdit#submissionReason {{
+        font-family: {ui_stack};
+        font-size: {fs_body}px;
+        background: {COLOR_SURFACE};
+        padding: 6px 8px;
+    }}
+
+    QToolBar#mainToolbar QToolButton,
+    QWidget#workspaceHeader QToolButton,
+    QToolButton#consoleToggle,
+    QToolButton#workspaceViewButton {{
+        min-height: {max(0, minh_compact - 8)}px;
+        padding: 3px 8px;
+        font-size: {fs_toolbar}px;
+    }}
+
+    QToolBar#mainToolbar QToolButton#primaryAction {{
+        min-height: {max(0, minh_compact - 8)}px;
+    }}
+
+    QWidget#autoCompileToggle {{ font-size: {fs_toolbar}px; }}
+    QLabel#workspaceSummary {{ font-size: {fs_toolbar}px; }}
+
+    QToolBar#mainToolbar QToolButton:focus,
+    QWidget#workspaceHeader QToolButton:focus,
+    QToolButton#consoleToggle:focus,
+    QToolButton#workspaceViewButton:focus {{
+        border-color: {COLOR_ACCENT};
+    }}
+
+    QToolButton#workspaceViewButton:checked {{
+        background: {COLOR_SELECTED};
+        color: {COLOR_ACCENT};
+        border-color: {COLOR_BORDER};
+    }}
+
+    QToolButton#primaryAction:pressed {{
+        background: {COLOR_ACCENT_HOVER};
+        border-color: {COLOR_ACCENT_HOVER};
+    }}
+
+    QTabWidget#sourceTabs QTabBar::tab {{
+        min-height: {max(0, minh_control - 10)}px;
+        padding: 4px 10px;
+    }}
+
+    QTabWidget#sourceTabs QTabBar::close-button {{
+        image: url("{tab_close_icon}");
+        width: {metrics.icon_size}px;
+        height: {metrics.icon_size}px;
+        border-radius: {RADIUS_SMALL}px;
+    }}
+
+    QTabWidget#sourceTabs QTabBar::close-button:hover {{
+        background: {COLOR_HOVER};
+    }}
+
+    QTabWidget#sourceTabs QTabBar::close-button:pressed {{
+        background: {COLOR_PRESSED};
+    }}
+
+    QDialog#submissionDeliveryDialog QPushButton,
+    QWidget#blockWorkspace QPushButton {{
+        min-height: {max(0, minh_control - 8)}px;
+        padding: 3px 9px;
+    }}
+
+    QDialog#submissionDeliveryDialog QPushButton#primaryButton:pressed,
+    QWidget#blockWorkspace QPushButton#primaryButton:pressed {{
+        background: {COLOR_ACCENT_HOVER};
+        border-color: {COLOR_ACCENT_HOVER};
+    }}
+
+    QDialog#submissionDeliveryDialog QPushButton:disabled,
+    QWidget#blockWorkspace QPushButton:disabled {{
+        background: {COLOR_SURFACE_ALT};
+        border-color: {COLOR_BORDER_SOFT};
+        color: {COLOR_TEXT_FAINT};
     }}
 
     QAbstractButton#autoCompileToggle {{
@@ -289,7 +447,22 @@ def stylesheet() -> str:
     }}
 
     QSplitter::handle:hover {{
-        background: #ead8d5;
+        background: #e7e1d8;
+    }}
+
+    QDockWidget {{
+        background: {COLOR_SURFACE};
+        border: 1px solid {COLOR_BORDER_SOFT};
+        color: {COLOR_TEXT};
+    }}
+
+    QDockWidget::title {{
+        background: {COLOR_SURFACE_ALT};
+        color: {COLOR_TEXT};
+        border-bottom: 1px solid {COLOR_BORDER_SOFT};
+        padding: 8px 12px;
+        font-weight: 650;
+        text-align: left;
     }}
 
     QDockWidget#toolboxDock {{
@@ -331,7 +504,7 @@ def stylesheet() -> str:
 
     QLabel#panelTitle {{
         color: {COLOR_TEXT};
-        font-size: 12px;
+        font-size: {fs_section}px;
         font-weight: 650;
     }}
 
@@ -384,7 +557,7 @@ def stylesheet() -> str:
     QLabel#dialogTitle {{
         color: {COLOR_TEXT};
         font-family: {heading_stack};
-        font-size: 15px;
+        font-size: {fs_dialog_title}px;
         font-weight: 700;
         padding: 3px 0 7px 0;
     }}
@@ -403,6 +576,15 @@ def stylesheet() -> str:
         background: {COLOR_EDITOR};
     }}
 
+    QScrollArea#welcomeScroll {{
+        background: {COLOR_EDITOR};
+        border: 0;
+    }}
+
+    QWidget#welcomeContent {{
+        background: {COLOR_EDITOR};
+    }}
+
     QLabel#welcomeCover {{
         background: transparent;
         border: 0;
@@ -410,16 +592,18 @@ def stylesheet() -> str:
 
     QLabel#welcomeKicker {{
         color: {COLOR_TEXT_FAINT};
-        font-size: 11px;
+        font-size: {fs_caption}px;
         font-weight: 650;
+        letter-spacing: 1px;
         text-transform: uppercase;
     }}
 
     QLabel#welcomeTitle {{
         color: {COLOR_TEXT};
         font-family: {heading_stack};
-        font-size: 23px;
+        font-size: {fs_page}px;
         font-weight: 750;
+        letter-spacing: -0.4px;
     }}
 
     QLabel#welcomeSubtitle {{
@@ -429,7 +613,7 @@ def stylesheet() -> str:
 
     QLabel#welcomeSectionTitle {{
         color: {COLOR_TEXT};
-        font-size: 12px;
+        font-size: {fs_section}px;
         font-weight: 650;
     }}
 
@@ -444,7 +628,7 @@ def stylesheet() -> str:
     QFrame#welcomeBox {{
         background: {COLOR_SURFACE};
         border: 1px solid {COLOR_BORDER_SOFT};
-        border-radius: 7px;
+        border-radius: {RADIUS_MEDIUM}px;
     }}
 
     QPushButton#welcomeRecent {{
@@ -481,8 +665,8 @@ def stylesheet() -> str:
     }}
 
     QTreeView::item {{
-        border-radius: 5px;
-        min-height: 23px;
+        border-radius: {RADIUS_SMALL}px;
+        min-height: {minh_row}px;
         padding: 2px 6px;
     }}
 
@@ -542,9 +726,9 @@ def stylesheet() -> str:
         color: {COLOR_TEXT_MUTED};
         border: 1px solid transparent;
         border-bottom: 0;
-        border-radius: {RADIUS_SMALL}px;
-        min-height: 28px;
-        padding: 5px 11px;
+        border-radius: 8px;
+        min-height: {minh_tab}px;
+        padding: 6px 14px;
         margin-right: 2px;
     }}
 
@@ -562,8 +746,8 @@ def stylesheet() -> str:
     }}
 
     QTabWidget#bottomTabs QTabBar::tab {{
-        min-height: 24px;
-        padding: 4px 10px;
+        min-height: {minh_tab_compact}px;
+        padding: 5px 12px;
     }}
 
     QPlainTextEdit {{
@@ -574,7 +758,7 @@ def stylesheet() -> str:
         selection-background-color: #d9dde2;
         selection-color: #111315;
         font-family: {editor_stack};
-        font-size: 13px;
+        font-size: {fs_mono}px;
     }}
 
     QTextEdit {{
@@ -604,7 +788,7 @@ def stylesheet() -> str:
         color: {COLOR_TEXT_MUTED};
         border-bottom: 1px solid {COLOR_BORDER_SOFT};
         padding: 3px 10px;
-        font-size: 11px;
+        font-size: {fs_caption}px;
     }}
 
     QLabel#pdfFreshnessBanner[severity="success"] {{ color: {COLOR_SUCCESS}; }}
@@ -619,7 +803,7 @@ def stylesheet() -> str:
     QLabel#pdfEmptyTitle {{
         color: {COLOR_TEXT};
         font-family: {heading_stack};
-        font-size: 13px;
+        font-size: {fs_body}px;
         font-weight: 650;
     }}
 
@@ -628,17 +812,24 @@ def stylesheet() -> str:
         color: {COLOR_TEXT_MUTED};
     }}
 
+    QLabel#pdfEmptyHint, QLabel#pdfDisplayStatus {{
+        color: {COLOR_TEXT_MUTED};
+        font-size: {fs_caption}px;
+    }}
+
     QWidget#findReplaceBar QPushButton,
-    QWidget#pdfToolbar QPushButton {{
+    QWidget#pdfToolbar QPushButton,
+    QWidget#pdfSearchToolbar QPushButton {{
         padding: 3px 7px;
         min-height: 22px;
     }}
 
-    QWidget#pdfToolbar QPushButton#iconButton {{
-        min-width: 28px;
-        max-width: 28px;
-        min-height: 28px;
-        max-height: 28px;
+    QWidget#pdfToolbar QPushButton#iconButton,
+    QWidget#pdfSearchToolbar QPushButton#iconButton {{
+        min-width: {icon_large}px;
+        max-width: {icon_large}px;
+        min-height: {icon_large}px;
+        max-height: {icon_large}px;
         padding: 0;
         border-color: transparent;
     }}
@@ -669,10 +860,10 @@ def stylesheet() -> str:
     QPushButton {{
         background: {COLOR_SURFACE};
         border: 1px solid {COLOR_BORDER};
-        border-radius: {RADIUS_SMALL}px;
+        border-radius: 8px;
         color: {COLOR_TEXT};
-        padding: 6px 11px;
-        min-height: 24px;
+        padding: 7px 13px;
+        min-height: {minh_control}px;
     }}
 
     QPushButton:hover {{
@@ -682,6 +873,10 @@ def stylesheet() -> str:
 
     QPushButton:pressed {{
         background: {COLOR_PRESSED};
+    }}
+
+    QPushButton:focus {{
+        border-color: {COLOR_ACCENT};
     }}
 
     QPushButton#primaryButton {{
@@ -702,24 +897,24 @@ def stylesheet() -> str:
     QComboBox {{
         background: {COLOR_SURFACE};
         border: 1px solid {COLOR_BORDER};
-        border-radius: {RADIUS_SMALL}px;
+        border-radius: 8px;
         color: {COLOR_TEXT};
-        padding: 5px 9px;
-        min-height: 24px;
+        padding: 6px 10px;
+        min-height: {minh_compact}px;
     }}
 
     QLineEdit:focus,
     QSpinBox:focus,
     QDoubleSpinBox:focus,
     QComboBox:focus {{
-        border-color: #a9aba5;
+        border-color: {COLOR_ACCENT};
         background: {COLOR_SURFACE};
     }}
 
     QComboBox#engineSelector {{
         padding: 5px 28px 5px 10px;
-        min-height: 25px;
-        min-width: 112px;
+        min-height: {minh_compact}px;
+        min-width: {eng_min_width}px;
     }}
 
     QComboBox#engineSelector:hover {{
@@ -742,8 +937,8 @@ def stylesheet() -> str:
     }}
 
     QComboBox QAbstractItemView::item {{
-        min-height: 28px;
-        padding: 6px 10px;
+        min-height: 30px;
+        padding: 7px 12px;
     }}
 
     QComboBox QAbstractItemView::item:selected {{
@@ -759,14 +954,14 @@ def stylesheet() -> str:
     QProgressBar#compileProgress {{
         background: {COLOR_HOVER};
         border: 1px solid {COLOR_BORDER};
-        border-radius: {RADIUS_SMALL}px;
-        height: 8px;
+        border-radius: {RADIUS_MEDIUM}px;
+        height: 9px;
         text-align: center;
     }}
 
     QProgressBar#compileProgress::chunk {{
         background: {COLOR_ACCENT};
-        border-radius: 4px;
+        border-radius: 6px;
     }}
 
     QLabel#compileTimer {{
@@ -778,15 +973,15 @@ def stylesheet() -> str:
         color: {COLOR_TEXT_MUTED};
         background: {COLOR_SURFACE_ALT};
         border: 1px solid {COLOR_BORDER_SOFT};
-        border-radius: {RADIUS_SMALL}px;
-        padding: 3px 7px;
+        border-radius: 8px;
+        padding: 4px 9px;
         margin-left: 3px;
     }}
 
     QLabel#statusPill[state="active"] {{
         color: {COLOR_ACCENT};
         background: {COLOR_SELECTED};
-        border-color: #e5c8c4;
+        border-color: #f0d9b8;
     }}
 
     QLabel#compileTimer[state="active"] {{ color: {COLOR_ACCENT}; }}
@@ -801,7 +996,7 @@ def stylesheet() -> str:
     QWidget#wordHighlightPanel {{
         background: {COLOR_SURFACE};
         border: 1px solid {COLOR_BORDER_SOFT};
-        border-radius: 6px;
+        border-radius: {RADIUS_MEDIUM}px;
         padding: 8px;
     }}
 
@@ -814,7 +1009,7 @@ def stylesheet() -> str:
         background: {COLOR_EDITOR};
         color: {COLOR_TEXT};
         border: 1px solid {COLOR_BORDER_SOFT};
-        border-radius: 6px;
+        border-radius: {RADIUS_MEDIUM}px;
         padding: 10px 12px;
         selection-background-color: #d9dde2;
         selection-color: #111315;
@@ -833,7 +1028,7 @@ def stylesheet() -> str:
     QWidget#wordStat {{
         background: {COLOR_SURFACE_ALT};
         border: 1px solid {COLOR_BORDER_SOFT};
-        border-radius: 6px;
+        border-radius: {RADIUS_MEDIUM}px;
         min-height: 68px;
     }}
 
@@ -881,12 +1076,12 @@ def stylesheet() -> str:
     QProgressBar#wordCategoryBar {{
         background: #e8e9e6;
         border: none;
-        border-radius: 4px;
+        border-radius: 6px;
     }}
 
     QProgressBar#wordCategoryBar::chunk {{
         background: #587f8c;
-        border-radius: 4px;
+        border-radius: 6px;
     }}
 
     QProgressBar#wordCategoryBar[category="effective"]::chunk {{ background: #3478c4; }}
@@ -905,13 +1100,13 @@ def stylesheet() -> str:
 
     QScrollBar:vertical {{
         background: transparent;
-        width: 10px;
+        width: 9px;
         margin: 2px;
     }}
 
     QScrollBar::handle:vertical {{
         background: #c9c9c2;
-        border-radius: 5px;
+        border-radius: 4px;
         min-height: 28px;
     }}
 
@@ -926,13 +1121,13 @@ def stylesheet() -> str:
 
     QScrollBar:horizontal {{
         background: transparent;
-        height: 10px;
+        height: 9px;
         margin: 2px;
     }}
 
     QScrollBar::handle:horizontal {{
         background: #c9c9c2;
-        border-radius: 5px;
+        border-radius: 4px;
         min-width: 28px;
     }}
 
@@ -941,6 +1136,37 @@ def stylesheet() -> str:
         width: 0;
     }}
     """
+
+
+@lru_cache(maxsize=1)
+def fixed_stylesheet() -> str:
+    """Keep the skin fixed; precompile size deltas for the five menu tiers."""
+    # Only parse this module's flat, generated QSS, never external stylesheets.
+    def rules(qss):
+        return [(selector.strip(), body.splitlines())
+                for selector, body in re.findall("([^{}]+)[{]([^{}]*)[}]", qss)]
+
+    base = stylesheet()
+    baseline = rules(base)
+    additions = []
+    for scale in SCALE_TIERS:
+        if scale == 1.0:
+            continue
+        current = rules(stylesheet(UiMetrics(scale), TypographyMetrics(scale)))
+        if len(current) != len(baseline):
+            raise ValueError("Generated scale stylesheet changed rule structure")
+        for (selector, lines), (base_selector, original) in zip(current, baseline):
+            if selector != base_selector or len(lines) != len(original):
+                raise ValueError("Generated scale stylesheet changed declaration structure")
+            changed = [line for line, previous in zip(lines, original) if line != previous]
+            if not changed:
+                continue
+            tagged = []
+            for item in selector.split(","):
+                head, separator, tail = item.strip().partition(":")
+                tagged.append(f'{head}[icstexUiScale="{round(scale * 100)}"]{separator}{tail}')
+            additions.append(", ".join(tagged) + " {" + "\n".join(changed) + "}")
+    return base + "\n".join(additions)
 
 
 def _ui_font_stack() -> list[str]:

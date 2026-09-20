@@ -3,9 +3,11 @@
 Claude Code and every other coding agent must follow `AGENTS.md`; this file is a
 compatibility entry point, not a second engineering manual.
 
+Current app version: **2.1.0-beta.4**
+
 ## Read Order
 
-1. Confirm `pwd -P` is `<HOME>/Desktop/Codex/ICS-Project-/ICSTeX`.
+1. Confirm `pwd -P` matches `git rev-parse --show-toplevel` and the repository is named `ICSTeX`.
 2. Read `AGENTS.md` completely.
 3. Read `docs/PROJECT_STATE.md` for current verified facts.
 4. Read `FORCLAUDE.md` for the current bounded assignment.

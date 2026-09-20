@@ -1,6 +1,6 @@
 # ICSTeX Architecture Decision Log
 
-更新时间：2026-08-06（Asia/Taipei）
+更新时间：2026-09-19（Asia/Taipei）
 
 本文件记录已经接受或明确提出的长期技术决策。它是 append-oriented 的决策
 记录，不保存任务过程。需要改变既有决策时，新增一条 Superseding decision，
@@ -29,10 +29,20 @@
 | D011 | Accepted | 界面、编辑内容和强调标题使用不同的字体角色 |
 | D012 | Accepted | 自动预览与原图正式输出采用隔离的双保真构建链 |
 | D013 | Proposed | 可视公式编辑保持 LaTeX 源码唯一真值并采用显式提交 |
+| D014 | Accepted | 不受信项目采用默认拒绝的本地执行边界 |
+| D015 | Accepted | Agent/Harness 通过项目绑定、默认只读的 stdio MCP 操作 ICSTeX |
+| D016 | Accepted | MCP 并发复用官方调度，并由项目级协调器保持一致性 |
+| D017 | Accepted | 文件工具箱保持只读模型，文件变更经项目级安全控制器执行 |
+| D019 | Accepted | 快速预览双向 SyncTeX 绑定实际显示构建，不改变提交资格 |
+| D020 | Accepted | 用户开启更新检查，验证完整制品并在保存退出后更新应用 |
+| D026 | Accepted | 安装位置共享租约与临时原生进程覆盖 Sparkle 安装生命期 |
+| D021 | Accepted, local development | macOS 受限编译使用启动前核验、失败即拒绝的 OS 隔离后端 |
+| D023 | Accepted | 自动编译到新PDF可见优先于后台统计与预览文件压缩率 |
+| D024 | Accepted | 不同PDF内容隔离Qt渲染队列，文档寿命长于其消费者 |
 
 ## D001 - Local Research Writing Infrastructure
 
-状态：Accepted  
+状态：Accepted
 确认日期：2026-07-14
 
 **Context**
@@ -170,6 +180,9 @@ macOS DMG、source archive、Windows ZIP/installer、版本元数据和用户文
 - 现有 0.2.7 artifacts 继续作为已验证历史制品，不声称包含 post-0.2.7 delta。
 - Windows build 必须来自 Windows-local path 并在那里完成启动和 toolchain 验证。
 - signing、architecture 和 notarization 状态必须如实描述。
+- 已发布下载页由其 release manifest 固定，不随尚未发布的源码版本改变。
+  离线 release preparation 与 tag-at-HEAD 发布校验仍要求 manifest 版本匹配源码；
+  普通网站一致性测试只验证已发布 manifest、制品和页面之间的一致性。
 
 ## D009 - Layered Project Memory
 
@@ -263,7 +276,8 @@ units 会破坏宏、计数器、引用、布局和 SyncTeX 语义。
 - UI 必须明确标识快速预览和原图回退，preview 不得冒充可提交结果。
 - clean cache、root 切换、外部图片 watcher、build id 和 revision guard 必须同时
   覆盖两套状态，但两者不得互相发布 artifact。
-- 当前快速预览不开放 SyncTeX；静态规则不能覆盖的图片语法继续使用原图。
+- 快速预览不开放 SyncTeX 的初始限制已由 D019 的双向定位规则取代；静态规则
+  不能覆盖的图片语法继续使用原图。
 
 ## D013 - Source-First Visual Formula Composer
 
@@ -302,3 +316,356 @@ package、注释和文档上下文，无法保证通用可视 AST 与原始源�
 - 不把正文编辑器改造成通用 WYSIWYG，也不直接移植其他应用的完整编辑器。
 - 第一阶段可以独立验证纯文本规则，降低 UI 和打包依赖带来的返工风险。
 - visual surface 可以替换或降级，而不会改变用户 `.tex` 文件的权威地位。
+
+## D014 - Default-Deny Local Execution Boundary
+
+状态：Accepted
+确认日期：2026-08-08
+
+**Context**
+
+LaTeX 项目可携带 `latexmk` 配置、Magic Root、原始 LaTeX Block、图片路径和联网
+元数据。若打开、预览、导出或清理缓存直接信任这些字段，项目内容可越过用户所选
+范围并触发本机代码执行、文件读取或数据泄露。
+
+**Decision**
+
+- 打开项目不启动编译；首次显式编译仅在当前会话授权该 normalized root 的自动预览。
+- 所有编译强制忽略项目 `latexmkrc`、关闭 shell escape，并使用有限超时。
+- Magic Root、图片和导出源必须保持在用户选择的 canonical project boundary；
+  symlink 与非普通文件 fail closed。
+- Block 的持久化 `trusted` 字段不等同运行权限；公式从受管 AST 重建，raw LaTeX
+  还需要当前会话的显式编译授权。
+- DOI/arXiv 仅访问固定 HTTPS metadata endpoint，禁止重定向并限制响应大小。
+
+**Consequences**
+
+- 依赖 `.latexmkrc`、shell escape 或 `minted` 外部进程的项目不在 Beta 安全模式支持范围。
+- 单文件 `chapter -> ../main.tex` 仅在 root 实际引用该 child 时自动接受；其他情况
+  要求用户打开项目文件夹确认边界。
+- 修改执行边界后的所有可执行安装包必须从同一 source commit 重新构建与验证。
+
+## D015 - Project-Scoped Agent and Harness MCP
+
+状态：Accepted
+确认日期：2026-08-13
+
+**Context**
+
+Agent 和 Harness 需要操作 ICSTeX 的文档、Block、编译、诊断、识别和导出能力，
+但 Skill 只能提供调用说明，无法强制项目边界、权限、并发冲突或执行安全；直接遥控
+QWidget 也无法稳定处理未保存缓冲区和后台状态。
+
+**Decision**
+
+- 提供薄的本地 stdio MCP adapter；协议层不 import `app/gui`，语义与安全规则复用
+  `app/core`。
+- 一个 server process 固定一个 canonical project root；只接受项目相对路径并拒绝
+  traversal、symlink 和非普通文件。
+- 默认只读；写入、编译、联网、本地识别、raw LaTeX 与外部导入/导出权限只能由
+  Harness 在启动时授予，不能由 tool 参数自我确认。
+- MCP 编译除 `-norc`、`-no-shell-escape` 和有限超时外，还使用 TeX paranoid
+  `openin_any/openout_any=p`，项目入口与输出以工作目录相对路径传入。
+- 文档和 Block 变更使用 SHA-256/revision compare-and-swap、跨进程项目锁、原子替换
+  与 byte-exact、可校验恢复的 preimage snapshot。
+- OCR 只返回 `reviewRequired` candidate；Skill 负责指导调用顺序，不作为权限边界。
+
+**Consequences**
+
+- MCP 不遥控 GUI、不读取未保存 buffer、不提供 GUI Undo/Redo；写入期间同项目 GUI
+  必须关闭或只读。
+- `mcp` SDK 是可选依赖，桌面应用默认运行时不因此增加协议依赖。
+- 未来扩展工具前优先增加现有语义操作，不建设 daemon 或通用插件系统。
+
+## D016 - SDK-Native MCP Dispatch with Project-Level Concurrency
+
+状态：Accepted
+确认日期：2026-08-28
+
+**Context**
+
+MCP SDK 1.x 会在 server event loop 内直接执行同步工具；长时间编译会阻塞其他请求，
+同根并发编译还可能覆盖活动 manager。把协议调度、线程池和取消协议重新实现在产品
+代码中会复制官方 SDK 能力，并扩大长期维护面。
+
+**Decision**
+
+- 可选 Agent 依赖使用官方 MCP SDK 2.x；由 SDK 负责逐请求任务隔离、同步函数线程
+  卸载和 legacy client 兼容，不引入独立 FastMCP 框架或以 provisional middleware
+  承载正确性。
+- 一个 server process 仍只绑定一个 canonical project root。多项目通过不同名称的
+  stdio server 实例并行；工具参数不得切换根目录。
+- 每个实例最多执行 4 个一致性普通读取；OCR 与显式网络查询各限制为 1 个。写入、
+  Block 修改、编译与导出进入写者优先的 FIFO 独占队列，不与项目读取重叠。
+- 编译请求在排队前登记，preview/final 的排队与执行共用既有 120/300 秒总期限。
+  `stop` 绕过独占队列，停止当前 manager 并取消本进程等待中的编译。
+- 编译校验、可选 Block 组装、LaTeX 执行及 artifact 发布全程持有可重入的跨进程
+  项目锁；CAS、快照、原子替换、授权与路径校验继续作为权威安全边界。
+
+**Consequences**
+
+- 多个不同项目可并行工作，同项目读取可安全重叠，所有修改保持确定性顺序。
+- 同一项目启动多个可写 MCP 进程不是支持拓扑；跨进程锁仍保护修改，但进程内读取
+  门控和 `stop` 无法协调另一个 server process。
+- 11 个工具、CLI 参数和 wire schema 保持兼容；SDK 的 Python 对象字段迁移为
+  snake_case，预期 core 错误显式转换为 `ToolError`，未知异常仍由 SDK 隐藏。
+
+## D017 - Read-Only File Model with Guarded Project Mutations
+
+状态：Accepted
+确认日期：2026-09-03
+
+**Context**
+
+文件工具箱原先只显示 `.tex`/`.bib`，打开子文件会把树根缩到子目录，且没有拖拽、
+重命名、移动或明确的新窗口入口。直接把 `QFileSystemModel` 改成可写会绕过项目边界、
+文件监视器、打开标签、编译 root 和 LaTeX 引用状态。
+
+**Decision**
+
+- 一个窗口保持一个稳定的 canonical project root；打开该项目的子文件不得改变树根，
+  从项目外显式拖入的 `.tex` 使用独立窗口。
+- `QFileSystemModel` 始终只读，只负责展示 `.tex`、`.bib`、常见图片和目录，并作为
+  drag source；所有重命名和移动由纯 core 规则与 focused GUI controller 执行。
+- 移动必须保持在项目内、不得覆盖、不得穿过符号链接或 ICSTeX 内部构建目录，并仅在
+  同一文件系统内使用原子 rename。
+- 操作前扫描 `.tex`、`.sty`、`.cls` 和 `.ltx` 的常见相对引用及打开编辑器的未保存
+  内容。任何入站引用、会改变目标的出站引用或可识别的动态引用都 fail closed；界面
+  不静默改写学生源码。
+- 相关编译必须处于空闲状态；成功移动后更新打开标签、文件监视器、recent path 和
+  compile/PDF ownership，旧 root 的构建授权与显示状态不迁移。
+- 多窗口是受支持能力，不以性能名义禁用；窗口 registry 在关闭成功后移除对象，
+  `Ctrl+Shift+N` 与文件树上下文菜单提供明确入口。
+
+**Consequences**
+
+- 常见未引用文件和目录可安全整理；被 LaTeX 引用的路径需先由用户修改引用，再执行
+  移动或重命名。
+- 图片拖入编辑器继续复用既有后台复制、冲突命名、相对路径和回滚事务，不增加平行
+  导入实现。
+- 暂不提供删除、批量重写引用、跨项目移动或后台文件索引；这些能力需要独立决策与
+  可回滚事务设计。
+
+## D018 - Bounded Background Analysis and Root-Owned Input Invalidation
+
+状态：Accepted
+确认日期：2026-09-08
+
+**Context**
+
+本地实测显示 Word Count 在 GUI 同步运行、键入时完整刷新面板，以及未打开输入
+缺少监听。编译 driver 的无变化检查本已使用 latexmk 缓存；引擎替换不是证据支持的
+首要优化。
+
+**Decision**
+
+- 自动构建统一要求用户开关和 root 会话授权。静态规则与成功构建 FLS 的输入并集
+  负责依赖归属；越界、链接和内部生成路径不授予读取，删除/重建保留可观测性。
+- GUI 只捕获编辑器快照和呈现结果；Word Count 后台运行，保留一个运行任务和一个
+  最新请求，以 root、revision、磁盘观察与窗口生命期校验结果。缓存有界，旧值明确
+  标注 pending，手动请求绕过已完成缓存。
+- 面板按 dirty domain、可见性和防抖刷新，扫描先剪枝；显式完整刷新及低频复核继续
+  作为可解释的修复路径。外部编辑冲突暂停自动保存，覆盖需明确确认。
+- 一个 root 的编译继续串行，FINAL 不被 PREVIEW 降级；请求保留原截止时间与完整
+  输入/配置身份，stop/cancel 令牌覆盖晚启动。FLS 在 worker 中捕获，Qt 延迟信号
+  不得把旧构建绑定到新 revision。
+- 保留 latexmk 中间产物、preview/final 输出隔离、安全参数和严格正式导出；不增加
+  runtime 依赖或变更 MCP wire contract。
+- 图像缓存继续核验原图与代理内容；真实可见 PDF 内容单独测量，不使用 load 调用
+  耗时或 PDF 哈希替代 freshness、SyncTeX 或可见性证据。
+
+**Consequences**
+
+- 常规输入减少主线程阻塞，但不承诺纯 Python 统计或任意大型依赖图已实时化。
+- 2026-09-14输入尾部排查补充：已登记的规范root直接复用状态身份，不逐键解析路径；
+  未知路径仍解析。成员扫描和后台字数在停笔500ms后合并，显式保存/编译不等待此防抖。
+  不更改全局线程切换或GC设置，不牺牲磁盘/输入证据校验来换取局部数字。
+- 静态规则不解释任意 TeX 宏；追踪有上限，超限/不可读明确提示，成功 FLS 补充
+  动态输入，低频复核补偿可能丢失的文件事件。
+- 不改变学生源文件、既有发布制品或已安装应用；真实项目验收与发布另行授权。
+
+## D019 - Preview SyncTeX Uses the Displayed Build
+
+状态：Accepted
+确认日期：2026-09-08
+扩展日期：2026-09-19（正向定位）
+范围：取代 D012 中快速预览不开放 SyncTeX 的初始限制，其余隔离与导出规则不变。
+
+**Decision**
+
+- 图片代理不改写源文件，因此快速预览可复用本地生成的 SyncTeX，直接定位原始
+  项目源码；不创建 shadow `.tex`，不引入路径映射清单或第二套定位数据。
+- PDF 双击和源码“定位 PDF”共用实际显示的 purpose、root、revision、build id 与 viewer 路径校验，
+  并要求对应记录为 CURRENT。查询前后均复核身份；同 purpose 的 worker 已启动但
+  Qt 信号尚未处理时也拒绝跳转。另一 purpose 的构建使用独立输出，不自动作废当前 PDF。
+- 同 revision 的新 build 仍重载 PDF，保证显示内容与该构建的 SyncTeX 一致，
+  同时复用现有 page/zoom/viewport 保留机制。
+- 相对输入路径从原始 compile root 目录解释；打开前拒绝项目外、符号链接、内部
+  生成目录、非源码、缺失文件和无效行号。PDF 页边空白或页间隙不冒充 PDF 坐标。
+- 正向查询还绑定当前源码标签、路径、文档 revision 与光标；窄窗口显示 PDF 后延后一轮
+  布局再复核并跳转。动作刷新只复用本轮 root/文件观察，实际点击与返回不使用长期缓存。
+  不新增 shadow 源码、路径映射系统或编译。正式导出继续只能使用当前 revision 的原图
+  FINAL，preview 的可导航性不构成提交资格。
+
+**Consequences**
+
+- 用户可在当前快速预览中双击正文，定位 root 或 child 的原始源码，不改写文本。
+- 过期、重建中、缺失工具或无可用 SyncTeX 数据时保持原位置并明确提示；任意 TeX
+  宏产生的非源码位置不保证存在一对一映射。
+- 不变更引擎、安全编译参数、MCP wire contract、依赖或已发布安装包。
+
+## D020 - Opt-In Update Discovery and Verified Application Replacement
+
+状态：Accepted
+确认日期：2026-09-08
+
+**Context**
+
+原有桌面程序没有更新器，开发构建与公开制品共用版本标签。发布侧已具备 GitHub
+Release 资产和 manifest 驱动的静态网站，可复用分发入口，但网站普通 JSON
+与 SHA-256 不能独立认证可执行更新。多窗口写作和外部编译不允许直接热替换代码。
+
+**Decision**
+
+- 用户显式开启定期检查，下载与重启安装分别受控；默认离线和本地文件边界不变。
+- 公开版本、单调发布序号和构建身份分离；dev 构建不混入公开更新渠道。
+- macOS 使用 Sparkle，Windows 使用 WinSparkle 与已验收的 EXE 安装器。
+  Qt 只负责中文设置、同意状态、调度和全窗口保存退出；原生库拥有 appcast、下载、
+  验签和安装流程。不再实施早期自定义签名 JSON/下载器提案，不热加载远程代码。
+- 发布信息来自同一已验收记录；先验证完整资产，后发布分平台/架构/渠道 appcast。
+  macOS 要求签名 feed 与解压前验签且不放宽失败策略；Windows 要求 Ed25519
+  payload 签名，不声称同等 feed 元数据认证，不执行 feed 提供的安装参数。
+- 运行时配置和公钥随应用固定；普通源码与未配置包不可更新，默认离线。SDK 固定
+  上游版本和摘要；只允许构建时显式嵌入，不从项目或运行时环境加载更新代码。
+- 更新前处理全部窗口、草稿和工作进程；更新不修改学生项目、TeX distribution
+  或项目格式。恢复路径必须在应用启动失败时仍可使用，不预先承诺自动回滚。
+
+**Consequences and Acceptance Gate**
+
+Velopack 统一跨平台方案因本轮检查到的 macOS 签名验证及失败清理路径而未采用；
+证据与版本范围记录在实现说明中。保留两套薄适配器的维护成本，不自建安装引擎。
+
+实施细则和分阶段验收见
+[`update-delivery-design-2026-09-08.md`](update-delivery-design-2026-09-08.md)。
+各平台须通过签名、唯一制品身份、目标绑定、保存取消、真实安装与失败恢复验证，
+才能开放自动安装。客户端源码完成不等于线上升级已启用；本条不授权发布、
+创建密钥、替换安装版或触发 GitHub Actions。维护者接入见 `packaging/UPDATES.md`。
+
+## D021 - Fail-Closed macOS Restricted Compiler Backend
+
+状态：Accepted for local source development; release support unaccepted
+确认日期：2026-09-12
+范围：用户在隔离原型验证后明确授权接入 Mac 受限编译链；只替代 D015 在 macOS
+受限任务中的输入隔离机制，不扩展发布、Windows 或普通 GUI 编译授权。
+
+**Decision**
+
+- `restricted_io=True` 的 macOS 编译由共享 CompileManager 接入独立 core 后端。
+  采用本机 sandbox-exec/SBPL 默认拒绝策略，启动前用自有合成文件核验实际内核
+  读写/符号链接/进程执行边界；缺失、失败或超时直接拒绝，不回退无隔离编译。
+- 仅支持标准 `/usr/local/texlive/<installation>` 工具布局；项目和已安装 TeX/系统
+  字体资源只读，当前构建输出及独立临时目录可写。精确允许构建驱动/引擎/辅助
+  程序，子进程继承隔离，网络默认拒绝；不允许执行项目配置或取消 no-shell-escape。
+- 只在通过上述检查的沙箱命令中使用 `openin_any=a`，解决 Lua 字体加载器的
+  发行版绝对路径读取；`openout_any=p` 保留。非 macOS 维持原有 p/p 路径，不能
+  据此宣称新版 TeX 或 Windows 获得同等隔离。普通 GUI 默认路径不变。
+- 子环境采用白名单，缓存留在当前输出目录；拒绝预先存在的多硬链接输出文件。
+  不继承用户密钥、Perl/DYLD 注入或全局可写缓存路径。保留现有构建身份、正式
+  PDF 证据和进程组停止规则。不支持同一项目的外部并发写入。
+
+**Consequences**
+
+该接口已弃用且 SBPL 不是稳定公开 API；每次真实启动的 fail-closed 检查只证明
+当前有限能力，不构成未来 macOS、全部 TeX distribution、辅助工具或完整安全认证。
+文件元数据不承诺保密。系统升级可能使受限编译明确不可用，需要维护者重新验收。
+当前授权为本地源码开发，不自动签名、打包、安装、推送或发布；证据及支持限制
+必须与当前源码一起记录，不把原型的通过改标为产品链通过。
+
+## D022 - Fixed UI Styles with Precompiled Scale Rules
+
+状态：Accepted（源码/离屏验证通过，原生收尾待确认）
+确认日期：2026-09-13
+
+用户授权以最小实现路径进行样式结构调整。重复应用全局QSS是已测得的缩放热点；
+不通过重建窗口、延迟首用交互、删除生命周期保护或更换Qt来换取数字。
+
+- 保留现有`stylesheet()`和`UiMetrics`为数值真值，预生成五档菜单缩放的尺寸差异，
+  与原基础样式组成固定QSS；不维护第二套手写字号/间距表。
+- 缩放更新控件标记，先父后子重新应用缓存样式并发送StyleChange通知；仍从基准
+  字体计算，不累计放大，保留同步期间的widget强引用保护。
+- 新控件在Polish阶段取得当前档位；非菜单缩放值沿用原完整QSS路径，不缩减兼容性。
+- 属性随控件销毁，不新增持有控件的全局缓存、依赖、布局引擎或后台服务。
+
+该决策不替代完整回归、原生新窗口/输入法和生命周期验收。规则提取仅针对仓库内部
+生成的平面QSS；将来改变其结构须同步更新检查，不扩展为通用CSS解析器。
+
+## D023 - Automatic Preview Latency Before Background Accounting
+
+状态：Accepted
+确认日期：2026-09-14
+
+用户明确要求一切当前优化服务于编辑事件到最新PDF内容可见的完整等待。真实EE
+副本显示，本机保存回声可重置编译防抖，后台统计又占用等待空档；最高PDF压缩率
+也有可测的额外耗时。采用已有机制的窄改动，不更换引擎、渲染器或运行时。
+
+- 保留保存后依赖核对，但自动PREVIEW不对已就绪快照额外强制扫描。成功原子写入
+  的精确字节立即登记，不能再次作为外部输入事件重置编译；真正的外部变更仍核验。
+- 后台字数统计在自动保存、排队和编译期间延后，预览加载后留首轮显示时间；保持
+  pending提示、显式统计入口、最新请求/关闭保护，不把旧计数伪装为最新结果。
+- 普通XeLaTeX预览使用快速无损PDF压缩，接受临时文件略大。FINAL、其他引擎、
+  受限编译及源码/图片内容不变，不跳过引用收敛或正式证据检查。
+- 完整等待必须核对当前build/revision及真实新内容像素；区分离屏/原生、首次缓存/
+  暖预览。保留失败候选，不以后台任务或编译器单段提速替代端到端收益。
+
+## D024 - PDF Render Queue and Document Lifetime Isolation
+
+状态：Accepted
+确认日期：2026-09-14
+
+Qt 6.11.1的渲染队列可保留在文档关闭时丢弃的请求，页面缓存也不校验结果的文档
+代际；已有确定失败的应用级重现。不能只依赖上层build/revision保护异步页面像素。
+
+- 校验为同内容时保留QPdfView；真正加载新内容时更换同技术的QPdfView和内置队列，
+  旧消费者先脱离文档/搜索，旧结果只触及待释放旧视图。保持PDF面板及文档/搜索实例。
+- 文档最后归属到PdfPanel，确保搜索和查看器/原生渲染线程在文档之前销毁；不能
+  将文档作为QPdfView子对象，因为其私有状态早于QObject子对象析构。
+- 阅读位置、缩放、焦点和信号连接属于切换事务。探针通过viewChanged跟踪实际视图。
+- 不采用持续重绘/定时重载或关闭多线程来掩盖队列错误，不修改FINAL与源码事务。
+
+## D025 - Opted-In Startup Update Check with Bounded Retry
+
+状态：Accepted for local source preparation; public activation held
+确认日期：2026-09-14
+
+用户确认启动后台检查、用户确认下载和退出重启安装的流程。仅调整 D020 的检查
+调度，不改变默认离线、固定渠道/公钥、安装同意和原生安装器的分工。
+
+- 用户一次开启自动检查后，每进程启动延后30秒检查；跨快速重启保持5分钟请求间隔，
+  运行期间每24小时复查。手动检查可立即发起，也满足该进程的启动检查。
+- 编译、PDF导出、模态交互及无窗口时保留待检查状态，不在这些时点发起后台更新。
+- 原生更新器初始化失败也记录尝试时间，不以每分钟调度形成无界失败重试。
+- 安装全生命周期保护与发布仍未验收；下一步方案见`UPDATE_ACTIVATION_PREPARATION.md`，
+  不以本条授权新增协调进程、修改SDK、公开发布或替换已安装程序。
+
+## D026 - Installation Lease Across Host Exit
+
+Status: Accepted (2026-09-15, user requested completion through online activation)
+
+- 仅带更新器的 macOS 包在 PyInstaller runtime hook 中获取共享租约，先于 GUI 或其他
+  入口导入；普通源码和手动版不改变启动路径。租约按规范化安装路径定位，放在
+  `/Users/Shared`，同安装位置的其他登录会话使用同一内核锁，不按用户 HOME 隔离。
+- 进入门锁使共享租约到独占安装租约的转换不留下新实例进入的窗口。额外的 bundle ID
+  更新门锁匹配 Sparkle 的 launchd 命名，避免不同安装副本同时争用同一原生安装器。
+- 提取前记录安装事务并启动只持锁的原生 helper。它监视已固定 Sparkle 2.9.6 的
+  Autoupdate 内核进程身份和 NOTE_EXIT；进程结束后检查实际 bundle 签名完整性，再
+  清记录并放行。它不下载、验签更新包、替换文件或发送终止信号；不修改 SDK。
+- 普通退出触发的 install-on-quit 也受保护，不能只接在“重启安装”回调后。用户取消
+  原生 UI 不一定取消后台待安装事务，故不能以 UI finished 或固定时间释放锁。
+- helper 强制中断后，持久记录继续拒绝进入。已记录的准确安装进程确实结束后才可
+  做完整性恢复；尚未记录安装进程的未知交接，需要重启 Mac 排除旧进程后再检查。
+  无法通过签名完整性检查则保留阻止状态，使用可信完整旧包人工恢复；不称自动回滚。
+- 这是合作进程间的文件安全协议，不声称抵御有本机写权限的恶意用户。新协议不能
+  追溯保护旧手动版；首个带更新器的版本仍须在旧实例退出后手动安装。
+
+验证须包括真实内核跨进程持锁、晚启动、守护进程及安装器中断、损坏包拒绝、恢复，
+再验证精确新候选的签名 N/N+1 升级和线上 HTTPS。源码协议通过不等于发布验收。

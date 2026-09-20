@@ -40,15 +40,22 @@ if [[ -f "dist/ICSTeX.dmg" ]]; then
   echo "Found latest DMG alias: dist/ICSTeX.dmg"
 fi
 
-if [[ -f "dist/ICSTeX-$APP_VERSION-Windows.zip" ]]; then
-  echo "Found versioned Windows ZIP: dist/ICSTeX-$APP_VERSION-Windows.zip"
-  echo "Verify it on Windows before distributing version $APP_VERSION."
-elif [[ -f "dist/ICSTeX-Windows.zip" ]]; then
+FOUND_WINDOWS_ARTIFACT=false
+for WINDOWS_ARCH in x64 arm64; do
+  WINDOWS_ZIP="dist/ICSTeX-$APP_VERSION-Windows-$WINDOWS_ARCH.zip"
+  if [[ -f "$WINDOWS_ZIP" ]]; then
+    echo "Found versioned Windows $WINDOWS_ARCH ZIP: $WINDOWS_ZIP"
+    echo "Verify it on matching Windows hardware before distributing version $APP_VERSION."
+    FOUND_WINDOWS_ARTIFACT=true
+  fi
+done
+
+if [[ "$FOUND_WINDOWS_ARTIFACT" == false && -f "dist/ICSTeX-Windows.zip" ]]; then
   echo "Found only an unversioned Windows ZIP; it may be stale: dist/ICSTeX-Windows.zip"
-  echo "Rebuild it on Windows to create ICSTeX-$APP_VERSION-Windows.zip."
-elif [[ -f "ICSTeX-Windows.zip" ]]; then
+  echo "Rebuild it on Windows to create an architecture-specific versioned ZIP."
+elif [[ "$FOUND_WINDOWS_ARTIFACT" == false && -f "ICSTeX-Windows.zip" ]]; then
   echo "Found only a root-level unversioned Windows ZIP; it may be stale: ICSTeX-Windows.zip"
-  echo "Rebuild it on Windows to create ICSTeX-$APP_VERSION-Windows.zip."
+  echo "Rebuild it on Windows to create an architecture-specific versioned ZIP."
 fi
 
 echo "Preflight passed."

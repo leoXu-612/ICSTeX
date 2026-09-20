@@ -4,9 +4,9 @@
 
 ## 路径
 
-- 原工作区：`<HOME>/Desktop/Codex/Codex_Latex编译器`
-- 新工作区：`<HOME>/Desktop/Codex/ICS-Project-/ICSTeX`
-- 备份目录：`<HOME>/Desktop/Codex/ICS-Project-/_backups`
+- 原工作区：`<legacy-workspace>`
+- 新工作区：`<repo-root>`
+- 备份目录：`<private-backup-root>`
 
 ## 迁移策略
 
@@ -52,8 +52,8 @@ Claude lock 文件。这些内容由系统自动改写，不属于项目权威�
 迁移使用以下排除规则复制，避免把旧路径缓存带入新工作区：
 
 ```bash
-test ! -e "<HOME>/Desktop/Codex/ICS-Project-/ICSTeX"
-mkdir "<HOME>/Desktop/Codex/ICS-Project-/ICSTeX"
+test ! -e "<repo-root>"
+mkdir "<repo-root>"
 rsync -a \
   --exclude='/build/' \
   --exclude='.DS_Store' \
@@ -61,8 +61,8 @@ rsync -a \
   --exclude='*.pyc' \
   --exclude='.codex_watch_state' \
   --exclude='.claude/scheduled_tasks.lock' \
-  "<HOME>/Desktop/Codex/Codex_Latex编译器/" \
-  "<HOME>/Desktop/Codex/ICS-Project-/ICSTeX/"
+  "<legacy-workspace>/" \
+  "<repo-root>/"
 ```
 
 复制后已在新根目录完成索引、compileall、298 项测试和 preflight 验证。

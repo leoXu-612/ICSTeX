@@ -11,6 +11,7 @@ from enum import Enum
 from pathlib import Path
 
 from app.core.paths import normalize_path
+from app.core.file_observation import is_nonempty_file
 
 
 class PreviewFreshness(Enum):
@@ -60,12 +61,8 @@ class PreviewBuildRecord:
 
     @property
     def has_valid_pdf(self) -> bool:
-        """Whether the last successful preview still exists and is non-empty."""
-        pdf = self.last_successful_pdf
-        try:
-            return pdf is not None and pdf.is_file() and pdf.stat().st_size > 0
-        except OSError:
-            return False
+        """Compatibility name: nonempty regular file, not validated PDF content."""
+        return is_nonempty_file(self.last_successful_pdf)
 
 
 class PreviewStateStore:
@@ -75,6 +72,11 @@ class PreviewStateStore:
         self._records: dict[Path, PreviewBuildRecord] = {}
 
     def record_for(self, root: str | Path) -> PreviewBuildRecord:
+        # Match the canonical PDF store: reuse established root identities in
+        # the typing path; unknown paths still undergo normal resolution.
+        record = self._records.get(root)
+        if record is not None:
+            return record
         key = normalize_path(root)
         record = self._records.get(key)
         if record is None:
@@ -91,7 +93,9 @@ class PreviewStateStore:
         record.freshness = PreviewFreshness.DIRTY
         return record
 
-    def begin_build(self, root: str | Path, build_id: int) -> PreviewBuildRecord:
+    def begin_build(
+        self, root: str | Path, build_id: int, *, source_revision: int | None = None,
+    ) -> PreviewBuildRecord:
         record = self.record_for(root)
         if build_id <= record.invalidated_build_id:
             return record
@@ -100,7 +104,7 @@ class PreviewStateStore:
 
         record.latest_build_id = build_id
         record.active_build_id = build_id
-        record.build_revision = record.source_revision
+        record.build_revision = record.source_revision if source_revision is None else source_revision
         record.freshness = PreviewFreshness.COMPILING
         return record
 
@@ -128,7 +132,7 @@ class PreviewStateStore:
         record.last_engine = engine
 
         candidate = normalize_path(pdf_file) if pdf_file is not None else None
-        if success and _is_valid_pdf(candidate):
+        if success and is_nonempty_file(candidate):
             record.last_successful_pdf = candidate
             record.last_successful_revision = record.build_revision
             record.fidelity = fidelity
@@ -186,10 +190,3 @@ class PreviewStateStore:
     def clear_build_output(self, root: str | Path) -> PreviewBuildRecord:
         """Compatibility spelling for callers that mirror ``PdfStateStore``."""
         return self.clear(root)
-
-
-def _is_valid_pdf(pdf: Path | None) -> bool:
-    try:
-        return pdf is not None and pdf.is_file() and pdf.stat().st_size > 0
-    except OSError:
-        return False

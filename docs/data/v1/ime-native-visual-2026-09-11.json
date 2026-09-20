@@ -1,0 +1,150 @@
+{
+  "app_sha256": "b6da0987b666734b4a91df0cd04d2b481f44b334b53ceaa9429bbcf5643fe80f",
+  "app_sha256_after": "b6da0987b666734b4a91df0cd04d2b481f44b334b53ceaa9429bbcf5643fe80f",
+  "platform": "macOS-26.6.1-arm64-arm-64bit",
+  "python": "3.12.6",
+  "pyside": "6.11.1",
+  "qt_platform": "cocoa",
+  "synthetic_only": true,
+  "source_mode": false,
+  "events": [
+    {
+      "seconds": 23.25,
+      "preedit": "z",
+      "commit": "",
+      "replacement_start": 0,
+      "replacement_length": 0
+    },
+    {
+      "seconds": 23.529,
+      "preedit": "z h",
+      "commit": "",
+      "replacement_start": 0,
+      "replacement_length": 0
+    },
+    {
+      "seconds": 23.567,
+      "preedit": "zho",
+      "commit": "",
+      "replacement_start": 0,
+      "replacement_length": 0
+    },
+    {
+      "seconds": 23.605,
+      "preedit": "zhon",
+      "commit": "",
+      "replacement_start": 0,
+      "replacement_length": 0
+    },
+    {
+      "seconds": 23.624,
+      "preedit": "zhong",
+      "commit": "",
+      "replacement_start": 0,
+      "replacement_length": 0
+    },
+    {
+      "seconds": 23.648,
+      "preedit": "zhong w",
+      "commit": "",
+      "replacement_start": 0,
+      "replacement_length": 0
+    },
+    {
+      "seconds": 23.672,
+      "preedit": "zhong we",
+      "commit": "",
+      "replacement_start": 0,
+      "replacement_length": 0
+    },
+    {
+      "seconds": 23.7,
+      "preedit": "zhong wen",
+      "commit": "",
+      "replacement_start": 0,
+      "replacement_length": 0
+    },
+    {
+      "seconds": 32.588,
+      "preedit": "",
+      "commit": "中文",
+      "replacement_start": 0,
+      "replacement_length": 0
+    },
+    {
+      "seconds": 73.214,
+      "preedit": "n",
+      "commit": "",
+      "replacement_start": 0,
+      "replacement_length": 0
+    },
+    {
+      "seconds": 73.32,
+      "preedit": "ni",
+      "commit": "",
+      "replacement_start": 0,
+      "replacement_length": 0
+    },
+    {
+      "seconds": 81.286,
+      "preedit": "",
+      "commit": "",
+      "replacement_start": 0,
+      "replacement_length": 0
+    }
+  ],
+  "states": [
+    {
+      "latex": "x+",
+      "preedit": false,
+      "source": "$x+$",
+      "apply_enabled": true
+    },
+    {
+      "latex": "x+",
+      "preedit": true,
+      "source": "$x+$",
+      "apply_enabled": false
+    },
+    {
+      "latex": "x+中文",
+      "preedit": false,
+      "source": "$x+中文$",
+      "apply_enabled": true
+    },
+    {
+      "latex": "x+",
+      "preedit": false,
+      "source": "$x+$",
+      "apply_enabled": true
+    },
+    {
+      "latex": "x+中文",
+      "preedit": false,
+      "source": "$x+中文$",
+      "apply_enabled": true
+    },
+    {
+      "latex": "x+中文",
+      "preedit": true,
+      "source": "$x+中文$",
+      "apply_enabled": false
+    },
+    {
+      "latex": "x+中文",
+      "preedit": false,
+      "source": "$x+中文$",
+      "apply_enabled": true
+    }
+  ],
+  "dialog_result": 1,
+  "plan": "$x+中文$",
+  "physical_ime_preedit_observed": true,
+  "chinese_commit_observed": true,
+  "undo_observed": true,
+  "redo_observed": true,
+  "original_document_preserved": true,
+  "window_destroyed": true,
+  "passed": true
+}
+

@@ -1,0 +1,241 @@
+"""Synthetic macOS feasibility probe, never used by the ICSTeX product."""
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+from pathlib import Path
+import platform
+import re
+import socket
+import subprocess
+import sys
+import time
+
+REPO = Path('/Users/leo.xu/Desktop/Codex/ICS-Project-/ICSTeX')
+sys.path.insert(0, str(REPO))
+from app.core.compiler import CompileManager
+from app.core.latex_tools import LaTeXEngine
+
+
+def sha(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def source_digest():
+    digest = hashlib.sha256()
+    for path in sorted(p for folder in ('app', 'tests')
+                       for p in (REPO / folder).rglob('*.py')):
+        digest.update(path.relative_to(REPO).as_posix().encode() + b'\0')
+        digest.update(path.read_bytes() + b'\0')
+    return digest.hexdigest()
+
+
+def main():
+    root = Path(sys.argv[1]).resolve()
+    root.mkdir(exist_ok=False)
+    job = root / 'job'
+    for name in ('inputs', 'out', 'cache', 'tmp', 'home'):
+        (job / name).mkdir(parents=True)
+    private = root / 'private.txt'
+    private.write_text('Synthetic private sentinel.\n')
+    source = job / 'inputs' / 'main.tex'
+    source.write_text('\\documentclass{article}\n\\begin{document}\n'
+                      'Synthetic sandbox LuaLaTeX. $E=mc^2$.\n\\end{document}\n')
+    (job / 'inputs' / 'escape.txt').symlink_to(private)
+    (job / 'out' / 'source-link.txt').symlink_to(source)
+    alias = Path('/System/Volumes/Data') / private.relative_to('/')
+    assert alias.is_file() and os.path.samefile(alias, private)
+    before = source_digest()
+    owned_before = {str(p): sha(p) for p in (private, source)}
+    engine = Path('/Library/TeX/texbin/lualatex')
+    raw_engine = Path('/Library/TeX/texbin/luahbtex')
+    texroot = Path('/usr/local/texlive/2025')
+    resource = texroot / 'texmf-dist/tex/generic/unicode-data/ScriptExtensions.txt'
+    resource_before = sha(resource)
+    base = CompileManager(source, engine=LaTeXEngine.LUALATEX,
+        restricted_io=True)._compile_environment(None, restricted_io=True)
+    assert base['openin_any'] == base['openout_any'] == 'p'
+    # Do not expose the host's unrelated environment or writable user caches.
+    env = {'PATH': '/Library/TeX/texbin:/usr/bin:/bin', 'LANG': 'en_US.UTF-8',
+           'HOME': str(job / 'home'), 'TMPDIR': str(job / 'tmp'),
+           'TEXMFVAR': str(job / 'cache'), 'TEXMFCACHE': str(job / 'cache'),
+           'TEXINPUTS': 'inputs//:', 'openin_any': base['openin_any'],
+           'openout_any': base['openout_any']}
+    quote = json.dumps
+    readable = [str(texroot), '/System', '/usr/lib', '/usr/share', '/Library/Fonts',
+                str(job / 'inputs'), str(job / 'out'), str(job / 'cache'),
+                str(job / 'tmp')]
+    writable = [str(job / name) for name in ('out', 'cache', 'tmp')]
+    programs = ['/usr/bin/perl5.34', str(raw_engine.resolve())]
+    profile_text = '\n'.join([
+        '(version 1)', '(deny default)', '(import "dyld-support.sb")',
+        '(allow process-exec ' + ' '.join('(literal ' + quote(p) + ')' for p in programs) + ')',
+        '(allow file-read* ' + ' '.join('(subpath ' + quote(p) + ')' for p in readable) + ')',
+        '(allow file-read* ' + ' '.join('(literal ' + quote(p) + ')' for p in [*programs, str(job), '/dev/null', '/dev/urandom', '/dev/random']) + ')',
+        '(allow file-map-executable (subpath "/System") (subpath "/usr/lib") (subpath ' + quote(str(texroot)) + ') (literal "/usr/bin/perl5.34"))',
+        '(allow file-read-metadata)',
+        '(allow file-write* ' + ' '.join('(subpath ' + quote(p) + ')' for p in writable) + ')',
+        '(allow file-write-data (literal "/dev/null"))',
+        '(allow sysctl-read)',
+        '(allow signal (target self))',
+        '',
+    ])
+    profile = root / 'prototype.sb'
+    profile.write_text(profile_text)
+    results = []
+
+    def run(label, command, *, sandbox=True, input_policy='p', timeout=30):
+        effective = ['/usr/bin/sandbox-exec', '-f', str(profile), *command] if sandbox else command
+        started = time.monotonic()
+        proc = subprocess.Popen(effective, cwd=job, env={**env, 'openin_any': input_policy},
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, close_fds=True, start_new_session=True)
+        timed_out = False
+        try:
+            stdout, stderr = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            CompileManager._terminate_process(proc)
+            stdout, stderr = proc.communicate(timeout=5)
+        item = {'label': label, 'command': effective, 'sandbox': sandbox,
+                'openin_any': input_policy, 'returncode': proc.returncode,
+                'timeout': timed_out, 'seconds': round(time.monotonic() - started, 3),
+                'stdout': stdout, 'stderr': stderr}
+        results.append(item)
+        (root / (label + '.stdout')).write_text(stdout)
+        (root / (label + '.stderr')).write_text(stderr)
+        print(json.dumps({k: v for k, v in item.items() if k not in ('stdout', 'stderr')}), flush=True)
+        return item
+
+    report = {'synthetic_only': True, 'prototype_only': True, 'platform': platform.platform(),
+              'script_sha256': sha(Path(__file__)), 'profile_sha256': sha(profile),
+              'profile': profile_text, 'environment': env, 'results': results,
+              'kernel_gate_passed': False, 'engine_gate_passed': False,
+              'compile_passed': False, 'chinese_compile_passed': False,
+              'cancellation_passed': False, 'source_sha256_before': before,
+              'limits': ['Deprecated/private macOS interface, not a shipping design',
+                         'File metadata is readable; private file contents are denied',
+                         'No latexmk/MCP/GUI integration or full workflow acceptance',
+                         'No installed-resource write attempt; source readonly gate uses owned files']}
+    try:
+        # A loopback-only listener belongs to this short-lived probe and sends no data.
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.bind(('127.0.0.1', 0))
+            listener.listen(2)
+            port = listener.getsockname()[1]
+            perl = r'''use strict; use warnings; use JSON::PP; use IO::Socket::INET;
+my ($source,$private,$link,$output,$resource,$port,$alias,$writelink)=@ARGV;
+sub opened { my ($path,$mode)=@_; my $ok=open(my $f,$mode,$path); close($f) if $ok; return $ok ? 1 : 0; }
+my %r=(local_read=>opened($source,'<'), external_read=>opened($private,'<'),
+ symlink_read=>opened($link,'<'), source_write=>opened($source,'>>'),
+ external_write=>opened($private,'>>'), output_write=>opened($output,'>'),
+ distribution_read=>opened($resource,'<'), alias_read=>opened($alias,'<'),
+ symlink_write=>opened($writelink,'>>'));
+my $s=IO::Socket::INET->new(PeerAddr=>'127.0.0.1',PeerPort=>$port,Proto=>'tcp',Timeout=>2);
+$r{network_connect}=$s ? 1 : 0; $r{network_error}="$!"; close($s) if $s;
+$r{child_status}=system('/usr/bin/true');
+print encode_json(\%r),"\n";
+'''
+            command = ['/usr/bin/perl5.34', '-e', perl, str(source), str(private),
+                       str(job / 'inputs/escape.txt'), str(job / 'out/gate.txt'),
+                       str(resource), str(port), str(alias), str(job / 'out/source-link.txt')]
+            control = run('os-unconfined-control', command, sandbox=False)
+            isolated = run('os-isolated', command)
+            assert control['returncode'] == isolated['returncode'] == 0, results
+            control_checks, isolated_checks = json.loads(control['stdout']), json.loads(isolated['stdout'])
+            control['checks'], isolated['checks'] = control_checks, isolated_checks
+            for key in ('local_read', 'external_read', 'symlink_read', 'source_write',
+                        'external_write', 'output_write', 'distribution_read', 'network_connect',
+                        'alias_read', 'symlink_write'):
+                assert control_checks[key] == 1, (key, control_checks)
+            assert control_checks['child_status'] == 0
+            for key in ('local_read', 'output_write', 'distribution_read'):
+                assert isolated_checks[key] == 1, (key, isolated_checks)
+            for key in ('external_read', 'symlink_read', 'source_write', 'external_write',
+                        'network_connect', 'alias_read', 'symlink_write'):
+                assert isolated_checks[key] == 0, (key, isolated_checks)
+            assert isolated_checks['child_status'] != 0, isolated_checks
+            report['kernel_gate_passed'] = True
+
+        # Only after independent kernel checks, adjust input policy inside the sandbox.
+        primitive = job / 'inputs/probe.tex'
+        primitive.write_text(r'''\catcode123=1 \catcode125=2
+\directlua0{
+local function check(label,path,mode)
+ local f=io.open(path,mode)
+ texio.write_nl('term and log','CHECK '..label..'='..tostring(f~=nil))
+ if f then f:close() end
+end
+check('local-read','inputs/main.tex','r')
+check('external-read',__PRIVATE__,'r')
+check('symlink-read','inputs/escape.txt','r')
+check('source-write','inputs/main.tex','a')
+check('external-write',__PRIVATE__,'a')
+check('output-write','out/lua-gate.txt','w')
+check('distribution-read',kpse.find_file('ScriptExtensions.txt'),'r')
+texio.write_nl('term and log','CHECK shell-escape='..tostring(status.shell_escape))
+}
+\end
+'''.replace('__PRIVATE__', json.dumps(str(private))))
+        raw = run('engine-isolated', [str(raw_engine), '--ini', '--no-shell-escape',
+            '--nosocket', '--interaction=nonstopmode', '--halt-on-error',
+            '--output-directory=out', 'inputs/probe.tex'], input_policy='a')
+        checks = re.findall(r'^CHECK [a-z-]+=(?:true|false|[0-9]+)', raw['stdout'], re.MULTILINE)
+        raw['checks'] = checks
+        assert raw['returncode'] == 0, raw
+        for value in ('local-read=true', 'distribution-read=true', 'output-write=true',
+                      'external-read=false', 'symlink-read=false', 'source-write=false',
+                      'external-write=false', 'shell-escape=0'):
+            assert 'CHECK ' + value in checks, (value, checks)
+        report['engine_gate_passed'] = True
+        compile_result = run('lualatex-isolated', [str(engine), '--no-shell-escape',
+            '--nosocket', '--interaction=nonstopmode', '--halt-on-error', '--recorder',
+            '--output-directory=out', 'inputs/main.tex'], input_policy='a', timeout=45)
+        pdf = job / 'out/main.pdf'
+        report['compile_passed'] = compile_result['returncode'] == 0 and pdf.is_file()
+        report['pdf_sha256'] = sha(pdf) if pdf.is_file() else None
+        report['pdf_bytes'] = pdf.stat().st_size if pdf.is_file() else 0
+        if not report['compile_passed']:
+            return
+        chinese = job / 'inputs' / '\u4e2d\u6587\u6d4b\u8bd5.tex'
+        chinese.write_text('\\documentclass[fontset=fandol]{ctexart}\n'
+            '\\begin{document}\n\\section{\u9694\u79bb\u7f16\u8bd1\u9a8c\u8bc1}\n'
+            '\u4e2d\u6587\u8f93\u5165\u4e0e\u516c\u5f0f\u6d4b\u8bd5\uff1a$E=mc^2$\u3002\n'
+            '\\end{document}\n')
+        owned_before[str(chinese)] = sha(chinese)
+        (job / 'out/chinese').mkdir()
+        cjk = run('chinese-isolated', [str(engine), '--no-shell-escape', '--nosocket',
+            '--interaction=nonstopmode', '--halt-on-error', '--recorder', '--jobname=chinese',
+            '--output-directory=out/chinese', chinese.relative_to(job).as_posix()],
+            input_policy='a', timeout=45)
+        cjk_pdf = job / 'out/chinese/chinese.pdf'
+        report['chinese_compile_passed'] = cjk['returncode'] == 0 and cjk_pdf.is_file()
+        report['chinese_pdf_sha256'] = sha(cjk_pdf) if cjk_pdf.is_file() else None
+        report['chinese_pdf_bytes'] = cjk_pdf.stat().st_size if cjk_pdf.is_file() else 0
+        cancel_source = job / 'inputs/cancel.tex'
+        cancel_source.write_text(r'''\catcode123=1 \catcode125=2
+\directlua0{texio.write_nl('term','SANDBOX LOOP READY'); io.flush(); while true do end}
+\end
+''')
+        owned_before[str(cancel_source)] = sha(cancel_source)
+        cancelled = run('cancel-isolated', [str(raw_engine), '--ini', '--no-shell-escape',
+            '--nosocket', '--interaction=nonstopmode', '--halt-on-error',
+            '--output-directory=out', 'inputs/cancel.tex'], input_policy='a', timeout=1)
+        assert 'SANDBOX LOOP READY' in cancelled['stdout'], cancelled
+        assert cancelled['timeout'] and cancelled['returncode'] < 0, cancelled
+        report['cancellation_passed'] = True
+    except Exception as exc:
+        report['failure'] = repr(exc)
+        raise
+    finally:
+        report['source_sha256_after'] = source_digest()
+        report['owned_inputs_unchanged'] = all(sha(Path(p)) == h for p, h in owned_before.items())
+        report['installed_resource_unchanged'] = sha(resource) == resource_before
+        report['installed_resource_sha256'] = resource_before
+        (root / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
+        print('REPORT ' + str(root / 'report.json'), flush=True)
+
+
+if __name__ == '__main__':
+    main()

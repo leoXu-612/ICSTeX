@@ -127,6 +127,17 @@ class BlockRegistry:
     def rename_alias(self, block_id: str, alias: str) -> Block:
         return self.update(block_id, {"alias": alias})
 
+    def restore(self, block: Block) -> Block:
+        """Re-insert a previously removed block with its original id (undo path)."""
+        if block.id in self._blocks:
+            raise BlockError(f"Block 已存在，无法恢复：{block.id}")
+        self._ensure_label_unique(
+            block.semantic.label if block.semantic is not None else None,
+            exclude_id=block.id,
+        )
+        self._insert(block)
+        return block
+
     def remove(self, block_id: str, strategy: str = "reject-if-referenced") -> None:
         self._require(block_id)
         references = self.find_references_to(block_id)

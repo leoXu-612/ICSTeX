@@ -1,0 +1,182 @@
+{
+  "date": "2026-09-12",
+  "scope": "Mac local source integration; synthetic only; not release acceptance",
+  "app_sha256": "7009463b6f091f8d58f46fcfee3e08b03b3535fe9d89b0882ac7d3a133e87506",
+  "app_tests_sha256": "14093898a54aa926b992b20106c570c1d2f6a5899af2ab35b69c157b1467cbc4",
+  "probe_sha256": "ac8a0fe85713f04ab0f0ea586eed1e49e25eb2219c5d2d9188de2b64125fc47c",
+  "source_boundaries": "Lua r4, boundaries r2 and hardlink r2 use final application code; final test-only stop fixture correction follows. Earlier pdf/xe/stdio and failure reports retain their intermediate source identities in the receipt. Cancellation r3 uses final app+tests.",
+  "reports": [
+    {
+      "raw_report": "/tmp/icstex-macos-integration-lua-bibtex-20260912-r1/report.json",
+      "raw_sha256": "362e6c514d2ce347d69d7303fafd803fc4b81596e75e6caa3686e3b38f394dd8",
+      "case": "lualatex",
+      "outcome": "latex_error",
+      "returncode": 12,
+      "seconds": 0.13868941701366566,
+      "source_unchanged": true,
+      "input_evidence_stable": true,
+      "errors": [],
+      "stderr": "Use of uninitialized value in concatenation (.) or string at /Library/TeX/texbin/latexmk line 1221.\nFailed to exec /bin/bash as variant for /bin/sh (1: Operation not permitted).\nLatexmk: No log file was found, neither the expected one, '.latex_build/main.log', nor one in '.'.\nLatexmk: fls file doesn't appear to have been made.\nLatexmk: Couldn't read log file '.latex_build/main.log':\n  No such file or directory\n----------------------\nThis message may duplicate earlier message.\nLatexmk: Failure in processing file 'main.tex':\n   *LaTeX didn't generate the expected log file '.latex_build/main.log'\n----------------------\nLatexmk: Sometimes, the -f option can be used to get latexmk\n  to try to force complete processing.\n  But normally, you will need to correct the file(s) that caused the\n  error, and then rerun latexmk.\n  In some cases, it is best to clean out generated files before rerunning\n  latexmk after you've corrected the files.\n",
+      "stdout_tail": "Rc files read:\n  NONE\nLatexmk: This is Latexmk, John Collins, 27 Dec. 2024. Version 4.86a.\nNo existing .aux file, so I'll make a simple one, and require run of *latex.\nForce everything to be remade.\nLatexmk: applying rule 'lualatex'...\nRule 'lualatex':  Reasons for rerun\nCategory 'other':\n  Rerun of 'lualatex' forced or previously required:\n    Reason or flag: 'go_mode'\n\n------------\nRun number 1 of rule 'lualatex'\n------------\n------------\nRunning 'lualatex  -no-shell-escape -synctex=1 -interaction=nonstopmode -file-line-error -recorder -output-directory=\".latex_build\"  \"main.tex\"'\n------------\nLatexmk: Getting log file '.latex_build/main.log'\nLatexmk: Errors, so I did not complete making targets\nCollected error summary (may duplicate other messages):\n  lualatex: Run of rule 'lualatex' gave a non-zero error code\n\n",
+      "completed_summary": []
+    },
+    {
+      "raw_report": "/tmp/icstex-macos-integration-lua-bibtex-20260912-r2/report.json",
+      "raw_sha256": "f074fde30dd85873aeeef5b57ff4a07750ec427a4b1633853ba4b5cf1d0a029f",
+      "case": "lualatex",
+      "outcome": "latex_error",
+      "returncode": 2,
+      "seconds": 16.965587583981687,
+      "source_unchanged": true,
+      "input_evidence_stable": true,
+      "errors": [],
+      "stderr": "Latexmk: Missing bbl file '.latex_build/main.bbl' in following:\n No file main.bbl.\nsh: /usr/local/texlive/2025/bin/universal-darwin/kpsewhich: Operation not permitted\nsh: /usr/local/texlive/2025/bin/universal-darwin/kpsewhich: Operation not permitted\nUse of uninitialized value in print at /Library/TeX/texbin/latexmk line 5297.\nlualatex: .latex_build/lualatex74781.fls: No such file or directory\nLatexmk.get_filetime_offset: In measuring filetime offset, couldn't write to\n    temporary file '.latex_build/tmp1.tmp'\n",
+      "stdout_tail": "usly required:\n    Reason or flag: 'Initial set up of rule'\n\n------------\nRun number 1 of rule 'bibtex .latex_build/main'\n------------\n====== ENV{BIBINPUTS} changed to '/private/tmp/icstex-macos-integration-lua-bibtex-20260912-r2/Chinese path with spaces:.latex_build:/private/tmp/icstex-macos-integration-lua-bibtex-20260912-r2/Chinese path with spaces/.latex_build:'\nLatexmk: Change directory to '.latex_build/'.\nTo assist finding of files in document directory, I set\n  BIBINPUTS='/private/tmp/icstex-macos-integration-lua-bibtex-20260912-r2/Chinese path with spaces:.latex_build:/private/tmp/icstex-macos-integration-lua-bibtex-20260912-r2/Chinese path with spaces/.latex_build:'\n  BSTINPUTS='/private/tmp/icstex-macos-integration-lua-bibtex-20260912-r2/Chinese path with spaces:'.\n------------\nRunning 'bibtex  \"main.aux\"'\n------------\nThis is BibTeX, Version 0.99d (TeX Live 2025)\nThe top-level auxiliary file: main.aux\nThe style file: plain.bst\nDatabase file #1: refs.bib\nWarning--empty publisher in sample\n(There was 1 warning)\nLatexmk: Change directory back to ''\nSource '.latex_build/main.aux' for 'bibtex .latex_build/main' doesn't exist,\nso I'll force *latex to run to try and make it.\nLatexmk: Bibtex did not produce '.latex_build/main.bbl'.  But that\n     was because of missing files, so I will continue.\nLatexmk: applying rule 'lualatex'...\nRule 'lualatex':  Reasons for rerun\nCategory 'other':\n  Rerun of 'lualatex' forced or previously required:\n    Reason or flag: 'to make 'main.tex' for 'lualatex''\n\n------------\nRun number 2 of rule 'lualatex'\n------------\n------------\nRunning 'lualatex  -no-shell-escape -synctex=1 -interaction=nonstopmode -file-line-error -recorder -output-directory=\".latex_build\"  \"main.tex\"'\n------------\nThis is LuaHBTeX, Version 1.21.0 (TeX Live 2025) \n",
+      "completed_summary": []
+    },
+    {
+      "raw_report": "/tmp/icstex-macos-integration-lua-bibtex-20260912-r3/report.json",
+      "raw_sha256": "e5c885a663392de0eca11cfb45ddb90c7f78f925c75e470b80e35a647cc74917",
+      "case": "lualatex",
+      "outcome": "latex_error",
+      "returncode": 2,
+      "seconds": 19.411572624987457,
+      "source_unchanged": true,
+      "input_evidence_stable": true,
+      "errors": [],
+      "stderr": "Latexmk: Missing bbl file '.latex_build/main.bbl' in following:\n No file main.bbl.\nUse of uninitialized value in print at /Library/TeX/texbin/latexmk line 5297.\nlualatex: .latex_build/lualatex75103.fls: No such file or directory\nLatexmk.get_filetime_offset: In measuring filetime offset, couldn't write to\n    temporary file '.latex_build/tmp1.tmp'\n",
+      "stdout_tail": "usly required:\n    Reason or flag: 'Initial set up of rule'\n\n------------\nRun number 1 of rule 'bibtex .latex_build/main'\n------------\n====== ENV{BIBINPUTS} changed to '/private/tmp/icstex-macos-integration-lua-bibtex-20260912-r3/Chinese path with spaces:.latex_build:/private/tmp/icstex-macos-integration-lua-bibtex-20260912-r3/Chinese path with spaces/.latex_build:'\nLatexmk: Change directory to '.latex_build/'.\nTo assist finding of files in document directory, I set\n  BIBINPUTS='/private/tmp/icstex-macos-integration-lua-bibtex-20260912-r3/Chinese path with spaces:.latex_build:/private/tmp/icstex-macos-integration-lua-bibtex-20260912-r3/Chinese path with spaces/.latex_build:'\n  BSTINPUTS='/private/tmp/icstex-macos-integration-lua-bibtex-20260912-r3/Chinese path with spaces:'.\n------------\nRunning 'bibtex  \"main.aux\"'\n------------\nThis is BibTeX, Version 0.99d (TeX Live 2025)\nThe top-level auxiliary file: main.aux\nThe style file: plain.bst\nDatabase file #1: refs.bib\nWarning--empty publisher in sample\n(There was 1 warning)\nLatexmk: Change directory back to ''\nSource '.latex_build/main.aux' for 'bibtex .latex_build/main' doesn't exist,\nso I'll force *latex to run to try and make it.\nLatexmk: Bibtex did not produce '.latex_build/main.bbl'.  But that\n     was because of missing files, so I will continue.\nLatexmk: applying rule 'lualatex'...\nRule 'lualatex':  Reasons for rerun\nCategory 'other':\n  Rerun of 'lualatex' forced or previously required:\n    Reason or flag: 'to make 'main.tex' for 'lualatex''\n\n------------\nRun number 2 of rule 'lualatex'\n------------\n------------\nRunning 'lualatex  -no-shell-escape -synctex=1 -interaction=nonstopmode -file-line-error -recorder -output-directory=\".latex_build\"  \"main.tex\"'\n------------\nThis is LuaHBTeX, Version 1.21.0 (TeX Live 2025) \n",
+      "completed_summary": []
+    },
+    {
+      "raw_report": "/tmp/icstex-macos-integration-lua-bibtex-20260912-r4/report.json",
+      "raw_sha256": "b2a857858ec5b386ed9ac44cd37779f7d61b77b4f696f400c6d8fa44d1e316f5",
+      "case": "lualatex",
+      "outcome": "success",
+      "returncode": 0,
+      "seconds": 20.865119750000304,
+      "source_unchanged": true,
+      "input_evidence_stable": true,
+      "errors": [],
+      "pdf_sha256": "6a9ebb1a46431ed8c6753e738be33354424c642e57c35607d8a726da6fe2eb43",
+      "pdf_path": "/private/tmp/icstex-macos-integration-lua-bibtex-20260912-r4/Chinese path with spaces/.latex_build/main.pdf",
+      "extracted_text": "1\n\n参考文献\nMac restricted compile. E = mc2 . 中文引用编译验证。[1]\n\n参考文献\n[1] Alex Example. Synthetic Reference. 2026.\n\n\f",
+      "stderr": "Latexmk: Missing bbl file '.latex_build/main.bbl' in following:\n No file main.bbl.\n",
+      "stdout_tail": "scheme-chinese-a\nrticle.def\n(/usr/local/texlive/2025/texmf-dist/tex/latex/ctex/config/ctex-name-utf8.cfg))\n(/usr/local/texlive/2025/texmf-dist/tex/latex/ctex/ctex-c5size.clo)\n(/usr/local/texlive/2025/texmf-dist/tex/latex/ctex/fontset/ctex-fontset-fandol.\ndef)) (/usr/local/texlive/2025/texmf-dist/tex/latex/ctex/config/ctex.cfg)\n(./.latex_build/main.aux) (./.latex_build/main.bbl)\n[1{/usr/local/texlive/2025/texmf-var/fonts/map/pdftex/updmap/pdftex.map}]\n(./.latex_build/main.aux))\n 569 words of node memory still in use:\n   4 hlist, 1 vlist, 1 rule, 2 glue, 3 kern, 1 glyph, 57 attribute, 50 glue_spe\nc, 11 attribute_list, 1 write, 6 user_defined nodes\n   avail lists: 1:2,2:2273,3:36,4:29,5:29,6:6,7:310,8:5,9:66,10:4,11:14\n</usr/local/texlive/2025/texmf-dist/fonts/opentype/public/lm/lmroman10-italic.o\ntf></usr/local/texlive/2025/texmf-dist/fonts/opentype/public/fandol/FandolSong-\nBold.otf></usr/local/texlive/2025/texmf-dist/fonts/opentype/public/fandol/Fando\nlSong-Regular.otf></usr/local/texlive/2025/texmf-dist/fonts/opentype/public/lm/\nlmroman10-regular.otf></usr/local/texlive/2025/texmf-dist/fonts/opentype/public\n/fandol/FandolKai-Regular.otf></usr/local/texlive/2025/texmf-dist/fonts/type1/p\nublic/amsfonts/cm/cmmi10.pfb></usr/local/texlive/2025/texmf-dist/fonts/type1/pu\nblic/amsfonts/cm/cmr10.pfb></usr/local/texlive/2025/texmf-dist/fonts/type1/publ\nic/amsfonts/cm/cmr7.pfb>\nOutput written on main.pdf (1 page, 40661 bytes).\nSyncTeX written on main.synctex.gz.\nTranscript written on main.log.\nLatexmk: Getting log file '.latex_build/main.log'\nLatexmk: Examining '.latex_build/main.fls'\nLatexmk: Examining '.latex_build/main.log'\nLatexmk: Log file says output to 'main.pdf'\nLatexmk: Found bibliography file(s):\n  ./refs.bib\nLatexmk: All targets (.latex_build/main.pdf) are up-to-date\n\n",
+      "completed_summary": []
+    },
+    {
+      "raw_report": "/tmp/icstex-macos-integration-pdf-20260912-r1/report.json",
+      "raw_sha256": "b5dbc4bfde88ee7cdb78bf541d602a9d09e735817277a7d5572b71e419e02902",
+      "case": "pdflatex",
+      "outcome": "success",
+      "returncode": 0,
+      "seconds": 0.4135067499883007,
+      "source_unchanged": true,
+      "input_evidence_stable": true,
+      "errors": [],
+      "pdf_sha256": "3ca20c0d3bfcdb1d0b0f2f1a887417521ad7bc7f7677b6351616cfcf93d06498",
+      "pdf_path": "/private/tmp/icstex-macos-integration-pdf-20260912-r1/Chinese path with spaces/.latex_build/main.pdf",
+      "extracted_text": "Mac restricted compile. E = mc2 .\n\n1\n\n\f",
+      "stderr": "",
+      "stdout_tail": "mk, John Collins, 27 Dec. 2024. Version 4.86a.\nNo existing .aux file, so I'll make a simple one, and require run of *latex.\nForce everything to be remade.\nLatexmk: applying rule 'pdflatex'...\nRule 'pdflatex':  Reasons for rerun\nCategory 'other':\n  Rerun of 'pdflatex' forced or previously required:\n    Reason or flag: 'go_mode'\n\n------------\nRun number 1 of rule 'pdflatex'\n------------\n------------\nRunning 'pdflatex  -no-shell-escape -synctex=1 -interaction=nonstopmode -file-line-error -recorder -output-directory=\".latex_build\"  \"main.tex\"'\n------------\nThis is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex)\nentering extended mode\n(./main.tex\nLaTeX2e <2024-11-01> patch level 2\nL3 programming layer <2025-01-18>\n(/usr/local/texlive/2025/texmf-dist/tex/latex/base/article.cls\nDocument Class: article 2024/06/29 v1.4n Standard LaTeX document class\n(/usr/local/texlive/2025/texmf-dist/tex/latex/base/size10.clo))\n(/usr/local/texlive/2025/texmf-dist/tex/latex/l3backend/l3backend-pdftex.def)\n(.latex_build/main.aux)\n[1{/usr/local/texlive/2025/texmf-var/fonts/map/pdftex/updmap/pdftex.map}]\n(.latex_build/main.aux) )</usr/local/texlive/2025/texmf-dist/fonts/type1/public\n/amsfonts/cm/cmmi10.pfb></usr/local/texlive/2025/texmf-dist/fonts/type1/public/\namsfonts/cm/cmr10.pfb></usr/local/texlive/2025/texmf-dist/fonts/type1/public/am\nsfonts/cm/cmr7.pfb>\nOutput written on .latex_build/main.pdf (1 page, 30589 bytes).\nSyncTeX written on .latex_build/main.synctex.gz.\nTranscript written on .latex_build/main.log.\nLatexmk: Getting log file '.latex_build/main.log'\nLatexmk: Examining '.latex_build/main.fls'\nLatexmk: Examining '.latex_build/main.log'\nLatexmk: Log file says output to '.latex_build/main.pdf'\nLatexmk: All targets (.latex_build/main.pdf) are up-to-date\n\n",
+      "completed_summary": []
+    },
+    {
+      "raw_report": "/tmp/icstex-macos-integration-xe-20260912-r1/report.json",
+      "raw_sha256": "c85defe3a4340f1e6afa9bce60a63132953f525ada9c252bb494833cd3fb1bce",
+      "case": "xelatex",
+      "outcome": "success",
+      "returncode": 0,
+      "seconds": 0.8466379579913337,
+      "source_unchanged": true,
+      "input_evidence_stable": true,
+      "errors": [],
+      "pdf_sha256": "808e9ef649efb8314246c10edecec6c3cff181610b49583c0a9a9dfdf4e78173",
+      "pdf_path": "/private/tmp/icstex-macos-integration-xe-20260912-r1/Chinese path with spaces/.latex_build/main.pdf",
+      "extracted_text": "1\nMac restricted compile. E = mc2 . 中文引用编译验证。\n\n\f",
+      "stderr": ".latex_build/main.xdv -> .latex_build/main.pdf\n[1]\n10415 bytes written\n",
+      "stdout_tail": "late/xtemplate.st\ny) (/usr/local/texlive/2025/texmf-dist/tex/latex/fontspec/fontspec.sty\n(/usr/local/texlive/2025/texmf-dist/tex/latex/l3packages/xparse/xparse.sty)\n(/usr/local/texlive/2025/texmf-dist/tex/latex/fontspec/fontspec-xetex.sty\n(/usr/local/texlive/2025/texmf-dist/tex/latex/base/fontenc.sty)\n(/usr/local/texlive/2025/texmf-dist/tex/latex/fontspec/fontspec.cfg)))\n(/usr/local/texlive/2025/texmf-dist/tex/xelatex/xecjk/xeCJK.cfg)))\n(/usr/local/texlive/2025/texmf-dist/tex/latex/zhnumber/zhnumber.sty\n(/usr/local/texlive/2025/texmf-dist/tex/latex/zhnumber/zhnumber-utf8.cfg))\n(/usr/local/texlive/2025/texmf-dist/tex/latex/ctex/scheme/ctex-scheme-chinese-a\nrticle.def\n(/usr/local/texlive/2025/texmf-dist/tex/latex/ctex/config/ctex-name-utf8.cfg))\n(/usr/local/texlive/2025/texmf-dist/tex/latex/ctex/ctex-c5size.clo)\n(/usr/local/texlive/2025/texmf-dist/tex/latex/ctex/fontset/ctex-fontset-fandol.\ndef)) (/usr/local/texlive/2025/texmf-dist/tex/latex/ctex/config/ctex.cfg)\n(.latex_build/main.aux)\n[1] (.latex_build/main.aux) )\nOutput written on .latex_build/main.xdv (1 page, 1180 bytes).\nSyncTeX written on .latex_build/main.synctex.gz.\nTranscript written on .latex_build/main.log.\nLatexmk: Getting log file '.latex_build/main.log'\nLatexmk: Examining '.latex_build/main.fls'\nLatexmk: Examining '.latex_build/main.log'\nLatexmk: Log file says output to '.latex_build/main.xdv'\nLatexmk: applying rule 'xdvipdfmx'...\nRule 'xdvipdfmx':  Reasons for rerun\nCategory 'other':\n  Rerun of 'xdvipdfmx' forced or previously required:\n    Reason or flag: 'go_mode'\n\n------------\nRun number 1 of rule 'xdvipdfmx'\n------------\n------------\nRunning 'xdvipdfmx -E -o \".latex_build/main.pdf\"  \".latex_build/main.xdv\"'\n------------\nLatexmk: All targets (.latex_build/main.xdv .latex_build/main.pdf) are up-to-date\n\n",
+      "completed_summary": []
+    },
+    {
+      "raw_report": "/tmp/icstex-macos-integration-stdio-20260912-r1/report.json",
+      "raw_sha256": "b61b44d1672e1883a71f56bd52c05bc7d1e93b3e89fab328e093f6ec7401301a",
+      "case": "stdio",
+      "source_unchanged": true,
+      "pdf_sha256": "de8f251280d867084db955b99855405b16096386f8d6a575250f3bf74f7b51f2",
+      "is_error": false,
+      "text": "Actual Mac MCP export.\n\n1\n\n\f",
+      "stdout_tail": "",
+      "completed_summary": []
+    },
+    {
+      "raw_report": "/tmp/icstex-macos-integration-boundaries-20260912-r2/report.json",
+      "raw_sha256": "b184026f8bf57cb13aa9f595d7c412e87229fa219827faf801656d19b74ef80f",
+      "case": "boundaries",
+      "returncode": 0,
+      "checks": {
+        "external_write": 0,
+        "hardlink_source": 0,
+        "external_read": 0,
+        "source_read": 1,
+        "unrelated_child": 0,
+        "output_write": 1,
+        "source_write": 0,
+        "network": 0,
+        "symlink_write": 0,
+        "symlink_read": 0
+      },
+      "stderr": "Can't exec \"/usr/bin/true\": Operation not permitted at -e line 5.\n",
+      "stdout_tail": "{\"external_write\":0,\"hardlink_source\":0,\"external_read\":0,\"source_read\":1,\"unrelated_child\":0,\"output_write\":1,\"source_write\":0,\"network\":0,\"symlink_write\":0,\"symlink_read\":0}",
+      "completed_summary": []
+    },
+    {
+      "raw_report": "/tmp/icstex-macos-integration-hardlink-20260912-r1/report.json",
+      "raw_sha256": "099ae09ac7be97053c40766c764829aaf6dbfd1b3e87d49ddbbb1824e0271c66",
+      "case": "preexisting-hardlink",
+      "returncode": 0,
+      "startup_refused": false,
+      "stderr": "",
+      "stdout_tail": "WRITABLE",
+      "completed_summary": []
+    },
+    {
+      "raw_report": "/tmp/icstex-macos-integration-hardlink-20260912-r2/report.json",
+      "raw_sha256": "8fac9ad0530adff18210ccebfd4737e2a0a0e3803eeb1b2e2d4e69f8f224425f",
+      "case": "preexisting-hardlink",
+      "startup_refused": true,
+      "reason": "Hardlinked build output is unsafe; restricted compilation refused",
+      "stdout_tail": "",
+      "completed_summary": []
+    },
+    {
+      "raw_report": "/tmp/icstex-macos-integration-cancellation-20260912-r2/report.json",
+      "raw_sha256": "c0c7658d899d7416595edb7f005859b33ee1175a912c33cbffa995a54f152347",
+      "case": "cancellation",
+      "ready": false,
+      "stdout_tail": "",
+      "completed_summary": [
+        {
+          "outcome": "latex_error",
+          "stderr": "Latexmk: Sometimes, the -f option can be used to get latexmk\n  to try to force complete processing.\n  But normally, you will need to correct the file(s) that caused the\n  error, and then rerun latexmk.\n  In some cases, it is best to clean out generated files before rerunning\n  latexmk after you've corrected the files.\n",
+          "stdout_tail": ":\n\t[C]: in function 'assert'\n\t[\\directlua]:1: in main chunk.\nl.2 ...ite('ready'); f:close(); while true do end}\n                                                  \\end{document}\n(./.latex_build/main.aux))\n(see the transcript file for additional information)\n 413 words of node memory still in use:\n   3 hlist, 1 vlist, 1 rule, 2 glue, 3 kern, 1 glyph, 5 attribute, 48 glue_spec\n, 5 attribute_list, 2 write nodes\n   avail lists: 2:7,3:1,4:1,5:4,7:1,9:1\n\nwarning  (pdf backend): no pages of output.\nTranscript written on main.log.\nLatexmk: Getting log file '.latex_build/main.log'\nLatexmk: Examining '.latex_build/main.fls'\nLatexmk: Examining '.latex_build/main.log'\nLatexmk: Errors, so I did not complete making targets\nCollected error summary (may duplicate other messages):\n  lualatex: Command for 'lualatex' gave return code 1\n      Refer to '.latex_build/main.log' and/or above output for details\n\n"
+        }
+      ]
+    },
+    {
+      "raw_report": "/tmp/icstex-macos-integration-cancellation-20260912-r3/report.json",
+      "raw_sha256": "e1762fd4fc10af2d59c09ec934f905d2cd8f476861e2aeb968b6c1a23bd3357a",
+      "case": "cancellation",
+      "seconds": 0.008189915999537334,
+      "ready": true,
+      "stopped": true,
+      "idle": true,
+      "group_gone": true,
+      "pid": 75950,
+      "stdout_tail": "",
+      "completed_summary": []
+    }
+  ]
+}
+

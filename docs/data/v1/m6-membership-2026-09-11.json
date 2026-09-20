@@ -1,0 +1,171 @@
+{
+  "app_sha256": "e1bf4fa9720c84cae9bda909da55dd890103f85ec36561f3a3512500e6e647da",
+  "platform": "macOS-26.6.1-arm64-arm-64bit",
+  "python": "3.12.6",
+  "qt_platform": "offscreen",
+  "samples": [
+    {
+      "children": 10,
+      "open_call_ms": 98.428,
+      "refresh": [
+        {
+          "trial": 0,
+          "call_ms": 4.678,
+          "timer_lateness_ms": 1.307
+        },
+        {
+          "trial": 1,
+          "call_ms": 4.17,
+          "timer_lateness_ms": 0.364
+        },
+        {
+          "trial": 2,
+          "call_ms": 4.116,
+          "timer_lateness_ms": 0.313
+        }
+      ],
+      "rss_open_kib": 160032,
+      "source_cursor_scroll_and_authority_preserved": true,
+      "rss_after_close_kib": 160192,
+      "closed_window_destroyed": true
+    },
+    {
+      "children": 50,
+      "open_call_ms": 142.651,
+      "refresh": [
+        {
+          "trial": 0,
+          "call_ms": 13.274,
+          "timer_lateness_ms": 3.342
+        },
+        {
+          "trial": 1,
+          "call_ms": 12.839,
+          "timer_lateness_ms": 2.915
+        },
+        {
+          "trial": 2,
+          "call_ms": 13.069,
+          "timer_lateness_ms": 3.148
+        }
+      ],
+      "rss_open_kib": 162976,
+      "source_cursor_scroll_and_authority_preserved": true,
+      "rss_after_close_kib": 163024,
+      "closed_window_destroyed": true
+    },
+    {
+      "children": 200,
+      "open_call_ms": 317.073,
+      "refresh": [
+        {
+          "trial": 0,
+          "call_ms": 46.549,
+          "timer_lateness_ms": 36.656
+        },
+        {
+          "trial": 1,
+          "call_ms": 46.465,
+          "timer_lateness_ms": 36.52
+        },
+        {
+          "trial": 2,
+          "call_ms": 46.376,
+          "timer_lateness_ms": 36.47
+        }
+      ],
+      "rss_open_kib": 167584,
+      "source_cursor_scroll_and_authority_preserved": true,
+      "rss_after_close_kib": 167360,
+      "closed_window_destroyed": true
+    }
+  ],
+  "memory_boundary": "Current process RSS includes Qt/Python allocators and caches; not a leak diagnosis",
+  "core": [
+    {
+      "children": 10,
+      "files": 11,
+      "source_bytes": 24600,
+      "static_graph": {
+        "samples_ms": [
+          2.123,
+          2.205,
+          2.193,
+          2.18,
+          2.197
+        ],
+        "median_ms": 2.193,
+        "max_ms": 2.205
+      },
+      "graph_and_content_hashes": {
+        "samples_ms": [
+          3.668,
+          3.646,
+          3.637,
+          3.645,
+          3.65
+        ],
+        "median_ms": 3.646,
+        "max_ms": 3.668
+      },
+      "cache_condition": "Repeated reads; OS cache not flushed; no app graph cache"
+    },
+    {
+      "children": 50,
+      "files": 51,
+      "source_bytes": 25440,
+      "static_graph": {
+        "samples_ms": [
+          7.826,
+          7.916,
+          7.892,
+          7.92,
+          7.886
+        ],
+        "median_ms": 7.892,
+        "max_ms": 7.92
+      },
+      "graph_and_content_hashes": {
+        "samples_ms": [
+          14.098,
+          14.53,
+          14.038,
+          14.472,
+          14.457
+        ],
+        "median_ms": 14.457,
+        "max_ms": 14.53
+      },
+      "cache_condition": "Repeated reads; OS cache not flushed; no app graph cache"
+    },
+    {
+      "children": 200,
+      "files": 201,
+      "source_bytes": 28690,
+      "static_graph": {
+        "samples_ms": [
+          29.548,
+          29.702,
+          30.634,
+          29.698,
+          30.03
+        ],
+        "median_ms": 29.702,
+        "max_ms": 30.634
+      },
+      "graph_and_content_hashes": {
+        "samples_ms": [
+          56.404,
+          56.371,
+          62.145,
+          56.006,
+          61.248
+        ],
+        "median_ms": 56.404,
+        "max_ms": 62.145
+      },
+      "cache_condition": "Repeated reads; OS cache not flushed; no app graph cache"
+    }
+  ],
+  "app_hash_matches_after_run": true
+}

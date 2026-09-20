@@ -93,3 +93,23 @@ class WordCountViewTests(TestCase):
             scroll.horizontalScrollBarPolicy(),
             Qt.ScrollBarPolicy.ScrollBarAlwaysOff,
         )
+
+    def test_texcount_mode_and_exclusion_scope_are_not_described_as_exact(self) -> None:
+        view = WordCountView()
+        result = WordCountResult(
+            total_words=5,
+            effective_words=2,
+            header_words=0,
+            caption_words=2,
+            math_inline=0,
+            math_display=0,
+            numbers=1,
+            source="texcount",
+        )
+
+        view.set_result(result, "main.tex", False)
+
+        self.assertEqual(view.last_mode_label, "TeXcount 兼容统计")
+        self.assertIn("脚注", view.meta_label.text())
+        self.assertIn("课程要求", view.meta_label.text())
+        self.assertIn("说明/脚注", view._legend_html())

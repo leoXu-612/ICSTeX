@@ -15,9 +15,11 @@ from pylatexenc.latexwalker import (
     LatexMacroNode,
     LatexMathNode,
     LatexNode,
+    LatexSpecialsNode,
 )
 
 from app.core.latex_parser import make_walker
+from app.core.file_observation import FileSignature, file_signature
 from app.core.latex_tools import LaTeXToolchain, detect_toolchain
 from app.core.paths import (
     included_tex_files_with_positions_from_text,
@@ -29,7 +31,21 @@ from app.core.process_env import latex_subprocess_env
 from app.core.text_encoding import LatexTextDecodeError, decode_latex_bytes
 
 
-CJK_RANGES = "\u3400-\u4dbf\u4e00-\u9fff"
+# Match Unicode ideographs rather than the broader ``Han`` script property.
+# TeXcount's ``-chinese`` preset uses ``Han``, whose script extensions also
+# contain punctuation such as U+3002 IDEOGRAPHIC FULL STOP and U+3001 IDEOGRAPHIC
+# COMMA.  Those marks must not become words.  Keep the Python fallback aligned
+# with TeXcount's narrower ``Ideographic`` property, including supplementary
+# CJK extension and compatibility planes.
+CJK_RANGES = (
+    "\u3007"
+    "\u3400-\u4dbf"
+    "\u4e00-\u9fff"
+    "\uf900-\ufaff"
+    "\U00020000-\U0002ee5f"
+    "\U0002f800-\U0002fa1f"
+    "\U00030000-\U000323af"
+)
 NON_CJK_LETTER = rf"[^\W\d_{CJK_RANGES}]"
 WORD_PATTERN = rf"(?:{NON_CJK_LETTER}+(?:[-'’]{NON_CJK_LETTER}+)*|[{CJK_RANGES}])"
 WORD_RE = re.compile(WORD_PATTERN, re.UNICODE)
@@ -43,6 +59,8 @@ INCLUDE_TARGET_RE = re.compile(r"(?P<prefix>\\(?:input|include|subfile)\s*\{)(?P
 TEXCOUNT_MARKER = "ICSTEX_WORDCOUNT"
 TEXCOUNT_TEMPLATE = f"{TEXCOUNT_MARKER}\t{{1}}\t{{2}}\t{{3}}\t{{4}}\t{{5}}\t{{6}}\t{{7}}\t{{SUM}}\n"
 TEXCOUNT_SUM_WEIGHTS = "-sum=1,1,1,0,0,0,0"
+TEXCOUNT_LOGOGRAMS = "-logograms=Ideographic"
+TC_COMMENT_RE = re.compile(r"^%*[ \t]*TC:[ \t]*(ignore|endignore)\b", re.IGNORECASE)
 
 HEADER_COMMANDS = {
     "title",
@@ -55,6 +73,7 @@ HEADER_COMMANDS = {
     "subparagraph",
 }
 CAPTION_COMMANDS = {"caption", "captionof"}
+NOTE_COMMANDS = {"endnote", "footnote", "footnotetext", "marginpar", "thanks"}
 NON_TEXT_COMMANDS = {
     "addbibresource",
     "autocite",
@@ -78,6 +97,80 @@ NON_TEXT_COMMANDS = {
     "textcite",
     "url",
     "usepackage",
+}
+BOUNDARY_COMMANDS = {
+    "autocite",
+    "autoref",
+    "cite",
+    "citealp",
+    "citealt",
+    "citep",
+    "citet",
+    "eqref",
+    "include",
+    "includegraphics",
+    "input",
+    "pageref",
+    "parencite",
+    "ref",
+    "subfile",
+    "textcite",
+    "url",
+}
+BOUNDARY_SYMBOL_COMMANDS = {
+    " ", "#", "$", "%", "&", "P", "S",
+    ",", ":", ";", "!",
+    "enspace", "hfill", "hspace", "ldots", "negthinspace", "quad", "qquad",
+    "slash", "textbackslash", "textemdash", "textendash", "thinspace", "vspace",
+}
+TRANSPARENT_SYMBOL_COMMANDS = {"_", "{", "}"}
+FORMATTING_COMMANDS = {
+    "emph",
+    "enquote",
+    "mbox",
+    "textbf",
+    "textit",
+    "textmd",
+    "textnormal",
+    "textrm",
+    "textsc",
+    "textsf",
+    "textsl",
+    "textsubscript",
+    "textsuperscript",
+    "texttt",
+    "textup",
+    "underline",
+}
+ACCENT_COMMANDS = {
+    "'", "`", '"', "^", "~", ".", "=",
+    "H", "b", "c", "d", "k", "r", "t", "u", "v",
+}
+TEXT_COMMAND_REPLACEMENTS = {
+    "AA": "Å",
+    "AE": "Æ",
+    "DH": "Ð",
+    "DJ": "Đ",
+    "L": "Ł",
+    "LaTeX": "LaTeX",
+    "NG": "Ŋ",
+    "O": "Ø",
+    "OE": "Œ",
+    "SS": "SS",
+    "TH": "Þ",
+    "TeX": "TeX",
+    "aa": "å",
+    "ae": "æ",
+    "dh": "ð",
+    "dj": "đ",
+    "i": "ı",
+    "j": "ȷ",
+    "l": "ł",
+    "ng": "ŋ",
+    "o": "ø",
+    "oe": "œ",
+    "ss": "ß",
+    "th": "þ",
 }
 DISPLAY_MATH_ENV_NAMES = {
     "equation", "equation*",
@@ -159,6 +252,17 @@ class _ProjectAnalysis:
     # analyzed for the preview. The shadow tree normalizes supported encodings
     # and replaces unreadable child sources with empty UTF-8 placeholders.
     needs_utf8_shadow: bool = False
+    texcount_safe: bool = True
+
+
+@dataclass(frozen=True)
+class WordCountSnapshot:
+    result: WordCountResult
+    disk_signatures: tuple[tuple[Path, FileSignature], ...] = ()
+    stable: bool = True
+
+    def is_current(self) -> bool:
+        return self.stable and all(file_signature(path) == value for path, value in self.disk_signatures)
 
 
 def count_words(path: str | Path, toolchain: LaTeXToolchain | None = None) -> WordCountResult:
@@ -178,12 +282,42 @@ def count_project(
         for path, text in (source_overrides or {}).items()
     }
     analysis = _analyze_project(root, overrides)
+    return _count_project_analysis(root, overrides, analysis, toolchain)
+
+
+def count_project_snapshot(
+    root_path: str | Path,
+    source_overrides: dict[Path, str],
+    toolchain: LaTeXToolchain,
+) -> WordCountSnapshot:
+    """Count immutable buffers and reject disk dependencies changed during work.
+
+    TeXcount consumes the same isolated shadow sources as the structured
+    analysis rather than rereading live files, even for a child-only editor.
+    This envelope is internal; WordCountResult and MCP fields stay unchanged.
+    """
+    root = normalize_path(root_path)
+    overrides = {normalize_path(path): text for path, text in source_overrides.items()}
+    observed: dict[Path, FileSignature] = {}
+    unstable: list[Path] = []
+    analysis = _analyze_project(root, overrides, observed=observed, unstable=unstable)
+    # Force the snapshot/shadow route even if only a child buffer was open.
+    captured = {source.path: source.text for source in analysis.sources}
+    result = _count_project_analysis(root, captured, analysis, toolchain)
+    snapshot = WordCountSnapshot(result, tuple(observed.items()), not unstable)
+    return snapshot
+
+
+def _count_project_analysis(
+    root: Path, overrides: dict[Path, str], analysis: _ProjectAnalysis,
+    toolchain: LaTeXToolchain | None,
+) -> WordCountResult:
     if not analysis.sources:
         details = analysis.warnings[0] if analysis.warnings else "File could not be read."
         return _empty_result("fallback", details, warnings=analysis.warnings)
 
     tools = toolchain or detect_toolchain()
-    if tools.texcount:
+    if tools.texcount and analysis.texcount_safe:
         result = _count_project_with_texcount(root, overrides, analysis, tools.texcount)
         if result is not None:
             return result
@@ -191,6 +325,12 @@ def count_project(
             analysis.breakdown,
             source="fallback",
             warnings=(*analysis.warnings, _texcount_failed_warning()),
+        )
+    if tools.texcount:
+        return _result_from_breakdown(
+            analysis.breakdown,
+            source="fallback",
+            warnings=(*analysis.warnings, _texcount_unsafe_project_warning()),
         )
     return _result_from_breakdown(
         analysis.breakdown,
@@ -323,7 +463,7 @@ def _run_texcount(
                 executable,
                 "-merge",
                 "-utf8",
-                "-chinese",
+                TEXCOUNT_LOGOGRAMS,
                 TEXCOUNT_SUM_WEIGHTS,
                 f"-template={TEXCOUNT_TEMPLATE}",
                 *target_args,
@@ -408,11 +548,15 @@ def _result_from_breakdown(
 
 
 def _texcount_missing_warning() -> str:
-    return "未找到 texcount，已使用 Python 简化统计。"
+    return "未找到 TeXcount，已使用 ICSTeX 本地结构化统计；结果可能与 TeXcount 不同。"
 
 
 def _texcount_failed_warning() -> str:
-    return "texcount 调用失败，已自动降级为 Python 简化统计。"
+    return "TeXcount 调用失败，已自动降级为 ICSTeX 本地结构化统计。"
+
+
+def _texcount_unsafe_project_warning() -> str:
+    return "项目存在循环引用或展开超限，已跳过 TeXcount 以避免递归卡住。"
 
 
 def _empty_result(
@@ -442,42 +586,47 @@ class _Accum:
     __slots__ = (
         "source_text",
         "source_label",
-        "body_words", "body_numbers",
-        "header_words", "header_numbers",
-        "caption_words", "caption_numbers",
+        "text_parts",
         "math_inline", "math_display",
-        "visual_segments",
+        "segment_parts",
     )
 
     def __init__(self, source_text: str, source_label: str | None = None) -> None:
         self.source_text = source_text
         self.source_label = source_label
-        self.body_words = 0
-        self.body_numbers = 0
-        self.header_words = 0
-        self.header_numbers = 0
-        self.caption_words = 0
-        self.caption_numbers = 0
+        self.text_parts: dict[str, list[str]] = {
+            "body": [],
+            "header": [],
+            "caption": [],
+        }
         self.math_inline = 0
         self.math_display = 0
-        self.visual_segments: list[WordCountSegment] = []
+        self.segment_parts: list[tuple[str, str | None, list[str]]] = []
 
     def add_chars(self, chars: str, category: str) -> None:
-        words = len(WORD_RE.findall(chars))
-        numbers = len(NUMBER_RE.findall(chars))
+        self.text_parts[category].append(chars)
         if category == "header":
-            self.header_words += words
-            self.header_numbers += numbers
             visual_category = "headers"
         elif category == "caption":
-            self.caption_words += words
-            self.caption_numbers += numbers
             visual_category = "captions"
         else:
-            self.body_words += words
-            self.body_numbers += numbers
             visual_category = "effective"
         self.add_text_segments(chars, visual_category)
+
+    def add_boundary(self, category: str) -> None:
+        parts = self.text_parts[category]
+        if parts and not parts[-1].endswith((" ", "\t", "\r", "\n")):
+            parts.append(" ")
+            if category == "header":
+                visual_category = "headers"
+            elif category == "caption":
+                visual_category = "captions"
+            else:
+                visual_category = "effective"
+            self.add_segment(" ", visual_category)
+
+    def category_text(self, category: str) -> str:
+        return "".join(self.text_parts[category])
 
     def add_text_segments(self, chars: str, category: str) -> None:
         if not chars:
@@ -499,35 +648,50 @@ class _Accum:
     def add_segment(self, text: str, category: str) -> None:
         if not text:
             return
-        if (
-            self.visual_segments
-            and self.visual_segments[-1].category == category
-            and self.visual_segments[-1].source == self.source_label
-        ):
-            previous = self.visual_segments[-1]
-            self.visual_segments[-1] = WordCountSegment(previous.text + text, category, self.source_label)
-            return
-        self.visual_segments.append(WordCountSegment(text, category, self.source_label))
+        if self.segment_parts:
+            previous_category, previous_source, parts = self.segment_parts[-1]
+            if previous_category == category and previous_source == self.source_label:
+                parts.append(text)
+                return
+        # Join each contiguous category/source run once after parsing. Copying
+        # its growing string per word makes long plain paragraphs quadratic.
+        self.segment_parts.append((category, self.source_label, [text]))
 
 
-def _analyze_project(root: Path, overrides: dict[Path, str]) -> _ProjectAnalysis:
-    seen: set[Path] = set()
+def _analyze_project(
+    root: Path, overrides: dict[Path, str], *,
+    observed: dict[Path, FileSignature] | None = None,
+    unstable: list[Path] | None = None,
+) -> _ProjectAnalysis:
     sources: list[_ProjectText] = []
     warnings: list[str] = []
     shadow_required_sources: list[Path] = []
+    texcount_safe = True
 
-    def visit(path: Path, initial_in_document: bool | None) -> None:
+    def visit(
+        path: Path,
+        initial_in_document: bool | None,
+        ancestors: tuple[Path, ...],
+    ) -> None:
+        nonlocal texcount_safe
         normalized = normalize_path(path)
-        if len(seen) >= 200:
-            if "项目包含超过 200 个 TeX 文件，彩色预览已停止继续展开。" not in warnings:
-                warnings.append("项目包含超过 200 个 TeX 文件，彩色预览已停止继续展开。")
+        if len(sources) >= 200:
+            texcount_safe = False
+            limit_warning = "项目引用展开超过 200 次，字数统计已停止继续展开。"
+            if limit_warning not in warnings:
+                warnings.append(limit_warning)
             return
-        if normalized in seen:
-            warnings.append(f"重复或循环引用只在彩色预览中显示一次：{_source_label(normalized, root)}。")
+        if normalized in ancestors:
+            texcount_safe = False
+            warnings.append(f"检测到循环引用，已停止继续展开：{_source_label(normalized, root)}。")
             return
-        seen.add(normalized)
         text = overrides.get(normalized)
         if text is None:
+            before = file_signature(normalized) if observed is not None else None
+            if observed is not None:
+                if normalized in observed and observed[normalized] != before and unstable is not None:
+                    unstable.append(normalized)
+                observed.setdefault(normalized, before)
             try:
                 data = normalized.read_bytes()
             except OSError:
@@ -536,6 +700,8 @@ def _analyze_project(root: Path, overrides: dict[Path, str]) -> _ProjectAnalysis
                     shadow_required_sources.append(normalized)
                     sources.append(_ProjectText(normalized, "", initial_in_document))
                 return
+            if observed is not None and file_signature(normalized) != before and unstable is not None:
+                unstable.append(normalized)
             try:
                 decoded = decode_latex_bytes(data)
                 text = decoded.text
@@ -551,19 +717,20 @@ def _analyze_project(root: Path, overrides: dict[Path, str]) -> _ProjectAnalysis
                     sources.append(_ProjectText(normalized, "", initial_in_document))
                 return
         sources.append(_ProjectText(normalized, text, initial_in_document))
-        clean_text = strip_latex_comments(text)
+        dependency_text = _mask_texcount_ignored_regions(text)
+        clean_text = strip_latex_comments(dependency_text)
         begin_document = clean_text.find("\\begin{document}")
         end_document = clean_text.find("\\end{document}")
         inherited_context = True if initial_in_document is None else initial_in_document
-        for child, position in included_tex_files_with_positions_from_text(normalized, text):
+        for child, position in included_tex_files_with_positions_from_text(normalized, dependency_text):
             child_in_document = inherited_context
             if begin_document >= 0:
                 child_in_document = position > begin_document and (
                     end_document < 0 or position < end_document
                 )
-            visit(child, child_in_document)
+            visit(child, child_in_document, (*ancestors, normalized))
 
-    visit(root, None)
+    visit(root, None, ())
     breakdowns = tuple(
         _analyze_latex_text(
             source.text,
@@ -577,6 +744,7 @@ def _analyze_project(root: Path, overrides: dict[Path, str]) -> _ProjectAnalysis
         sources=tuple(sources),
         warnings=tuple(dict.fromkeys(warnings)),
         needs_utf8_shadow=bool(shadow_required_sources),
+        texcount_safe=texcount_safe,
     )
 
 
@@ -606,6 +774,7 @@ def _analyze_latex_text(
     source_label: str | None = None,
     initial_in_document: bool | None = None,
 ) -> _TextBreakdown:
+    text = _mask_texcount_ignored_regions(text)
     accum = _Accum(text, source_label)
     nodes = _parse_nodes(text)
     if "\\begin{document}" in text:
@@ -615,17 +784,68 @@ def _analyze_latex_text(
     else:
         in_document = initial_in_document
     _walk(nodes, accum, in_document=in_document, category="body")
+    body_text = accum.category_text("body")
+    header_text = accum.category_text("header")
+    caption_text = accum.category_text("caption")
     return _TextBreakdown(
-        body_words=accum.body_words,
-        header_words=accum.header_words,
-        caption_words=accum.caption_words,
-        body_numbers=accum.body_numbers,
-        header_numbers=accum.header_numbers,
-        caption_numbers=accum.caption_numbers,
+        body_words=len(WORD_RE.findall(body_text)),
+        header_words=len(WORD_RE.findall(header_text)),
+        caption_words=len(WORD_RE.findall(caption_text)),
+        body_numbers=len(NUMBER_RE.findall(body_text)),
+        header_numbers=len(NUMBER_RE.findall(header_text)),
+        caption_numbers=len(NUMBER_RE.findall(caption_text)),
         math_inline=accum.math_inline,
         math_display=accum.math_display,
-        visual_segments=tuple(accum.visual_segments),
+        visual_segments=tuple(
+            WordCountSegment("".join(parts), category, label)
+            for category, label, parts in accum.segment_parts
+        ),
     )
+
+
+def _mask_texcount_ignored_regions(text: str) -> str:
+    """Mask standard ``%TC:ignore`` regions without changing source offsets."""
+    if "tc:" not in text.lower():
+        return text
+    nodes = _parse_nodes(text)
+    directives: list[tuple[LatexCommentNode, str]] = []
+    for node in _descendant_nodes(nodes):
+        if not isinstance(node, LatexCommentNode):
+            continue
+        directive = TC_COMMENT_RE.match(node.comment)
+        if directive is not None:
+            directives.append((node, directive.group(1).lower()))
+
+    ranges: list[tuple[int, int]] = []
+    start: int | None = None
+    for node, command in sorted(directives, key=lambda item: item[0].pos):
+        if command == "ignore" and start is None:
+            start = node.pos
+        elif command == "endignore" and start is not None:
+            ranges.append((start, node.pos + node.len))
+            start = None
+    if start is not None:
+        ranges.append((start, len(text)))
+    if not ranges:
+        return text
+
+    masked = list(text)
+    for first, last in ranges:
+        for index in range(first, last):
+            if masked[index] not in "\r\n":
+                masked[index] = " "
+    return "".join(masked)
+
+
+def _descendant_nodes(nodes: list[LatexNode]):
+    for node in nodes:
+        yield node
+        if isinstance(node, (LatexEnvironmentNode, LatexGroupNode)):
+            yield from _descendant_nodes(node.nodelist)
+        elif isinstance(node, LatexMacroNode):
+            for arg in _arg_iter(node):
+                if isinstance(arg, LatexGroupNode):
+                    yield from _descendant_nodes(arg.nodelist)
 
 
 def _parse_nodes(text: str) -> list[LatexNode]:
@@ -655,23 +875,34 @@ def _walk(
                 _walk(node.nodelist, accum, in_document=True, category=category)
             elif env_name in DISPLAY_MATH_ENV_NAMES:
                 if in_document:
+                    accum.add_boundary(category)
                     accum.math_display += 1
                     accum.add_math_segment(node, "math_display")
+                    accum.add_boundary(category)
             elif env_name in VERBATIM_ENV_NAMES or env_name in BIBLIOGRAPHY_ENV_NAMES:
+                accum.add_boundary(category)
                 continue  # verbatim / bibliography list: not counted as body text
             else:
+                accum.add_boundary(category)
                 _walk(node.nodelist, accum, in_document=in_document, category=category)
+                accum.add_boundary(category)
         elif isinstance(node, LatexMathNode):
             if not in_document:
                 continue
+            accum.add_boundary(category)
             if getattr(node, "displaytype", None) == "inline":
                 accum.math_inline += 1
                 accum.add_math_segment(node, "math_inline")
             else:
                 accum.math_display += 1
                 accum.add_math_segment(node, "math_display")
+            accum.add_boundary(category)
         elif isinstance(node, LatexGroupNode):
             _walk(node.nodelist, accum, in_document=in_document, category=category)
+        elif isinstance(node, LatexSpecialsNode):
+            if category in ("header", "caption") or in_document:
+                if node.specials_chars in {"~", "&"}:
+                    accum.add_chars(" ", category)
 
 
 def _walk_macro(
@@ -683,27 +914,64 @@ def _walk_macro(
 ) -> None:
     name = node.macroname
     if name in NON_TEXT_COMMANDS:
+        if name in BOUNDARY_COMMANDS:
+            accum.add_boundary(category)
+        return
+    if name in {"verb", "lstinline"}:
+        accum.add_boundary(category)
+        return
+    if name in {"\\", "linebreak", "newline", "par", "item"}:
+        accum.add_boundary(category)
+        return
+    if name in BOUNDARY_SYMBOL_COMMANDS:
+        accum.add_boundary(category)
+        return
+    if name in TRANSPARENT_SYMBOL_COMMANDS:
         return
     if name == "href":
         _walk_href_args(node, accum, in_document=in_document, category=category)
         return
     if name in HEADER_COMMANDS:
-        _walk_first_group_arg(node, accum, in_document=in_document, target_category="header")
+        accum.add_boundary(category)
+        _walk_last_group_arg(node, accum, in_document=in_document, target_category="header")
+        accum.add_boundary(category)
         return
     if name in CAPTION_COMMANDS:
-        # caption: 1 group arg; captionof: take last group arg (the actual caption text)
-        if name == "captionof":
-            _walk_last_group_arg(node, accum, in_document=in_document, target_category="caption")
-        else:
-            _walk_first_group_arg(node, accum, in_document=in_document, target_category="caption")
+        accum.add_boundary(category)
+        # Ignore optional short captions and captionof's object type; the last
+        # group is the text rendered with the figure/table.
+        _walk_last_group_arg(node, accum, in_document=in_document, target_category="caption")
+        accum.add_boundary(category)
         return
-    # Any other macro: walk its arg groups so e.g. \textbf{Bold} or unknown macros still count.
+    if name in NOTE_COMMANDS:
+        accum.add_boundary(category)
+        _walk_last_group_arg(node, accum, in_document=in_document, target_category="caption")
+        accum.add_boundary(category)
+        return
+    if name in TEXT_COMMAND_REPLACEMENTS:
+        if category in ("header", "caption") or in_document:
+            accum.add_chars(TEXT_COMMAND_REPLACEMENTS[name], category)
+        return
+    if name in ACCENT_COMMANDS or name in FORMATTING_COMMANDS:
+        for arg in _arg_iter(node):
+            if isinstance(arg, LatexGroupNode):
+                _walk(arg.nodelist, accum, in_document=in_document, category=category)
+            elif isinstance(arg, LatexCharsNode):
+                if category in ("header", "caption") or in_document:
+                    accum.add_chars(arg.chars, category)
+        return
+    # Unknown semantic macros are ambiguous. Count visible-looking arguments,
+    # but keep boundaries so metadata arguments cannot merge neighbouring words.
     for arg in _arg_iter(node):
         if isinstance(arg, LatexGroupNode):
+            accum.add_boundary(category)
             _walk(arg.nodelist, accum, in_document=in_document, category=category)
+            accum.add_boundary(category)
         elif isinstance(arg, LatexCharsNode):
             if category in ("header", "caption") or in_document:
+                accum.add_boundary(category)
                 accum.add_chars(arg.chars, category)
+                accum.add_boundary(category)
 
 
 def _walk_href_args(node, accum, *, in_document, category):
@@ -715,20 +983,15 @@ def _walk_href_args(node, accum, *, in_document, category):
         _walk(groups[0].nodelist, accum, in_document=in_document, category=category)
 
 
-def _walk_first_group_arg(node, accum, *, in_document, target_category):
-    for arg in _arg_iter(node):
-        if isinstance(arg, LatexGroupNode):
-            _walk(arg.nodelist, accum, in_document=in_document, category=target_category)
-            return
-
-
 def _walk_last_group_arg(node, accum, *, in_document, target_category):
     last = None
     for arg in _arg_iter(node):
         if isinstance(arg, LatexGroupNode):
             last = arg
     if last is not None:
+        accum.add_boundary(target_category)
         _walk(last.nodelist, accum, in_document=in_document, category=target_category)
+        accum.add_boundary(target_category)
 
 
 def _arg_iter(node: LatexMacroNode):

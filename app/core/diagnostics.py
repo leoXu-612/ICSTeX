@@ -44,8 +44,9 @@ _MISMATCH_RE = re.compile(r"Unexpected mismatching closing environment: '([^']+)
 
 PACKAGE_RULES: tuple[tuple[str, re.Pattern[str], str, str], ...] = (
     ("graphicx", re.compile(r"\\includegraphics\b"), "缺少 graphicx", "插入图片需要 graphicx package。"),
-    ("amsmath", re.compile(r"\\(?:begin\{(?:align|align\*|equation\*|gather|multline)\}|eqref\b)"), "缺少 amsmath", "公式环境或 eqref 通常需要 amsmath package。"),
+    ("amsmath", re.compile(r"\\(?:begin\{(?:align|align\*|equation\*|gather|multline)\}|eqref\b|dfrac\b|operatorname\b|text\b)"), "缺少 amsmath", "公式环境或相关数学命令通常需要 amsmath package。"),
     ("hyperref", re.compile(r"\\(?:href|url|autoref)\b"), "缺少 hyperref", "超链接、URL 或 autoref 通常需要 hyperref package。"),
+    ("xcolor", re.compile(r"\\(?:textcolor|colorbox|fcolorbox|color)\b"), "缺少 xcolor", "文字或背景颜色命令需要 xcolor package。"),
     ("booktabs", re.compile(r"\\(?:toprule|midrule|bottomrule)\b"), "缺少 booktabs", "专业表格线需要 booktabs package。"),
     ("siunitx", re.compile(r"\\(?:SI|si|qty|num|unit)\b"), "缺少 siunitx", "数字、单位和科学计量格式通常需要 siunitx package。"),
     ("subcaption", re.compile(r"\\(?:begin\{subfigure\}|subcaptionbox\b)"), "缺少 subcaption", "并排子图通常需要 subcaption package。"),
@@ -59,6 +60,13 @@ COMMAND_PACKAGE_HINTS = {
     "\\url": "hyperref",
     "\\autoref": "hyperref",
     "\\eqref": "amsmath",
+    "\\dfrac": "amsmath",
+    "\\operatorname": "amsmath",
+    "\\text": "amsmath",
+    "\\textcolor": "xcolor",
+    "\\colorbox": "xcolor",
+    "\\fcolorbox": "xcolor",
+    "\\color": "xcolor",
     "\\toprule": "booktabs",
     "\\midrule": "booktabs",
     "\\bottomrule": "booktabs",
@@ -135,6 +143,23 @@ def explain_latex_error(error: LaTeXError, *, root_file: Path | None = None) -> 
     raw = error.message.strip()
     lower = raw.lower()
     file = error.file or root_file
+
+    if "unable to load picture or pdf file" in lower:
+        return Diagnostic(
+            severity=SEVERITY_ERROR,
+            title="图片或 PDF 读取失败",
+            message="请检查图片文件、引用路径和 graphicspath 设置。带行号的检查项可定位引用；原始日志中保留了文件名。",
+            file=file, line=error.line, raw_message=raw,
+        )
+
+    if raw.startswith("luaotfload: FATAL ERROR"):
+        return Diagnostic(
+            severity=SEVERITY_ERROR,
+            title="LuaLaTeX 字体组件失败",
+            message="luaotfload 字体组件报告致命错误。请查看原始日志并检查工具链与文件访问配置；"
+                    "这不等同于正文语法错误。不会自动放宽读取限制或切换引擎。",
+            raw_message=raw,
+        )
 
     if "undefined control sequence" in lower:
         command = _extract_command(raw)

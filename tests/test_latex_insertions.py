@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shutil
 from tempfile import TemporaryDirectory
-from unittest import TestCase
+from unittest import TestCase, skipUnless
 
+from app.core.compiler import BuildPurpose, CompileManager
+from app.core.latex_tools import LaTeXEngine, detect_toolchain
 from app.core.latex_insertions import (
     FIGURE_PACKAGES,
+    FigureLayout,
+    FigureLayoutItem,
+    FigureLayoutSpec,
     FigureSpec,
     HyperlinkSpec,
     SideBySideFigureSpec,
@@ -13,6 +19,7 @@ from app.core.latex_insertions import (
     ensure_packages,
     export_template,
     existing_packages,
+    figure_layout_snippet,
     figure_snippet,
     hyperlink_snippet,
     import_custom_template,
@@ -26,6 +33,9 @@ from app.core.latex_insertions import (
     template_for_key,
     unique_asset_path,
 )
+
+
+TOOLCHAIN = detect_toolchain()
 
 
 class ParseTabularTests(TestCase):
@@ -145,6 +155,67 @@ class LatexInsertionsTests(TestCase):
         self.assertIn("\\includegraphics[width=\\linewidth]{figures/a.png}", snippet)
         self.assertIn("\\caption{Both}", snippet)
 
+    def test_vertical_figure_layout_preserves_individual_widths(self) -> None:
+        snippet = figure_layout_snippet(
+            FigureLayoutSpec(
+                layout=FigureLayout.VERTICAL,
+                items=(
+                    FigureLayoutItem("figures/a.png", 0.80, "Top"),
+                    FigureLayoutItem("figures/b.png", 0.65, "Bottom"),
+                ),
+                caption="Vertical pair",
+            )
+        )
+
+        self.assertIn("\\begin{subfigure}{0.8\\textwidth}", snippet)
+        self.assertIn("\\begin{subfigure}{0.65\\textwidth}", snippet)
+        self.assertIn("\\par\\medskip", snippet)
+        self.assertNotIn("\\hfill", snippet)
+
+    def test_grid_figure_layout_builds_two_rows_without_distortion(self) -> None:
+        snippet = figure_layout_snippet(
+            FigureLayoutSpec(
+                layout=FigureLayout.GRID_2X2,
+                items=tuple(
+                    FigureLayoutItem(f"figures/{name}.png", width, name.upper())
+                    for name, width in (("a", 0.55), ("b", 0.40), ("c", 0.45), ("d", 0.50))
+                ),
+                caption="Grid",
+                label="fig:grid",
+            )
+        )
+
+        self.assertEqual(snippet.count("\\begin{subfigure}"), 4)
+        self.assertEqual(snippet.count("\\hfill"), 2)
+        self.assertEqual(snippet.count("\\par\\medskip"), 1)
+        self.assertEqual(snippet.count("\\includegraphics[width=\\linewidth]"), 4)
+        self.assertNotIn("height=", snippet)
+        self.assertIn("\\label{fig:grid}", snippet)
+
+    def test_horizontal_and_grid_layout_reject_row_overflow(self) -> None:
+        with self.assertRaisesRegex(ValueError, "宽度合计"):
+            figure_layout_snippet(
+                FigureLayoutSpec(
+                    layout=FigureLayout.HORIZONTAL,
+                    items=(
+                        FigureLayoutItem("figures/a.png", 0.60),
+                        FigureLayoutItem("figures/b.png", 0.50),
+                    ),
+                )
+            )
+
+    def test_figure_layout_requires_the_layout_image_count(self) -> None:
+        with self.assertRaisesRegex(ValueError, "4 张图片"):
+            figure_layout_snippet(
+                FigureLayoutSpec(
+                    layout=FigureLayout.GRID_2X2,
+                    items=(
+                        FigureLayoutItem("figures/a.png"),
+                        FigureLayoutItem("figures/b.png"),
+                    ),
+                )
+            )
+
     def test_table_snippet_uses_booktabs(self) -> None:
         snippet = table_snippet(TableSpec(rows=2, columns=2, caption="Data", label="tab:data"))
 
@@ -217,3 +288,46 @@ class LatexInsertionsTests(TestCase):
             exported = export_template(saved.key, root / "shared-template", root)
             self.assertEqual(exported.suffix, ".tex")
             self.assertIn("\\documentclass{article}", exported.read_text(encoding="utf-8"))
+
+
+@skipUnless(TOOLCHAIN.supports_engine(LaTeXEngine.XELATEX), "xelatex is not available")
+class FigureLayoutCompileTests(TestCase):
+    def test_adjustable_grid_compiles_with_subcaption(self) -> None:
+        with TemporaryDirectory() as directory:
+            project = Path(directory)
+            fixture = Path(__file__).parents[1] / "app" / "assets" / "icstex_cover.png"
+            for name in ("a.png", "b.png", "c.png", "d.png"):
+                shutil.copyfile(fixture, project / name)
+            snippet = figure_layout_snippet(
+                FigureLayoutSpec(
+                    layout=FigureLayout.GRID_2X2,
+                    items=tuple(
+                        FigureLayoutItem(name, width, name[0].upper())
+                        for name, width in zip(
+                            ("a.png", "b.png", "c.png", "d.png"),
+                            (0.55, 0.40, 0.45, 0.50),
+                            strict=True,
+                        )
+                    ),
+                    caption="Four panels",
+                    label="fig:grid",
+                )
+            )
+            main = project / "main.tex"
+            main.write_text(
+                "\\documentclass{article}\n"
+                "\\usepackage{graphicx}\n"
+                "\\usepackage{subcaption}\n"
+                "\\begin{document}\n"
+                f"{snippet}\n"
+                "\\end{document}\n",
+                encoding="utf-8",
+            )
+
+            result = CompileManager(
+                main,
+                toolchain=TOOLCHAIN,
+                engine=LaTeXEngine.XELATEX,
+            ).compile_now(BuildPurpose.FINAL, timeout_seconds=300)
+
+            self.assertTrue(result.ok, result.combined_output)

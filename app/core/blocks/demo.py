@@ -15,7 +15,7 @@ import zlib
 
 from pathlib import Path
 
-from app.core.blocks.block_renderer import render_block, required_packages_for_block
+from app.core.blocks.block_renderer import RenderPolicy, render_block, required_packages_for_block
 from app.core.blocks.export_package import export_package
 from app.core.blocks.formula_adapter import FormulaBlockAdapter
 from app.core.blocks.layout import LayoutNode, Size, block_slot
@@ -137,7 +137,11 @@ def build_demo(project_dir: Path) -> DemoResult:
     block_latex: dict[str, str] = {}
     for block in registry.blocks():
         (blocks_dir / f"{block.id}.tex").write_text(
-            render_block(block, in_box=True),
+            render_block(
+                block,
+                in_box=True,
+                policy=RenderPolicy(allow_trusted_raw_latex=True, project_root=project),
+            ),
             encoding="utf-8",
         )
         block_latex[block.id] = f"\\input{{blocks/{block.id}.tex}}\n"

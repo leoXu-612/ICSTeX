@@ -1,17 +1,15 @@
 # FORCODEX.md
 
-Active bounded task (2026-09-20): integrate accepted source through PR, publish
-macOS Beta 4 and update the existing production website and signed update feed.
+Completed (2026-09-20): authorized GitHub integration and macOS Beta 4 publication.
 
-User authorized commit, push, merge and publication. Keep Actions disabled and
-retain main PR/squash/conversation rules. Local accepted source is saved at a5451d8.
-This isolated branch starts at main 69ca0b6; content integration uses shared feature
-head 44eecb8 to reconcile squashed history without dropping main's repair/workflow changes.
+Source PR #4 and release-freeze PR #5 are merged. v2.1.0-beta.4 / 210004 is public
+with verified DMG/ZIP; the existing Vercel website and signed feed serve that release.
+Live anonymous feed/archive verification and visible download-page checks passed.
+Current facts, hashes and acceptance limits are in docs/PROJECT_STATE.md.
 
-Prepare 2.1.0-beta.4 / 210004 for macOS arm64 only. Reuse Sparkle, the existing public
-key and Keychain signing account; do not export private keys. Human handles any new
-Keychain/login approval. Run focused tests and full preflight before merge/build.
-Publish immutable verified assets before signed feed/site metadata. Verify public
-HTTPS discovery/signatures/download identity; collaborator owns final other-device
-acceptance. Do not replace the user's installed Beta 3, touch documents, add models,
-upgrade dependencies or expand functionality. Record actual results and limitations.
+Actions remains disabled. No force-push, rule bypass, key export, document changes,
+model download or installed-app replacement occurred. The local Beta 3 is retained
+as an upgrade starting point. Collaborator owns final other-device automatic discovery,
+download/install/restart acceptance; do not mark that as passed from HTTP tests.
+Stop this release task after the delivery-record PR is merged. Continue only for
+specific new feedback, not more feature development or an unrequested test matrix.

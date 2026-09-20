@@ -16,14 +16,20 @@
 
 ## Product and Source State
 
-### Beta 4 source integration and publication preparation (2026-09-20)
+### Beta 4 published: GitHub, production website and signed feed (2026-09-20)
 
 - Integrated accepted local source a5451d8 with remote main 69ca0b6, retaining PR/Issue
   templates, disabled Actions and main's cancellation, cache-reader release, CRLF/save-echo
   and portable redaction fixes. Shared original feature head 44eecb8 is an ancestor of the
   local source; it supplied the content merge base for the squashed main history.
-- Candidate identity is 2.1.0-beta.4 / 210004, macOS arm64 only. Public download metadata
-  remains Beta 3 until the assets and signed feed are published; installed local app is unchanged.
+- Published identity is 2.1.0-beta.4 / 210004, macOS arm64 only. PR #4 merged source into
+  main at 4ea00ff; PR #5 froze the identical tree into release/2.1 at 79fcd86. Tag
+  v2.1.0-beta.4 points to that release commit. Installed local Beta 3 remains unchanged.
+- GitHub Release is public (prerelease, not draft), with both DMG/ZIP and six release documents.
+  Anonymous ZIP download is 57188923 bytes, SHA256
+  170696e77b5eca6b09fefe3bb4cdab95d2c4862c9ebe56589811220e4e01aa6a, identical to the
+  signed local artifact. DMG endpoint returns 200/65672242 bytes; GitHub's digest matches
+  cfcffab1e0b80f7c78df49fd953d4c4d213ab138a2735862306a9f7ed2821c94.
 - Final preflight passed 1843 tests / 321.019s, command 322.704s, exit 0. App digest
   ca778fe504893584d5fe6ece318876062b450268b8f662147832725e40dfebe6 and app+tests
   7a6d2aa5d84295cff71a56731ba45fe3e284707317666a5cdf73e1b3d96aafaf were unchanged.
@@ -35,10 +41,22 @@
   No Developer ID/notarization claim. Human Keychain authorization completed; archive and
   appcast Ed25519 signatures independently verify against the existing embedded public key.
   Feed digest is 2300e564f8760b2847de848ee68697928df3d0d210314dc3b2bdd482aff3a352.
-  Release metadata consistency and all 17 website tests passed. Public activation and
-  collaborator discovery/install acceptance remain separate from these local checks.
+  Release metadata consistency and all 17 website tests passed. Public HTTPS feed/archive
+  were downloaded anonymously and independently reverified; the old embedded feed URL and
+  public key are unchanged, and 210004 is greater than installed 210003.
+- Vercel production deployment dpl_3rSnXMYS45Ke5Leo1Gc5eT9ZYFdX is READY. Both
+  https://ics-tex.vercel.app and the old website-phi-beryl-92.vercel.app alias point there.
+  The website visibly shows Beta 4 and correct DMG/ZIP hashes/links. Live release.json and
+  appcast bytes match the checked-in files; feed returns HTTP 200/application-xml with
+  max-age=0,must-revalidate. Actions remains disabled; there is no Git-triggered site deployment.
+- Collaborator's automatic discovery/download/install/restart remains pending actual other-device
+  testing. Beta 3 users must opt into automatic checks; startup defers 30 seconds and a recent
+  attempt has a 5-minute cooldown. Checks defer during modal dialogs/compilation/export.
+  Download and installation still require confirmation. A manual check is a diagnostic fallback,
+  not proof of the automatic path. No Windows or Apple-notarized claim.
 - Evidence is under the local icstex-beta4-release directory: preflight-final/result.json,
-  package-receipt.json and build.log. Existing Qt/temp-path and libobjc build warnings remain.
+  package-receipt.json, signed-package-receipt.json, public-check/verified.json and build.log.
+  Existing Qt/temp-path and libobjc build warnings remain. Old assets, tags and app are preserved.
 
 ### 当前安装版：公式导航与显示留白（2026-09-20）
 

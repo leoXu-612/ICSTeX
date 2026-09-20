@@ -7,13 +7,28 @@ emit an explicit placeholder comment.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
+from pathlib import Path, PurePosixPath
+import re
+
+from app.core.blocks.formula_adapter import FormulaBlockAdapter
+from app.core.formula.sanitizer import sanitize_formula_latex
 from app.core.blocks.model import Block
 from app.core.blocks.latex_escape import escape_latex
 from app.core.blocks.table_model import TableData
 from app.core.blocks.table_renderer import render_table, required_packages
 
 
-def render_block(block: Block, *, in_box: bool = False) -> str:
+_LABEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9:._-]{0,127}$")
+
+
+@dataclass(frozen=True)
+class RenderPolicy:
+    allow_trusted_raw_latex: bool = False
+    project_root: Path | None = None
+
+
+def render_block(block: Block, *, in_box: bool = False, policy: RenderPolicy | None = None) -> str:
     """Render a Block to LaTeX.
 
     ``in_box`` marks placement inside a Row/Grid minipage: floats and
@@ -21,6 +36,7 @@ def render_block(block: Block, *, in_box: bool = False) -> str:
     ``\\captionof`` and headings to bold text.
     """
 
+    policy = policy or RenderPolicy()
     block_type = block.type
     if block_type == "text":
         latex = escape_latex(str(block.content.get("text", ""))) + "\n"
@@ -39,10 +55,22 @@ def render_block(block: Block, *, in_box: bool = False) -> str:
         latex = f"\\begin{{{environment}}}\n{items}\n\\end{{{environment}}}\n"
     elif block_type == "rawLatex":
         trusted = bool(block.content.get("trusted"))
-        latex = f"% ICSTEX:raw-latex trusted={str(trusted).lower()}\n{block.content.get('latex', '')}\n"
+        if trusted and policy.allow_trusted_raw_latex:
+            latex = f"% ICSTEX:raw-latex trusted=true\n{block.content.get('latex', '')}\n"
+        else:
+            latex = "% ICSTEX:raw-latex blocked (requires explicit session trust)\n"
     elif block_type == "formula":
-        latex = str(block.content.get("latexCache", ""))
-        label = block.semantic.label
+        try:
+            latex = FormulaBlockAdapter().render_latex(block.content["ast"])
+        except (KeyError, TypeError, ValueError):
+            latex = "% ICSTEX:formula blocked (invalid managed AST)"
+        else:
+            sanitized = sanitize_formula_latex(latex)
+            if not sanitized.ok:
+                latex = "% ICSTEX:formula blocked (unsafe managed AST)"
+            else:
+                latex = sanitized.text
+        label = _safe_label(block.semantic.label)
         role = block.semantic.role
         if role == "inline":
             latex = f"\\({latex}\\)\n"
@@ -52,7 +80,7 @@ def render_block(block: Block, *, in_box: bool = False) -> str:
                 body = latex + f"\n  \\label{{{label}}}"
             latex = f"\\[\n  {body}\n\\]\n"
     elif block_type == "image":
-        latex = _render_image(block, in_box=in_box)
+        latex = _render_image(block, in_box=in_box, policy=policy)
     elif block_type == "table":
         try:
             table = TableData.from_content_dict(block.content)
@@ -93,10 +121,12 @@ def required_packages_for_block(block: Block, *, in_box: bool = False) -> tuple[
     return ()
 
 
-def _render_image(block: Block, *, in_box: bool) -> str:
-    source = str(block.content.get("source", ""))
+def _render_image(block: Block, *, in_box: bool, policy: RenderPolicy) -> str:
+    source = _safe_image_source(str(block.content.get("source", "")), policy.project_root)
+    if source is None:
+        return f"% ICSTEX:image block={block.id} blocked (unsafe source)\n"
     caption = block.semantic.caption.text if block.semantic.caption else ""
-    label = block.semantic.label or ""
+    label = _safe_label(block.semantic.label) or ""
     if in_box:
         lines = [f"\\includegraphics[width=\\linewidth]{{{source}}}"]
         if caption:
@@ -111,3 +141,29 @@ def _render_image(block: Block, *, in_box: bool) -> str:
         lines.append(f"  \\label{{{label}}}")
     lines.append("\\end{figure}")
     return "\n".join(lines) + "\n"
+
+
+def _safe_label(label: str | None) -> str | None:
+    value = str(label or "")
+    return value if _LABEL_RE.fullmatch(value) else None
+
+
+def _safe_image_source(source: str, project_root: Path | None) -> str | None:
+    if not source or "\\" in source or "\x00" in source or "://" in source:
+        return None
+    candidate = PurePosixPath(source)
+    if candidate.is_absolute() or any(part in {"", ".", ".."} for part in candidate.parts):
+        return None
+    if len(candidate.parts[0]) == 2 and candidate.parts[0][1] == ":":
+        return None
+    if project_root is not None:
+        root = Path(project_root).expanduser().resolve()
+        lexical = root.joinpath(*candidate.parts)
+        if any(part.is_symlink() for part in (lexical, *lexical.parents) if part != root.parent):
+            return None
+        try:
+            if not lexical.resolve(strict=True).is_relative_to(root):
+                return None
+        except OSError:
+            return None
+    return candidate.as_posix()

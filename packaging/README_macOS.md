@@ -1,12 +1,16 @@
 # ICSTeX for macOS
 
-版本：0.2.7
+版本：2.1.0-beta.4
+
+Beta 4 提供 macOS arm64 安装包，并保留应用内更新器。Beta 3 可在应用内升级；旧手动版需先安装本版一次；
+之后在 macOS 菜单“ICSTeX → 软件更新…”中开启自动检查，或手动检查更新。
+下载及保存退出安装均需确认。安装中断后先验证应用完整性，不承诺自动回滚。
 
 ICSTeX - ICC Student's TeX - 是一个面向学生的桌面 LaTeX 编辑器，支持实时编译、PDF 预览、项目模板、插图/表格辅助、BibTeX 引用和标签工具。
 
 ## 系统兼容性
 
-当前 0.2.7 DMG 为 Apple Silicon `arm64` 版，适用于 M1/M2/M3/M4 等 Mac。
+当前 2.1.0-beta.4 DMG 为 Apple Silicon `arm64` 版，适用于 macOS 13 及以上的 M 系列 Mac。
 本次未生成 Intel (`x86_64`) 或 Universal 2 安装包，Intel Mac 请不要使用该 DMG。
 
 ## 打开 App 前需要安装什么

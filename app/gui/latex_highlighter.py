@@ -34,7 +34,7 @@ class LaTeXHighlighter(QSyntaxHighlighter):
             HighlightRule(QRegularExpression(r"\[[^\[\]]*\]"), _format(COLOR_SYNTAX_OPTION)),
             HighlightRule(QRegularExpression(r"\$[^$]*\$|\$\$[^$]*\$\$|\\\[|\\\]|\\\(|\\\)"), _format(COLOR_SYNTAX_MATH)),
         ]
-        self.comment_format = _format(COLOR_SYNTAX_COMMENT, italic=True)
+        self.comment_format = _format(COLOR_SYNTAX_COMMENT)
 
     def highlightBlock(self, text: str) -> None:
         for rule in self.rules:

@@ -1,0 +1,8 @@
+ICSTeX 2.1.0-beta.1 Windows ARM64 hardened rebuild
+Build directory: C:\w3\ICSTeX-Source-2.1.0-beta.1
+Build input source ZIP SHA-256: ac54dfea7a710c4c2c1de5f23e5b16e07066af8c130cbdc22b2e72526fde5aef
+Python: 3.12.10 (64 bit ARM64)
+Machine: ARM64
+Windows ZIP SHA-256: 9f7ee34c82c6c781fbdeebf6d86704d823d91e9915185b3e64b2c12c685030fb
+Packaged launch with Python removed from PATH: PASS
+Windows TeX source-to-PDF: NOT TESTED (no MiKTeX or TeX Live installed)

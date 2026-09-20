@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "task": "WEB-RS-001",
+  "status": "verified",
+  "modified": [
+    "website/index.html",
+    "website/styles.css",
+    "website/app.js",
+    "website/config.js",
+    "website/release.json",
+    "release/release-manifest.json",
+    "tools/update_release_site.py",
+    "tools/verify_release_consistency.py",
+    "tests/test_release_site.py"
+  ],
+  "preserved": [
+    "website/vendor/pico.min.css",
+    "packaging artifacts",
+    "application source"
+  ],
+  "forbidden": [
+    "hard-coded release metadata",
+    "React",
+    "Next.js",
+    "Tailwind CSS",
+    "Node build chain",
+    "remote fonts",
+    "runtime CDN dependencies",
+    "analytics",
+    "unapproved publication"
+  ],
+  "evidence": {
+    "release_metadata_check": "passed",
+    "focused_tests": 10,
+    "full_tests": 720,
+    "compileall": "passed",
+    "packaging_preflight": "passed",
+    "browser": {
+      "console_errors": 0,
+      "viewports": [
+        {
+          "width": 390,
+          "height": 844,
+          "horizontal_overflow": false,
+          "first_viewport_requirement": true
+        },
+        {
+          "width": 1440,
+          "height": 900,
+          "horizontal_overflow": false
+        }
+      ]
+    },
+    "lighthouse": {
+      "mobile": {
+        "performance": 98,
+        "accessibility": 100,
+        "best_practices": 100,
+        "seo": 100
+      },
+      "desktop": {
+        "performance": 100,
+        "accessibility": 100,
+        "best_practices": 100,
+        "seo": 100
+      }
+    },
+    "github_404_gate": {
+      "repository_visibility": "private",
+      "remote_release_branch_exists": false,
+      "remote_tag_exists": false,
+      "github_release_exists": false,
+      "enabled_outbound_links_while_private": 0,
+      "connector_private_repo_access": false,
+      "local_gh_cli_access": true
+    }
+  },
+  "publication_performed": false
+}

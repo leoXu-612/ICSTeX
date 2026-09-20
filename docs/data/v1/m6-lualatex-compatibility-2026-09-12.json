@@ -1,0 +1,119 @@
+{
+  "synthetic_only": true,
+  "platform": "macOS-26.6.1-arm64-arm-64bit",
+  "app_sha256_before_after": "4e0720eb707fecce1394a7b5f20868be7ea9bd668ba56b615297c23afa267e54",
+  "script_sha256": "ef250c0fb0b1e7d164dfd202f17f1087286b49291c4cc7dff329e07099caecef",
+  "restricted_environment": {
+    "openin_any": "p",
+    "openout_any": "p"
+  },
+  "resources_sha256_before_after": {
+    "/usr/local/texlive/2025/texmf-dist/tex/generic/unicode-data/ScriptExtensions.txt": "049117ce26b9769fe2749b06eef51a50a89faef4a97764dd2d81daa715980700",
+    "/usr/local/texlive/2025/texmf-dist/tex/generic/unicode-data/Scripts.txt": "9e88f0a677df47311106340be8ede2ecdacd9c1c931831218d2be6d5508e0039",
+    "/usr/local/texlive/2025/texmf-dist/tex/luatex/luaotfload/luaotfload-multiscript.lua": "5c2ddb0ca04537c754496c3cd4ef3c00cc53bb329c3e56d1833d19b8b7a75792"
+  },
+  "sentinel_unchanged": true,
+  "results": [
+    {
+      "command": [
+        "/Library/TeX/texbin/lualatex",
+        "--no-shell-escape",
+        "--interaction=nonstopmode",
+        "--halt-on-error",
+        "--recorder",
+        "main.tex"
+      ],
+      "returncode": 255,
+      "seconds": 0.266,
+      "stdout": "This is LuaHBTeX, Version 1.21.0 (TeX Live 2025) \n(./main.tex\nLaTeX2e <2024-11-01> patch level 2\nL3 programming layer <2025-01-18>\n\n\nluaotfload | load : FATAL ERROR\nluaotfload | load :   \u00d7 Failed to load \"luaotfload\" module \"multiscript\".\nluaotfload | load :   \u00d7 Error message:\nluaotfload | load :     \u00d7 \"...mf-dist/tex/luatex/luaotfload/luaotfload-multiscript.lua:70: attempt to index a nil value (local 'f')\".\n\nstack traceback:\n\t...ive/2025/texmf-dist/tex/luatex/luaotfload/luaotfload.lua:200: in field 'luaotfload'\n\t...025/texmf-dist/tex/luatex/luaotfload/luaotfload-init.lua:424: in local 'action'\n\t...025/texmf-dist/tex/luatex/luaotfload/luaotfload-init.lua:581: in upvalue 'init_post'\n\t...025/texmf-dist/tex/luatex/luaotfload/luaotfload-init.lua:594: in function 'luaotfload-init.lua'\n\t...ive/2025/texmf-dist/tex/luatex/luaotfload/luaotfload.lua:322: in field 'main'\n\t[\\directlua]:1: in main chunk\n\n",
+      "stderr": "",
+      "kind": "compile",
+      "candidate": "current",
+      "source_unchanged": true,
+      "pdf_sha256": null
+    },
+    {
+      "command": [
+        "/Library/TeX/texbin/luahbtex",
+        "--ini",
+        "--no-shell-escape",
+        "--nosocket",
+        "--interaction=nonstopmode",
+        "--halt-on-error",
+        "probe.tex"
+      ],
+      "returncode": 0,
+      "seconds": 0.123,
+      "stdout": "This is LuaHBTeX, Version 1.21.0 (TeX Live 2025)  (INITEX)\n(./probe.tex\nCHECK local-read=true\nCHECK parent-read=false\nCHECK absolute-read=false\nCHECK distribution-read=false\nCHECK local-write=true\nCHECK parent-write=false\nCHECK distribution-out-name=false\nCHECK shell-escape=0\nCHECK safer=0)\nNo pages of output.\nTranscript written on probe.log.\n",
+      "stderr": "",
+      "kind": "primitive",
+      "candidate": "current",
+      "checks": [
+        "CHECK local-read=true",
+        "CHECK parent-read=false",
+        "CHECK absolute-read=false",
+        "CHECK distribution-read=false",
+        "CHECK local-write=true",
+        "CHECK parent-write=false",
+        "CHECK distribution-out-name=false",
+        "CHECK shell-escape=0",
+        "CHECK safer=0"
+      ],
+      "local_read_works": true,
+      "candidate_compatible": false
+    },
+    {
+      "command": [
+        "/Library/TeX/texbin/lualatex",
+        "--no-shell-escape",
+        "--safer",
+        "--nosocket",
+        "--interaction=nonstopmode",
+        "--halt-on-error",
+        "--recorder",
+        "main.tex"
+      ],
+      "returncode": 1,
+      "seconds": 0.224,
+      "stdout": "This is LuaHBTeX, Version 1.21.0 (TeX Live 2025) \n(./main.tex\nLaTeX2e <2024-11-01> patch level 2\nL3 programming layer <2025-01-18>\n\nluaotfload can't run with option --safer. Aborting\n...ive/2025/texmf-dist/tex/luatex/luaotfload/luaotfload.lua:105: safer_option u\nsed\nError in luaotfload: reverting to OT1\n\n! LaTeX Error: File `article.cls' not found.\n\nType X to quit or <RETURN> to proceed,\nor enter new name. (Default extension: cls)\n\nEnter file name: \n! Emergency stop.\n<read *> \n         \nl.2 \\begin\n          {document}\n 275 words of node memory still in use:\n   1 hlist, 1 dir, 39 glue_spec nodes\n   avail lists: 2:12,3:3,4:1\n!  ==> Fatal error occurred, no output PDF file produced!\nTranscript written on main.log.\n",
+      "stderr": "",
+      "kind": "compile",
+      "candidate": "safer",
+      "source_unchanged": true,
+      "pdf_sha256": null
+    },
+    {
+      "command": [
+        "/Library/TeX/texbin/luahbtex",
+        "--ini",
+        "--no-shell-escape",
+        "--nosocket",
+        "--safer",
+        "--nosocket",
+        "--interaction=nonstopmode",
+        "--halt-on-error",
+        "probe.tex"
+      ],
+      "returncode": 0,
+      "seconds": 0.103,
+      "stdout": "This is LuaHBTeX, Version 1.21.0 (TeX Live 2025)  (INITEX)\n(./probe.tex\nsafer option set, function \"io.open\" is disabled\nCHECK local-read=false\nCHECK parent-read=false\nCHECK absolute-read=false\nCHECK distribution-read=false\nCHECK local-write=false\nCHECK parent-write=false\nCHECK distribution-out-name=false\nCHECK shell-escape=0\nCHECK safer=1)\nNo pages of output.\nTranscript written on probe.log.\n",
+      "stderr": "",
+      "kind": "primitive",
+      "candidate": "safer",
+      "checks": [
+        "CHECK local-read=false",
+        "CHECK parent-read=false",
+        "CHECK absolute-read=false",
+        "CHECK distribution-read=false",
+        "CHECK local-write=false",
+        "CHECK parent-write=false",
+        "CHECK distribution-out-name=false",
+        "CHECK shell-escape=0",
+        "CHECK safer=1"
+      ],
+      "local_read_works": false,
+      "candidate_compatible": false
+    }
+  ],
+  "limitations": "Current installed engine only; no TeX Live 2026 binary or OS sandbox acceptance."
+}

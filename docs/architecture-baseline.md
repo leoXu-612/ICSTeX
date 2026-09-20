@@ -12,7 +12,7 @@ Block 化改造决策使用。只记录已核实事实，不含路线图规划�
 - LaTeX 编译：外部 `latexmk`/`pdflatex` 等（本机 TeX Live 2025），
   `app/core/latex_tools.py` 检测 toolchain；不捆绑发行版（D002）。
 - 仓库：当前非逐文件跟踪的 git 仓库（有 initial commit 与 feature 分支）；
-  权威根目录 `<HOME>/Desktop/Codex/ICS-Project-/ICSTeX`。
+  权威根目录即本仓库根目录（当前工作目录）。
 
 ## 2. 分层与模块地图
 

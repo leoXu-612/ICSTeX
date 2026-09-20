@@ -12,6 +12,7 @@ from enum import Enum
 from pathlib import Path
 
 from app.core.compiler import CompileOutcome
+from app.core.file_observation import is_nonempty_file
 from app.core.paths import normalize_path
 
 
@@ -66,15 +67,21 @@ class PdfBuildRecord:
 
     @property
     def has_valid_pdf(self) -> bool:
-        pdf = self.last_successful_pdf
-        try:
-            return pdf is not None and pdf.exists() and pdf.stat().st_size > 0
-        except OSError:
-            return False
+        """Compatibility name: nonempty regular file, not validated PDF content."""
+        return is_nonempty_file(self.last_successful_pdf)
 
     @property
     def export_allowed(self) -> bool:
-        return self.has_valid_pdf and self.freshness not in (
+        return self.can_export()
+
+    def can_export(self, *, file_available: bool | None = None) -> bool:
+        """Legacy action eligibility, not submission clearance.
+
+        A caller may reuse a file observation within one synchronous UI refresh;
+        omitted observations are read now. Never retain the observation for export.
+        """
+        available = self.has_valid_pdf if file_available is None else file_available
+        return available and self.freshness not in (
             PdfFreshness.UNCOMPILED,
             PdfFreshness.FAILED_NO_PDF,
         )
@@ -91,6 +98,11 @@ class PdfStateStore:
         self._records: dict[Path, PdfBuildRecord] = {}
 
     def record_for(self, root: str | Path) -> PdfBuildRecord:
+        # Registered canonical paths are state identities, not fresh filesystem
+        # queries. Typing must not resolve them again on every revision update.
+        record = self._records.get(root)
+        if record is not None:
+            return record
         key = normalize_path(root)
         record = self._records.get(key)
         if record is None:
@@ -107,12 +119,14 @@ class PdfStateStore:
         record.freshness = PdfFreshness.DIRTY
         return record
 
-    def begin_build(self, root: str | Path, build_id: int) -> PdfBuildRecord:
+    def begin_build(
+        self, root: str | Path, build_id: int, *, source_revision: int | None = None,
+    ) -> PdfBuildRecord:
         record = self.record_for(root)
         if record.latest_build_id is not None and build_id <= record.latest_build_id:
             return record
         record.latest_build_id = build_id
-        record.compile_revision = record.source_revision
+        record.compile_revision = record.source_revision if source_revision is None else source_revision
         record.freshness = PdfFreshness.COMPILING
         return record
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 from dataclasses import dataclass
+from enum import Enum
 import io
 import os
 from pathlib import Path
@@ -44,6 +45,36 @@ class SideBySideFigureSpec:
     placement: str = "htbp"
 
 
+class FigureLayout(str, Enum):
+    HORIZONTAL = "horizontal"
+    VERTICAL = "vertical"
+    GRID_2X2 = "grid_2x2"
+
+    @property
+    def display_name(self) -> str:
+        return {
+            FigureLayout.HORIZONTAL: "左右拼接",
+            FigureLayout.VERTICAL: "上下拼接",
+            FigureLayout.GRID_2X2: "田字拼接（2×2）",
+        }[self]
+
+
+@dataclass(frozen=True)
+class FigureLayoutItem:
+    image_path: str
+    width: float = 0.48
+    caption: str = ""
+
+
+@dataclass(frozen=True)
+class FigureLayoutSpec:
+    layout: FigureLayout = FigureLayout.HORIZONTAL
+    items: tuple[FigureLayoutItem, ...] = ()
+    caption: str = ""
+    label: str = ""
+    placement: str = "htbp"
+
+
 @dataclass(frozen=True)
 class TableSpec:
     rows: int = 3
@@ -69,6 +100,8 @@ class TemplateSpec:
     title: str
     filename: str
     text: str
+    language: str = "未标注"
+    description: str = "个人模板；内容与排版取决于你保存的源码。"
 
 
 @dataclass(frozen=True)
@@ -93,34 +126,77 @@ def figure_snippet(spec: FigureSpec) -> str:
 
 
 def side_by_side_figure_snippet(spec: SideBySideFigureSpec) -> str:
-    width = _ratio(spec.width)
+    return figure_layout_snippet(
+        FigureLayoutSpec(
+            layout=FigureLayout.HORIZONTAL,
+            items=(
+                FigureLayoutItem(spec.left_image_path, spec.width, spec.left_caption),
+                FigureLayoutItem(spec.right_image_path, spec.width, spec.right_caption),
+            ),
+            caption=spec.caption,
+            label=spec.label,
+            placement=spec.placement,
+        )
+    )
+
+
+def figure_layout_snippet(spec: FigureLayoutSpec) -> str:
+    layout = FigureLayout(spec.layout)
+    expected = 4 if layout is FigureLayout.GRID_2X2 else 2
+    if len(spec.items) != expected:
+        raise ValueError(f"{layout.display_name}需要选择 {expected} 张图片。")
+    for item in spec.items:
+        if not item.image_path.strip():
+            raise ValueError("图片路径不能为空。")
+        if not 0.05 <= float(item.width) <= 1.0:
+            raise ValueError("单张图片宽度必须在 0.05 到 1.0 之间。")
+
+    rows = _figure_layout_rows(layout, spec.items)
+    for row in rows:
+        if len(row) > 1 and sum(float(item.width) for item in row) > 1.000001:
+            raise ValueError("同一行图片宽度合计不能超过 1.0\\textwidth。")
+
     lines = [
         f"\\begin{{figure}}[{spec.placement}]",
         "  \\centering",
-        f"  \\begin{{subfigure}}{{{width}\\textwidth}}",
-        "    \\centering",
-        f"    \\includegraphics[width=\\linewidth]{{{spec.left_image_path}}}",
     ]
-    if spec.left_caption:
-        lines.append(f"    \\caption{{{spec.left_caption}}}")
-    lines.extend(
-        [
-            "  \\end{subfigure}",
-            "  \\hfill",
-            f"  \\begin{{subfigure}}{{{width}\\textwidth}}",
-            "    \\centering",
-            f"    \\includegraphics[width=\\linewidth]{{{spec.right_image_path}}}",
-        ]
-    )
-    if spec.right_caption:
-        lines.append(f"    \\caption{{{spec.right_caption}}}")
-    lines.append("  \\end{subfigure}")
+    for row_index, row in enumerate(rows):
+        for item_index, item in enumerate(row):
+            lines.extend(_subfigure_lines(item, suppress_trailing_space=item_index < len(row) - 1))
+            if item_index < len(row) - 1:
+                lines.append("  \\hfill")
+        if row_index < len(rows) - 1:
+            lines.append("  \\par\\medskip")
     if spec.caption:
         lines.append(f"  \\caption{{{spec.caption}}}")
     if spec.label:
         lines.append(f"  \\label{{{spec.label}}}")
     lines.append("\\end{figure}")
     return "\n".join(lines)
+
+
+def _figure_layout_rows(
+    layout: FigureLayout,
+    items: tuple[FigureLayoutItem, ...],
+) -> tuple[tuple[FigureLayoutItem, ...], ...]:
+    if layout is FigureLayout.HORIZONTAL:
+        return (items,)
+    if layout is FigureLayout.VERTICAL:
+        return tuple((item,) for item in items)
+    return (items[:2], items[2:])
+
+
+def _subfigure_lines(item: FigureLayoutItem, *, suppress_trailing_space: bool) -> list[str]:
+    lines = [
+        f"  \\begin{{subfigure}}{{{_ratio(item.width)}\\textwidth}}",
+        "    \\centering",
+        f"    \\includegraphics[width=\\linewidth]{{{item.image_path}}}",
+    ]
+    if item.caption:
+        lines.append(f"    \\caption{{{item.caption}}}")
+    ending = "  \\end{subfigure}%" if suppress_trailing_space else "  \\end{subfigure}"
+    lines.append(ending)
+    return lines
 
 
 def table_snippet(spec: TableSpec) -> str:
@@ -294,8 +370,9 @@ def _table_placement(text: str) -> str:
 def _table_row_values(values: tuple[str, ...], columns: int, fallback) -> list[str]:  # type: ignore[no-untyped-def]
     row: list[str] = []
     for index in range(1, columns + 1):
-        value = values[index - 1].strip() if index - 1 < len(values) else ""
-        row.append(value or fallback(index))
+        # A supplied empty cell is intentional; only absent template data gets
+        # a placeholder. The grid preview and inserted source must agree.
+        row.append(values[index - 1].strip() if index - 1 < len(values) else fallback(index))
     return row
 
 
@@ -518,6 +595,8 @@ TEMPLATES: dict[str, TemplateSpec] = {
     "blank_article": TemplateSpec(
         key="blank_article",
         title="空白文章",
+        language="英文",
+        description="通用文章：从标题与引言开始，适合短文和日常练习。",
         filename="Blank_Article.tex",
         text=(
             "\\documentclass{article}\n"
@@ -536,6 +615,8 @@ TEMPLATES: dict[str, TemplateSpec] = {
     "ib_ia_report": TemplateSpec(
         key="ib_ia_report",
         title="IB/IA 报告",
+        language="英文",
+        description="通用 IA 报告：提供研究问题、方法、数据处理与评价的章节骨架。",
         filename="IB_IA_Report.tex",
         text=(
             "\\documentclass[12pt]{article}\n"
@@ -557,6 +638,8 @@ TEMPLATES: dict[str, TemplateSpec] = {
     "lab_report": TemplateSpec(
         key="lab_report",
         title="实验报告",
+        language="英文",
+        description="记录实验目的、器材、步骤、结果与分析；章节标题为英文。",
         filename="Lab_Report.tex",
         text=(
             "\\documentclass[12pt]{article}\n"
@@ -578,6 +661,8 @@ TEMPLATES: dict[str, TemplateSpec] = {
     "coursework_essay": TemplateSpec(
         key="coursework_essay",
         title="课程论文",
+        language="英文",
+        description="课程写作：以引言、论证和结论组织文章。",
         filename="Coursework_Essay.tex",
         text=(
             "\\documentclass[12pt]{article}\n"
@@ -599,6 +684,8 @@ TEMPLATES: dict[str, TemplateSpec] = {
     "extended_essay": TemplateSpec(
         key="extended_essay",
         title="Extended Essay",
+        language="英文",
+        description="EE 长篇论文：含摘要、目录及研究章节；具体要求仍需核对课程说明。",
         filename="Extended_Essay.tex",
         text=(
             "\\documentclass[12pt]{article}\n"
@@ -624,6 +711,8 @@ TEMPLATES: dict[str, TemplateSpec] = {
     "physics_ia": TemplateSpec(
         key="physics_ia",
         title="Physics IA",
+        language="英文",
+        description="物理 IA：包含变量、原始数据、处理数据和不确定度分析。",
         filename="Physics_IA.tex",
         text=(
             "\\documentclass[12pt]{article}\n"
@@ -648,6 +737,8 @@ TEMPLATES: dict[str, TemplateSpec] = {
     "math_ia": TemplateSpec(
         key="math_ia",
         title="Math IA",
+        language="英文",
+        description="数学 IA：包含探索目标、数学过程、解释与反思。",
         filename="Math_IA.tex",
         text=(
             "\\documentclass[12pt]{article}\n"
@@ -669,6 +760,8 @@ TEMPLATES: dict[str, TemplateSpec] = {
     "chemistry_lab": TemplateSpec(
         key="chemistry_lab",
         title="化学实验报告",
+        language="英文",
+        description="化学实验：包含假设、观察和计算，支持化学式命令；章节标题为英文。",
         filename="Chemistry_Lab_Report.tex",
         text=(
             "\\documentclass[12pt]{article}\n"
@@ -692,6 +785,8 @@ TEMPLATES: dict[str, TemplateSpec] = {
     "chinese_xelatex_article": TemplateSpec(
         key="chinese_xelatex_article",
         title="中文 XeLaTeX 文章",
+        language="中文",
+        description="中文写作：含标题、引言、正文和结论；自动选择会使用模板声明的 XeLaTeX。",
         filename="Chinese_XeLaTeX_Article.tex",
         text=(
             "% !TEX program = xelatex\n"

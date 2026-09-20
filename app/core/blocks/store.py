@@ -39,13 +39,26 @@ class BlockStore:
         if not self.exists():
             return BlockRegistry()
         try:
-            payload = json.loads(self.path.read_text(encoding="utf-8"))
+            return self.from_bytes(self.path.read_bytes())
+        except OSError as exc:
+            raise BlockStoreError(f"Block 数据无法读取：{exc}") from exc
+
+    @staticmethod
+    def from_bytes(data: bytes) -> BlockRegistry:
+        try:
+            payload = json.loads(data.decode("utf-8"))
         except (OSError, ValueError) as exc:
             raise BlockStoreError(f"Block 数据无法解析：{exc}") from exc
+        if not isinstance(payload, dict) or payload.get("schemaVersion", SCHEMA_VERSION) != SCHEMA_VERSION:
+            raise BlockStoreError("不支持的 Block 元数据格式或版本。")
         if payload.get("format") != "icstex-blocks":
             raise BlockStoreError("不是有效的 icstex-blocks 文件。")
+        if not isinstance(payload.get("blocks", []), list):
+            raise BlockStoreError("blocks 必须是列表。")
         blocks: list[Block] = []
         for raw in payload.get("blocks", []):
+            if not isinstance(raw, dict):
+                raise BlockStoreError("每个 Block 必须是对象。")
             schema_issues = validate_block(raw)
             if schema_issues:
                 raise BlockStoreError(

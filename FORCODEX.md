@@ -1,19 +1,17 @@
 # FORCODEX.md
 
-Timestamp: 2026-09-19 (reviewed merge closeout)
+Active bounded task (2026-09-20): integrate accepted source through PR, publish
+macOS Beta 4 and update the existing production website and signed update feed.
 
-## Current Bounded Assignment
+User authorized commit, push, merge and publication. Keep Actions disabled and
+retain main PR/squash/conversation rules. Local accepted source is saved at a5451d8.
+This isolated branch starts at main 69ca0b6; content integration uses shared feature
+head 44eecb8 to reconcile squashed history without dropping main's repair/workflow changes.
 
-The authorized scope is the three pending PRs (#3 repair, #2 workflow, #1 modular
-layout). Their integrated source has local validation recorded in PROJECT_STATE.
-Complete only any remaining reviewed PR merge, then stop. Once all three PRs are
-merged, no further task is active; do not restart feature development automatically.
-
-GitHub Actions is disabled and CI checks are not merge requirements. Use focused
-and full local tests, record exact evidence, and do not re-enable workflows.
-Main still requires PRs, resolved conversations and squash merge; no force-push,
-deletion or bypass. Never use admin merge to bypass these remaining rules.
-
-Preserve the dirty codex/v1-development checkout, release branches, existing
-artifacts and student files. Do not bulk-import unpublished features, package,
-deploy or replace the local application in this merge task.
+Prepare 2.1.0-beta.4 / 210004 for macOS arm64 only. Reuse Sparkle, the existing public
+key and Keychain signing account; do not export private keys. Human handles any new
+Keychain/login approval. Run focused tests and full preflight before merge/build.
+Publish immutable verified assets before signed feed/site metadata. Verify public
+HTTPS discovery/signatures/download identity; collaborator owns final other-device
+acceptance. Do not replace the user's installed Beta 3, touch documents, add models,
+upgrade dependencies or expand functionality. Record actual results and limitations.

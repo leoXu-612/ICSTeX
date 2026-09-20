@@ -22,6 +22,8 @@ class LaTeXToolchainTests(TestCase):
 
         self.assertEqual(command[0], "/bin/latexmk")
         self.assertIn("-pdf", command)
+        self.assertIn("-norc", command)
+        self.assertIn("-no-shell-escape", command)
         self.assertIn("-synctex=1", command)
         self.assertIn("-outdir=build", command)
 
@@ -69,6 +71,7 @@ class LaTeXToolchainTests(TestCase):
         command = tools.compile_command(Path("main.tex"), Path("build"))
 
         self.assertEqual(command[0], "/bin/pdflatex")
+        self.assertIn("-no-shell-escape", command)
         self.assertIn("-output-directory=build", command)
 
     def test_direct_xelatex_without_latexmk(self) -> None:

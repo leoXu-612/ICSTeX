@@ -6,10 +6,91 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from app.core.latex_tools import LaTeXToolchain
-from app.core.word_count import count_project, count_text, count_words
+from app.core.word_count import count_project, count_project_snapshot, count_text, count_words
+import app.core.word_count as word_count
+
+
+class VisualSegmentAccumulationTests(TestCase):
+    def test_constructs_only_final_visual_segments_for_a_long_paragraph(self):
+        text = "\\begin{document}" + "ordinary word " * 2000 + "\\end{document}"
+        with patch("app.core.word_count.WordCountSegment", wraps=word_count.WordCountSegment) as construct:
+            result = count_text(text, toolchain=LaTeXToolchain(None, None))
+        self.assertEqual(result.total_words, 4000)
+        self.assertEqual(construct.call_count, len(result.visual_segments))
+        self.assertEqual("".join(item.text for item in result.visual_segments), "ordinary word " * 2000)
+
+    def test_visual_output_matches_previous_stream_merging_across_categories(self):
+        import random
+        randomizer = random.Random(20260913)
+        fragments = ("ordinary text ", "\u4e2d\u6587\u3002 ", "R\u00e9sum\u00e9 na\u00efve ",
+            "teacher's teacher\u2019s ", "12.5 -3e-2% 1,234 ", "\U00020000\U0001f642 e\u0301 ",
+            r"\textbf{bold 14 words}", r"\section{Heading 42}", r"\footnote{note 9 words}",
+            r"$x^2$", r"\[a=b\]", r"\cite{hidden}", r"\url{https://example.invalid/12}",
+            r"\verb|hidden 12|", r"\caption{Caption 5}", "{nested text}")
+        original_add = word_count._Accum.add_segment
+        for case in range(24):
+            expected = []
+
+            def record(accum, text, category):
+                if text:
+                    # The previous implementation is the oracle, independent
+                    # of how the candidate batches intermediate fragments.
+                    if expected and expected[-1].category == category and expected[-1].source == accum.source_label:
+                        previous = expected[-1]
+                        expected[-1] = word_count.WordCountSegment(previous.text + text, category, accum.source_label)
+                    else:
+                        expected.append(word_count.WordCountSegment(text, category, accum.source_label))
+                original_add(accum, text, category)
+
+            source = "\\begin{document}\n" + " ".join(randomizer.choices(fragments, k=40)) + "\n\\end{document}"
+            with self.subTest(case=case), patch.object(word_count._Accum, "add_segment", record):
+                result = word_count._analyze_latex_text(source, source_label="chapter.tex")
+            self.assertEqual(result.visual_segments, tuple(expected))
+
+    def test_empty_input_has_no_visual_segments(self):
+        self.assertEqual(word_count._analyze_latex_text("").visual_segments, ())
 
 
 class WordCountTests(TestCase):
+    def test_snapshot_tracks_missing_and_changed_disk_dependencies(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory) / "main.tex"
+            child = Path(directory) / "child.tex"
+            source = "\\begin{document}Root.\\input{child}\\end{document}"
+            root.write_text(source, encoding="utf-8")
+            tools = LaTeXToolchain(None, None)
+            snapshot = count_project_snapshot(root, {root: source}, tools)
+            self.assertTrue(snapshot.is_current())
+            child.write_text("New child.", encoding="utf-8")
+            self.assertFalse(snapshot.is_current())
+            snapshot = count_project_snapshot(root, {root: source}, tools)
+            self.assertTrue(snapshot.is_current())
+            self.assertEqual(snapshot.result, count_project(root, {root: source}, tools))
+            child.unlink()
+            self.assertFalse(snapshot.is_current())
+
+    def test_snapshot_texcount_uses_captured_sources_and_detects_concurrent_edit(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory) / "main.tex"
+            child = Path(directory) / "child.tex"
+            root.write_text("\\begin{document}Root \\input{child}\\end{document}", encoding="utf-8")
+            child.write_text("old", encoding="utf-8")
+
+            def fake_run(command, **kwargs):
+                shadow = Path(command[-1])
+                self.assertNotEqual(shadow, root)
+                child.write_text("new version", encoding="utf-8")
+                text = shadow.read_text(encoding="utf-8")
+                included = Path(text.split("\\input{", 1)[1].split("}", 1)[0])
+                self.assertEqual(included.read_text(encoding="utf-8"), "old")
+                return type("Result", (), {"returncode": 0,
+                    "stdout": "ICSTEX_WORDCOUNT\t2\t0\t0\t0\t0\t0\t0\t2\n", "stderr": ""})()
+
+            with patch("app.core.word_count.subprocess.run", side_effect=fake_run):
+                snapshot = count_project_snapshot(root, {}, LaTeXToolchain(None, None, texcount="texcount"))
+            self.assertEqual(snapshot.result.effective_words, 2)
+            self.assertFalse(snapshot.is_current())
+
     def test_fallback_counts_text_and_ignores_comments_and_commands(self) -> None:
         with TemporaryDirectory() as directory:
             tex = Path(directory) / "main.tex"
@@ -71,7 +152,7 @@ class WordCountTests(TestCase):
         self.assertEqual(result.effective_words, 2)
         self.assertEqual(result.numbers, 1)
         self.assertEqual(result.total_words, 3)
-        self.assertIn("未找到 texcount", " ".join(result.warnings))
+        self.assertIn("未找到 TeXcount", " ".join(result.warnings))
 
     def test_fallback_counts_unicode_words_and_cjk_characters(self) -> None:
         result = count_text(
@@ -97,7 +178,7 @@ class WordCountTests(TestCase):
 
         self.assertEqual(result.source, "fallback")
         self.assertEqual(result.effective_words, 2)
-        self.assertIn("texcount 调用失败", " ".join(result.warnings))
+        self.assertIn("TeXcount 调用失败", " ".join(result.warnings))
 
     def test_fallback_ignores_words_inside_verbatim(self) -> None:
         text = (
@@ -165,6 +246,111 @@ class WordCountTests(TestCase):
         # Only the visible "Click me" counts; the URL does not.
         self.assertEqual(result.effective_words, 2)
 
+    def test_fallback_keeps_words_joined_across_formatting_and_accents(self) -> None:
+        result = count_text(
+            "\\begin{document}"
+            "w\\'ard w\\'{a}rd inter\\textbf{nal}formatting \\LaTeX{} "
+            "word\\&word \\$word word\\% \\#word wo\\_rd \\{word\\}"
+            "\\end{document}",
+            toolchain=LaTeXToolchain(latexmk=None, pdflatex=None, texcount=None, synctex=None),
+        )
+
+        self.assertEqual(result.effective_words, 11)
+        preview = "".join(segment.text for segment in result.visual_segments)
+        self.assertIn("ward ward internalformatting LaTeX", preview)
+
+    def test_fallback_ignores_inline_verbatim_and_texcount_ignored_regions(self) -> None:
+        result = count_text(
+            "\\begin{document}\n"
+            "Before \\verb|inline hidden words| after.\n"
+            "\\begin{verbatim}\n"
+            "%TC:ignore\n"
+            "\\end{verbatim}\n"
+            "Still visible.\n"
+            "%TC:ignore\n"
+            "ignored words 42\n"
+            "%%TC: endignore\n"
+            "Visible end.\n"
+            "\\end{document}\n",
+            toolchain=LaTeXToolchain(latexmk=None, pdflatex=None, texcount=None, synctex=None),
+        )
+
+        self.assertEqual(result.effective_words, 6)
+        self.assertEqual(result.numbers, 0)
+        preview = "".join(segment.text for segment in result.visual_segments)
+        self.assertNotIn("inline hidden words", preview)
+        self.assertNotIn("ignored words", preview)
+
+    def test_fallback_counts_rare_ideographs_but_not_cjk_punctuation(self) -> None:
+        result = count_text(
+            "\\begin{document}中文𠀀。、《》\\end{document}",
+            toolchain=LaTeXToolchain(latexmk=None, pdflatex=None, texcount=None, synctex=None),
+        )
+
+        self.assertEqual(result.effective_words, 3)
+
+    def test_texcount_uses_ideographic_property_instead_of_han_preset(self) -> None:
+        completed = type("Result", (), {
+            "returncode": 0,
+            "stdout": "ICSTEX_WORDCOUNT\t5\t0\t0\t0\t0\t0\t0\t5\n",
+            "stderr": "",
+        })()
+
+        with patch("app.core.word_count.subprocess.run", return_value=completed) as run:
+            result = count_text(
+                "\\begin{document}中文测试。42\\end{document}",
+                toolchain=LaTeXToolchain(latexmk=None, pdflatex=None, texcount="texcount", synctex=None),
+            )
+
+        command = run.call_args.args[0]
+        self.assertIn("-logograms=Ideographic", command)
+        self.assertNotIn("-chinese", command)
+        self.assertEqual(result.effective_words, 4)
+        self.assertEqual(result.numbers, 1)
+
+    def test_fallback_and_texcount_classify_footnotes_as_excluded_notes(self) -> None:
+        text = "\\begin{document}Main\\footnote{Foot note 42.}Next\\end{document}"
+        fallback = count_text(
+            text,
+            toolchain=LaTeXToolchain(latexmk=None, pdflatex=None, texcount=None, synctex=None),
+        )
+        completed = type("Result", (), {
+            "returncode": 0,
+            "stdout": "ICSTEX_WORDCOUNT\t2\t0\t3\t0\t0\t0\t0\t5\n",
+            "stderr": "",
+        })()
+        with patch("app.core.word_count.subprocess.run", return_value=completed):
+            precise = count_text(
+                text,
+                toolchain=LaTeXToolchain(latexmk=None, pdflatex=None, texcount="texcount", synctex=None),
+            )
+
+        for result in (fallback, precise):
+            self.assertEqual(result.effective_words, 2)
+            self.assertEqual(result.caption_words, 2)
+            self.assertEqual(result.numbers, 1)
+            self.assertEqual(result.total_words, 5)
+
+    def test_fallback_counts_long_heading_and_caption_not_optional_short_forms(self) -> None:
+        result = count_text(
+            "\\begin{document}"
+            "\\section[Short toc]{Long visible heading}"
+            "\\begin{figure}"
+            "\\caption[Short list]{Long visible caption 2026}"
+            "\\end{figure}"
+            "\\section{Second heading}"
+            "\\begin{figure}\\caption{Second caption}\\end{figure}"
+            "\\end{document}",
+            toolchain=LaTeXToolchain(latexmk=None, pdflatex=None, texcount=None, synctex=None),
+        )
+
+        self.assertEqual(result.header_words, 5)
+        self.assertEqual(result.caption_words, 5)
+        self.assertEqual(result.numbers, 1)
+        preview = "".join(segment.text for segment in result.visual_segments)
+        self.assertNotIn("Short toc", preview)
+        self.assertNotIn("Short list", preview)
+
     def test_visual_segments_explain_counted_categories(self) -> None:
         result = count_text(
             "\\begin{document}\n"
@@ -231,10 +417,54 @@ class WordCountTests(TestCase):
                 root,
                 toolchain=LaTeXToolchain(latexmk=None, pdflatex=None, texcount=None, synctex=None),
             )
+            with patch("app.core.word_count.subprocess.run") as run:
+                guarded = count_project(
+                    root,
+                    toolchain=LaTeXToolchain(latexmk=None, pdflatex=None, texcount="texcount", synctex=None),
+                )
 
         sources = list(dict.fromkeys(segment.source for segment in result.visual_segments))
         self.assertEqual(sources, ["main.tex", "first.tex", "second.tex"])
         self.assertEqual(result.effective_words, 3)
+        run.assert_not_called()
+        self.assertEqual(guarded.effective_words, 3)
+        self.assertIn("已跳过 TeXcount", " ".join(guarded.warnings))
+
+    def test_project_counts_repeated_includes_each_time_without_confusing_them_with_cycles(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory) / "main.tex"
+            child = Path(directory) / "child.tex"
+            root.write_text(
+                "\\begin{document}Root \\input{child} Again \\input{child}\\end{document}",
+                encoding="utf-8",
+            )
+            child.write_text("Child 42 words.", encoding="utf-8")
+
+            fallback = count_project(
+                root,
+                toolchain=LaTeXToolchain(latexmk=None, pdflatex=None, texcount=None, synctex=None),
+            )
+            completed = type("Result", (), {
+                "returncode": 0,
+                "stdout": "ICSTEX_WORDCOUNT\t8\t0\t0\t0\t0\t0\t0\t8\n",
+                "stderr": "",
+            })()
+            with patch("app.core.word_count.subprocess.run", return_value=completed):
+                precise = count_project(
+                    root,
+                    toolchain=LaTeXToolchain(latexmk=None, pdflatex=None, texcount="texcount", synctex=None),
+                )
+
+        for result in (fallback, precise):
+            self.assertEqual(result.total_words, 8)
+            self.assertEqual(result.effective_words, 6)
+            self.assertEqual(result.numbers, 2)
+            self.assertNotIn("循环引用", " ".join(result.warnings))
+        child_previews = [
+            segment for segment in fallback.visual_segments
+            if segment.source == "child.tex" and "Child" in segment.text
+        ]
+        self.assertEqual(len(child_previews), 2)
 
     def test_project_missing_child_warns_and_keeps_root_text(self) -> None:
         with TemporaryDirectory() as directory:
@@ -333,7 +563,7 @@ class WordCountTests(TestCase):
             self.assertEqual(len(shadow_paths), 1)
             self.assertFalse(shadow_paths[0].exists())
         self.assertEqual(result.source, "fallback")
-        self.assertIn("texcount 调用失败", " ".join(result.warnings))
+        self.assertIn("TeXcount 调用失败", " ".join(result.warnings))
 
     def test_project_does_not_count_preamble_include_as_body(self) -> None:
         with TemporaryDirectory() as directory:

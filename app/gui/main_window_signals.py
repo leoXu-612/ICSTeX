@@ -1,7 +1,7 @@
-"""Wire every QAction/QWidget signal in MainWindow to its slot.
+"""Wire MainWindow's static action and panel signals to their slots.
 
 Same shape as ``build_actions`` / ``build_ui``: mutates the window in place.
-Pulled out so the connection topology lives in one auditable file.
+Editor factories and focused controllers also own dynamic/lifetime-bound connections.
 """
 from __future__ import annotations
 
@@ -9,6 +9,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from app.core.compiler import BuildPurpose
+from app.gui.project_profile_dialog import show_project_profile
+from app.gui.project_checkpoint_dialog import show_project_checkpoint
+from app.gui.project_recovery_dialog import show_recovery_drafts
+from app.gui.block_write_recovery_dialog import show_block_write_recovery
+from app.gui.project_migration_dialog import show_project_migration
+from app.gui.project_archive_dialog import show_project_archive
+from app.gui.table_navigation import enable_table_key_activation
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from app.gui.main_window import MainWindow
@@ -17,12 +24,20 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 def connect_signals(window: "MainWindow") -> None:
     # File / project actions
     window.new_project_action.triggered.connect(window.new_project)
+    window.project_profile_action.triggered.connect(lambda: show_project_profile(window))
+    window.project_checkpoint_action.triggered.connect(lambda: show_project_checkpoint(window))
+    window.restore_checkpoint_action.triggered.connect(lambda: show_project_checkpoint(window, restore=True))
+    window.recovery_drafts_action.triggered.connect(lambda: show_recovery_drafts(window))
+    window.write_recovery_action.triggered.connect(lambda: show_block_write_recovery(window))
+    window.migrate_project_action.triggered.connect(lambda: show_project_migration(window))
+    window.prepare_submission_action.triggered.connect(window.prepare_submission)
     window.new_action.triggered.connect(window.new_document)
     window.open_file_action.triggered.connect(window.open_file_dialog)
     window.open_folder_action.triggered.connect(window.open_folder_dialog)
     window.save_action.triggered.connect(window.save_current)
     window.save_as_action.triggered.connect(window.save_current_as)
     window.export_pdf_action.triggered.connect(window.export_pdf)
+    window.export_project_action.triggered.connect(lambda: show_project_archive(window))
     window.reveal_pdf_action.triggered.connect(window.reveal_pdf)
     window.new_window_action.triggered.connect(window.spawn_window)
 
@@ -40,18 +55,32 @@ def connect_signals(window: "MainWindow") -> None:
     window.health_check_action.triggered.connect(
         lambda _checked=False: window.run_project_check(switch_to_panel=True)
     )
+    window.submission_check_action.triggered.connect(window.readiness.show)
+    window.submission_panel.refreshRequested.connect(window.readiness.request)
+    window.submission_panel.cancelRequested.connect(window.readiness.cancel)
+    window.submission_panel.actionRequested.connect(window.readiness.act)
+    window.signals.external_changed.connect(window.readiness.external_changed)
+    window.signals.started.connect(window.readiness.build_started)
+    window.signals.finished.connect(window.readiness.build_finished)
+    window.editor_tabs.currentChanged.connect(window.readiness.invalidate)
+    window.engine_selector.currentIndexChanged.connect(window.readiness.invalidate)
     window.environment_doctor_action.triggered.connect(window.show_environment_doctor)
     window.feedback_bundle_action.triggered.connect(window.copy_feedback_bundle)
     window.import_perf_action.triggered.connect(window.show_import_perf_dialog)
     window.block_project_action.triggered.connect(window.show_block_project_dialog)
     window.user_guide_action.triggered.connect(window.show_user_guide)
-    window.word_count_action.triggered.connect(window.update_word_count)
+    from app.gui.main_window_layout import show_console, reveal_workspace_widget
+    window.word_count_action.triggered.connect(lambda: show_console(window, window.word_count_panel))
+    window.word_count_action.triggered.connect(lambda: window.update_word_count(force=True))
+    window.pdf_panel.revealRequested.connect(lambda widget: reveal_workspace_widget(window, widget))
     window.sync_pdf_action.triggered.connect(window.sync_current_source_to_pdf)
     window.engine_selector.currentIndexChanged.connect(window.on_engine_selector_changed)
 
     # Toolbox / auto-compile toggles
     window.toolbox_action.toggled.connect(window.set_toolbox_visible)
     window.toolbox_dock.visibilityChanged.connect(window.sync_toolbox_action)
+    window.toolbox_dock.visibilityChanged.connect(window.project_panels.refresh_visible)
+    window.sidebar_tabs.currentChanged.connect(window.project_panels.refresh_visible)
     window.auto_compile_action.toggled.connect(window.sync_auto_compile_toggle)
     window.auto_compile_action.toggled.connect(window._persist_preferences_from_ui)
     window.auto_compile_toggle.toggled.connect(window.sync_auto_compile_action)
@@ -66,7 +95,11 @@ def connect_signals(window: "MainWindow") -> None:
     window.editor_tabs.tabCloseRequested.connect(window.close_tab)
     window.editor_tabs.currentChanged.connect(window.on_current_tab_changed)
     window.tree.doubleClicked.connect(window.open_tree_item)
+    window.tree.customContextMenuRequested.connect(window.show_file_tree_context_menu)
     window.error_table.cellDoubleClicked.connect(window.jump_to_error)
+    window.error_table.cellActivated.connect(window.jump_to_error)
+    enable_table_key_activation(window.error_table)
+    window.error_table.setToolTip("方向键移动，空格选中当前行，Return/Enter 定位；Tab 切换控件。")
 
     # Compile signals + PDF
     window.signals.external_changed.connect(window.reload_external_change)
@@ -81,6 +114,8 @@ def connect_signals(window: "MainWindow") -> None:
     window.welcome_page.openFileRequested.connect(window.open_file_dialog)
     window.welcome_page.openFolderRequested.connect(window.open_folder_dialog)
     window.welcome_page.guideRequested.connect(window.show_user_guide)
+    window.welcome_page.environmentRequested.connect(window.show_environment_doctor)
+    window.welcome_page.recheckRequested.connect(window.preferences_controller.recheck_environment)
     window.welcome_page.recentProjectRequested.connect(
         lambda path: window.open_recent_project(Path(path))
     )
@@ -101,6 +136,8 @@ def connect_signals(window: "MainWindow") -> None:
     window.images_panel.insertRequested.connect(window.insert_existing_image)
     window.history_panel.refreshRequested.connect(window.refresh_project_panels)
     window.history_panel.restoreRequested.connect(window.restore_history_snapshot)
+    window.history_panel.checkpointRequested.connect(window.project_checkpoint_action.trigger)
+    window.history_panel.checkpointRestoreRequested.connect(window.restore_checkpoint_action.trigger)
 
     # Insert + templates panels
     window.insert_panel.figureRequested.connect(window.insert_figure)
@@ -122,6 +159,19 @@ def connect_signals(window: "MainWindow") -> None:
     window.references_panel.importReferenceRequested.connect(window.import_reference)
     window.references_panel.refreshRequested.connect(window.refresh_project_panels)
     window.references_panel.citeRequested.connect(window.insert_citation)
+    window.references_panel.checkRequested.connect(window.citations.request)
+    window.references_panel.cancelCheckRequested.connect(window.citations.cancel)
+    window.references_panel.locationRequested.connect(window.citations.navigate)
+    window.signals.external_changed.connect(window.citations.external_changed)
+    window.editor_tabs.currentChanged.connect(window.citations.invalidate)
+    window.block_mode_action.toggled.connect(window.citations.invalidate)
+    window.images_panel.checkRequested.connect(window.materials.request)
+    window.images_panel.cancelCheckRequested.connect(window.materials.cancel)
+    window.images_panel.locationRequested.connect(window.materials.navigate)
+    window.images_panel.material_tabs.currentChanged.connect(window.project_panels.refresh_visible)
+    window.signals.external_changed.connect(window.materials.external_changed)
+    window.editor_tabs.currentChanged.connect(window.materials.invalidate)
+    window.block_mode_action.toggled.connect(window.materials.invalidate)
     window.labels_panel.refreshRequested.connect(window.refresh_project_panels)
     window.labels_panel.referenceRequested.connect(window.insert_reference)
 

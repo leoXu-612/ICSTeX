@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QApplication, QDialog, QDialogButtonBox, QPushButt
 
 from app.core.diagnostics import Diagnostic
 from app.core.environment_doctor import EnvironmentReport, FeedbackMetadata, build_feedback_bundle
+from app.gui.theme import PRIMARY_BUTTON_STATE_STYLE
 
 
 FeedbackContextProvider = Callable[[], "FeedbackContext"]
@@ -56,6 +57,7 @@ class EnvironmentDoctorDialog(QDialog):
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         self.copy_button = QPushButton("复制诊断报告")
         self.copy_button.setObjectName("primaryButton")
+        self.copy_button.setStyleSheet(PRIMARY_BUTTON_STATE_STYLE)
         buttons.addButton(self.copy_button, QDialogButtonBox.ButtonRole.ActionRole)
         self.feedback_button = QPushButton("复制反馈包")
         self.feedback_button.setToolTip("包含环境信息、最近日志和项目检查摘要，不包含论文正文。")

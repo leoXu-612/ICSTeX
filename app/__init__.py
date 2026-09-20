@@ -1,4 +1,12 @@
 """ICSTeX application package."""
 
 __app_name__ = "ICSTeX"
-__version__ = "0.2.7"
+__version__ = "2.1.0-beta.4"
+
+# Single application-version source.
+PRODUCT_NAME = "ICSTeX"
+PRODUCT_MAJOR = 2
+PRODUCT_MINOR = 1
+VERSION = __version__
+RELEASE_NAME = "Formula Intelligence"
+RELEASE_CHANNEL = "beta"

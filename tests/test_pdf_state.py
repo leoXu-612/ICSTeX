@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
+from unittest.mock import patch
 
 from app.core.compiler import CompileOutcome
 from app.core.pdf_state import (
@@ -14,6 +15,50 @@ from app.core.pdf_state import (
 
 
 class PdfStateStoreTests(TestCase):
+    def test_file_availability_matches_preview_for_regular_files_only(self):
+        from app.core.pdf_state import PdfBuildRecord
+        from app.core.preview_state import PreviewBuildRecord
+        directory = self.root.parent / "directory.pdf"
+        directory.mkdir()
+        empty = self.root.parent / "empty.pdf"
+        empty.touch()
+        nonempty = self.root.parent / "bytes.pdf"
+        nonempty.write_bytes(b"not parsed as PDF content")
+        link = self.root.parent / "link.pdf"
+        link.symlink_to(nonempty)
+        broken = self.root.parent / "broken.pdf"
+        broken.symlink_to(self.root.parent / "missing")
+        for record_type in (PdfBuildRecord, PreviewBuildRecord):
+            record = record_type(self.root)
+            for path, expected in ((None, False), (self.pdf, False), (directory, False),
+                                   (empty, False), (nonempty, True), (link, True), (broken, False)):
+                with self.subTest(record=record_type.__name__, path=path):
+                    record.last_successful_pdf = path
+                    self.assertEqual(record.has_valid_pdf, expected)
+            record.last_successful_pdf = nonempty
+            original_stat = Path.stat
+            with patch.object(Path, "stat", autospec=True, side_effect=original_stat) as stat:
+                self.assertTrue(record.has_valid_pdf)
+            self.assertEqual(stat.call_count, 1)
+            for error in (PermissionError(), FileNotFoundError(), OSError("unavailable")):
+                with patch.object(Path, "stat", side_effect=error):
+                    self.assertFalse(record.has_valid_pdf)
+
+    def test_action_eligibility_reuses_only_explicit_same_refresh_observation(self):
+        from app.core.pdf_state import PdfBuildRecord
+        self._write_pdf()
+        record = PdfBuildRecord(self.root, last_successful_pdf=self.pdf)
+        for state in PdfFreshness:
+            record.freshness = state
+            expected = state not in (PdfFreshness.UNCOMPILED, PdfFreshness.FAILED_NO_PDF)
+            self.assertEqual(record.export_allowed, expected)
+            with patch("app.core.pdf_state.is_nonempty_file", side_effect=AssertionError("duplicate read")):
+                self.assertEqual(record.can_export(file_available=True), expected)
+                self.assertFalse(record.can_export(file_available=False))
+        record.freshness = PdfFreshness.CURRENT
+        self.pdf.unlink()
+        self.assertFalse(record.export_allowed)
+
     def setUp(self) -> None:
         self._tmp = TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
@@ -34,6 +79,24 @@ class PdfStateStoreTests(TestCase):
     def test_records_are_keyed_by_normalized_root(self) -> None:
         alias = Path(self._tmp.name) / "sub" / ".." / "main.tex"
         self.assertIs(self.store.record_for(self.root), self.store.record_for(alias))
+
+    def test_registered_root_edits_do_not_resolve_paths_again(self) -> None:
+        record = self.store.record_for(self.root)
+        with patch("app.core.pdf_state.normalize_path", side_effect=AssertionError("unexpected disk lookup")):
+            for _ in range(30):
+                self.assertIs(self.store.mark_edited(record.root_file), record)
+        self.assertEqual(record.source_revision, 30)
+
+    def test_unregistered_symlink_alias_is_resolved_on_each_lookup(self) -> None:
+        alias = self.root.with_name("alias.tex")
+        other = self.root.with_name("other.tex")
+        other.write_text("other", encoding="utf-8")
+        alias.symlink_to(self.root)
+        first = self.store.record_for(alias)
+        alias.unlink()
+        alias.symlink_to(other)
+        self.assertIsNot(self.store.record_for(alias), first)
+        self.assertIs(self.store.record_for(self.root), first)
 
     def test_edit_marks_dirty_from_any_state(self) -> None:
         for prepare in (

@@ -36,6 +36,37 @@ class PathTests(TestCase):
             self.assertEqual(find_root_tex(chapter), main.resolve())
             self.assertEqual(resolve_root_tex(chapter).source, "magic")
 
+    def test_magic_root_must_include_opened_child(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            project = root / "project"
+            outside = root / "outside"
+            project.mkdir()
+            outside.mkdir()
+            main = outside / "main.tex"
+            chapter = project / "chapter.tex"
+            main.write_text("\\documentclass{article}\n\\begin{document}\n\\end{document}", encoding="utf-8")
+            chapter.write_text(f"% !TEX root = {main}\nChapter", encoding="utf-8")
+
+            resolution = resolve_root_tex(chapter)
+
+            self.assertEqual(resolution.root, chapter.resolve())
+            self.assertNotEqual(resolution.source, "magic")
+
+    def test_selected_folder_rejects_magic_root_escape(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            project = root / "project"
+            project.mkdir()
+            chapter = project / "chapter.tex"
+            outside = root / "main.tex"
+            outside.write_text("\\documentclass{article}\n\\input{project/chapter}", encoding="utf-8")
+            chapter.write_text("% !TEX root = ../main.tex\nChapter", encoding="utf-8")
+
+            resolution = resolve_root_tex(chapter, selected_scope=project)
+
+            self.assertEqual(resolution.root, chapter.resolve())
+
     def test_find_root_infers_parent_from_input_relationship(self) -> None:
         with TemporaryDirectory() as directory:
             root = Path(directory)

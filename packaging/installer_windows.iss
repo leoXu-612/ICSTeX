@@ -1,5 +1,5 @@
 #define MyAppName "ICSTeX"
-#define MyAppVersion "0.2.7"
+#define MyAppVersion "2.1.0-beta.4"
 #define MyAppPublisher "ICSTeX"
 #define MyAppExeName "ICSTeX.exe"
 
@@ -12,7 +12,7 @@ DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=..\dist
-OutputBaseFilename=ICSTeX-{#MyAppVersion}-Setup
+OutputBaseFilename=ICSTeX-{#MyAppVersion}-Windows-x64-Setup
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern

@@ -1,0 +1,47 @@
+{
+  "date": "2026-09-08",
+  "scope": "source update client and isolated native SDK integration",
+  "compileall_passed": true,
+  "focused_tests": {"count": 46, "seconds": 0.715, "passed": true},
+  "full_tests": {"count": 958, "seconds": 484.198, "passed": true},
+  "app_python_files": 170,
+  "app_python_path_content_sha256": "b002533f20a35533487f6c108c96a49163d05abfc377616a12f16d4cc60a1c7b",
+  "hash_encoding": "sorted relative POSIX path, NUL, raw contents, NUL per app Python file",
+  "updater_packaging_path_content_sha256": "9923f95da34c115c017d6f9f432f95699fa7fb8ba617d4704ac4627bb50d3ce8",
+  "updater_packaging_hash_order": [
+    "packaging/ICSTeX.spec",
+    "packaging/windows.spec",
+    "packaging/native_updates.py",
+    "packaging/native_updates/sparkle_bridge.m"
+  ],
+  "sdk_archives": [
+    {
+      "name": "Sparkle",
+      "version": "2.9.6",
+      "sha256": "52bf9e88cdd972fc0c81501377a880e90d47031bd8ca5462488f843e2609e192",
+      "digest_verified": true,
+      "staging_targets": ["darwin-arm64", "darwin-x86_64"],
+      "bridge_compile_passed": true,
+      "framework_deep_strict_codesign_verify_passed": true,
+      "arm64_bridge_load_passed": true,
+      "updater_initialized": false
+    },
+    {
+      "name": "WinSparkle",
+      "version": "0.9.4",
+      "sha256": "6037df37fc263bd1650a1c4949681a9d40ffe991d01f35892a406cb5d103c976",
+      "digest_verified": true,
+      "staging_targets": ["win32-arm64", "win32-x86_64"],
+      "dll_architecture_inspected": true,
+      "native_windows_execution_tested": false
+    }
+  ],
+  "student_projects_used": 0,
+  "real_feed_configured": false,
+  "production_keys_generated": false,
+  "application_packaged_by_this_assignment": false,
+  "application_installed_by_this_assignment": false,
+  "two_version_installation_tested": false,
+  "automatic_rollback_implemented": false,
+  "ui_report": "report.json"
+}

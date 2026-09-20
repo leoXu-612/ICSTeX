@@ -6367,3 +6367,30 @@ runs. The application release tag remains81b1672; no published archive was chang
 - Keep public Beta3 assets/feed and installed local app unchanged until publication gates pass.
   Retained Qt/temp-path diagnostics, libobjc warning and failed premature unsigned-feed check.
   Local evidence: icstex-beta4-release/preflight-final, package-receipt.json, build.log.
+
+## 2026-09-20 - Publish Beta 4 and activate the existing production feed
+
+- Keychain signing completed through the existing account; no private-key export or key rotation.
+  Local signed feed/archive verified with the embedded public key. Release/site consistency and
+  all17 website tests passed; app/tests remained at the1843-test preflight identity.
+- PR#4 squash-merged into main4ea00ff. Old release headf03776e was already an ancestor of
+  accepteda5451d8; a branch from main recorded that incorporated lineage with no tree change.
+  PR#5 froze the identical main tree at release/2.1 commit79fcd868a7109fb3b8dfa8c589007fbfa67a1414.
+  Tagv2.1.0-beta.4 points there; strict tag-at-HEAD release consistency passed.
+- Public prerelease https://github.com/leoXu-612/ICSTeX/releases/tag/v2.1.0-beta.4 contains
+  DMG/ZIP and six documents. Anonymous ZIP download57188923bytes matched signed local bytes
+  (170696e77b5eca6b09fefe3bb4cdab95d2c4862c9ebe56589811220e4e01aa6a); DMG endpoint200,
+  65672242bytes and GitHub digestcfcffab1e0b80f7c78df49fd953d4c4d213ab138a2735862306a9f7ed2821c94.
+- After asset verification deployed the16-file existing static website to production:
+  dpl_3rSnXMYS45Ke5Leo1Gc5eT9ZYFdX, READY; website-2z2160iy5-leoxuminghua-7962s-projects.vercel.app.
+  Both ics-tex.vercel.app and the old embedded website-phi-beryl-92.vercel.app alias are current.
+  Browser rendered Beta4, current checksums and real download links. No new project or Git integration.
+- Live release.json and appcast exactly matched local files. Anonymous appcast HTTP200 with
+  no-cache-staleness policy; independent public feed/archive signature verification passed.
+  Feed SHA2562300e564f8760b2847de848ee68697928df3d0d210314dc3b2bdd482aff3a352.
+  Installed210003 and offered210004 share the same feed URL/key. Collaborator's real automatic
+  discovery/download/install/restart is not claimed; opt-in,30-second start delay,5-minute startup
+  cooldown and busy/modal deferral remain. User confirmation still protects download/install.
+- Evidence: local icstex-beta4-release/public-check/verified.json, signed-package-receipt.json,
+  preflight-final/result.json, build.log and this turn's browser/API output. Preserved old assets,
+  tags and installed Beta3; Actions stays disabled. No CI/rule bypass or force-push.

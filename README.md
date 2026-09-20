@@ -1,6 +1,6 @@
 # ICSTeX
 
-Current version: 2.1.0-beta.4. Packaged target: macOS Apple Silicon (arm64); current downloads are listed on the release website.
+Current version: 2.1.0-beta.4. Current packaged release: 2.1.0-beta.4 for macOS arm64.
 See [`release/BUILD_RECEIPT.json`](release/BUILD_RECEIPT.json) for the exact packaged source identity.
 This release includes opt-in, signed in-app updates. Older manual builds need one manual
 bootstrap installation. Windows stays on its historical Beta 1 package.

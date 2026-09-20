@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import Mock, patch
 
 from app.gui.update_backends import SparkleUpdater, WinSparkleUpdater
 from tests.test_app_updates import update_config
@@ -30,6 +31,33 @@ class FakeLibrary:
 
 
 class NativeUpdateBackendTests(unittest.TestCase):
+    def test_sparkle_binds_guard_before_check_and_requires_tracking_before_save(self):
+        library, guard, save = FakeLibrary(), Mock(), Mock(return_value=True)
+        events = []
+        with patch("app.gui.update_backends.installed_lease", return_value=guard):
+            adapter = SparkleUpdater(update_config(), Path("/fixture/bridge"), save, lambda: None,
+                                     events.append, loader=lambda _path: library)
+        adapter.check(user_initiated=True)
+        guard.begin.assert_called_once_with()
+        args = library.icstex_update_init.calls[0]
+        self.assertEqual(args[6](b"extracting"), 1)
+        guard.extracting.assert_called_once_with()
+        guard.ready.return_value = False
+        self.assertEqual(args[3](), 0)
+        save.assert_not_called()
+        guard.ready.return_value = True
+        self.assertEqual(args[3](), 1)
+        save.assert_called_once_with()
+        args[6](b"finished")
+        guard.finish.assert_called_once_with()
+        adapter.close()
+        guard.close.assert_not_called()
+
+    def test_real_sparkle_loader_cannot_bypass_missing_entry_lease(self):
+        with patch("app.gui.update_backends.installed_lease", return_value=None):
+            with self.assertRaisesRegex(RuntimeError, "installation lease"):
+                SparkleUpdater(update_config(), Path("/not-loaded"), lambda: True, lambda: None, lambda _: None)
+
     def test_sparkle_uses_build_identity_and_retains_callbacks(self):
         library = FakeLibrary()
         events = []

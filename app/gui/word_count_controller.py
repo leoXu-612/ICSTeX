@@ -65,7 +65,7 @@ class WordCountController(QObject):
         self._signals.completed.connect(self._finished, Qt.ConnectionType.QueuedConnection)
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
-        self._timer.setInterval(200)
+        self._timer.setInterval(500)
         self._timer.timeout.connect(self.request)
         self._active: _Request | None = None
         self._pending: _Request | None = None
@@ -86,7 +86,7 @@ class WordCountController(QObject):
         revisions = []
         for candidate in self.window.tabs.values():
             if candidate is tab or self._belongs(candidate, root):
-                revisions.append((str(candidate.path or ""), id(candidate.editor), candidate.editor.document().revision()))
+                revisions.append((str(candidate.path or ""), id(candidate.editor), candidate.editor.source_revision))
         source_revision = self.window.pdf_state.record_for(root).source_revision if root is not None else 0
         return root, source_revision, tuple(sorted(revisions)), self.window.toolchain
 
@@ -96,12 +96,26 @@ class WordCountController(QObject):
             or (tab.path is not None and tab.path.resolve() in self.window.dependencies.paths_for(root))
         )
 
-    def schedule(self) -> None:
+    def schedule(self, *, delay_ms: int = 500) -> None:
         if self._closed:
             return
         self._pending = None
-        self._timer.start()
+        self._timer.start(delay_ms)
         self._mark_pending(self._key())
+
+    def _automatic_compile_pending(self) -> bool:
+        window = self.window
+        root = window.dependencies.root_for_tab(window.current_tab())
+        if (not window.auto_compile_action.isChecked()
+                or root not in window.compile_authorized_roots
+                or window.block_mode_action.isChecked()):
+            return False
+        return root in window.compile._deferred_dependencies or any(
+            window.dependencies.root_for_tab(tab) == root and (
+                (tab.save_timer is not None and tab.save_timer.isActive())
+                or (tab.manager is not None and (tab.manager.is_busy or tab.manager.is_scheduled)))
+            for tab in window.tabs.values()
+        )
 
     def _mark_pending(self, key: tuple | None) -> None:
         view = self.window.word_count_view
@@ -118,6 +132,10 @@ class WordCountController(QObject):
         if self._closed:
             return
         self._timer.stop()
+        if not force and self._automatic_compile_pending():
+            # Autosave, dependency resolution and PDF compilation have priority.
+            self.schedule()
+            return
         key = self._key()
         if key is None:
             self._pending = None

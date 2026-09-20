@@ -6,11 +6,12 @@ from itertools import count
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
+from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QSettings
-from PySide6.QtWidgets import QApplication, QToolBar
+from PySide6.QtCore import QEvent, QObject, QSettings
+from PySide6.QtWidgets import QApplication, QDialog, QLabel, QPushButton, QToolBar, QVBoxLayout
 
 from app.core.settings import AppSettings
 from app.gui.theme import apply_theme, stylesheet
@@ -128,6 +129,65 @@ class ScaleManagerTests(TestCase):
         for scale in SCALE_TIERS:
             qss = stylesheet(UiMetrics(scale), TypographyMetrics(scale))
             self.assertIn(f"font-size: {round(13 * scale)}px", qss)
+
+    def test_supported_tiers_do_not_reapply_the_application_stylesheet(self):
+        self.manager.apply_scale(1.1)
+        self.manager.apply_scale(1.0)
+        before = self.app.styleSheet()
+        with patch.object(self.app, "setStyleSheet", wraps=self.app.setStyleSheet) as apply:
+            for scale in SCALE_TIERS:
+                self.manager.apply_scale(scale)
+            apply.assert_not_called()
+        self.assertEqual(self.app.styleSheet(), before)
+
+    def test_new_widgets_receive_current_tier_before_use(self):
+        self.manager.apply_scale(1.5)
+        dialog = QDialog()
+        layout = QVBoxLayout(dialog)
+        title, button = QLabel("Heading"), QPushButton("Action")
+        title.setObjectName("dialogTitle")
+        layout.addWidget(title)
+        layout.addWidget(button)
+        try:
+            dialog.show()
+            self.app.processEvents()
+            self.assertEqual(button.property("icstexUiScale"), "150")
+            self.assertEqual(button.minimumHeight(), round(34 * 1.5) + 16)
+            self.assertEqual(title.font().pixelSize(), round(15 * 1.5))
+        finally:
+            dialog.close()
+            dialog.deleteLater()
+            self.app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_non_menu_scale_retains_legacy_values_and_can_return(self):
+        self.manager.apply_scale(1.17)
+        self.assertEqual(self.app.styleSheet(), stylesheet(UiMetrics(1.17), TypographyMetrics(1.17)))
+        self.manager.apply_scale(1.25)
+        self.assertEqual(self.app.styleSheet(), self.manager._fixed_stylesheet)
+
+    def test_global_filter_only_runs_when_new_widgets_need_scale_markers(self):
+        class CountingManager(UiScaleManager):
+            user_events = 0
+
+            def eventFilter(self, watched, event):
+                if event.type() == QEvent.Type.User:
+                    self.user_events += 1
+                return super().eventFilter(watched, event)
+
+        manager = CountingManager(self.app)
+        receiver = QObject()
+        try:
+            for scale, expected in ((1.0, 0), (1.25, 1), (1.0, 0),
+                                    (1.17, 0), (1.5, 1), (1.0, 0)):
+                manager.apply_scale(scale)
+                manager.user_events = 0
+                self.app.sendEvent(receiver, QEvent(QEvent.Type.User))
+                self.assertEqual(manager.user_events, expected, scale)
+        finally:
+            manager.apply_scale(1.0)
+            self.app.removeEventFilter(manager)
+            manager.deleteLater()
+            self.app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
 class ButtonMinimumSizeTests(TestCase):

@@ -7,7 +7,7 @@ from unittest import TestCase, skipUnless
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from app.core.blocks.schema import validate_theme
+from app.core.blocks.schema import validate_theme, validate_saved_document_theme
 from app.core.blocks.theme import AppTheme, DocumentTheme, theme_from_dict
 from app.core.blocks.theme_renderer import render_document_theme_sty
 from app.core.compiler import BuildPurpose, CompileManager
@@ -75,6 +75,15 @@ def document_theme_dict(**overrides: object) -> dict:
 
 
 class ThemeModelTests(TestCase):
+    def test_persisted_overrides_do_not_relax_full_template_requirements(self) -> None:
+        partial = DocumentTheme(id="doc_default", name="Default").to_dict()
+        self.assertEqual(validate_saved_document_theme(partial), [])
+        self.assertTrue(validate_theme(partial))
+        self.assertTrue(validate_saved_document_theme({**partial, "schemaVersion": "99.0.0"}))
+        self.assertTrue(validate_saved_document_theme({**partial, "page": {"size": "invalid"}}))
+        self.assertTrue(validate_saved_document_theme({**partial, "unknown": True}))
+        self.assertTrue(validate_saved_document_theme(app_theme_dict()))
+
     def test_app_theme_valid_with_all_tokens(self) -> None:
         self.assertEqual(validate_theme(app_theme_dict()), [])
 

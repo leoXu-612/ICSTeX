@@ -2,7 +2,7 @@
 
 Scale changes recompute the unified ``UiMetrics``/``TypographyMetrics`` from
 the *base* font (never from the current scaled font), update toolbar icon
-sizes, rebuild the stylesheet, and re-clamp docks/splitters.  Window and
+sizes and fixed style-rule markers, and re-clamp docks/splitters. Window and
 splitter size changes are handled separately by responsive layout code and
 never touch the font.
 """
@@ -13,15 +13,15 @@ import sys
 import time
 from weakref import WeakSet
 
-from PySide6.QtCore import QObject, QSize, Qt, Signal
+from PySide6.QtCore import QEvent, QObject, QSize, Qt, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication, QDockWidget, QSplitter, QToolBar, QWidget
+from shiboken6 import isValid
 
-from app.gui.theme import stylesheet
-from app.gui.theme.ui_metrics import TypographyMetrics, UiMetrics
+from app.gui.theme import fixed_stylesheet, stylesheet
+from app.gui.theme.ui_metrics import SCALE_TIERS, TypographyMetrics, UiMetrics
 
 
-SCALE_TIERS = (0.90, 1.00, 1.10, 1.25, 1.50)
 _PROFILE = os.environ.get("ICSTEX_UI_SCALE_PROFILE") == "1"
 
 TIER_LABELS: dict[float, str] = {
@@ -50,6 +50,17 @@ class UiScaleManager(QObject):
         self._windows: WeakSet = WeakSet()
         self._stylesheet_cache: dict[tuple[float, float], str] = {}
         self._applied_stylesheet = ""
+        self._fixed_stylesheet = fixed_stylesheet()
+
+    def eventFilter(self, watched, event):
+        if (event.type() == QEvent.Type.Polish and isinstance(watched, QWidget)
+                and self._scale in SCALE_TIERS and self._scale != 1.0):
+            token = str(round(self._scale * 100))
+            if watched.property("icstexUiScale") != token:
+                watched.setProperty("icstexUiScale", token)
+                watched.style().unpolish(watched)
+                watched.style().polish(watched)
+        return False
 
     def register_window(self, window) -> None:
         if window is not None:
@@ -77,8 +88,18 @@ class UiScaleManager(QObject):
         self._scale = scale
         self._metrics = UiMetrics(scale)
         self._typography = TypographyMetrics(scale)
+        # Default/legacy styles need no per-widget marker. Do not route every
+        # application event through Python when the filter has nothing to do.
+        self._app.removeEventFilter(self)
+        if scale in SCALE_TIERS and scale != 1.0:
+            self._app.installEventFilter(self)
         profile_start = time.perf_counter()
 
+        # Font/style events re-enter Python while Qt traverses raw widget
+        # pointers. Keep wrappers alive so cyclic GC cannot delete a different
+        # Python-owned widget mid-traversal. This local snapshot neither changes
+        # GC policy nor retains closed widgets after the synchronous update.
+        live_widgets = self._app.allWidgets()
         font = QFont(self._base_font)
         font.setPointSizeF(self._base_point_size * scale)
         self._app.setFont(font)
@@ -95,15 +116,32 @@ class UiScaleManager(QObject):
                 self._windows.discard(window)
         t_refresh = time.perf_counter()
 
-        cache_key = (self._metrics.scale, self._metrics.density)
-        qss = self._stylesheet_cache.get(cache_key)
-        if qss is None:
-            qss = stylesheet(self._metrics, self._typography)
-            self._stylesheet_cache[cache_key] = qss
         t_build = time.perf_counter()
-        if qss != self._applied_stylesheet:
-            self._app.setStyleSheet(qss)
-            self._applied_stylesheet = qss
+        if scale in SCALE_TIERS:
+            token = str(round(scale * 100))
+            for widget in live_widgets:
+                if isValid(widget):
+                    widget.setProperty("icstexUiScale", token)
+            if self._app.styleSheet() != self._fixed_stylesheet:
+                self._app.setStyleSheet(self._fixed_stylesheet)
+            else:
+                # Parents first: their font restoration can affect children.
+                for widget in sorted(live_widgets, key=_widget_depth):
+                    if isValid(widget):
+                        widget.style().unpolish(widget)
+                        widget.style().polish(widget)
+                        self._app.sendEvent(widget, QEvent(QEvent.Type.StyleChange))
+            self._applied_stylesheet = self._fixed_stylesheet
+        else:
+            # ponytail: non-menu scales keep the legacy path; precompile only new UI tiers.
+            cache_key = (self._metrics.scale, self._metrics.density)
+            qss = self._stylesheet_cache.get(cache_key)
+            if qss is None:
+                qss = stylesheet(self._metrics, self._typography)
+                self._stylesheet_cache[cache_key] = qss
+            if qss != self._applied_stylesheet:
+                self._app.setStyleSheet(qss)
+                self._applied_stylesheet = qss
         t_apply = time.perf_counter()
         if _PROFILE:
             print(
@@ -116,6 +154,16 @@ class UiScaleManager(QObject):
                 file=sys.stderr,
             )
         self.scale_changed.emit(scale)
+        del live_widgets
+
+
+def _widget_depth(widget: QWidget) -> int:
+    depth = 0
+    parent = widget.parentWidget()
+    while parent is not None:
+        depth += 1
+        parent = parent.parentWidget()
+    return depth
 
 
 def refresh_window_metrics(window: QWidget, metrics: UiMetrics) -> None:

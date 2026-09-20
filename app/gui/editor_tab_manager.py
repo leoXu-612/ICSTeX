@@ -139,10 +139,23 @@ class EditorTabManager:
             window.file_watcher.unwatch(tab.path)
         window.editor_tabs.removeTab(index)
         window.tabs.pop(tab_id, None)
+        if widget is not None:
+            # removeTab keeps the page alive in the stack. An accepted close
+            # must also release its editor/document at the Qt event boundary.
+            widget.deleteLater()
         window.update_document_view_state()
         window.dependencies.refresh_memberships()
 
     def handle_close_event(self, event: QCloseEvent) -> None:
+        session = self.window.block_session
+        pending = session.pause_writes() if session is not None else None
+        try:
+            self._handle_close_event(event)
+        finally:
+            if session is not None:
+                session.resume_writes(pending)
+
+    def _handle_close_event(self, event: QCloseEvent) -> None:
         window = self.window
         open_tabs: list[EditorTab] = []
         for index in range(window.editor_tabs.count()):
@@ -170,9 +183,16 @@ class EditorTabManager:
                     event.ignore()
                     return
 
+        from app.gui.blocks.close_guard import confirm_block_close
+        if not confirm_block_close(window, window.block_session):
+            event.ignore()
+            return
+
         # Shutdown side effects are deferred until every document has agreed
         # to close. A later Cancel must leave earlier tabs fully operational.
         retired: set[object] = set()
+        from app.gui.block_mode import _close_block_project
+        _close_block_project(window, discard=True)
         for tab in open_tabs:
             window.documents.cancel_save_timer(tab)
             if tab.manager and tab.manager not in retired:

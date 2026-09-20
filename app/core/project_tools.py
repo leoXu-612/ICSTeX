@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from pathlib import Path
+import os
 import re
 import urllib.error
 import urllib.request
@@ -9,6 +10,8 @@ from urllib.parse import quote, urlparse
 from xml.etree import ElementTree
 
 from app.core.latex_insertions import template_for_key
+from app.core.project_dependencies import MAX_SOURCE_BYTES, read_project_bytes, safe_project_input
+from app.core.project_profile import PROFILE_PATH, ProjectProfile, profile_bytes
 from app.core.text_encoding import write_latex_text_atomic
 
 
@@ -44,6 +47,7 @@ class ProjectInitSpec:
     parent_dir: Path
     project_name: str
     template_key: str = "ib_ia_report"
+    profile: ProjectProfile | None = None
 
 
 @dataclass(frozen=True)
@@ -81,28 +85,76 @@ class LabelInfo:
 
 
 def sanitize_project_name(name: str) -> str:
-    cleaned = re.sub(r"[^A-Za-z0-9._ -]+", "_", name.strip()).strip(" ._")
-    return cleaned or "LaTeX_Project"
+    cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f\x7f]+', "_", name.strip()).strip(" ._")
+    cleaned = cleaned or "LaTeX_Project"
+    if re.fullmatch(r"CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9]", cleaned.split(".")[0], re.I):
+        cleaned = "Project_" + cleaned
+    return cleaned
 
 
 def initialize_project(spec: ProjectInitSpec) -> InitializedProject:
-    project_name = sanitize_project_name(spec.project_name)
-    root = spec.parent_dir.expanduser().resolve() / project_name
-    if root.exists() and any(root.iterdir()):
-        raise FileExistsError(f"项目文件夹不是空的：{root}")
-
-    root.mkdir(parents=True, exist_ok=True)
-    folders = tuple(root / folder for folder in PROJECT_FOLDERS)
-    for folder in folders:
-        folder.mkdir(exist_ok=True)
-
+    # Validate everything before reserving a destination. New means new: even
+    # an existing empty directory or symlink belongs to someone else.
     template = template_for_key(spec.template_key)
-    tex_file = root / "main.tex"
-    bib_file = root / "bib" / "references.bib"
-    write_latex_text_atomic(tex_file, ensure_bibliography(template.text), encoding="utf-8")
-    if not bib_file.exists():
-        write_latex_text_atomic(bib_file, "% 在这里添加 BibTeX 条目。\n", encoding="utf-8")
-    return InitializedProject(root_dir=root, tex_file=tex_file, bib_file=bib_file, folders=folders)
+    files = {Path("main.tex"): ensure_bibliography(template.text).encode("utf-8"),
+             Path("bib/references.bib"): "% 在这里添加 BibTeX 条目。\n".encode("utf-8")}
+    if spec.profile is not None:
+        files[PROFILE_PATH] = profile_bytes(spec.profile)
+    if any(len(payload) > MAX_SOURCE_BYTES for payload in files.values()):
+        raise ValueError("模板超过项目创建的文件大小限制。")
+    project_name = sanitize_project_name(spec.project_name)
+    parent = spec.parent_dir.expanduser().resolve(strict=True)
+    if not parent.is_dir():
+        raise NotADirectoryError("请选择已有父文件夹。")
+    root = parent / project_name
+    try:
+        root.mkdir(mode=0o700, exist_ok=False)
+    except FileExistsError as exc:
+        raise FileExistsError(f"目标已存在，请使用新的项目名称：{root}") from exc
+    original = root.stat()
+    folders = tuple(root / folder for folder in PROJECT_FOLDERS)
+    def check_root():
+        current = root.lstat()
+        if root.is_symlink() or (current.st_dev, current.st_ino) != (original.st_dev, original.st_ino):
+            raise OSError("项目目录在创建中发生变化。")
+    try:
+        for folder in (*folders, *((root / ".icstex",) if spec.profile is not None else ())):
+            check_root()
+            folder.mkdir(mode=0o700, exist_ok=False)
+        for relative, payload in files.items():
+            check_root()
+            _write_new_project_file(root / relative, root, payload)
+        check_root()
+        for relative, payload in files.items():
+            if read_project_bytes(root / relative, root, allow_internal=True) != payload:
+                raise OSError("新项目文件在创建中发生变化。")
+        check_root()
+    except (OSError, ValueError) as exc:
+        # Never recursively remove a directory that an external process could
+        # already have edited. The UI keeps the current workspace on failure.
+        raise OSError(f"项目创建未完成：{root}。已创建内容保留，请检查后重试；未打开为新项目。{exc}") from exc
+    return InitializedProject(root_dir=root, tex_file=root / "main.tex",
+                              bib_file=root / "bib/references.bib", folders=folders)
+
+
+def _write_new_project_file(path: Path, root: Path, payload: bytes) -> None:
+    if root.is_symlink() or safe_project_input(root, path, allow_internal=True) is None:
+        raise OSError("新项目路径不安全。")
+    directory = None
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        if os.open in os.supports_dir_fd and hasattr(os, "O_NOFOLLOW"):
+            directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            fd = os.open(path.name, flags, 0o600, dir_fd=directory)
+        else:
+            fd = os.open(path, flags, 0o600)
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+    finally:
+        if directory is not None:
+            os.close(directory)
 
 
 def ensure_bibliography(text: str) -> str:

@@ -76,6 +76,14 @@ def compile_sparkle_bridge(sdk: Path, output: Path, architecture: str) -> None:
     ], check=True)
 
 
+def compile_install_guard(output: Path, architecture: str) -> None:
+    subprocess.run([
+        "xcrun", "clang", "-std=c11", "-Wall", "-Wextra", "-Werror", "-arch", architecture,
+        f"-mmacosx-version-min={MACOS_MIN_SYSTEM_VERSION}",
+        str(ROOT / "packaging/native_updates/install_guard.c"), "-o", str(output),
+    ], check=True)
+
+
 def prepare_runtime(archive: Path, config: UpdateConfiguration, output: Path) -> None:
     """Generate a new runtime directory, never overwrite an existing one."""
     verify_sdk_archive(archive, config.target_platform)
@@ -101,6 +109,9 @@ def prepare_runtime(archive: Path, config: UpdateConfiguration, output: Path) ->
             frameworks.mkdir()
             shutil.copytree(framework, frameworks / framework.name, symlinks=True)
             compile_sparkle_bridge(sdk, frameworks / "ICSTeXUpdateBridge.dylib", config.architecture)
+            helpers = stage / "Helpers"
+            helpers.mkdir()
+            compile_install_guard(helpers / "ICSTeXInstallGuard", config.architecture)
             shutil.copy2(sdk / "LICENSE", licenses / "Sparkle-LICENSE")
         else:
             directory = "ARM64" if config.architecture == "arm64" else "x64"
@@ -129,6 +140,8 @@ def runtime_from_environment() -> tuple[Path | None, UpdateConfiguration | None]
               else runtime / "updates" / "WinSparkle.dll")
     if not native.is_file():
         raise ValueError("Updater runtime is incomplete")
+    if sys.platform == "darwin" and not (runtime / "Helpers/ICSTeXInstallGuard").is_file():
+        raise ValueError("Updater runtime is missing the installation guard")
     return runtime, config
 
 
@@ -148,6 +161,9 @@ def embed_macos_runtime(app_path: Path, runtime: Path) -> None:
         shutil.rmtree(target)
     shutil.copytree(runtime / "Frameworks" / "Sparkle.framework", target, symlinks=True)
     shutil.copy2(runtime / "Frameworks" / "ICSTeXUpdateBridge.dylib", frameworks)
+    helpers = app_path / "Contents/Helpers"
+    helpers.mkdir(exist_ok=True)
+    shutil.copy2(runtime / "Helpers/ICSTeXInstallGuard", helpers)
     # Re-establish local integrity after embedding. This is not Developer ID.
     subprocess.run(["codesign", "--force", "--deep", "--sign", "-", str(app_path)], check=True)
     subprocess.run(["codesign", "--verify", "--deep", "--strict", str(app_path)], check=True)

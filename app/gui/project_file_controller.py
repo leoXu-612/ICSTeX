@@ -64,9 +64,13 @@ class ProjectFileController(QObject):
         window.selected_project_scope = root
         root_index = window.model.setRootPath(str(root))
         window.tree.setRootIndex(root_index)
+        if hasattr(window, "source_panels"):
+            window.source_panels.set_welcome(False)
         if remember:
             window._remember_recent_project(root)
         window.dependencies.refresh_memberships()
+        if hasattr(window, "workspace"):
+            window.workspace.schedule()
         return root
 
     def ensure_project_root_for_file(self, path: str | Path) -> None:
@@ -291,7 +295,12 @@ class ProjectFileController(QObject):
         window._sync_compile_indicators_to_active_root()
         window.refresh_project_panels()
         window.update_recent_menu()
-        QTimer.singleShot(0, lambda: window.tree.setCurrentIndex(window.model.index(str(plan.destination))))
+
+        def select_destination() -> None:
+            if window.selected_project_scope == plan.project_root:
+                window.tree.setCurrentIndex(window.model.index(str(plan.destination)))
+
+        QTimer.singleShot(0, window, select_destination)
         window.statusBar().showMessage(
             f"已{operation_label}：{plan.source.name} → {plan.destination.name}",
             5000,

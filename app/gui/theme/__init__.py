@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import sys
+import re
+from functools import lru_cache
 from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QPalette
 from PySide6.QtWidgets import QApplication
 
-from app.gui.theme.ui_metrics import TypographyMetrics, UiMetrics
+from app.gui.theme.ui_metrics import SCALE_TIERS, TypographyMetrics, UiMetrics
+from app.gui.assets import asset_path
 
 
 # macOS exposes the complete built-in SF Mono family under the internal
@@ -51,6 +54,7 @@ COLOR_PRESSED = "#e8e8e3"
 COLOR_SELECTED = "#fdf1e0"
 COLOR_ACCENT = "#b45309"
 COLOR_ACCENT_HOVER = "#92400e"
+COLOR_ACCENT_PRESSED = "#78350f"
 COLOR_SUCCESS = "#2f7d4e"
 COLOR_WARNING = "#a7661b"
 COLOR_ERROR = "#b3261e"
@@ -63,6 +67,17 @@ COLOR_SYNTAX_ARGUMENT = "#666b67"
 COLOR_SYNTAX_OPTION = "#6f746f"
 COLOR_SYNTAX_MATH = "#7b526f"
 COLOR_SYNTAX_COMMENT = "#6c716b"
+
+PRIMARY_ACTION_FOCUS_STYLE = (
+    f"QToolButton:enabled:focus {{ border-color: {COLOR_TEXT}; }}"
+    f"QToolButton:enabled:pressed {{ background: {COLOR_ACCENT_PRESSED}; border-color: {COLOR_ACCENT_PRESSED}; }}"
+)
+PRIMARY_BUTTON_STATE_STYLE = (
+    f"QPushButton:enabled:focus {{ border-color: {COLOR_TEXT}; }}"
+    f"QPushButton:enabled:pressed {{ background: {COLOR_ACCENT_PRESSED}; border-color: {COLOR_ACCENT_PRESSED}; }}"
+    f"QPushButton:disabled {{ background: {COLOR_SURFACE_ALT}; border-color: {COLOR_BORDER_SOFT}; color: {COLOR_TEXT_FAINT}; }}"
+)
+FORMULA_PRIMARY_BUTTON_STYLE = PRIMARY_BUTTON_STATE_STYLE
 
 SPACE_1 = 4
 SPACE_2 = 8
@@ -114,7 +129,7 @@ def apply_theme(app: QApplication) -> None:
     if hasattr(app.styleHints(), "setColorScheme"):
         app.styleHints().setColorScheme(Qt.ColorScheme.Light)
     app.setPalette(light_palette())
-    app.setStyleSheet(stylesheet())
+    app.setStyleSheet(fixed_stylesheet())
 
 
 def light_palette() -> QPalette:
@@ -164,6 +179,7 @@ def stylesheet(
     typography = typography or TypographyMetrics(1.0)
     fs_body = round(typography.body_pt)
     fs_caption = round(typography.caption_pt)
+    fs_toolbar = round(typography.toolbar_pt)
     fs_section = round(typography.section_title_pt)
     fs_page = round(typography.page_title_pt)
     fs_dialog_title = round(15 * metrics.scale)
@@ -178,6 +194,7 @@ def stylesheet(
     ui_stack = _qss_font_stack(_ui_font_stack())
     editor_stack = _qss_font_stack(_editor_font_stack())
     heading_stack = _qss_font_stack(_heading_font_stack())
+    tab_close_icon = asset_path("icons/close.svg").as_posix()
     return f"""
     QMainWindow {{
         background: {COLOR_APP};
@@ -288,6 +305,126 @@ def stylesheet(
         background: #ecc9a8;
         border-color: #ecc9a8;
         color: {COLOR_SURFACE};
+    }}
+
+    QToolBar#mainToolbar, QToolBar#workspaceToolbar {{
+        padding: 2px 8px;
+    }}
+
+    QPlainTextEdit#workspaceDetails {{
+        background: {COLOR_SURFACE_ALT};
+        color: {COLOR_TEXT};
+        font-family: {ui_stack};
+        font-size: {fs_body}px;
+        padding: 2px 6px;
+        border: 1px solid {COLOR_BORDER_SOFT};
+    }}
+
+    QWidget#submissionCheckPanel QPushButton {{
+        min-height: {max(0, minh_control - 8)}px;
+        padding: 3px 9px;
+    }}
+
+    QPushButton#mathCategoryButton, QPushButton#mathNumbersButton {{
+        min-height: {max(0, minh_compact - 16)}px;
+        padding: 2px 8px;
+    }}
+
+    QPushButton#mathCategoryButton:checked,
+    QWidget#submissionCheckPanel QPushButton:checked {{
+        background: {COLOR_SELECTED};
+        border-color: {COLOR_ACCENT};
+    }}
+
+    QWidget#submissionCheckPanel QPushButton:disabled {{
+        background: {COLOR_SURFACE_ALT};
+        border-color: {COLOR_BORDER_SOFT};
+        color: {COLOR_TEXT_FAINT};
+    }}
+
+    QLabel#submissionSummary {{
+        color: {COLOR_TEXT};
+        font-weight: 600;
+    }}
+
+    QPlainTextEdit#submissionReason {{
+        font-family: {ui_stack};
+        font-size: {fs_body}px;
+        background: {COLOR_SURFACE};
+        padding: 6px 8px;
+    }}
+
+    QToolBar#mainToolbar QToolButton,
+    QWidget#workspaceHeader QToolButton,
+    QToolButton#consoleToggle,
+    QToolButton#workspaceViewButton {{
+        min-height: {max(0, minh_compact - 8)}px;
+        padding: 3px 8px;
+        font-size: {fs_toolbar}px;
+    }}
+
+    QToolBar#mainToolbar QToolButton#primaryAction {{
+        min-height: {max(0, minh_compact - 8)}px;
+    }}
+
+    QWidget#autoCompileToggle {{ font-size: {fs_toolbar}px; }}
+    QLabel#workspaceSummary {{ font-size: {fs_toolbar}px; }}
+
+    QToolBar#mainToolbar QToolButton:focus,
+    QWidget#workspaceHeader QToolButton:focus,
+    QToolButton#consoleToggle:focus,
+    QToolButton#workspaceViewButton:focus {{
+        border-color: {COLOR_ACCENT};
+    }}
+
+    QToolButton#workspaceViewButton:checked {{
+        background: {COLOR_SELECTED};
+        color: {COLOR_ACCENT};
+        border-color: {COLOR_BORDER};
+    }}
+
+    QToolButton#primaryAction:pressed {{
+        background: {COLOR_ACCENT_HOVER};
+        border-color: {COLOR_ACCENT_HOVER};
+    }}
+
+    QTabWidget#sourceTabs QTabBar::tab {{
+        min-height: {max(0, minh_control - 10)}px;
+        padding: 4px 10px;
+    }}
+
+    QTabWidget#sourceTabs QTabBar::close-button {{
+        image: url("{tab_close_icon}");
+        width: {metrics.icon_size}px;
+        height: {metrics.icon_size}px;
+        border-radius: {RADIUS_SMALL}px;
+    }}
+
+    QTabWidget#sourceTabs QTabBar::close-button:hover {{
+        background: {COLOR_HOVER};
+    }}
+
+    QTabWidget#sourceTabs QTabBar::close-button:pressed {{
+        background: {COLOR_PRESSED};
+    }}
+
+    QDialog#submissionDeliveryDialog QPushButton,
+    QWidget#blockWorkspace QPushButton {{
+        min-height: {max(0, minh_control - 8)}px;
+        padding: 3px 9px;
+    }}
+
+    QDialog#submissionDeliveryDialog QPushButton#primaryButton:pressed,
+    QWidget#blockWorkspace QPushButton#primaryButton:pressed {{
+        background: {COLOR_ACCENT_HOVER};
+        border-color: {COLOR_ACCENT_HOVER};
+    }}
+
+    QDialog#submissionDeliveryDialog QPushButton:disabled,
+    QWidget#blockWorkspace QPushButton:disabled {{
+        background: {COLOR_SURFACE_ALT};
+        border-color: {COLOR_BORDER_SOFT};
+        color: {COLOR_TEXT_FAINT};
     }}
 
     QAbstractButton#autoCompileToggle {{
@@ -651,7 +788,7 @@ def stylesheet(
         color: {COLOR_TEXT_MUTED};
         border-bottom: 1px solid {COLOR_BORDER_SOFT};
         padding: 3px 10px;
-        font-size: 11px;
+        font-size: {fs_caption}px;
     }}
 
     QLabel#pdfFreshnessBanner[severity="success"] {{ color: {COLOR_SUCCESS}; }}
@@ -666,7 +803,7 @@ def stylesheet(
     QLabel#pdfEmptyTitle {{
         color: {COLOR_TEXT};
         font-family: {heading_stack};
-        font-size: 13px;
+        font-size: {fs_body}px;
         font-weight: 650;
     }}
 
@@ -675,13 +812,20 @@ def stylesheet(
         color: {COLOR_TEXT_MUTED};
     }}
 
+    QLabel#pdfEmptyHint, QLabel#pdfDisplayStatus {{
+        color: {COLOR_TEXT_MUTED};
+        font-size: {fs_caption}px;
+    }}
+
     QWidget#findReplaceBar QPushButton,
-    QWidget#pdfToolbar QPushButton {{
+    QWidget#pdfToolbar QPushButton,
+    QWidget#pdfSearchToolbar QPushButton {{
         padding: 3px 7px;
         min-height: 22px;
     }}
 
-    QWidget#pdfToolbar QPushButton#iconButton {{
+    QWidget#pdfToolbar QPushButton#iconButton,
+    QWidget#pdfSearchToolbar QPushButton#iconButton {{
         min-width: {icon_large}px;
         max-width: {icon_large}px;
         min-height: {icon_large}px;
@@ -992,6 +1136,37 @@ def stylesheet(
         width: 0;
     }}
     """
+
+
+@lru_cache(maxsize=1)
+def fixed_stylesheet() -> str:
+    """Keep the skin fixed; precompile size deltas for the five menu tiers."""
+    # Only parse this module's flat, generated QSS, never external stylesheets.
+    def rules(qss):
+        return [(selector.strip(), body.splitlines())
+                for selector, body in re.findall("([^{}]+)[{]([^{}]*)[}]", qss)]
+
+    base = stylesheet()
+    baseline = rules(base)
+    additions = []
+    for scale in SCALE_TIERS:
+        if scale == 1.0:
+            continue
+        current = rules(stylesheet(UiMetrics(scale), TypographyMetrics(scale)))
+        if len(current) != len(baseline):
+            raise ValueError("Generated scale stylesheet changed rule structure")
+        for (selector, lines), (base_selector, original) in zip(current, baseline):
+            if selector != base_selector or len(lines) != len(original):
+                raise ValueError("Generated scale stylesheet changed declaration structure")
+            changed = [line for line, previous in zip(lines, original) if line != previous]
+            if not changed:
+                continue
+            tagged = []
+            for item in selector.split(","):
+                head, separator, tail = item.strip().partition(":")
+                tagged.append(f'{head}[icstexUiScale="{round(scale * 100)}"]{separator}{tail}')
+            additions.append(", ".join(tagged) + " {" + "\n".join(changed) + "}")
+    return base + "\n".join(additions)
 
 
 def _ui_font_stack() -> list[str]:

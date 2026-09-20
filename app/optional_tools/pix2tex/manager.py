@@ -1,10 +1,13 @@
 """High-level OCR manager: status, install lifecycle, recognition routing."""
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import QObject, QProcess, QTimer, Signal
 
-from app.optional_tools.pix2tex.client import Pix2TexClient
-from app.optional_tools.pix2tex.environment import manifest_path, models_dir, python_executable
+from app.optional_tools.pix2tex.client import Pix2TexClient, WorkerState
+from app.optional_tools.pix2tex.environment import manifest_path, python_executable
+from app.optional_tools.pix2tex.manifest import load_manifest
 from app.optional_tools.pix2tex.protocol import RecognitionRequest, RecognitionResult
 
 
@@ -27,7 +30,11 @@ class OcrManager(QObject):
     def status(self) -> str:
         if not python_executable().exists():
             return "NOT_INSTALLED"
-        if not manifest_path().is_file() or not manifest_path().exists():
+        try:
+            missing = load_manifest(manifest_path()).missing_files()
+        except (OSError, ValueError, KeyError, TypeError):
+            return "MODEL_MISSING"
+        if missing:
             return "MODEL_MISSING"
         if self._client is None:
             return "STOPPED"
@@ -86,12 +93,11 @@ class OcrManager(QObject):
 
     def _ensure_client(self) -> Pix2TexClient:
         if self._client is not None:
+            if self._client.state is WorkerState.STOPPED:
+                self._client.start()
             return self._client
-        import sys
-
         worker_args = [
-            "-m",
-            "app.optional_tools.pix2tex.worker_entry",
+            str(Path(__file__).with_name("worker_entry.py")),
             "--manifest",
             str(manifest_path()),
         ]
@@ -99,8 +105,9 @@ class OcrManager(QObject):
         client.result_ready.connect(self._on_result)
         client.error.connect(lambda code, msg: self.recognition_failed.emit("", code, msg))
         client.state_changed.connect(lambda _state: self.status_changed.emit(self.status()))
-        client.start()
         self._client = client
+        # start() emits STARTING synchronously; status() must see this client.
+        client.start()
         return client
 
     def _on_result(self, result: RecognitionResult) -> None:

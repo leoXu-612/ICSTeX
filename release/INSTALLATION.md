@@ -1,47 +1,29 @@
-# ICSTeX 2.1.0-beta.1 安装说明
+# ICSTeX 2.1.0-beta.4 安装说明
 
-## macOS Apple Silicon
+本次提供 macOS Apple Silicon（arm64）DMG/ZIP，包含应用内更新器。最低系统版本为 macOS 13。
 
-### 1. 安装 ICSTeX
+## 首次安装或从旧手动版升级
 
-1. 下载 `ICSTeX-2.1.0-beta.1-macos-arm64.dmg`（或同名 `.zip`）。
-2. 双击 DMG，将 `ICSTeX.app` 拖入“应用程序”文件夹。
-3. 首次启动：若出现“无法验证开发者”提示，右键（或按住 Control 点击）图标 → “打开” → 确认；
-   或前往 系统设置 → 隐私与安全性 → “仍要打开”。
+1. 下载 `ICSTeX-2.1.0-beta.4-macos-arm64.dmg`，或同名 ZIP，并核对 SHA-256。
+2. 保存文稿，退出全部旧 ICSTeX 实例，保留完整旧应用和项目备份。
+3. 打开 DMG，把 `ICSTeX.app` 拖入“应用程序”；ZIP 用户先完整解压。
+4. 当前为 ad-hoc 签名、未经 Apple 公证。若系统阻止首次打开，请核实来源后，在“系统设置 → 隐私与安全性”中亲自决定是否允许。不要关闭系统安全保护。
+5. 启动后在“ICSTeX → 软件更新…”中手动检查，或开启启动/每日检查。
 
-### 2. LaTeX 环境（必需）
+Beta 3 可在应用内升级到本版。旧 Beta 1/Beta 2 手动包没有更新器，必须先手动安装本版一次。以后检查、下载、保存退出与重启安装可在应用内完成。自动检查默认关闭，不会自动同意下载或安装。
 
-ICSTeX 不内置 LaTeX 发行版。请先安装：
+## 更新与恢复
 
-- MacTeX（推荐）或 BasicTeX：https://tug.org/mactex/
+发现新版后先确认下载，再确认安装。更新前处理全部窗口的未保存内容；取消会保留窗口。编译、导出、草稿对话框或其他实例未退出时不开始安装。
 
-安装后确认 `xelatex` / `pdflatex` 可用。
+安装期间请不要重复启动应用。安装器结束后先验证应用完整性，再允许新实例进入。安装中断后可等待安装器退出再重试；若系统提示交接状态未知，请重新启动 Mac 后重试。完整性检查失败时，用可信的完整旧安装包恢复应用。没有自动回滚或跨版本未保存草稿恢复。
 
-### 3. 可选：本地公式识别（pix2tex）
+## 常用入口
 
-公式识别为可选本地组件，安装包默认不包含：
+- 编译器：“编译 → 编译器”，选择 Auto、pdfLaTeX、XeLaTeX 或 LuaLaTeX。
+- 控制台：工具栏“控制台”，查看日志、错误、字数及检查信息。
+- 支持项目：“帮助 → 在 GitHub 支持项目（Star）”，完全自愿。
 
-1. 打开 ICSTeX → 设置 → 可选工具 → 公式识别 (pix2tex)。
-2. 点击“安装”（首次安装约需数分钟，包含 Python 3.11 虚拟环境与模型下载，占用约 1.2 GB）。
-3. 安装完成后状态显示为可用；打开公式编辑器 → “图片识别…” 即可使用。
+应用不包含 MacTeX、TeX Live、MiKTeX 或 OCR 模型；运行不需要另外安装 Python，编译仍需本地 LaTeX 发行版。下载摘要见 `SHA256SUMS.txt`，构建身份见 `BUILD_RECEIPT.json`。
 
-卸载：在设置中点击“移除”即可删除对应运行环境。
-
-> 开发者提示：运行环境路径可用环境变量覆盖，例如
-> `ICSTEX_PIX2TEX_ENV=/path/to/pix2tex/venv`、`ICSTEX_RAPIDOCR_ENV=/path/to/rapidocr/venv`。
-
-### 4. 验证安装
-
-- 打开示例项目：`release/demo/Formula-Intelligence-Demo.zip`（解压后用 ICSTeX 打开 `main.tex`）。
-- 在公式编辑器输入 `\frac{a}{b}` 或使用“图片识别…”导入公式图片，确认可编译并生成 PDF。
-
-## Windows on ARM（ARM64 Developer Beta）
-
-1. 下载 `ICSTeX-2.1.0-beta.1-Windows-arm64.zip` 并解压到普通本地目录。
-2. 双击解压目录中的 `ICSTeX.exe`；运行应用不需要安装 Python。
-3. 安装 MiKTeX 或 TeX Live，重启 ICSTeX 后在“环境医生”检查 `latexmk`、
-   `pdflatex` 和 `texcount`。
-4. Windows SmartScreen 可能提示未知发布者；本 Beta 未做代码签名。
-
-此 ARM64 ZIP 不适用于常见 Intel/AMD x64 Windows 电脑。x64 ZIP 与 x64 Setup EXE
-必须在 x64 Windows-local 构建环境另行生成，不能通过改名 ARM64 制品替代。
+本次没有新的 Windows 或 Intel Mac 包。历史 Windows ARM64 包不能用于 Intel/AMD x64 Windows。

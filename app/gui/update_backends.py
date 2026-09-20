@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Callable, Protocol
 
 from app.core.app_updates import UpdateConfiguration
+from app.core.update_install_guard import installed_lease
 
 
 CanShutdown = Callable[[], bool]
@@ -22,18 +23,43 @@ class SparkleUpdater:
     def __init__(self, config: UpdateConfiguration, library: Path,
                  can_shutdown: CanShutdown, shutdown: Callable[[], None],
                  notify: Notification, *, loader=ctypes.CDLL) -> None:
+        self._guard = installed_lease()
+        if self._guard is None and loader is ctypes.CDLL:
+            raise RuntimeError("Installed update entry is missing its installation lease")
         self._library = loader(str(library))
         can_type = ctypes.CFUNCTYPE(ctypes.c_int)
         shutdown_type = ctypes.CFUNCTYPE(None)
         event_type = ctypes.CFUNCTYPE(None, ctypes.c_char_p)
+        guard_type = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_char_p)
+        def authorize() -> int:
+            # Runtime hook is mandatory for installed macOS updater builds.
+            # Test loaders remain usable without pretending they validate locks.
+            if self._guard is not None and not self._guard.ready():
+                notify("guard_error")
+                return 0
+            return int(can_shutdown())
+
+        def guard_event(value: bytes) -> int:
+            if self._guard is None:
+                return int(loader is not ctypes.CDLL)
+            try:
+                if value == b"extracting":
+                    self._guard.extracting()
+                elif value == b"finished":
+                    self._guard.finish()
+                return 1
+            except Exception:
+                notify("guard_error")
+                return 0
         self._callbacks = (
-            can_type(lambda: int(can_shutdown())),
+            can_type(authorize),
             shutdown_type(shutdown),
             event_type(lambda value: notify((value or b"error").decode("ascii", errors="replace"))),
+            guard_type(guard_event),
         )
         initialize = self._library.icstex_update_init
         initialize.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p,
-                               can_type, shutdown_type, event_type]
+                               can_type, shutdown_type, event_type, guard_type]
         initialize.restype = ctypes.c_int
         self._library.icstex_update_check.argtypes = [ctypes.c_int]
         self._library.icstex_update_check.restype = ctypes.c_int
@@ -45,11 +71,14 @@ class SparkleUpdater:
             raise RuntimeError("Sparkle configuration or native startup failed")
 
     def check(self, *, user_initiated: bool) -> None:
+        if self._guard is not None:
+            self._guard.begin()
         if not self._library.icstex_update_check(int(user_initiated)):
             raise RuntimeError("An update operation is already in progress")
 
     def close(self) -> None:
         self._library.icstex_update_cleanup()
+        # Never unlock here: an install-on-quit can outlive Qt and Python.
 
 
 class WinSparkleUpdater:

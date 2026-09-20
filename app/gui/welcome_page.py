@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+from collections.abc import Sequence
 
-from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtCore import QSize, Qt, Signal, Slot
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -12,6 +13,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -19,6 +21,7 @@ from PySide6.QtWidgets import (
 from app.gui.assets import app_cover_path
 from app.gui.icons import icon
 from app.gui.main_window_support import set_dynamic_property
+from app.gui.theme import PRIMARY_BUTTON_STATE_STYLE
 from app.gui.responsive.helpers import (
     layout_reflow,
     resolve_layout_mode,
@@ -32,6 +35,8 @@ class WelcomePage(QWidget):
     openFolderRequested = Signal()
     guideRequested = Signal()
     recentProjectRequested = Signal(str)
+    environmentRequested = Signal()
+    recheckRequested = Signal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -44,28 +49,61 @@ class WelcomePage(QWidget):
         self.recent_list.setSpacing(4)
         self._action_buttons: list[QPushButton] = []
         self._card_widgets: list[QWidget] = []
+        self._recent_buttons: list[QPushButton] = []
+        self._recent_rows: tuple[tuple[Path, Path | None, str, str], ...] | None = None
         self._build()
 
     def set_toolchain_status(self, ready: bool, message: str) -> None:
         prefix = "LaTeX 环境就绪" if ready else "LaTeX 环境未就绪"
-        self.toolchain_label.setText(f"{prefix}：{message}")
+        self.toolchain_label.setText("LaTeX 环境就绪，可以开始写作" if ready else f"{prefix}：{message}")
+        self.toolchain_label.setToolTip(message)
+        self.environment_help.setVisible(not ready)
+        self.recheck_button.setVisible(not ready)
+        self.environment_button.setText("查看环境" if ready else "查看安装指引")
         set_dynamic_property(self.toolchain_label, "state", "ready" if ready else "warning")
 
-    def set_recent_projects(self, paths: list[Path]) -> None:
+    def set_recent_projects(self, paths: Sequence[Path], *, recent_files: Sequence[Path] = ()) -> None:
+        """Rebuild only changed captions/targets, including recent names and path text."""
+        rows = []
+        for path in paths[:6]:
+            recent = next((file for file in recent_files if file.is_relative_to(path)), None)
+            short_path = str(Path("~") / path.relative_to(Path.home())) if path.is_relative_to(Path.home()) else str(path)
+            if len(short_path) > 60:
+                short_path = "…/" + "/".join(path.parts[-3:])
+            label = path.name + (f" · 最近打开：{recent.name}" if recent else "")
+            rows.append((path, recent, label, short_path))
+        if tuple(rows) == self._recent_rows:
+            return
+        self._recent_rows = tuple(rows)
+        self._recent_buttons.clear()
         _clear_layout(self.recent_list)
-        if not paths:
+        if not rows:
             label = QLabel("暂无最近项目")
             label.setObjectName("welcomeMuted")
             self.recent_list.addWidget(label)
             return
-        for path in paths[:6]:
-            button = QPushButton(path.name)
+        for path, recent, label, short_path in rows:
+            button = QPushButton(f"{label}\n{short_path}")
+            button.setMinimumWidth(0)
+            button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+            button.setProperty("projectLabel", label)
+            button.setProperty("projectPath", short_path)
+            button.setAccessibleName(f"{label}，{path}")
             button.setObjectName("welcomeRecent")
             button.setIcon(icon("folder", size=16))
             button.setIconSize(QSize(16, 16))
-            button.setToolTip(str(path))
+            button.setToolTip(f"项目位置：{path}" + (f"\n最近打开：{recent}" if recent else ""))
             button.clicked.connect(lambda _checked=False, item=path: self.recentProjectRequested.emit(str(item)))
             self.recent_list.addWidget(button)
+            self._recent_buttons.append(button)
+        self._update_recent_labels()
+
+    def _update_recent_labels(self) -> None:
+        for button in self._recent_buttons:
+            width = max(60, self.width() - 130)
+            metrics = button.fontMetrics()
+            button.setText("\n".join(metrics.elidedText(button.property(key), Qt.TextElideMode.ElideMiddle, width)
+                                     for key in ("projectLabel", "projectPath")))
 
     def _build(self) -> None:
         content = QWidget()
@@ -100,8 +138,9 @@ class WelcomePage(QWidget):
 
         self.action_grid = QGridLayout()
         self.action_grid.setSpacing(10)
-        self.new_project_button = QPushButton("新建 IA 项目")
+        self.new_project_button = QPushButton("新建项目")
         self.new_project_button.setObjectName("primaryButton")
+        self.new_project_button.setStyleSheet(PRIMARY_BUTTON_STATE_STYLE)
         self.open_file_button = QPushButton("打开 .tex")
         self.open_folder_button = QPushButton("打开项目文件夹")
         self.guide_button = QPushButton("新手导引")
@@ -119,14 +158,20 @@ class WelcomePage(QWidget):
             button.setIconSize(QSize(16, 16))
         layout.addLayout(self.action_grid)
 
-        status_box = QFrame()
-        status_box.setObjectName("welcomeBox")
-        status_layout = QVBoxLayout(status_box)
-        status_layout.setContentsMargins(14, 12, 14, 12)
-        status_title = QLabel("当前环境")
-        status_title.setObjectName("welcomeSectionTitle")
-        status_layout.addWidget(status_title)
-        status_layout.addWidget(self.toolchain_label)
+        status_row = QHBoxLayout()
+        status_row.addWidget(self.toolchain_label, 1)
+        self.environment_button = QPushButton("查看环境")
+        self.environment_button.clicked.connect(self.environmentRequested.emit)
+        self.recheck_button = QPushButton("重新检测")
+        self.recheck_button.clicked.connect(self.recheckRequested.emit)
+        status_row.addWidget(self.environment_button)
+        status_row.addWidget(self.recheck_button)
+        layout.addLayout(status_row)
+        self.environment_help = QLabel("可以先创建和编辑项目；生成 PDF 前请安装 LaTeX 工具。安装后点击“重新检测”。")
+        self.environment_help.setWordWrap(True)
+        self.environment_help.hide()
+        self.recheck_button.hide()
+        layout.addWidget(self.environment_help)
         recent_box = QFrame()
         recent_box.setObjectName("welcomeBox")
         recent_layout = QVBoxLayout(recent_box)
@@ -137,7 +182,7 @@ class WelcomePage(QWidget):
         recent_layout.addLayout(self.recent_list)
         self.cards_grid = QGridLayout()
         self.cards_grid.setSpacing(12)
-        self._card_widgets = [status_box, recent_box]
+        self._card_widgets = [recent_box]
         layout.addLayout(self.cards_grid)
         layout.addStretch()
 
@@ -158,10 +203,11 @@ class WelcomePage(QWidget):
         app = QApplication.instance()
         manager = getattr(app, "ui_scale_manager", None)
         if manager is not None:
-            manager.scale_changed.connect(lambda _scale: self._apply_metrics())
+            manager.scale_changed.connect(self._apply_metrics)
         self._apply_metrics()
         self._apply_layout_mode(resolve_layout_mode(self.contentsRect().width()))
 
+    @Slot()
     def _apply_metrics(self) -> None:
         app = QApplication.instance()
         manager = getattr(app, "ui_scale_manager", None)
@@ -184,18 +230,20 @@ class WelcomePage(QWidget):
             )
         for button in self._action_buttons:
             update_button_minimum_size(button, metrics)
+        self._update_recent_labels()
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         mode = resolve_layout_mode(self.contentsRect().width())
         if mode != self._layout_mode:
             self._apply_layout_mode(mode)
+        self._update_recent_labels()
 
     def _apply_layout_mode(self, mode: str) -> None:
         self._layout_mode = mode
         if mode == "wide":
             action_columns = 4
-            card_columns = 2
+            card_columns = 1
         elif mode == "medium":
             action_columns = 2
             card_columns = 1

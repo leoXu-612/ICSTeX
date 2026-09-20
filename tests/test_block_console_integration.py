@@ -246,6 +246,7 @@ class DialogWrapperTests(TestCase):
         dialog = BlockProjectDialog(registry)
         self.assertIs(dialog.session.registry, registry)
         self.assertIs(dialog.layout_panel.registry, registry)
+        dialog.session.shutdown()  # Explicit cleanup of the synthetic unsaved model.
         dialog.close()
 
 
@@ -324,7 +325,65 @@ class NavDropTests(TestCase):
         self.nav = BlockNavigationWidget(self.session)
 
     def tearDown(self) -> None:
+        from PySide6.QtCore import QCoreApplication, QEvent
+        self.session.shutdown()
+        self.nav.close()
+        self.nav.deleteLater()
+        self.session.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         self._tmp.cleanup()
+
+    def drop_event(self, source, point=None):
+        from PySide6.QtCore import QMimeData, QPointF, Qt, QUrl
+        from PySide6.QtGui import QDropEvent
+        mime = QMimeData()
+        mime.setUrls([QUrl.fromLocalFile(str(source))])
+        self._drop_mime = mime  # QDropEvent borrows rather than owns this object.
+        return QDropEvent(QPointF(point) if point is not None else QPointF(10, 10),
+            Qt.DropAction.CopyAction, mime, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+
+    def test_failed_drop_is_reported_without_model_change(self):
+        from unittest.mock import patch
+        event = self.drop_event(self.project / "missing.png")
+        with patch("PySide6.QtWidgets.QMessageBox.warning") as warning:
+            self.nav.dropEvent(event)
+        self.assertFalse(event.isAccepted())
+        self.assertFalse(self.session.registry.blocks())
+        self.assertEqual(self.session.undo_stack.count(), 0)
+        warning.assert_called_once()
+
+    def test_closed_session_drop_does_not_copy_or_change_model(self):
+        from unittest.mock import patch
+        self.session.shutdown()
+        event = self.drop_event(self.project / "unused.png")
+        with patch("app.gui.blocks.navigation_dock.import_image") as copy:
+            self.nav.dropEvent(event)
+        copy.assert_not_called()
+        self.assertFalse(event.isAccepted())
+        self.assertFalse(self.session.registry.blocks())
+
+    def test_drop_coordinates_and_undo_bind_the_actual_image_row(self):
+        for number in range(5):
+            self.session.registry.create(CreateBlockInput(type="image", alias=f"image-{number}",
+                content={"source": f"assets/images/original-{number}.png"}))
+        self.nav.refresh()
+        self.nav.resize(600, 700)
+        self.nav.show()
+        app().processEvents()
+        item = self.nav.block_list.item(0)
+        target_id = item.data(256)
+        original = {block.id: dict(block.content) for block in self.session.registry.blocks()}
+        position = self.nav.block_list.viewport().mapTo(self.nav, self.nav.block_list.visualItemRect(item).center())
+        source = self.project / "new.png"
+        source.write_bytes(b"synthetic image")
+        self.nav.dropEvent(self.drop_event(source, position))
+        self.assertEqual(self.session.registry.get(target_id).content["source"], "assets/images/new.png")
+        for block in self.session.registry.blocks():
+            if block.id != target_id:
+                self.assertEqual(block.content, original[block.id])
+        self.assertEqual(self.session.undo_stack.count(), 1)
+        self.session.undo_stack.undo()
+        self.assertEqual(self.session.registry.get(target_id).content, original[target_id])
 
     def test_drop_image_creates_image_block(self) -> None:
         from PySide6.QtCore import QMimeData, QPointF, Qt, QUrl
@@ -361,7 +420,7 @@ class MainWindowBlockIntegrationTests(TestCase):
     def tearDown(self) -> None:
         from app.gui.block_mode import _close_block_project
 
-        _close_block_project(self.window)
+        _close_block_project(self.window, discard=True)
         self.window.close()
 
     def _install(self, session: ProjectSession) -> None:
@@ -489,7 +548,7 @@ class MainWindowBlockIntegrationTests(TestCase):
         self.assertEqual(len(session_a.registry.blocks()), 2)
         self.assertTrue(self.window.block_undo_action.isEnabled() or True)
 
-        _close_block_project(self.window)
+        _close_block_project(self.window, discard=True)
         self.assertIsNone(self.window.block_session)
 
         session_b = ProjectSession(registry=BlockRegistry())

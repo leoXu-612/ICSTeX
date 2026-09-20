@@ -57,6 +57,8 @@ class AppUpdateController(QObject):
         self._dialog: AppUpdateDialog | None = None
         self._closed = False
         self._checking = False
+        self._startup_check_pending = True
+        self._automatic_ready = False
         self._preparing = False
         self._handoff = False
         self._installing = False
@@ -74,7 +76,7 @@ class AppUpdateController(QObject):
         self._timer.timeout.connect(self._automatic_tick)
         self._startup_timer = QTimer(self)
         self._startup_timer.setSingleShot(True)
-        self._startup_timer.timeout.connect(self._automatic_tick)
+        self._startup_timer.timeout.connect(self._startup_tick)
 
     @staticmethod
     def _main_windows() -> list:
@@ -92,8 +94,15 @@ class AppUpdateController(QObject):
     def start(self) -> None:
         # No backend is loaded here. Opted-in users get a deferred first check.
         if self.availability.available and self.automatic and not self._closed:
-            self._startup_timer.start(30_000)
-            self._timer.start()
+            if not self._automatic_ready and not self._startup_timer.isActive():
+                self._startup_timer.start(30_000)
+            if not self._timer.isActive():
+                self._timer.start()
+
+    @Slot()
+    def _startup_tick(self) -> None:
+        self._automatic_ready = True
+        self._automatic_tick()
 
     def show_dialog(self, parent=None) -> None:
         if self._closed:
@@ -136,21 +145,29 @@ class AppUpdateController(QObject):
         self.settings.sync()
         self._timer.stop()
         self._startup_timer.stop()
+        self._automatic_ready = False
         if enabled:
             self.start()
         self.changed.emit()
 
     @Slot()
     def _automatic_tick(self) -> None:
-        if self._closed or not self.automatic or self._checking or self._handoff:
+        if (self._closed or not self.availability.available or not self.automatic
+                or not self._automatic_ready or self._checking or self._handoff):
             return
-        if not self._windows_provider() or QApplication.activeModalWidget() is not None:
+        windows = self._windows_provider()
+        if not windows or QApplication.activeModalWidget() is not None:
+            return
+        # An update prompt must not compete with active compilation or export.
+        if any(manager.is_busy for window in windows for manager in window.compile_managers.values()):
+            return
+        if any(getattr(getattr(window, "pdf_export", None), "_pending", {}) for window in windows):
             return
         try:
             previous = float(self.settings.value("updates/last_attempt", 0))
         except (TypeError, ValueError):
             previous = 0
-        if automatic_check_due(previous, self._now()):
+        if automatic_check_due(previous, self._now(), startup=self._startup_check_pending):
             self.check(user_initiated=False)
 
     def check(self, *, user_initiated: bool) -> None:
@@ -170,6 +187,10 @@ class AppUpdateController(QObject):
                     self.message = "更新仍在处理，暂时无法显示进度窗口。请稍后重试。"
                     self.show_dialog()
             return
+        # Count failed backend initialization too; it must not retry every minute.
+        self._startup_check_pending = False
+        self.settings.setValue("updates/last_attempt", self._now())
+        self.settings.sync()
         try:
             if self._backend is None:
                 self._backend = self._backend_factory(
@@ -177,9 +198,6 @@ class AppUpdateController(QObject):
                     self._native_can_shutdown, self.shutdown_requested.emit, self.native_event.emit)
             self._checking = True
             self.message = "正在检查更新；下载和安装状态将在原生更新窗口中显示。"
-            # Persist attempts, including failures, to avoid a retry/network loop.
-            self.settings.setValue("updates/last_attempt", self._now())
-            self.settings.sync()
             if user_initiated and self._dialog is not None:
                 self._dialog.hide()
             self._backend.check(user_initiated=user_initiated)
@@ -202,6 +220,7 @@ class AppUpdateController(QObject):
             # callback. That dismissal must not revoke our prepared exit.
             return
         messages = {
+            "guard_error": "安装保护未能建立，未授权退出安装。请关闭其他 ICSTeX 实例；若更新曾被强制中断，请重新启动 Mac 后重试。",
             "available": "发现可用更新，请在原生更新窗口查看并确认下载。",
             "no_update": "本次未发现可安装的新版本。兼容性详情以原生更新窗口为准。",
             "error": "更新未完成。请查看原生更新窗口的错误信息，现有文档未被关闭。",
@@ -209,7 +228,7 @@ class AppUpdateController(QObject):
         }
         if event in messages:
             self.message = messages[event]
-        if event in ("no_update", "error", "cancelled", "finished"):
+        if event in ("no_update", "error", "guard_error", "cancelled", "finished"):
             self._installing = False
             self._checking = False
             self._release_prepared_windows()

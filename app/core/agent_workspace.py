@@ -26,13 +26,16 @@ import uuid
 from typing import Iterator
 
 from app import __app_name__, __version__
+from app.core.artifact_export import (
+    EXPORT_CONTEXT_PATHS, capture_export_inputs, current_final_pdf, publish_exact_file,
+)
 from app.core.blocks.assembly import build_latex_files
 from app.core.blocks.export_package import export_package
 from app.core.blocks.layout import LayoutNode
-from app.core.blocks.model import Block
+from app.core.blocks.model import Block, SCHEMA_VERSION
 from app.core.blocks.project_repository import load_project
 from app.core.blocks.registry import BlockError, BlockRegistry, CreateBlockInput
-from app.core.blocks.schema import validate_layout, validate_source, validate_theme
+from app.core.blocks.schema import validate_layout, validate_source, validate_theme, validate_saved_document_theme
 from app.core.blocks.source_registry import SourceRecord
 from app.core.blocks.theme import DocumentTheme, theme_from_dict
 from app.core.compiler import (
@@ -50,6 +53,8 @@ from app.core.latex_tools import LaTeXEngine, LaTeXToolchain, detect_toolchain
 from app.core.log_parser import parse_log_file
 from app.core.magic_comments import parse_magic_comments
 from app.core.paths import ROOT_CANDIDATES, strip_latex_comments
+from app.core.project_lock import project_write_lock
+from app.core.project_recovery import parse_saved_block_model
 from app.core.project_tools import (
     bib_keys,
     duplicate_labels,
@@ -110,9 +115,6 @@ class AgentGrants:
     allowed_inputs: tuple[Path, ...] = ()
 
 
-_LOCKS: dict[str, threading.RLock] = {}
-_LOCKS_GUARD = threading.Lock()
-_PROJECT_LOCKS_HELD = threading.local()
 
 
 class AgentWorkspace:
@@ -611,6 +613,12 @@ class AgentWorkspace:
 
     def _compile_project_run(
         self,
+        **kwargs,
+    ) -> dict:
+        return self._compile_result(self._compile_project_result(**kwargs))
+
+    def _compile_project_result(
+        self,
         *,
         root_path: str,
         purpose: str,
@@ -619,7 +627,7 @@ class AgentWorkspace:
         expected_project_sha256: str,
         deadline_monotonic: float | None,
         request_generation: int,
-    ) -> dict:
+    ) -> CompileResult:
         with self._project_lock():
             if assemble_blocks:
                 if not expected_project_sha256:
@@ -629,7 +637,7 @@ class AgentWorkspace:
             self._validate_executable_tree()
             self._validate_tex_closure(root_file)
             selected_purpose = BuildPurpose(purpose)
-            selected_engine = LaTeXEngine(engine)
+            selected_engine = self._compile_engine(root_path, root_file, LaTeXEngine(engine))
             timeout = PREVIEW_TIMEOUT_SECONDS if selected_purpose is BuildPurpose.PREVIEW else FINAL_TIMEOUT_SECONDS
             if deadline_monotonic is not None:
                 remaining = deadline_monotonic - time.monotonic()
@@ -641,6 +649,7 @@ class AgentWorkspace:
                 toolchain=detect_toolchain(),
                 engine=selected_engine,
                 restricted_io=True,
+                project_scope=self.root,
             )
             key = self._relative(root_file)
             with self._compile_lock:
@@ -661,7 +670,7 @@ class AgentWorkspace:
                 if cancelled:
                     raise AgentWorkspaceError("编译请求已由 stop 取消，未启动编译。")
                 raise AgentWorkspaceError("编译未启动。")
-            return self._compile_result(result)
+            return result
 
     def fetch_reference_metadata(self, raw_text: str) -> dict:
         self._require("network")
@@ -760,39 +769,79 @@ class AgentWorkspace:
                 self._require("compile")
                 if request_generation is None:
                     raise AgentWorkspaceError("PDF 导出缺少编译请求上下文。")
-                result = self._compile_project_run(
+                # Refuse unresolved journal evidence before optional assembly.
+                capture_export_inputs(self.root, ())
+                if assemble_blocks:
+                    if not expected_project_sha256:
+                        raise ConflictError("组装 Block 项目必须提供 expected_project_sha256。")
+                    self.mutate_blocks("assemble", {}, expected_project_sha256=expected_project_sha256)
+                root_file = self._root_file(root_path)
+                selected_file = self._project_path(root_path, must_exist=True, regular=True)
+                context = capture_export_inputs(self.root, set(EXPORT_CONTEXT_PATHS) | {
+                    self._relative(root_file), self._relative(selected_file)})
+                result = self._compile_project_result(
                     root_path=root_path,
                     purpose="final",
                     engine="auto",
-                    assemble_blocks=assemble_blocks,
+                    assemble_blocks=False,
                     expected_project_sha256=expected_project_sha256,
                     deadline_monotonic=deadline_monotonic,
                     request_generation=request_generation,
                 )
-                if not result["ok"]:
+                if not result.ok:
                     raise AgentWorkspaceError("最终编译失败，未导出 PDF。")
-                source = self._project_path(result["pdfFile"], must_exist=True, regular=True)
+                def check_intent_locked():
+                    if request_generation != self._compile_generation:
+                        raise AgentWorkspaceError("导出请求已由 stop 取消，未发布 PDF。")
+                    if deadline_monotonic is not None and time.monotonic() >= deadline_monotonic:
+                        raise AgentWorkspaceError("导出请求超时，未发布 PDF。")
+                    if self._export_path(target_path) != target:
+                        raise UnsafePathError("导出目标路径变化。")
+
+                def check_intent():
+                    with self._compile_lock:
+                        check_intent_locked()
+
+                check_intent()
+                payload = current_final_pdf(result, context)
+
+                def recheck():
+                    check_intent()
+                    if current_final_pdf(result, context) != payload:
+                        raise ConflictError("正式 PDF 在导出期间变化。")
+
+                @contextmanager
+                def publish_guard():
+                    # Linearize stop versus the final no-overwrite publication,
+                    # without holding this lock over reads or compilation.
+                    with self._compile_lock:
+                        check_intent_locked()
+                        yield
+
                 target.parent.mkdir(parents=True, exist_ok=True)
-                self._atomic_copy(source, target)
+                check_intent()
+                publish_exact_file(target, payload, check_source=recheck, publication_guard=publish_guard)
                 return {
                     "kind": selected,
                     "target": target_path,
-                    "sha256": _sha256_file(target),
-                    "size": target.stat().st_size,
+                    "sha256": hashlib.sha256(payload).hexdigest(),
+                    "size": len(payload),
                 }
             if selected == "package":
+                capture_export_inputs(self.root, ())
                 if assemble_blocks:
                     if not expected_project_sha256:
                         raise ConflictError("组装 Block 项目必须提供 expected_project_sha256。")
                     self.mutate_blocks("assemble", {}, expected_project_sha256=expected_project_sha256)
                 target.parent.mkdir(parents=True, exist_ok=True)
-                temporary = Path(tempfile.mkdtemp(prefix=f".{target.name}.", dir=target.parent))
-                try:
-                    result = export_package(self.root, temporary)
-                    os.replace(temporary, target)
-                except BaseException:
-                    shutil.rmtree(temporary, ignore_errors=True)
-                    raise
+                def check_package_target():
+                    if self._export_path(target_path) != target:
+                        raise UnsafePathError("导出目标路径变化。")
+                    if target.exists() or target.is_symlink():
+                        raise ConflictError("导出目标已出现；未覆盖。")
+                # The exporter now owns staging/readback/exclusive publication;
+                # no second blind replace/rmtree layer around it.
+                result = export_package(self.root, target, check_target=check_package_target, allow_empty=False)
                 return {
                     "kind": selected,
                     "target": target_path,
@@ -802,6 +851,42 @@ class AgentWorkspace:
             raise AgentWorkspaceError("kind 必须是 pdf 或 package。")
 
     # -- Block helpers ---------------------------------------------------
+    def _compile_engine(self, selected_path: str, root_file: Path, engine: LaTeXEngine) -> LaTeXEngine:
+        if engine is not LaTeXEngine.AUTO:
+            return engine
+        selected_file = self._project_path(selected_path, must_exist=True, regular=True)
+        for path in dict.fromkeys((selected_file, root_file)):
+            program = parse_magic_comments(self._read_text(path), base_dir=path.parent).program
+            if program is not None:
+                return program
+        # The existing Block GUI explicitly uses XeLaTeX. Recognize its actual
+        # saved generated root, not any arbitrary ctex document or stray metadata.
+        if root_file == self.root / "main.tex" and (self.root / ".icstex/blocks.json").is_file():
+            # Existing GUI sessions persist partial theme overrides, not a full
+            # theme template. Reuse M4's strict, lossless saved-model parser;
+            # absent sidecars retain the repository loader's established defaults.
+            defaults = {
+                ".icstex/layouts.json": {"schemaVersion": SCHEMA_VERSION, "layouts": []},
+                ".icstex/sources.json": {"sources": []},
+                "styles/document-theme.json": DocumentTheme(id="doc_default", name="Default").to_dict(),
+            }
+            files = {}
+            for relative in sorted(BLOCK_STATE_PATHS):
+                path = self.root / relative
+                self._assert_project_file(path, must_exist=False)
+                if path.exists():
+                    files[relative] = self._read_limited(path, MAX_TEXT_BYTES)
+                else:
+                    if relative not in defaults:
+                        raise ConflictError("Block 元数据在选择编译引擎时消失。")
+                    files[relative] = json.dumps(defaults[relative]).encode("utf-8")
+            state = parse_saved_block_model(files)
+            generated = build_latex_files(self.root, registry=state["registry"],
+                layout=state["layout"], document_theme=state["document_theme"])
+            if generated.get(root_file) == self._read_text(root_file):
+                return LaTeXEngine.XELATEX
+        return LaTeXEngine.AUTO
+
     def block_project_sha256(self) -> str:
         self._validate_block_state_paths()
         digest = hashlib.sha256()
@@ -937,7 +1022,7 @@ class AgentWorkspace:
         theme_path = self.root / "styles" / "document-theme.json"
         if theme_path.is_file():
             payload = self._read_json_object(theme_path)
-            issues = validate_theme(payload)
+            issues = validate_saved_document_theme(payload)
             if issues:
                 raise AgentWorkspaceError("持久化主题无效：" + "; ".join(issues[:5]))
         state = load_project(self.root)
@@ -1205,28 +1290,8 @@ class AgentWorkspace:
 
     @contextmanager
     def _project_lock(self) -> Iterator[None]:
-        key = str(self.root)
-        held = getattr(_PROJECT_LOCKS_HELD, "roots", None)
-        if held is None:
-            held = set()
-            _PROJECT_LOCKS_HELD.roots = held
-        if key in held:
+        with project_write_lock(self.root):
             yield
-            return
-        with _LOCKS_GUARD:
-            thread_lock = _LOCKS.setdefault(key, threading.RLock())
-        with thread_lock:
-            lock_dir = Path(tempfile.gettempdir()).resolve() / "icstex-agent-locks"
-            lock_dir.mkdir(parents=True, exist_ok=True)
-            lock_path = lock_dir / f"{_sha256(key.encode('utf-8'))}.lock"
-            with lock_path.open("a+b") as handle:
-                _lock_handle(handle)
-                held.add(key)
-                try:
-                    yield
-                finally:
-                    held.remove(key)
-                    _unlock_handle(handle)
 
     def _check_expected(self, current: bytes | None, expected: str) -> None:
         normalized = expected.strip().lower()
@@ -1355,19 +1420,6 @@ class AgentWorkspace:
         if len(data) > limit:
             raise AgentWorkspaceError(f"文件超过 {limit} 字节限制。")
         return data
-
-    @staticmethod
-    def _atomic_copy(source: Path, target: Path) -> None:
-        temporary: Path | None = None
-        try:
-            with tempfile.NamedTemporaryFile(prefix=f".{target.name}.", suffix=".tmp", dir=target.parent, delete=False) as handle:
-                temporary = Path(handle.name)
-            shutil.copy2(source, temporary)
-            os.replace(temporary, target)
-            temporary = None
-        finally:
-            if temporary is not None:
-                temporary.unlink(missing_ok=True)
 
     # -- query and execution helpers ------------------------------------
     def _search(self, query: str, case_sensitive: bool, whole_word: bool) -> list[dict]:
@@ -1668,31 +1720,3 @@ def _plain(value: object) -> object:
     if isinstance(value, (list, tuple, set, frozenset)):
         return [_plain(item) for item in value]
     return value
-
-
-def _lock_handle(handle: object) -> None:
-    if os.name == "nt":
-        import msvcrt
-
-        handle.seek(0)  # type: ignore[attr-defined]
-        if handle.read(1) == b"":  # type: ignore[attr-defined]
-            handle.write(b"\0")  # type: ignore[attr-defined]
-            handle.flush()  # type: ignore[attr-defined]
-        handle.seek(0)  # type: ignore[attr-defined]
-        msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)  # type: ignore[attr-defined]
-    else:
-        import fcntl
-
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)  # type: ignore[attr-defined]
-
-
-def _unlock_handle(handle: object) -> None:
-    if os.name == "nt":
-        import msvcrt
-
-        handle.seek(0)  # type: ignore[attr-defined]
-        msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)  # type: ignore[attr-defined]
-    else:
-        import fcntl
-
-        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)  # type: ignore[attr-defined]

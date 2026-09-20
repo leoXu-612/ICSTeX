@@ -1,0 +1,171 @@
+{
+  "app_sha256": "e4e978cb79d3321462bbe52d6597195ff1a0da13f93df7273a7d75887a635baf",
+  "platform": "macOS-26.6.1-arm64-arm-64bit",
+  "python": "3.12.6",
+  "qt_platform": "offscreen",
+  "samples": [
+    {
+      "children": 10,
+      "open_call_ms": 164.061,
+      "refresh": [
+        {
+          "trial": 0,
+          "call_ms": 9.611,
+          "timer_lateness_ms": 2.212
+        },
+        {
+          "trial": 1,
+          "call_ms": 8.067,
+          "timer_lateness_ms": 1.265
+        },
+        {
+          "trial": 2,
+          "call_ms": 11.395,
+          "timer_lateness_ms": 1.535
+        }
+      ],
+      "rss_open_kib": 140192,
+      "source_cursor_scroll_and_authority_preserved": true,
+      "rss_after_close_kib": 140544,
+      "closed_window_destroyed": true
+    },
+    {
+      "children": 50,
+      "open_call_ms": 291.615,
+      "refresh": [
+        {
+          "trial": 0,
+          "call_ms": 30.42,
+          "timer_lateness_ms": 20.582
+        },
+        {
+          "trial": 1,
+          "call_ms": 26.524,
+          "timer_lateness_ms": 16.65
+        },
+        {
+          "trial": 2,
+          "call_ms": 26.0,
+          "timer_lateness_ms": 16.163
+        }
+      ],
+      "rss_open_kib": 143920,
+      "source_cursor_scroll_and_authority_preserved": true,
+      "rss_after_close_kib": 143904,
+      "closed_window_destroyed": true
+    },
+    {
+      "children": 200,
+      "open_call_ms": 536.53,
+      "refresh": [
+        {
+          "trial": 0,
+          "call_ms": 72.218,
+          "timer_lateness_ms": 62.352
+        },
+        {
+          "trial": 1,
+          "call_ms": 72.948,
+          "timer_lateness_ms": 63.092
+        },
+        {
+          "trial": 2,
+          "call_ms": 76.238,
+          "timer_lateness_ms": 66.847
+        }
+      ],
+      "rss_open_kib": 146752,
+      "source_cursor_scroll_and_authority_preserved": true,
+      "rss_after_close_kib": 136624,
+      "closed_window_destroyed": true
+    }
+  ],
+  "memory_boundary": "Current process RSS includes Qt/Python allocators and caches; not a leak diagnosis",
+  "core": [
+    {
+      "children": 10,
+      "files": 11,
+      "source_bytes": 24600,
+      "static_graph": {
+        "samples_ms": [
+          3.388,
+          3.566,
+          3.499,
+          3.344,
+          7.508
+        ],
+        "median_ms": 3.499,
+        "max_ms": 7.508
+      },
+      "graph_and_content_hashes": {
+        "samples_ms": [
+          8.854,
+          7.173,
+          7.74,
+          5.828,
+          7.755
+        ],
+        "median_ms": 7.74,
+        "max_ms": 8.854
+      },
+      "cache_condition": "Repeated reads; OS cache not flushed; no app graph cache"
+    },
+    {
+      "children": 50,
+      "files": 51,
+      "source_bytes": 25440,
+      "static_graph": {
+        "samples_ms": [
+          14.537,
+          15.824,
+          16.144,
+          15.061,
+          14.755
+        ],
+        "median_ms": 15.061,
+        "max_ms": 16.144
+      },
+      "graph_and_content_hashes": {
+        "samples_ms": [
+          31.985,
+          30.412,
+          31.079,
+          34.947,
+          29.837
+        ],
+        "median_ms": 31.079,
+        "max_ms": 34.947
+      },
+      "cache_condition": "Repeated reads; OS cache not flushed; no app graph cache"
+    },
+    {
+      "children": 200,
+      "files": 201,
+      "source_bytes": 28690,
+      "static_graph": {
+        "samples_ms": [
+          110.96,
+          90.079,
+          85.898,
+          107.129,
+          86.815
+        ],
+        "median_ms": 90.079,
+        "max_ms": 110.96
+      },
+      "graph_and_content_hashes": {
+        "samples_ms": [
+          163.969,
+          168.475,
+          160.174,
+          150.346,
+          136.006
+        ],
+        "median_ms": 160.174,
+        "max_ms": 168.475
+      },
+      "cache_condition": "Repeated reads; OS cache not flushed; no app graph cache"
+    }
+  ],
+  "app_hash_matches_after_run": true
+}

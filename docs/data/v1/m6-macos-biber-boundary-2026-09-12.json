@@ -1,0 +1,77 @@
+{
+  "date": "2026-09-12",
+  "scope": "Biber-only follow-up; no product code or policy change; synthetic fixtures",
+  "app_sha256": "7009463b6f091f8d58f46fcfee3e08b03b3535fe9d89b0882ac7d3a133e87506",
+  "app_tests_sha256": "14093898a54aa926b992b20106c570c1d2f6a5899af2ab35b69c157b1467cbc4",
+  "reports": [
+    {
+      "raw_report": "/tmp/icstex-macos-integration-lua-biber-20260912-r1/report.json",
+      "raw_sha256": "e2a6c60c7ff9462e6a999f76e04e2185973b6be4d7aa8fd46c113dbb4305d166",
+      "outcome": "latex_error",
+      "returncode": 12,
+      "seconds": 17.59090079201269,
+      "source_unchanged": true,
+      "input_evidence_stable": true,
+      "errors": [],
+      "stderr": "Latexmk: Missing bbl file '.latex_build/main.bbl' in following:\n No file main.bbl.\nbiber: Command Line Tools are not installed - run 'xcode-select --install' to install (errno=1)\nLatexmk: ====Undefined refs and citations with line #s in .tex file:\n  Citation 'sample' on page 1 undefined on input line 4\nLatexmk: Sometimes, the -f option can be used to get latexmk\n  to try to force complete processing.\n  But normally, you will need to correct the file(s) that caused the\n  error, and then rerun latexmk.\n  In some cases, it is best to clean out generated files before rerunning\n  latexmk after you've corrected the files.\n",
+      "stdout_tail": "uild/main.aux)\n(/usr/local/texlive/2025/texmf-dist/tex/latex/biblatex/lbx/english.lbx)\nNo file main.bbl.\n\nLaTeX Warning: Citation 'sample' on page 1 undefined on input line 4.\n\n\nLaTeX Warning: Empty bibliography on input line 4.\n\n\n[1{/usr/local/texlive/2025/texmf-var/fonts/map/pdftex/updmap/pdftex.map}]\n(./.latex_build/main.aux)\n\nLaTeX Warning: There were undefined references.\n\n\nPackage biblatex Warning: Please (re)run Biber on the file:\n(biblatex)                main\n(biblatex)                and rerun LaTeX afterwards.\n\n)\n 624 words of node memory still in use:\n   4 hlist, 1 vlist, 1 rule, 2 glue, 3 kern, 1 glyph, 57 attribute, 61 glue_spe\nc, 11 attribute_list, 1 write, 6 user_defined nodes\n   avail lists: 1:3,2:1130,3:15,4:19,5:26,6:3,7:154,8:5,9:40,11:6\n</usr/local/texlive/2025/texmf-dist/fonts/opentype/public/lm/lmroman10-bold.otf\n></usr/local/texlive/2025/texmf-dist/fonts/opentype/public/fandol/FandolSong-Re\ngular.otf></usr/local/texlive/2025/texmf-dist/fonts/opentype/public/lm/lmroman1\n0-regular.otf></usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/c\nm/cmmi10.pfb></usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm\n/cmr10.pfb></usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/c\nmr7.pfb>\nOutput written on main.pdf (1 page, 32226 bytes).\nSyncTeX written on main.synctex.gz.\nTranscript written on main.log.\nLatexmk: Getting log file '.latex_build/main.log'\nLatexmk: Examining '.latex_build/main.fls'\nLatexmk: Examining '.latex_build/main.log'\nLatexmk: Log file says output to 'main.pdf'\nLatexmk: Bibliography file(s) from .bcf file:\n  refs.bib\nLatexmk: applying rule 'biber .latex_build/main'...\nRule 'biber .latex_build/main':  Reasons for rerun\nCategory 'other':\n  Rerun of 'biber .latex_build/main' forced or previously required:\n    Reason or flag: 'Initial set up of rule'\n\n------------\nRun number 1 of rule 'biber .latex_build/main'\n------------\n------------\nRunning 'biber  \".latex_build/main.bcf\"'\n------------\nLatexmk: Error return from 'biber .latex_build/main'\nI will add to its source list, anything cached from analysis of bcf file.\nLatexmk: Summary of warnings from last run of *latex:\n  Latex failed to resolve 1 citation(s)\nLatexmk: Errors, so I did not complete making targets\nCollected error summary (may duplicate other messages):\n  biber .latex_build/main: Could not open biber log file for '.latex_build/main'\n\n",
+      "temporary_count": 0,
+      "runtime_paths": []
+    },
+    {
+      "raw_report": "/tmp/icstex-macos-biber-runtime-20260912-r1/report.json",
+      "raw_sha256": "3d23e6c55de673e537a4591a1b3ba77bff1d302f75d2031f184cef0bfb155123",
+      "stdout_tail": "",
+      "cases": [
+        {
+          "case": "unconfined-version-control",
+          "returncode": 0,
+          "seconds": 24.419937792001292,
+          "stdout": "biber version: 2.20\n",
+          "stderr": ""
+        },
+        {
+          "case": "sandboxed-version",
+          "returncode": 255,
+          "seconds": 0.1314205409726128,
+          "stdout": "",
+          "stderr": "/Library/TeX/texbin/biber: Command Line Tools are not installed - run 'xcode-select --install' to install (errno=1)\n"
+        }
+      ],
+      "app_tests_sha256": "14093898a54aa926b992b20106c570c1d2f6a5899af2ab35b69c157b1467cbc4",
+      "biber_sha256": "521a6f01d4dcca56649adc307fa5b7bcdb45c30d139fb3a1f9b67796a34296b2",
+      "temporary_count": 3868,
+      "runtime_paths": [
+        "par-6c656f2e7875/cache-4cd328e47a51f5a1ede80c953064699f2d24a7fc/biber",
+        "par-6c656f2e7875/cache-4cd328e47a51f5a1ede80c953064699f2d24a7fc/libperl.dylib",
+        "par-6c656f2e7875/cache-4cd328e47a51f5a1ede80c953064699f2d24a7fc/thin/biber"
+      ]
+    },
+    {
+      "raw_report": "/tmp/icstex-macos-biber-dependencies-20260912-r1/report.json",
+      "raw_sha256": "77fd7f42b68f6e5772ae658572a0b7afa0fe559cc4df52b09d73e0ff89204a8e",
+      "stdout_tail": "",
+      "cases": [
+        {
+          "case": "sandboxed-xcode-select",
+          "returncode": 71,
+          "seconds": 0.009372000000439584,
+          "stdout": "",
+          "stderr": "sandbox-exec: execvp() of '/usr/bin/xcode-select' failed: Operation not permitted\n"
+        },
+        {
+          "case": "sandboxed-lipo",
+          "returncode": 71,
+          "seconds": 0.009060417010914534,
+          "stdout": "",
+          "stderr": "sandbox-exec: execvp() of '/usr/bin/lipo' failed: Operation not permitted\n"
+        }
+      ],
+      "app_tests_sha256": "14093898a54aa926b992b20106c570c1d2f6a5899af2ab35b69c157b1467cbc4",
+      "biber_sha256": "521a6f01d4dcca56649adc307fa5b7bcdb45c30d139fb3a1f9b67796a34296b2",
+      "temporary_count": 0,
+      "runtime_paths": []
+    }
+  ]
+}
+

@@ -8,9 +8,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
+
+# The isolated Python cannot import the GUI bundle's PYZ, nor rely on its cwd.
+# Packaging includes these three small stdlib-only worker modules as data.
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+
+# Albumentations otherwise checks its release online when pix2tex imports it.
+os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"
 
 from app.optional_tools.pix2tex.manifest import load_manifest
 from app.optional_tools.pix2tex.protocol import encode_message

@@ -18,7 +18,7 @@ GRAPHICS_RE = re.compile(r"\\includegraphics(?:\[[^\]]*\])?\{([^{}]+)\}")
 class ImageAsset:
     path: Path
     relative_path: str
-    used_count: int
+    used_count: int | None
 
 
 def copy_image_atomic(source: Path, destination: Path) -> None:

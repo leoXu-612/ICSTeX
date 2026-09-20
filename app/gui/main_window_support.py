@@ -2,12 +2,44 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import NamedTuple, TYPE_CHECKING
 
 from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from app.core.compiler import BuildPurpose, CompileManager
 from app.gui.latex_editor import LaTeXEditor
+
+if TYPE_CHECKING:
+    from app.gui.main_window import MainWindow
+
+
+# Path, editor identity, monotonic revision, modified, dirty, external conflict.
+SourceEditorKey = tuple[Path | None, int, int, bool, bool, bool]
+
+
+class SourceCheckKey(NamedTuple):
+    scope: Path | None
+    root: Path | None
+    current_tab_id: int
+    block_mode: bool
+    editors: tuple[SourceEditorKey, ...]
+    dependency_generation: int
+
+
+def source_check_key(window: MainWindow, root: Path | None) -> SourceCheckKey:
+    """GUI-thread identity snapshot; no text reads, path resolution or file I/O.
+
+    Revisions deliberately survive edit/undo. Reuse the controller's established
+    root instead of reparsing it during the 200 ms invalidation check.
+    """
+    return SourceCheckKey(
+        window.selected_project_scope, root, id(window.current_tab()),
+        window.block_mode_action.isChecked(),
+        tuple((tab.path, id(tab.editor), tab.editor.source_revision, tab.modified,
+               tab.dirty, tab.external_conflict) for tab in window.tabs.values()),
+        window.dependencies.generation_for(root) if root else 0,
+    )
 
 
 SAMPLE_DOCUMENT = """\\documentclass{article}
@@ -43,6 +75,8 @@ class EditorTab:
     external_conflict: bool = False
     pending_compile_after_save: bool = False
     save_timer: QTimer | None = None
+    recovery_pending: bool = False
+    recovery_base: bytes | None = None
 
 
 @dataclass(frozen=True)

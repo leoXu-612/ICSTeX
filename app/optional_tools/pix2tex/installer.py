@@ -29,9 +29,11 @@ def status() -> dict:
 
 def install(python: str | None = None, *, timeout: int = 900) -> dict:
     """Create the venv and install the pinned pix2tex base package."""
-    base_python = python or sys.executable
     if not python_executable().exists():
-        venv.EnvBuilder(with_pip=True, clear=False).create(str(venv_dir()))
+        if python:
+            subprocess.run([python, "-m", "venv", str(venv_dir())], check=True, timeout=timeout)
+        else:
+            venv.EnvBuilder(with_pip=True, clear=False).create(str(venv_dir()))
     exe = str(python_executable())
     subprocess.run(
         [exe, "-m", "pip", "install", "--upgrade", "pip"],

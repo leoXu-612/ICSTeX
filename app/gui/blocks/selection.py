@@ -57,10 +57,10 @@ class SelectionManager(QObject):
         self.select(self._current.with_block(block_id), source=source)
 
     def select_layout_node(self, layout_node_id: str | None, *, source: str) -> None:
-        self.select(self._current.with_layout_node(layout_node_id), source=source)
+        self.select(replace(self._current, layout_node_id=layout_node_id, slot_id=None), source=source)
 
     def select_slot(self, slot_id: str | None, *, source: str) -> None:
-        self.select(self._current.with_slot(slot_id), source=source)
+        self.select(replace(self._current, slot_id=slot_id, layout_node_id=None), source=source)
 
     def select_source(self, source_id: str | None, *, source: str) -> None:
         self.select(self._current.with_source(source_id), source=source)

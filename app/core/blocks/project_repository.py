@@ -1,8 +1,8 @@
-"""Atomic Block project load/save shared by the console and the main window.
+"""Block project serialization and legacy per-file persistence.
 
 Kept in ``app/core`` so it can be tested without Qt.  Load/save never mutate
-the in-memory models; ``save_project`` performs same-directory atomic writes
-so a failed write cannot corrupt an existing project.
+the in-memory models. Legacy ``save_project`` is not an atomic project transaction;
+interactive Block sessions use the guarded writer in ``project_write``.
 """
 from __future__ import annotations
 
@@ -13,26 +13,50 @@ import tempfile
 
 from app.core.blocks.layout import LayoutNode
 from app.core.blocks.registry import BlockRegistry
+from app.core.blocks.model import SCHEMA_VERSION
 from app.core.blocks.store import BlockStore
 from app.core.blocks.source_registry import SourceRecord
 from app.core.blocks.theme import DocumentTheme, theme_from_dict
+from app.core.project_dependencies import read_project_bytes
+
+
+def project_payloads(project_dir: Path, *, registry: BlockRegistry,
+                     layout: LayoutNode | None, sources=(),
+                     document_theme: DocumentTheme | None = None) -> dict[Path, bytes]:
+    """Validate and serialize a complete model before any filesystem mutation."""
+    issues = registry.validate_all()
+    if issues:
+        raise ValueError("Invalid Block model: " + "; ".join(issue.message for issue in issues[:5]))
+    project = Path(project_dir)
+    payloads = {
+        project / ".icstex/blocks.json": {"format": "icstex-blocks", "schemaVersion": SCHEMA_VERSION,
+                                           "blocks": [block.to_dict() for block in registry.blocks()]},
+        project / ".icstex/layouts.json": {"schemaVersion": SCHEMA_VERSION,
+                                            "layouts": [layout.to_dict()] if layout else []},
+        project / ".icstex/sources.json": {"sources": [source.to_dict() for source in sources]},
+    }
+    if document_theme is not None:
+        if document_theme.schemaVersion != SCHEMA_VERSION:
+            raise ValueError("Unsupported document theme version")
+        payloads[project / "styles/document-theme.json"] = document_theme.to_dict()
+    return {path: json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False).encode("utf-8")
+            for path, value in payloads.items()}
 
 
 def load_project(project_dir: Path) -> dict:
     """Load registry/layout/sources/document theme from a Block project dir."""
     project = Path(project_dir).expanduser().resolve()
     metadata = project / ".icstex"
-    registry = (
-        BlockStore(metadata / "blocks.json").load()
-        if (metadata / "blocks.json").is_file()
-        else BlockRegistry()
-    )
+    try:
+        registry = BlockStore.from_bytes(read_project_bytes(metadata / "blocks.json", project, allow_internal=True))
+    except FileNotFoundError:
+        registry = BlockRegistry()
 
     layout: LayoutNode | None = None
     layouts_path = metadata / "layouts.json"
     if layouts_path.is_file():
         try:
-            payload = json.loads(layouts_path.read_text(encoding="utf-8"))
+            payload = _read_json(layouts_path, project)
             layouts = payload.get("layouts", [])
             if layouts:
                 layout = LayoutNode.from_dict(layouts[0])
@@ -43,7 +67,7 @@ def load_project(project_dir: Path) -> dict:
     sources_path = metadata / "sources.json"
     if sources_path.is_file():
         try:
-            payload = json.loads(sources_path.read_text(encoding="utf-8"))
+            payload = _read_json(sources_path, project)
             sources = [SourceRecord.from_dict(item) for item in payload.get("sources", [])]
         except (OSError, ValueError, KeyError, TypeError):
             sources = []
@@ -52,7 +76,7 @@ def load_project(project_dir: Path) -> dict:
     theme_path = project / "styles" / "document-theme.json"
     if theme_path.is_file():
         try:
-            loaded = theme_from_dict(json.loads(theme_path.read_text(encoding="utf-8")))
+            loaded = theme_from_dict(_read_json(theme_path, project))
             if isinstance(loaded, DocumentTheme):
                 document_theme = loaded
         except (OSError, ValueError, KeyError):
@@ -68,6 +92,13 @@ def load_project(project_dir: Path) -> dict:
     }
 
 
+def _read_json(path, project):
+    value = json.loads(read_project_bytes(path, project, allow_internal=True).decode("utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError("Block metadata must be an object")
+    return value
+
+
 def save_project(
     project_dir: Path,
     *,
@@ -76,7 +107,7 @@ def save_project(
     sources: list[SourceRecord] | tuple[SourceRecord, ...] = (),
     document_theme: DocumentTheme | None = None,
 ) -> list[Path]:
-    """Atomically persist the whole project; returns the written paths."""
+    """Legacy per-file persistence; not a consistent whole-project transaction."""
     project = Path(project_dir).expanduser().resolve()
     metadata = project / ".icstex"
     metadata.mkdir(parents=True, exist_ok=True)

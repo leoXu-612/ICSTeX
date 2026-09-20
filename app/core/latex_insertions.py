@@ -100,6 +100,8 @@ class TemplateSpec:
     title: str
     filename: str
     text: str
+    language: str = "未标注"
+    description: str = "个人模板；内容与排版取决于你保存的源码。"
 
 
 @dataclass(frozen=True)
@@ -593,6 +595,8 @@ TEMPLATES: dict[str, TemplateSpec] = {
     "blank_article": TemplateSpec(
         key="blank_article",
         title="空白文章",
+        language="英文",
+        description="通用文章：从标题与引言开始，适合短文和日常练习。",
         filename="Blank_Article.tex",
         text=(
             "\\documentclass{article}\n"
@@ -611,6 +615,8 @@ TEMPLATES: dict[str, TemplateSpec] = {
     "ib_ia_report": TemplateSpec(
         key="ib_ia_report",
         title="IB/IA 报告",
+        language="英文",
+        description="通用 IA 报告：提供研究问题、方法、数据处理与评价的章节骨架。",
         filename="IB_IA_Report.tex",
         text=(
             "\\documentclass[12pt]{article}\n"
@@ -632,6 +638,8 @@ TEMPLATES: dict[str, TemplateSpec] = {
     "lab_report": TemplateSpec(
         key="lab_report",
         title="实验报告",
+        language="英文",
+        description="记录实验目的、器材、步骤、结果与分析；章节标题为英文。",
         filename="Lab_Report.tex",
         text=(
             "\\documentclass[12pt]{article}\n"
@@ -653,6 +661,8 @@ TEMPLATES: dict[str, TemplateSpec] = {
     "coursework_essay": TemplateSpec(
         key="coursework_essay",
         title="课程论文",
+        language="英文",
+        description="课程写作：以引言、论证和结论组织文章。",
         filename="Coursework_Essay.tex",
         text=(
             "\\documentclass[12pt]{article}\n"
@@ -674,6 +684,8 @@ TEMPLATES: dict[str, TemplateSpec] = {
     "extended_essay": TemplateSpec(
         key="extended_essay",
         title="Extended Essay",
+        language="英文",
+        description="EE 长篇论文：含摘要、目录及研究章节；具体要求仍需核对课程说明。",
         filename="Extended_Essay.tex",
         text=(
             "\\documentclass[12pt]{article}\n"
@@ -699,6 +711,8 @@ TEMPLATES: dict[str, TemplateSpec] = {
     "physics_ia": TemplateSpec(
         key="physics_ia",
         title="Physics IA",
+        language="英文",
+        description="物理 IA：包含变量、原始数据、处理数据和不确定度分析。",
         filename="Physics_IA.tex",
         text=(
             "\\documentclass[12pt]{article}\n"
@@ -723,6 +737,8 @@ TEMPLATES: dict[str, TemplateSpec] = {
     "math_ia": TemplateSpec(
         key="math_ia",
         title="Math IA",
+        language="英文",
+        description="数学 IA：包含探索目标、数学过程、解释与反思。",
         filename="Math_IA.tex",
         text=(
             "\\documentclass[12pt]{article}\n"
@@ -744,6 +760,8 @@ TEMPLATES: dict[str, TemplateSpec] = {
     "chemistry_lab": TemplateSpec(
         key="chemistry_lab",
         title="化学实验报告",
+        language="英文",
+        description="化学实验：包含假设、观察和计算，支持化学式命令；章节标题为英文。",
         filename="Chemistry_Lab_Report.tex",
         text=(
             "\\documentclass[12pt]{article}\n"
@@ -767,6 +785,8 @@ TEMPLATES: dict[str, TemplateSpec] = {
     "chinese_xelatex_article": TemplateSpec(
         key="chinese_xelatex_article",
         title="中文 XeLaTeX 文章",
+        language="中文",
+        description="中文写作：含标题、引言、正文和结论；自动选择会使用模板声明的 XeLaTeX。",
         filename="Chinese_XeLaTeX_Article.tex",
         text=(
             "% !TEX program = xelatex\n"

@@ -104,7 +104,10 @@ class TemplateEditResult:
 
 @dataclass(frozen=True)
 class FinalTextEditPlan:
-    """Pure text replacement plan; execution belongs to the GUI layer."""
+    """Pure replacement plan in Python character indexes, including cursor_offset.
+
+    Execution and conversion to native editor coordinates belong to the GUI.
+    """
 
     start: int
     end: int
@@ -225,9 +228,9 @@ def final_edit_plan(
 
     With a non-empty range, the current selection must still be exactly one
     formula envelope; otherwise None is returned and nothing is planned. With
-    an empty range (start == end), this is an insertion: the draft itself must
-    render as a complete formula envelope, and the plan inserts it at the
-    cursor without touching existing content. The plan carries the full
+    an empty range (start == end), this is an insertion at the cursor without
+    touching existing content. In both cases the new draft must render as a
+    complete formula envelope. The plan carries the full
     replacement text, the exact source text it replaces ("" for insertion),
     required package names, and an optional cursor offset. No editor, file,
     or state is touched.
@@ -238,9 +241,9 @@ def final_edit_plan(
     if start < end:
         if parse_document_selection(document, start, end) is None:
             return None
-    elif recognize_formula(render_formula(draft)) is None:
-        return None
     text = render_formula(draft)
+    if recognize_formula(text) is None:
+        return None
     source_text = document[start:end]
     cursor_offset = None
     if body_cursor_offset is not None:

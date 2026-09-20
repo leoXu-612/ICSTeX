@@ -188,6 +188,74 @@ class ImageInputTests(TestCase):
         self.assertNotEqual(image_fingerprint(first), image_fingerprint(different))
 
 
+class ManagerReadinessTests(TestCase):
+    def test_install_honors_the_explicit_python_for_the_isolated_venv(self):
+        from unittest.mock import patch
+        from app.optional_tools.pix2tex import installer
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            with (patch.object(installer, "python_executable", return_value=root / "venv/bin/python"),
+                  patch.object(installer, "venv_dir", return_value=root / "venv"),
+                  patch.object(installer, "models_dir", return_value=root / "models"),
+                  patch.object(installer, "state_path", return_value=root / "state.json"),
+                  patch.object(installer, "status", return_value={}),
+                  patch.object(installer.subprocess, "run") as run):
+                installer.install(python="/approved/python3.11")
+            self.assertEqual(run.call_args_list[0].args[0],
+                             ["/approved/python3.11", "-m", "venv", str(root / "venv")])
+
+    def test_packaged_worker_sources_start_outside_repository_without_gui_imports(self):
+        import shutil
+        import subprocess
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            worker = root / "resources/app/optional_tools/pix2tex"
+            worker.mkdir(parents=True)
+            for name in ("worker_entry.py", "manifest.py", "protocol.py"):
+                shutil.copy2(ROOT / "app/optional_tools/pix2tex" / name, worker / name)
+            env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+            result = subprocess.run([sys.executable, str(worker / "worker_entry.py"), "--help"],
+                                    cwd=root, env=env, capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("--manifest", result.stdout)
+
+    def test_cancelled_real_process_can_restart_without_replacing_the_client(self):
+        from unittest.mock import Mock, patch
+        from app.optional_tools.pix2tex.manager import OcrManager
+        _app()
+        manager = OcrManager()
+        self.addCleanup(manager.deleteLater)
+        self.addCleanup(manager.shutdown_worker)
+        client = Pix2TexClient(sys.executable,
+            ["-m", "app.optional_tools.pix2tex.fake_worker"],
+            env={"PYTHONPATH": str(ROOT), "ICSTEX_FAKE_OCR_MODE": "ok"})
+        states = []
+        manager.status_changed.connect(states.append)
+        with (patch("app.optional_tools.pix2tex.manager.Pix2TexClient", return_value=client),
+              patch("app.optional_tools.pix2tex.manager.python_executable", return_value=Path(sys.executable)),
+              patch("app.optional_tools.pix2tex.manager.load_manifest", return_value=Mock(missing_files=lambda: []))):
+            self.assertIs(manager._ensure_client(), client)
+            self.assertEqual(states[0], "starting")
+        self.assertTrue(_spin(lambda: client.state is WorkerState.READY))
+        manager.cancel()
+        self.assertTrue(_spin(lambda: client.state is WorkerState.STOPPED))
+        self.assertIs(manager._ensure_client(), client)
+        self.assertTrue(_spin(lambda: client.state is WorkerState.READY))
+
+    def test_stale_manifest_is_missing_and_stopped_client_can_restart(self):
+        from unittest.mock import Mock, patch
+        from app.optional_tools.pix2tex.manager import OcrManager
+        _app()
+        manager = OcrManager()
+        self.addCleanup(manager.deleteLater)
+        with (patch("app.optional_tools.pix2tex.manager.python_executable", return_value=Path(sys.executable)),
+              patch("app.optional_tools.pix2tex.manager.load_manifest", return_value=Mock(missing_files=lambda: [Path("missing.pth")]))):
+            self.assertEqual(manager.status(), "MODEL_MISSING")
+        manager._client = Mock(state=WorkerState.STOPPED)
+        self.assertIs(manager._ensure_client(), manager._client)
+        manager._client.start.assert_called_once()
+
+
 class LineSplitterTests(TestCase):
     def test_splits_two_bands(self) -> None:
         _app()

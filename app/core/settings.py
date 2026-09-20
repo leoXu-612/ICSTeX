@@ -86,9 +86,14 @@ class AppSettings:
 
     def _add_recent(self, key: str, path: str | Path) -> None:
         normalized = Path(path).expanduser().resolve()
-        values = [item for item in _paths(self.settings.value(key, [])) if item != normalized]
+        stored = self.settings.value(key, [])
+        previous = _paths(stored)
+        values = [item for item in previous if item != normalized]
         values.insert(0, normalized)
-        self.settings.setValue(key, [str(item) for item in values[:MAX_RECENT_ITEMS]])
+        serialized = [str(item) for item in values[:MAX_RECENT_ITEMS]]
+        if serialized == stored:
+            return
+        self.settings.setValue(key, serialized)
         self.settings.sync()
 
     def _remove_recent(self, key: str, path: str | Path) -> None:

@@ -39,6 +39,8 @@ class DocumentLifecycle:
 
     def __init__(self, window: "MainWindow") -> None:
         self.window = window
+        self.checkpoint_tabs: set[int] = set()
+        self._pending_root_save = None
 
     # --- editor factory -----------------------------------------------------
 
@@ -49,7 +51,7 @@ class DocumentLifecycle:
         self.apply_editor_font(editor)
         editor.document().setDocumentMargin(18)
         window.apply_editor_options(editor)
-        editor.textChanged.connect(window._on_editor_changed)
+        editor.sourceTextChanged.connect(window._on_editor_changed)
         editor.imageDropped.connect(window.insert_dropped_images)
         editor.texFilesDropped.connect(window.open_dropped_tex_files)
         return editor
@@ -61,7 +63,7 @@ class DocumentLifecycle:
     # --- save coordination --------------------------------------------------
 
     def schedule_save(self, tab: EditorTab, *, compile_after_save: bool = False) -> None:
-        if not tab.path:
+        if not tab.path or tab.recovery_pending or id(tab) in self.checkpoint_tabs:
             return
         window = self.window
         if tab.external_conflict:
@@ -86,7 +88,7 @@ class DocumentLifecycle:
         *,
         compile_after_save: bool | None = None,
     ) -> bool:
-        if tab.path is None or tab.external_conflict:
+        if tab.path is None or tab.external_conflict or id(tab) in self.checkpoint_tabs:
             return False
         should_compile = tab.pending_compile_after_save if compile_after_save is None else compile_after_save
         tab.pending_compile_after_save = False
@@ -106,7 +108,7 @@ class DocumentLifecycle:
             tab.save_timer.stop()
 
     def compile_after_idle(self, tab: EditorTab) -> None:
-        if tab.manager is None:
+        if tab.manager is None or tab.recovery_pending or id(tab) in self.checkpoint_tabs:
             return
         purpose = automatic_build_purpose(
             enabled=self.window.auto_compile_action.isChecked(),
@@ -115,20 +117,25 @@ class DocumentLifecycle:
         )
         if purpose is None:
             return
-        if not self.flush_root_documents(tab.manager.root_file):
-            return
         logger.info("已安排%s：编辑器空闲", "快速预览" if purpose is BuildPurpose.PREVIEW else "最终编译")
-        tab.manager.compile_async(purpose)
+        self.window.compile.compile_for_root(tab.manager.root_file, purpose,
+                                             reason="编辑器空闲", immediate=True)
 
     def flush_root_documents(self, root: Path) -> bool:
         """Persist every open document that belongs to ``root`` before export."""
         target = root.expanduser().resolve()
+        if not self.window.dependencies.memberships_current:
+            self.window.dependencies.refresh_memberships()
+            self.window.statusBar().showMessage("项目依赖仍在更新；尚未保存关联文件。", 4000)
+            return False
         dependencies = self.window.dependencies.paths_for(target)
         for tab in tuple(self.window.tabs.values()):
             if tab.path is None or (
                 self.window._compile_root_for_tab(tab) != target and tab.path.resolve() not in dependencies
             ):
                 continue
+            if id(tab) in self.checkpoint_tabs:
+                return False
             if tab.external_conflict:
                 return False
             if not (tab.dirty or tab.modified or (tab.save_timer and tab.save_timer.isActive())):
@@ -137,7 +144,41 @@ class DocumentLifecycle:
                 return False
         return True
 
+    def request_root_save(self, root: Path, *, cancelled=None) -> bool:
+        """Keep one explicit GUI save intent while membership is being checked."""
+        window = self.window
+        tab = window.current_tab()
+        self._pending_root_save = (root, window.selected_project_scope, id(tab.editor) if tab else None, cancelled)
+        window.dependencies.refresh_memberships(force=window.dependencies.memberships_current)
+        window.statusBar().showMessage("正在更新依赖；完成后保存已请求的项目文档。", 4000)
+        return True
+
+    def resume_root_save(self):
+        window = self.window
+        if (window.dependencies._closed.is_set() or self._pending_root_save is None
+                or not window.dependencies.memberships_current):
+            return
+        root, scope, identity, cancelled = self._pending_root_save
+        self._pending_root_save = None
+        if cancelled is not None and cancelled.is_set():
+            return
+        tab = window.current_tab()
+        if (tab is None or id(tab.editor) != identity or scope != window.selected_project_scope
+                or window.block_mode_action.isChecked() or window._compile_root_for_tab(tab) != root):
+            return
+        if not self.flush_root_documents(root):
+            window.statusBar().showMessage("项目尚未全部保存；请先处理冲突或另存为。", 5000)
+        window.readiness.invalidate()
+        window.workspace.schedule()
+
+    @property
+    def root_save_pending(self):
+        request = self._pending_root_save
+        return bool(request is not None and (request[3] is None or not request[3].is_set()))
+
     def save_tab(self, tab: EditorTab, path: Path) -> bool:
+        if id(tab) in self.checkpoint_tabs:
+            return False
         window = self.window
         old_path = tab.path
         old_manager = tab.manager
@@ -146,8 +187,18 @@ class DocumentLifecycle:
             window.statusBar().showMessage("外部文件冲突尚未确认；未覆盖磁盘文件。", 5000)
             return False
         try:
+            if tab.recovery_pending and old_path == path and tab.recovery_base is not None:
+                from app.core.project_checkpoint import _read_file
+                scope = window.selected_project_scope or path.parent
+                current, _ = _read_file(scope, path.relative_to(scope).as_posix())
+                if current != tab.recovery_base:
+                    tab.external_conflict = True
+                    window.statusBar().showMessage("恢复副本已被外部修改；草稿保留，请另存为或重新审阅。", 6000)
+                    return False
             text = tab.editor.toPlainText()
             path.parent.mkdir(parents=True, exist_ok=True)
+            # Establish the buffer key once at save; do not follow the leaf.
+            tab_path = path.parent.resolve() / path.name
             write_latex_text_atomic(path, text, encoding=tab.encoding)
         except UnicodeEncodeError:
             QMessageBox.warning(
@@ -162,11 +213,17 @@ class DocumentLifecycle:
         except (OSError, UnicodeError) as exc:
             QMessageBox.warning(window, "保存失败", str(exc))
             return False
+        path = tab_path
         window.local_save_contents[path] = text
+        # The atomic write is already known; do not rediscover our own save as
+        # an external edit and replace the immediate preview with a new debounce.
+        window.dependencies.remember_disk(path, text.encode(tab.encoding))
         tab.path = path
         tab.dirty = False
         tab.modified = False
         tab.external_conflict = False
+        tab.recovery_pending = False
+        tab.recovery_base = None
         window._invalidate_include_cache()
         if tab.manager is None or old_path != path:
             tab.manager = window.create_compile_manager(path)
@@ -191,9 +248,15 @@ class DocumentLifecycle:
         window._watch_file(path)
         window._remember_recent_file(path)
         self.create_history_snapshot(path, text, "保存")
-        window.dependencies.refresh_memberships()
+        # Saving can change disk-based root inference even when the immutable
+        # editor text/revision is unchanged from the preceding graph request.
+        window.dependencies.refresh_memberships(force=True)
         if old_path != path:
             window.project_panels.context_changed()
+        window.workspace.schedule()
+        if (tab is window.current_tab() and window.statusBar().currentMessage()
+                in ("等待保存...", "等待输入暂停后自动编译...")):
+            window.statusBar().showMessage("文档已保存；PDF 更新状态请看预览区。", 3000)
         return True
 
     # --- history snapshot ---------------------------------------------------
@@ -202,7 +265,7 @@ class DocumentLifecycle:
         window = self.window
         try:
             snapshot = create_snapshot(path, text, label)
-        except OSError as exc:
+        except (OSError, ValueError) as exc:
             logger.warning("历史快照保存失败：%s", exc)
             return
         current = window.current_tab()
@@ -240,18 +303,21 @@ class DocumentLifecycle:
             self._external_conflict(tab, path)
             window._watch_file(path)
             return
-        if disk_text == tab.editor.toPlainText():
+        # Qt exposes paragraph breaks as LF. Compare that view for save echoes
+        # without rewriting the original file's CRLF/CR bytes or moving its cursor.
+        editor_disk_text = disk_text.replace("\r\n", "\n").replace("\r", "\n")
+        if editor_disk_text == tab.editor.toPlainText():
             tab.external_conflict = False
             window.dependencies.remember_disk(path, data)
             window._watch_file(path)
             return
-        if disk_text == window.local_save_contents.get(path):
+        if editor_disk_text == window.local_save_contents.get(path):
             # The watcher woke up on our own save; the editor has moved on
             # since (more typing), so this is an echo, not an external edit.
             window.dependencies.remember_disk(path, data)
             window._watch_file(path)
             return
-        if tab.modified:
+        if tab.modified or tab.editor.has_preedit():
             window.statusBar().showMessage(
                 f"检测到外部修改：{path.name}；已保留当前本地编辑。", 6000
             )
@@ -292,12 +358,8 @@ class DocumentLifecycle:
         )
         if purpose is None:
             return
-        if root is not None and not self.flush_root_documents(root):
-            return
-        if tab.manager is not None:
-            tab.manager.schedule_compile("外部修改", purpose)
-        else:
-            window.compile_current(purpose=purpose, user_initiated=False)
+        window.compile.compile_current(purpose=purpose, user_initiated=False,
+                                       _tab_id=id(tab.editor), _reason="外部修改")
 
     def _external_conflict(self, tab: EditorTab, path: Path) -> None:
         window = self.window

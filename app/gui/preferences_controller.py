@@ -9,13 +9,15 @@ from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from PySide6.QtCore import QSignalBlocker
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QDialog, QMessageBox
 
 from app.core.paths import find_root_tex
 from app.core.settings import AppPreferences
+from app.core.latex_tools import detect_toolchain
 from app.gui.latex_editor import LaTeXEditor
-from app.gui.main_window_actions import auto_compile_tooltip
+from app.gui.main_window_actions import auto_compile_tooltip, auto_compile_label
 from app.gui.main_window_support import set_dynamic_property
 from app.gui.settings_dialog import SettingsDialog
 
@@ -29,12 +31,16 @@ _INTERNAL_PROJECT_DIRS = frozenset({".icstex", ".latex_build"})
 class PreferencesController:
     def __init__(self, window: "MainWindow") -> None:
         self.window = window
+        self._recent_menu_key: tuple[tuple[Path, ...], tuple[Path, ...]] | None = None
 
     # --- toolbox / auto-compile sync ---------------------------------------
 
     def set_toolbox_visible(self, visible: bool) -> None:
         window = self.window
         if not hasattr(window, "toolbox_dock"):
+            return
+        if hasattr(window, "source_panels"):
+            window.source_panels.set_toolbox(visible)
             return
         window.toolbox_dock.setVisible(visible)
 
@@ -58,20 +64,27 @@ class PreferencesController:
         toggle = self.window.auto_compile_toggle
         if toggle.isChecked() == enabled:
             return
-        toggle.blockSignals(True)
-        toggle.setChecked(enabled)
-        toggle.blockSignals(False)
+        with QSignalBlocker(toggle):
+            toggle.setChecked(enabled)
 
     def _update_auto_compile_status(self, enabled: bool) -> None:
         label = getattr(self.window, "status_auto_label", None)
         if label is None:
             return
-        label.setText("自动编译" if enabled else "手动编译")
+        label.setText(auto_compile_label(self.window.preferences.fast_preview) if enabled else "手动编译")
+        label.setToolTip(auto_compile_tooltip(self.window.preferences.fast_preview))
         set_dynamic_property(label, "state", "active" if enabled else "idle")
 
     # --- welcome page status -----------------------------------------------
 
     def update_welcome_page(self) -> None:
+        self.update_welcome_environment()
+        if hasattr(self.window, "welcome_page"):
+            files, projects = self._recent_paths()
+            self.window.welcome_page.set_recent_projects(projects, recent_files=files)
+
+    def update_welcome_environment(self) -> None:
+        """Refresh environment text independently of recent-file presentation."""
         window = self.window
         if not hasattr(window, "welcome_page"):
             return
@@ -83,9 +96,12 @@ class PreferencesController:
             window.welcome_page.set_toolchain_status(True, message)
         else:
             window.welcome_page.set_toolchain_status(False, window.toolchain.missing_compile_message)
-        window.welcome_page.set_recent_projects(
-            [path for path in window.app_settings.recent_projects() if _is_displayable_project(path)]
-        )
+
+    def recheck_environment(self) -> None:
+        # Explicit welcome-page action. Reuse detection; never compile or rebuild
+        # active managers just to update this information.
+        self.window.toolchain = detect_toolchain()
+        self.update_welcome_environment()
 
     # --- settings dialog & preference application --------------------------
 
@@ -98,6 +114,11 @@ class PreferencesController:
         window.statusBar().showMessage("设置已保存。", 4000)
 
     def apply_preferences(self, preferences: AppPreferences, *, save: bool = False) -> None:
+        """GUI-thread batch: publish complete options before applying or persisting.
+
+        Direct user toggles retain their slots; only these programmatic assignments
+        are blocked. A settings batch changes compile configuration, not build consent.
+        """
         window = self.window
         previous_engine = window.current_engine
         previous_compile_delay = window.compile_debounce_ms
@@ -105,22 +126,29 @@ class PreferencesController:
         window.save_debounce_ms = preferences.save_debounce_ms
         window.compile_debounce_ms = preferences.compile_debounce_ms
 
-        window.auto_compile_action.setChecked(preferences.auto_compile)
-        self.sync_auto_compile_toggle(preferences.auto_compile)
+        for control, value in (
+            (window.auto_compile_action, preferences.auto_compile),
+            (window.auto_compile_toggle, preferences.auto_compile),
+            (window.auto_item_action, preferences.auto_item),
+            (window.auto_environment_action, preferences.auto_environment),
+            (window.auto_pairs_action, preferences.auto_pairs),
+            (window.snippets_action, preferences.snippets),
+        ):
+            with QSignalBlocker(control):
+                control.setChecked(value)
+        self._update_auto_compile_status(preferences.auto_compile)
         tooltip = auto_compile_tooltip(preferences.fast_preview)
+        window.auto_compile_action.setText(auto_compile_label(preferences.fast_preview))
+        window.auto_compile_toggle.set_mode_text(window.auto_compile_action.text())
         window.auto_compile_action.setToolTip(tooltip)
         window.auto_compile_toggle.setToolTip(tooltip)
-        window.auto_item_action.setChecked(preferences.auto_item)
-        window.auto_environment_action.setChecked(preferences.auto_environment)
-        window.auto_pairs_action.setChecked(preferences.auto_pairs)
-        window.snippets_action.setChecked(preferences.snippets)
 
         for tab in window.tabs.values():
             window.documents.apply_editor_font(tab.editor)
             self.apply_editor_options(tab.editor)
 
         if preferences.default_engine != previous_engine:
-            window.compile.set_engine(preferences.default_engine)
+            window.compile.set_engine(preferences.default_engine, compile_after=False, persist=False)
         elif previous_compile_delay != window.compile_debounce_ms:
             window.compile.rebuild_managers()
 
@@ -146,13 +174,21 @@ class PreferencesController:
 
     # --- recent files / projects -------------------------------------------
 
+    def _recent_paths(self) -> tuple[tuple[Path, ...], tuple[Path, ...]]:
+        """Read current records/existence; presentation caches never authorize opening."""
+        settings = self.window.app_settings
+        return (tuple(path for path in settings.recent_files() if path.is_file()),
+                tuple(path for path in settings.recent_projects() if _is_displayable_project(path)))
+
     def update_recent_menu(self) -> None:
         window = self.window
+        recent_files, recent_projects = key = self._recent_paths()
+        if hasattr(window, "welcome_page"):
+            window.welcome_page.set_recent_projects(recent_projects, recent_files=recent_files)
+        if key == self._recent_menu_key:
+            return
+        self._recent_menu_key = key
         window.recent_menu.clear()
-        recent_files = [path for path in window.app_settings.recent_files() if path.is_file()]
-        recent_projects = [
-            path for path in window.app_settings.recent_projects() if _is_displayable_project(path)
-        ]
 
         if recent_files:
             files_menu = window.recent_menu.addMenu("文件")
@@ -174,7 +210,6 @@ class PreferencesController:
             empty = QAction("暂无最近打开", window)
             empty.setEnabled(False)
             window.recent_menu.addAction(empty)
-        self.update_welcome_page()
 
     def open_recent_file(self, path: Path) -> None:
         window = self.window

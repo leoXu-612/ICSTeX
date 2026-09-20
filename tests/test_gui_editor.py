@@ -8,12 +8,12 @@ import threading
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, PropertyMock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QEvent, QMimeData, QPointF, QSettings, Qt, QTimer, QUrl
-from PySide6.QtGui import QCloseEvent, QDropEvent, QKeyEvent, QKeySequence, QTextCursor
+from PySide6.QtGui import QCloseEvent, QDropEvent, QInputMethodEvent, QKeyEvent, QKeySequence, QTextCursor
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -33,6 +33,7 @@ from app.core.formula_input import (
     parse_document_selection,
 )
 from app.core.log_parser import LaTeXError
+from app.core.history import create_snapshot
 from app.core.pdf_state import PdfFreshness
 from app.core.preview_state import PreviewFreshness
 from app.core.settings import AppSettings
@@ -85,9 +86,2120 @@ def wait_until(predicate, timeout_s: float = 3.0) -> bool:
     return predicate()
 
 
+class SyncTargetHighlightTests(TestCase):
+    def setUp(self):
+        app()
+        self.editor = LaTeXEditor("first\nTarget line\nlast")
+        self.editor.resize(600, 220)
+        self.editor.show()
+        QApplication.processEvents()
+        self.addCleanup(self.editor.deleteLater)
+        self.addCleanup(self.editor.close)
+
+    def test_highlight_preserves_text_view_and_search_then_expires(self):
+        from PySide6.QtWidgets import QTextEdit
+        from PySide6.QtGui import QColor
+        editor = self.editor
+        cursor = QTextCursor(editor.document().findBlockByNumber(1))
+        editor.setTextCursor(cursor)
+        match = QTextEdit.ExtraSelection()
+        match.cursor = QTextCursor(cursor)
+        match.cursor.movePosition(QTextCursor.MoveOperation.NextCharacter, QTextCursor.MoveMode.KeepAnchor, 6)
+        match.format.setBackground(QColor("#a5d6ff"))
+        editor.set_search_selections([match])
+        before = (editor.toPlainText(), editor.source_revision, editor.document().revision(),
+                  editor.document().isModified(), editor.document().isUndoAvailable(),
+                  editor.textCursor().position(), editor.verticalScrollBar().value())
+        self.assertEqual(editor._sync_highlight_timer.interval(), 2000)
+        editor._sync_highlight_timer.setInterval(30)
+        editor.flash_sync_target()
+        self.assertEqual(editor._sync_selection.cursor.blockNumber(), 1)
+        self.assertFalse(editor.textCursor().hasSelection())
+        # Hold the returned Qt selection wrappers while reading their cursors.
+        selections = editor.extraSelections()
+        self.assertEqual(len(selections), 3)
+        self.assertEqual(selections[-1].cursor.selectedText(), "Target")
+        self.assertTrue(wait_until(lambda: editor._sync_selection is None))
+        self.assertFalse(editor._sync_highlight_timer.isActive())
+        self.assertEqual(len(editor.extraSelections()), 2)
+        after = (editor.toPlainText(), editor.source_revision, editor.document().revision(),
+                 editor.document().isModified(), editor.document().isUndoAvailable(),
+                 editor.textCursor().position(), editor.verticalScrollBar().value())
+        self.assertEqual(after, before)
+
+    def test_new_target_replaces_old_and_user_actions_clear_it(self):
+        editor = self.editor
+        editor.flash_sync_target()
+        editor.setTextCursor(QTextCursor(editor.document().findBlockByNumber(1)))
+        self.assertIsNone(editor._sync_selection)
+        editor.flash_sync_target()
+        self.assertEqual(editor._sync_selection.cursor.blockNumber(), 1)
+        self.assertEqual(len(editor.extraSelections()), 2)
+        editor.insertPlainText("changed ")
+        self.assertIsNone(editor._sync_selection)
+        self.assertFalse(editor._sync_highlight_timer.isActive())
+        editor.flash_sync_target()
+        editor.hide()
+        self.assertIsNone(editor._sync_selection)
+        self.assertFalse(editor._sync_highlight_timer.isActive())
+
+
+class SourceIdleCompositionTests(TestCase):
+    """Real default save timers and Qt IME events; not physical IME evidence."""
+
+    def setUp(self):
+        self.application = app()
+        self.directory = TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name).resolve()
+        self.source = self.root / "main.tex"
+        self.original = "\\documentclass{article}\n\\begin{document}\nbase \n\\end{document}\n"
+        self.source.write_text(self.original, encoding="utf-8")
+        self.window = MainWindow(settings_store=isolated_settings())
+        self.addCleanup(self.dispose)
+        self.window.auto_compile_action.setChecked(False)
+        self.window.project_files.set_project_root(self.root)
+        self.window.open_file(self.source)
+        self.tab = self.window.current_tab()
+        self.editor = self.tab.editor
+        cursor = self.editor.textCursor()
+        self.position = self.original.index("base ") + len("base ")
+        cursor.setPosition(self.position)
+        self.editor.setTextCursor(cursor)
+        self.assertEqual(self.window.save_debounce_ms, 800)
+
+    def dispose(self):
+        for tab in self.window.tabs.values():
+            self.window.documents.cancel_save_timer(tab)
+            tab.modified = tab.dirty = False
+        self.window.close()
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def input(self, preedit="", commit=""):
+        event = QInputMethodEvent(preedit, [])
+        event.setCommitString(commit)
+        QApplication.sendEvent(self.editor, event)
+
+    def preedit(self):
+        return self.editor.textCursor().block().layout().preeditAreaText()
+
+    def wait_for_idle(self):
+        from PySide6.QtTest import QTest
+        QTest.qWait(self.window.save_debounce_ms + 200)
+
+    def wait_for_save(self):
+        from PySide6.QtTest import QSignalSpy
+        timer = self.tab.save_timer
+        self.assertEqual(timer.interval(), 800)
+        observed = QSignalSpy(timer.timeout)
+        expected = self.editor.toPlainText()
+        # qWait can return with a due timer still queued after other callbacks.
+        # Observe its actual delivery and bytes, without flushing it manually
+        # or changing the production debounce to fit the test's wall clock.
+        self.assertTrue(wait_until(lambda: observed.count() == 1 and not self.tab.dirty
+                                   and self.source.read_text() == expected), {
+            "timeouts": observed.count(), "timer_active": timer.isActive(),
+            "remaining_ms": timer.remainingTime(), "conflict": self.tab.external_conflict,
+        })
+
+    def test_candidate_and_cancel_do_not_write_compile_or_invalidate_source(self):
+        from app.core.text_encoding import write_latex_text_atomic
+        self.window.auto_compile_action.setChecked(True)
+        self.tab.manager = self.window.create_compile_manager(self.source)
+        self.window.compile_authorized_roots.add(self.tab.manager.root_file)
+        before = self.window.pdf_state.record_for(self.source).source_revision
+        undo_steps = self.editor.document().availableUndoSteps()
+        with patch("app.gui.document_lifecycle.write_latex_text_atomic", wraps=write_latex_text_atomic) as write, \
+                patch.object(self.tab.manager, "compile_async") as compile_async, \
+                patch.object(self.window.readiness, "invalidate") as invalidate:
+            self.input("zhong")
+            self.wait_for_idle()
+            self.assertEqual(self.preedit(), "zhong")
+            self.input("zhongwen")
+            self.input()  # cancel without committing
+            self.wait_for_idle()
+            write.assert_not_called()
+            compile_async.assert_not_called()
+            invalidate.assert_not_called()
+        self.assertEqual(self.source.read_text(), self.original)
+        self.assertEqual(self.editor.toPlainText(), self.original)
+        self.assertFalse(self.tab.modified or self.tab.dirty)
+        self.assertEqual(self.editor.document().availableUndoSteps(), undo_steps)
+        self.assertEqual(self.window.pdf_state.record_for(self.source).source_revision, before)
+
+    def test_partial_commit_saves_only_committed_text_and_preserves_candidate_and_undo(self):
+        from app.core.text_encoding import write_latex_text_atomic
+        expected = self.original[:self.position] + "\u4e2d" + self.original[self.position:]
+        with patch("app.gui.document_lifecycle.write_latex_text_atomic", wraps=write_latex_text_atomic) as write:
+            self.input("zhongwen")
+            self.input("wen", "\u4e2d")
+            before_view = (self.editor.textCursor().position(), self.editor.verticalScrollBar().value())
+            self.wait_for_save()
+            self.assertEqual(self.source.read_text(), expected)
+            self.assertEqual(self.preedit(), "wen")
+            self.assertEqual((self.editor.textCursor().position(), self.editor.verticalScrollBar().value()), before_view)
+            self.assertEqual(write.call_count, 1)
+            self.assertFalse(self.tab.modified or self.tab.dirty)
+            # Explicitly deliver our own watcher echo while the candidate lives.
+            self.window.reload_external_change(str(self.source))
+            self.assertEqual(self.preedit(), "wen")
+            revision = self.window.pdf_state.record_for(self.source).source_revision
+            self.input()  # cancel only the remaining candidate
+            self.wait_for_idle()
+            self.assertEqual(write.call_count, 1)
+            self.assertEqual(self.window.pdf_state.record_for(self.source).source_revision, revision)
+            self.editor.undo()
+            self.assertEqual(self.editor.toPlainText(), self.original)
+            self.editor.redo()
+            self.assertEqual(self.editor.toPlainText(), expected)
+
+    def test_cancel_does_not_rearm_an_existing_committed_save_timer(self):
+        self.input(commit="\u4e2d")
+        timer_id = self.tab.save_timer.timerId()
+        self.input("wen")
+        self.input()
+        self.assertTrue(self.tab.save_timer.isActive())
+        self.assertEqual(self.tab.save_timer.timerId(), timer_id)
+        self.wait_for_save()
+        self.assertEqual(self.source.read_text(), self.editor.toPlainText())
+
+    def test_external_edit_after_idle_save_preserves_active_candidate_as_conflict(self):
+        self.input("wen", "\u4e2d")
+        self.wait_for_save()
+        committed = self.editor.toPlainText()
+        self.assertFalse(self.tab.modified or self.tab.dirty)
+        external = self.original.replace("base ", "external ")
+        self.source.write_text(external, encoding="utf-8")
+        self.window.reload_external_change(str(self.source))
+        self.assertTrue(self.tab.external_conflict)
+        self.assertEqual(self.editor.toPlainText(), committed)
+        self.assertEqual(self.preedit(), "wen")
+        self.input(commit="\u6587")
+        self.wait_for_idle()
+        self.assertEqual(self.source.read_text(), external)
+        self.assertTrue(self.tab.modified and self.tab.dirty)
+        self.assertFalse(self.tab.save_timer.isActive())
+
+    def test_inactive_source_commit_keeps_tab_save_and_revision_ownership(self):
+        other = self.root / "other.tex"
+        other.write_text("other", encoding="utf-8")
+        self.window.open_file(other)
+        active = self.window.current_tab()
+        before = self.window.pdf_state.record_for(other).source_revision
+        self.input("zhong")
+        self.assertFalse(self.tab.modified or active.modified)
+        self.input(commit="\u4e2d")
+        self.assertTrue(self.tab.modified)
+        self.assertFalse(active.modified)
+        self.wait_for_save()
+        self.assertEqual(self.source.read_text(), self.editor.toPlainText())
+        self.assertEqual(other.read_text(), "other")
+        self.assertIs(self.window.current_tab(), active)
+        self.assertEqual(self.window.pdf_state.record_for(other).source_revision, before)
+
+    def test_preedit_keeps_word_count_and_panel_cache_identity_without_reading_text(self):
+        self.window.project_panels._refresh_domains({"outline"})
+        word_key = self.window.word_counts._key()
+        panel_key = self.window.project_panels._source_key
+        self.input("zhong")
+        with patch.object(self.editor, "toPlainText", side_effect=AssertionError("cached identity must be cheap")):
+            self.assertEqual(self.window.word_counts._key(), word_key)
+            self.window.project_panels._refresh_domains({"outline"})
+        self.assertEqual(self.window.project_panels._source_key, panel_key)
+        self.input()
+        self.assertEqual(self.window.word_counts._key(), word_key)
+        self.input(commit="\u4e2d")
+        self.assertNotEqual(self.window.word_counts._key(), word_key)
+
+    def test_reader_keys_reject_blocked_reload_and_undo_on_inactive_related_tab(self):
+        other = self.root / "child.tex"
+        other.write_text("% !TeX root = main.tex\nother", encoding="utf-8")
+        self.original = self.original.replace("base \n", "base \\input{child}\n")
+        self.source.write_text(self.original, encoding="utf-8")
+        self.window.reload_external_change(str(self.source))
+        self.window.open_file(other)
+        active = self.window.current_tab()
+        self.assertEqual(self.window._compile_root_for_tab(active), self.source)
+
+        def keys():
+            return (self.window.citations._key(), self.window.materials._key(),
+                    self.window.readiness._quick_key(self.source), self.window.word_counts._key())
+
+        before = keys()
+        self.input("zhong")
+        self.input()
+        self.assertEqual(keys(), before)
+        self.editor.blockSignals(True)
+        try:
+            self.editor.insertPlainText("changed ")
+            changed = keys()
+            self.editor.undo()
+            undone = keys()
+            self.editor.setPlainText("external")
+            reloaded = keys()
+        finally:
+            self.editor.blockSignals(False)
+        for old, new in ((before, changed), (changed, undone), (undone, reloaded), (before, undone)):
+            for name, a, b in zip(("citation", "material", "submission", "word_count"), old, new):
+                self.assertNotEqual(a, b, name)
+        self.assertIs(self.window.current_tab(), active)
+        self.assertFalse(self.tab.modified or self.tab.dirty or active.modified or active.dirty)
+        self.assertEqual(self.source.read_text(), self.original)
+        self.assertEqual(other.read_text(), "% !TeX root = main.tex\nother")
+
+    def test_word_count_late_preedit_result_and_cache_survive_but_edit_undo_is_stale(self):
+        from app.core.word_count import count_project_snapshot
+        self.assertTrue(wait_until(lambda: not self.window.dependencies.is_busy
+                                   and not self.window.word_counts.is_busy))
+        controller = self.window.word_counts
+        for action in ("preedit", "edit_undo"):
+            with self.subTest(action=action):
+                entered, release = threading.Event(), threading.Event()
+
+                def delayed(*args, **kwargs):
+                    result = count_project_snapshot(*args, **kwargs)
+                    entered.set()
+                    release.wait(3)
+                    return result
+
+                with patch("app.gui.word_count_controller.count_project_snapshot", delayed), \
+                        patch.object(controller, "_show", wraps=controller._show) as show:
+                    try:
+                        controller.request(force=True)
+                        self.assertTrue(wait_until(entered.is_set))
+                        key = controller._active.key
+                        if action == "preedit":
+                            self.input("zhong")
+                        else:
+                            self.editor.blockSignals(True)
+                            try:
+                                self.editor.insertPlainText("changed ")
+                                self.editor.undo()
+                            finally:
+                                self.editor.blockSignals(False)
+                        release.set()
+                        self.assertTrue(wait_until(lambda: not controller.is_busy))
+                        self.assertEqual(show.call_count, 1 if action == "preedit" else 0)
+                    finally:
+                        release.set()
+                if action == "preedit":
+                    self.assertEqual(controller._displayed_key, key)
+                    with patch.object(controller, "_launch", side_effect=AssertionError("reuse cache")), \
+                            patch.object(self.editor, "toPlainText", side_effect=AssertionError("reuse snapshot")):
+                        controller.request()
+                    self.input()
+        self.assertEqual(self.source.read_text(), self.original)
+
+
+class ReadOnlyNavigationShortcutTests(TestCase):
+    def setUp(self):
+        self.application = app()
+        self.directory = TemporaryDirectory(prefix="icstex-keyboard-navigation-")
+        self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name).resolve()
+        self.main = self.root / "main.tex"
+        self.child = self.root / "child.tex"
+        self.main.write_text("\\documentclass{article}\n\\begin{document}\n"
+                             "\\section{First}\ntext\n\\section{Second}\n"
+                             "\\input{child}\n\\end{document}\n")
+        self.child.write_text("% !TeX root = main.tex\nfirst\nnavigationneedle\nfourth\n")
+        self.originals = {path: path.read_bytes() for path in (self.main, self.child)}
+        self.window = MainWindow(settings_store=isolated_settings())
+        self.window.auto_compile_action.setChecked(False)
+        self.window.save_debounce_ms = 3600000
+        self.window.project_files.set_project_root(self.root)
+        self.window.open_file(self.main)
+        self.window.show()
+        self.window.activateWindow()
+        self.window.set_toolbox_visible(True)
+        self.addCleanup(self.dispose)
+
+    def dispose(self):
+        for tab in self.window.tabs.values():
+            self.window.documents.cancel_save_timer(tab)
+            tab.modified = tab.dirty = False
+        self.window.close()
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def select_surface(self, name):
+        from app.core.diagnostics import Diagnostic
+        from app.core.latex_outline import scan_outline
+        self.window.open_file(self.main, 1)
+        if name == "outline":
+            self.window.sidebar_tabs.setCurrentIndex(1)
+            panel = self.window.outline_panel
+            panel.set_outline(scan_outline(self.main.read_text()))
+            table, row, target, line = panel.table, 1, self.main, 5
+        elif name == "search":
+            self.window.sidebar_tabs.setCurrentIndex(2)
+            self.window.run_project_search("navigationneedle", False, False)
+            table, row, target, line = self.window.search_panel.table, 0, self.child, 3
+        elif name == "diagnostics":
+            self.window.bottom_tabs.setCurrentWidget(self.window.diagnostic_panel)
+            self.window.diagnostic_panel.set_diagnostics([
+                Diagnostic("info", "First", "Synthetic", self.main, 3),
+                Diagnostic("info", "Second", "Synthetic", self.child, 3),
+            ])
+            table, row, target, line = self.window.diagnostic_panel.table, 1, self.child, 3
+        else:
+            self.window.bottom_tabs.setCurrentWidget(self.window.error_table)
+            self.window.compile.show_errors(CompileResult(
+                root_file=self.main, output_dir=self.root / "not-built",
+                pdf_file=self.root / "not-built/main.pdf", log_file=self.root / "not-built/main.log",
+                command=[], returncode=1, stdout="", stderr="", duration_seconds=0,
+                outcome=CompileOutcome.LATEX_ERROR,
+                errors=[LaTeXError("Synthetic", self.main, 3), LaTeXError("Synthetic", self.child, 3)],
+            ))
+            table, row, target, line = self.window.error_table, 1, self.child, 3
+        table.setCurrentCell(row, 0)
+        table.setFocus()
+        self.application.processEvents()
+        self.assertIs(self.application.focusWidget(), table)
+        return table, target, line
+
+    def test_return_and_enter_navigate_once_through_existing_read_only_routes(self):
+        from PySide6.QtTest import QSignalSpy, QTest
+        with patch.object(self.window, "save_current", side_effect=AssertionError("no save")), \
+                patch.object(self.window, "compile_current", side_effect=AssertionError("no compile")):
+            for name in ("outline", "search", "errors", "diagnostics"):
+                for key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                    with self.subTest(surface=name, key=key):
+                        table, target, line = self.select_surface(name)
+                        activated = QSignalSpy(table.cellActivated)
+                        QTest.keyClick(table, key)
+                        self.application.processEvents()
+                        self.assertEqual(activated.count(), 1)
+                        tab = self.window.current_tab()
+                        self.assertEqual(tab.path, target)
+                        self.assertEqual(tab.editor.textCursor().blockNumber() + 1, line)
+                        self.assertEqual({path: path.read_bytes() for path in self.originals}, self.originals)
+                        self.assertFalse(self.window.compile_authorized_roots)
+                        self.assertFalse(any(item.dirty or item.modified for item in self.window.tabs.values()))
+
+    def test_navigation_keys_ignore_other_focus_empty_selection_and_repeat(self):
+        from PySide6.QtTest import QSignalSpy, QTest
+        for name in ("outline", "search", "errors", "diagnostics"):
+            with self.subTest(surface=name):
+                table, _target, _line = self.select_surface(name)
+                activated = QSignalSpy(table.cellActivated)
+                table.clearSelection()
+                QTest.keyClick(table, Qt.Key.Key_Return)
+                self.assertEqual(activated.count(), 0)
+                table.selectRow(0)
+                QApplication.sendEvent(table, QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Return,
+                                                       Qt.KeyboardModifier.NoModifier, "", True))
+                self.assertEqual(activated.count(), 0)
+                self.window.auto_compile_toggle.setFocus()
+                QTest.keyClick(self.window.auto_compile_toggle, Qt.Key.Key_Return)
+                self.assertEqual(activated.count(), 0)
+                self.assertFalse(self.window.auto_compile_action.isChecked())
+                table.setRowCount(0)
+                table.setFocus()
+                QTest.keyClick(table, Qt.Key.Key_Return)
+                self.assertEqual(activated.count(), 0)
+                self.assertEqual(self.window.current_tab().path, self.main)
+                self.assertEqual({path: path.read_bytes() for path in self.originals}, self.originals)
+
+    def test_single_search_result_can_be_selected_with_space_before_return(self):
+        from PySide6.QtTest import QSignalSpy, QTest
+        table, target, line = self.select_surface("search")
+        self.assertEqual(table.rowCount(), 1)
+        table.clearSelection()
+        activated = QSignalSpy(table.cellActivated)
+        QTest.keyClick(table, Qt.Key.Key_Return)
+        self.assertEqual(activated.count(), 0)
+        QTest.keyClick(table, Qt.Key.Key_Space)
+        self.assertTrue(table.selectionModel().isSelected(table.currentIndex()))
+        QTest.keyClick(table, Qt.Key.Key_Return)
+        self.assertEqual(activated.count(), 1)
+        self.assertEqual(self.window.current_tab().path, target)
+        self.assertEqual(self.window.current_tab().editor.textCursor().blockNumber() + 1, line)
+        self.assertEqual({path: path.read_bytes() for path in self.originals}, self.originals)
+        self.assertFalse(self.window.compile_authorized_roots)
+        for table in (self.window.outline_panel.table, self.window.search_panel.table,
+                      self.window.error_table, self.window.diagnostic_panel.table):
+            with self.subTest(table=table.parentWidget().objectName()):
+                self.assertIn("空格", table.toolTip())
+
+
+class WorkbenchShortcutTests(TestCase):
+    def setUp(self):
+        self.application = app()
+
+    def test_inspector_focus_shortcuts_preserve_draft_and_are_widget_scoped(self):
+        import sys
+        from PySide6.QtTest import QSignalSpy, QTest
+        from app.core.blocks.project_repository import load_project
+        from app.gui.block_mode import _install_session, _set_block_mode
+        from app.gui.blocks.project_session import ProjectSession
+        from tests.v1_fixtures import create_project
+
+        with TemporaryDirectory() as directory:
+            sample = create_project(Path(directory), "block")
+            loaded = load_project(sample.root.parent)
+            session = ProjectSession(**{key: loaded[key] for key in
+                                     ("registry", "layout", "sources", "document_theme", "project_dir")})
+            window = MainWindow(settings_store=isolated_settings())
+            window.auto_compile_action.setChecked(False)
+            manager = self.application.ui_scale_manager
+            old_scale = manager.scale
+            try:
+                window.open_file(sample.root)
+                self.assertTrue(_install_session(window, session))
+                _set_block_mode(window, True)
+                block = next(block for block in session.registry.blocks() if block.type == "text")
+                session.selection.select_block(block.id, source="focus-test")
+                window.resize(1080, 720)
+                window.show()
+                window.activateWindow()
+                self.application.processEvents()
+                inspector = window.block_inspector
+                window.block_panels.request("inspector")
+                self.application.processEvents()
+                editor = inspector.content_edit
+                self.assertTrue(editor.isVisible())
+                editor.setFocus()
+                editor.moveCursor(QTextCursor.MoveOperation.End)
+                QTest.keyClicks(editor, " draft")
+                expected = editor.toPlainText()
+                before_model = block.to_dict()
+                before_files = {path: path.read_bytes() for path in sample.root.parent.rglob("*") if path.is_file()}
+                QTest.keyClick(editor, Qt.Key.Key_Tab)
+                self.assertEqual(editor.toPlainText(), expected + "\t")
+                QTest.keySequence(editor, QKeySequence(QKeySequence.StandardKey.Undo))
+                self.assertEqual(editor.toPlainText(), before_model["content"]["text"])
+                QTest.keySequence(editor, QKeySequence(QKeySequence.StandardKey.Redo))
+                self.assertEqual(editor.toPlainText(), expected + "\t")
+                QTest.keyClick(editor, Qt.Key.Key_Backspace)
+                self.assertEqual(editor.toPlainText(), expected)
+                forward = QSignalSpy(inspector._focus_apply_shortcut.activated)
+                backward = QSignalSpy(inspector._focus_alias_shortcut.activated)
+                control = Qt.KeyboardModifier.MetaModifier if sys.platform == "darwin" else Qt.KeyboardModifier.ControlModifier
+                for scale in (1.0, 1.5):
+                    manager.apply_scale(scale)
+                    self.application.processEvents()
+                    for modifiers, target in (
+                        (control | Qt.KeyboardModifier.ShiftModifier, inspector.alias_edit),
+                        (control, inspector.apply_button),
+                    ):
+                        editor.setFocus()
+                        QTest.keyClick(window.windowHandle(), Qt.Key.Key_Tab, modifiers)
+                        self.application.processEvents()
+                        self.assertIs(self.application.focusWidget(), target)
+                        self.assertFalse(target.visibleRegion().isEmpty())
+                        self.assertEqual(editor.toPlainText(), expected)
+                        self.assertEqual(block.to_dict(), before_model)
+                        self.assertEqual(session.undo_stack.count(), 0)
+                        self.assertEqual({path: path.read_bytes() for path in before_files}, before_files)
+                        self.assertIsNone(session.compile_manager)
+                self.assertEqual((forward.count(), backward.count()), (2, 2))
+                inspector.alias_edit.setFocus()
+                QTest.keyClick(window.windowHandle(), Qt.Key.Key_Tab, control)
+                self.assertEqual((forward.count(), backward.count()), (2, 2))
+                _set_block_mode(window, False)
+                window.current_tab().editor.setFocus()
+                QTest.keyClick(window.windowHandle(), Qt.Key.Key_Tab, control)
+                self.assertEqual((forward.count(), backward.count()), (2, 2))
+            finally:
+                session.editor_drafts.clear()
+                session._dirty = False
+                for tab in window.tabs.values():
+                    window.documents.cancel_save_timer(tab)
+                    tab.modified = tab.dirty = False
+                window.close()
+                window.deleteLater()
+                self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+                manager.apply_scale(old_scale)
+
+    def test_standard_save_shortcut_targets_only_the_visible_mode(self):
+        from PySide6.QtTest import QTest
+        from app.core.blocks.project_repository import load_project
+        from app.gui.block_mode import _install_session, _set_block_mode
+        from app.gui.blocks.project_session import ProjectSession
+        from tests.v1_fixtures import create_project
+
+        with TemporaryDirectory() as directory:
+            sample = create_project(Path(directory), "block")
+            loaded = load_project(sample.root.parent)
+            session = ProjectSession(**{key: loaded[key] for key in
+                                     ("registry", "layout", "sources", "document_theme", "project_dir")})
+            window = MainWindow(settings_store=isolated_settings())
+            window.auto_compile_action.setChecked(False)
+            try:
+                window.open_file(sample.root)
+                self.assertTrue(_install_session(window, session))
+                _set_block_mode(window, True)
+                window.show()
+                window.activateWindow()
+                self.application.processEvents()
+                window.block_inspector.alias_edit.setFocus()
+                actions = []
+                window.save_action.triggered.connect(lambda: actions.append("source"))
+                window.block_save_action.triggered.connect(lambda: actions.append("block"))
+                QTest.keySequence(window.block_inspector.alias_edit, QKeySequence(QKeySequence.StandardKey.Save))
+                self.application.processEvents()
+                self.assertEqual(actions, ["block"])
+                self.assertTrue(session.last_save_ok)
+                _set_block_mode(window, False)
+                window.current_tab().editor.setFocus()
+                QTest.keySequence(window.current_tab().editor, QKeySequence(QKeySequence.StandardKey.Save))
+                self.application.processEvents()
+                self.assertEqual(actions, ["block", "source"])
+            finally:
+                window.close()
+                window.deleteLater()
+                self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_standard_save_shortcut_writes_source_without_moving_editor_or_compiling(self):
+        from PySide6.QtTest import QTest
+
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "main.tex"
+            source.write_text("\\documentclass{article}\n\\begin{document}\n"
+                              + "Line of synthetic text.\n" * 100 + "\\end{document}\n", encoding="utf-8")
+            window = MainWindow(settings_store=isolated_settings())
+            window.auto_compile_action.setChecked(False)
+            window.save_debounce_ms = 3600000
+            try:
+                window.open_file(source)
+                window.show()
+                window.activateWindow()
+                self.application.processEvents()
+                editor = window.current_tab().editor
+                editor.setFocus()
+                editor.moveCursor(QTextCursor.MoveOperation.End)
+                editor.insertPlainText("% saved by keyboard\n")
+                editor.verticalScrollBar().setValue(editor.verticalScrollBar().maximum() // 2)
+                before = (editor.textCursor().position(), editor.verticalScrollBar().value())
+                saves = []
+                window.save_action.triggered.connect(lambda: saves.append(True))
+                QTest.keySequence(editor, QKeySequence(QKeySequence.StandardKey.Save))
+                self.application.processEvents()
+                self.assertEqual(saves, [True])
+                self.assertEqual(source.read_text(encoding="utf-8"), editor.toPlainText())
+                self.assertFalse(window.current_tab().dirty)
+                self.assertEqual((editor.textCursor().position(), editor.verticalScrollBar().value()), before)
+                self.assertEqual(window.compile_authorized_roots, set())
+            finally:
+                for tab in window.tabs.values():
+                    window.documents.cancel_save_timer(tab)
+                    tab.modified = tab.dirty = False
+                window.close()
+                window.deleteLater()
+                self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
+class TableDialogLifetimeTests(TestCase):
+    def setUp(self):
+        self.application = app()
+        self.directory = TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.path = Path(self.directory.name) / "main.tex"
+        self.original = b"\\documentclass{article}\r\n\\begin{document}\r\nBody\r\n\\end{document}\r\n"
+        self.path.write_bytes(self.original)
+        self.window = MainWindow(settings_store=isolated_settings())
+        self.addCleanup(self.dispose)
+        self.window.auto_compile_action.setChecked(False)
+        self.window.save_debounce_ms = 60_000
+        self.window.open_file(self.path)
+        self.editor = self.window.current_tab().editor
+        cursor = self.editor.textCursor()
+        cursor.setPosition(self.editor.toPlainText().index("\\end{document}"))
+        self.editor.setTextCursor(cursor)
+        self.before = self.editor.toPlainText()
+        self.created = []
+
+    def dispose(self):
+        from shiboken6 import isValid
+        if isValid(self.window):
+            for tab in self.window.tabs.values():
+                self.window.documents.cancel_save_timer(tab)
+                tab.modified = tab.dirty = False
+            self.window.close()
+            self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def driven_dialog(self, outcome, failure=None, mutation=None, observed=None):
+        created = self.created
+        window = self.window
+
+        class DrivenDialog(TableDialog):
+            def __init__(self, parent, **kwargs):
+                self.finished_exec = False
+                super().__init__(parent, **kwargs)
+                self.preview_table.item(0, 0).setText("Value")
+                self.preview_table.item(1, 0).setText("0")
+                self.caption_edit.setText("Measured values")
+                self.label_edit.setText("tab:measured")
+                created.append(self)
+
+            def exec(self):
+                if failure == "exec":
+                    raise RuntimeError("Synthetic exec failure")
+                if mutation is not None:
+                    def change_then_accept():
+                        from shiboken6 import isValid
+                        try:
+                            mutation()
+                            target = window.current_tab()
+                            before = target.editor.toPlainText() if target else None
+                            draft = self.values()
+                            self.accept()
+                            observed.update(open=self.isVisible(), draft_preserved=self.values() == draft,
+                                            preview_visible=self.source_preview.isVisible())
+                            observed["source_unchanged"] = target is None or target.editor.toPlainText() == before
+                        except Exception as exc:
+                            observed["error"] = exc
+                        finally:
+                            if isValid(self):
+                                self.reject()
+                    QTimer.singleShot(0, self, change_then_accept)
+                elif outcome == "parent-destroyed":
+                    QTimer.singleShot(0, window, window.close)
+                else:
+                    QTimer.singleShot(0, self, self.accept if outcome == "accept" else self.reject)
+                result = super().exec()
+                self.finished_exec = True
+                return result
+
+            def values(self):
+                if failure == "values" and self.finished_exec:
+                    raise RuntimeError("Synthetic values failure")
+                return super().values()
+
+        return DrivenDialog
+
+    def assert_disposed(self):
+        from shiboken6 import isValid
+        self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        self.assertTrue(self.created)
+        self.assertTrue(all(not isValid(dialog) for dialog in self.created))
+        if isValid(self.window):
+            self.assertEqual(self.window.findChildren(TableDialog), [])
+
+    def test_repeated_modal_cancel_releases_dialog_and_preserves_source(self):
+        before_view = (self.editor.textCursor().position(), self.editor.verticalScrollBar().value())
+        before_undo = self.editor.document().availableUndoSteps()
+        with patch("app.gui.insertion_actions.TableDialog", self.driven_dialog("cancel")):
+            for _ in range(6):
+                self.window.insert_table()
+                self.assert_disposed()
+        self.assertEqual(self.editor.toPlainText(), self.before)
+        self.assertEqual((self.editor.textCursor().position(), self.editor.verticalScrollBar().value()), before_view)
+        self.assertEqual(self.editor.document().availableUndoSteps(), before_undo)
+        self.assertEqual(self.path.read_bytes(), self.original)
+        self.assertEqual(self.window.compile_authorized_roots, set())
+
+    def test_modal_accept_copies_values_before_disposal_and_keeps_one_undo(self):
+        with patch("app.gui.insertion_actions.TableDialog", self.driven_dialog("accept")):
+            self.window.insert_table()
+        self.assert_disposed()
+        after = self.editor.toPlainText()
+        self.assertIn(r"\usepackage{booktabs}", after)
+        self.assertIn(r"\caption{Measured values}", after)
+        self.assertIn(r"\label{tab:measured}", after)
+        self.assertIn("Value &", after)
+        self.assertIn("0 &", after)
+        self.editor.undo()
+        self.assertEqual(self.editor.toPlainText(), self.before)
+        self.editor.redo()
+        self.assertEqual(self.editor.toPlainText(), after)
+        self.assertEqual(self.path.read_bytes(), self.original)
+        self.assertEqual(self.window.compile_authorized_roots, set())
+
+    def test_exec_and_value_failures_release_dialog_without_source_changes(self):
+        for stage in ("exec", "values"):
+            with self.subTest(stage=stage):
+                with patch("app.gui.insertion_actions.TableDialog", self.driven_dialog("accept", stage)):
+                    with self.assertRaisesRegex(RuntimeError, "Synthetic"):
+                        self.window.insert_table()
+                self.assert_disposed()
+                self.assertEqual(self.editor.toPlainText(), self.before)
+                self.assertEqual(self.path.read_bytes(), self.original)
+
+    def test_parent_destruction_during_modal_loop_does_not_double_delete(self):
+        from shiboken6 import isValid
+        with patch("app.gui.insertion_actions.TableDialog", self.driven_dialog("parent-destroyed")):
+            self.window.insert_table()
+        self.assert_disposed()
+        self.assertFalse(isValid(self.window))
+        self.assertEqual(self.path.read_bytes(), self.original)
+
+    def assert_target_change_refused(self, mutation):
+        observed = {}
+        with patch("app.gui.insertion_actions.TableDialog", self.driven_dialog(
+            "accept", mutation=mutation, observed=observed,
+        )):
+            self.window.insert_table()
+        self.assert_disposed()
+        self.assertNotIn("error", observed)
+        self.assertEqual(observed, {"open": True, "draft_preserved": True,
+                                    "preview_visible": True, "source_unchanged": True})
+        self.assertEqual(self.window.compile_authorized_roots, set())
+
+    def test_external_reload_during_table_edit_refuses_stale_target(self):
+        cursor = self.editor.textCursor()
+        start = self.before.index("Body")
+        cursor.setPosition(start)
+        cursor.setPosition(start + 4, QTextCursor.MoveMode.KeepAnchor)
+        self.editor.setTextCursor(cursor)
+        changed = b"% External edit adds a header line.\r\n" + self.original.replace(b"Body", b"NEW!")
+
+        def reload():
+            self.path.write_bytes(changed)
+            self.window.documents.reload_external_change(str(self.path))
+
+        self.assert_target_change_refused(reload)
+        self.assertEqual(self.editor.toPlainText(), changed.decode().replace("\r\n", "\n"))
+        self.assertEqual(self.path.read_bytes(), changed)
+
+    def test_source_edit_then_undo_still_refuses_old_table_target(self):
+        def edit_then_undo():
+            self.editor.insertPlainText("new edit")
+            self.editor.undo()
+
+        self.assert_target_change_refused(edit_then_undo)
+        self.assertEqual(self.editor.toPlainText(), self.before)
+        self.assertEqual(self.path.read_bytes(), self.original)
+
+    def test_changed_cursor_refuses_old_table_target(self):
+        def move_cursor():
+            cursor = self.editor.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.Start)
+            self.editor.setTextCursor(cursor)
+
+        self.assert_target_change_refused(move_cursor)
+        self.assertEqual(self.editor.toPlainText(), self.before)
+
+    def test_closed_editor_refuses_table_target_without_destroying_draft(self):
+        def close_editor():
+            self.window.close_tab(self.window._index_for_tab_id(id(self.editor)))
+            self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+        self.assert_target_change_refused(close_editor)
+        self.assertEqual(self.path.read_bytes(), self.original)
+
+
+class GeneratedInsertionTransactionTests(TestCase):
+    def setUp(self):
+        self.application = app()
+        self.window = MainWindow(settings_store=isolated_settings())
+        self.addCleanup(self.dispose)
+        self.window.auto_compile_action.setChecked(False)
+        self.window.new_document()
+        self.tab = self.window.current_tab()
+        self.editor = self.tab.editor
+        self.before = "% \U0001f600\U0001f680\n\\documentclass{article}\n\\begin{document}\nBody\n\\end{document}\n"
+        self.editor.setPlainText(self.before)
+
+    def dispose(self):
+        for tab in self.window.tabs.values():
+            self.window.documents.cancel_save_timer(tab)
+            tab.modified = tab.dirty = False
+        self.window.close()
+        self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def select_body(self, *, backward=False):
+        text = self.editor.toPlainText()
+        start = len(text[:text.index("Body")].encode("utf-16-le")) // 2
+        end = start + len("Body")
+        cursor = self.editor.textCursor()
+        cursor.setPosition(end if backward else start)
+        cursor.setPosition(start if backward else end, QTextCursor.MoveMode.KeepAnchor)
+        self.editor.setTextCursor(cursor)
+
+    def test_snippet_and_new_packages_keep_prior_undo_history(self):
+        cursor = self.editor.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        cursor.beginEditBlock()
+        cursor.insertText("% earlier edit\n")
+        cursor.endEditBlock()
+        self.editor.setTextCursor(cursor)
+        edited = self.editor.toPlainText()
+        self.window._insert_generated_snippet(self.tab, "Inserted", ("array",), "Inserted")
+        after = self.editor.toPlainText()
+        self.assertEqual(after, edited.replace("\\begin{document}", "\\usepackage{array}\n\\begin{document}") + "Inserted")
+        self.editor.undo()
+        self.assertEqual(self.editor.toPlainText(), edited)
+        self.editor.undo()
+        self.assertEqual(self.editor.toPlainText(), self.before)
+        self.editor.redo()
+        self.assertEqual(self.editor.toPlainText(), edited)
+        self.editor.redo()
+        self.assertEqual(self.editor.toPlainText(), after)
+        self.assertEqual(self.window.compile_authorized_roots, set())
+
+    def test_package_only_keeps_selection_direction_and_is_undoable(self):
+        for backward in (False, True):
+            with self.subTest(backward=backward):
+                self.editor.setPlainText(self.before)
+                self.select_body(backward=backward)
+                before_cursor = self.editor.textCursor()
+                positions = (before_cursor.position(), before_cursor.anchor())
+                self.window.insertions.ensure_packages(self.tab, ("array", "booktabs"))
+                inserted = "\\usepackage{array}\n\\usepackage{booktabs}\n"
+                after = self.before.replace("\\begin{document}", inserted + "\\begin{document}")
+                self.assertEqual(self.editor.toPlainText(), after)
+                current = self.editor.textCursor()
+                self.assertEqual(current.selectedText(), "Body")
+                self.assertEqual((current.position(), current.anchor()), tuple(p + len(inserted) for p in positions))
+                steps = self.editor.document().availableUndoSteps()
+                self.window.insertions.ensure_packages(self.tab, ("array", "booktabs"))
+                self.assertEqual(self.editor.document().availableUndoSteps(), steps)
+                self.editor.undo()
+                self.assertEqual(self.editor.toPlainText(), self.before)
+                self.editor.redo()
+                self.assertEqual(self.editor.toPlainText(), after)
+
+    def test_block_replaces_both_selection_directions_with_correct_padding(self):
+        for backward in (False, True):
+            for packages in ((), ("array",)):
+                with self.subTest(backward=backward, packages=packages):
+                    self.editor.setPlainText(self.before)
+                    self.select_body(backward=backward)
+                    self.window._insert_generated_snippet(self.tab, "Inserted", packages, "Inserted")
+                    expected = self.before.replace("Body", "Inserted")
+                    if packages:
+                        expected = expected.replace("\\begin{document}", "\\usepackage{array}\n\\begin{document}")
+                    self.assertEqual(self.editor.toPlainText(), expected)
+                    self.editor.undo()
+                    self.assertEqual(self.editor.toPlainText(), self.before)
+
+    def test_block_padding_at_utf16_eof_and_empty_preamble(self):
+        for text in ("\U0001f600\U0001f680", "Body"):
+            with self.subTest(text=text):
+                self.editor.setPlainText(text)
+                cursor = self.editor.textCursor()
+                cursor.movePosition(QTextCursor.MoveOperation.End)
+                self.editor.setTextCursor(cursor)
+                self.window._insert_generated_snippet(self.tab, "Inserted", ("array",), "Inserted")
+                self.assertEqual(self.editor.toPlainText(), "\\usepackage{array}\n" + text + "\nInserted")
+                self.editor.undo()
+                self.assertEqual(self.editor.toPlainText(), text)
+
+    def test_inline_insertion_preserves_target_and_cursor_offset(self):
+        self.select_body(backward=True)
+        self.window._insert_generated_snippet(
+            self.tab, "\\href{}{Text}", HYPERLINK_PACKAGES, "Inserted", block=False, cursor_offset=6,
+        )
+        expected = self.before.replace("Body", "\\href{}{Text}").replace(
+            "\\begin{document}", "\\usepackage{hyperref}\n\\begin{document}",
+        )
+        self.assertEqual(self.editor.toPlainText(), expected)
+        expected_cursor = len(expected[:expected.index("\\href{")].encode("utf-16-le")) // 2 + 6
+        self.assertEqual(self.editor.textCursor().position(), expected_cursor)
+        self.editor.undo()
+        self.assertEqual(self.editor.toPlainText(), self.before)
+
+    def test_existing_package_keeps_consecutive_insertions_separate(self):
+        before = self.before.replace("\\begin{document}", "\\usepackage{array}\n\\begin{document}")
+        self.editor.setPlainText(before)
+        cursor = self.editor.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        self.editor.setTextCursor(cursor)
+        self.window._insert_generated_snippet(self.tab, "First", ("array",), "Inserted", block=False)
+        first = self.editor.toPlainText()
+        self.window._insert_generated_snippet(self.tab, "Second", ("array",), "Inserted", block=False)
+        self.assertEqual(self.editor.toPlainText(), before + "FirstSecond")
+        self.editor.undo()
+        self.assertEqual(self.editor.toPlainText(), first)
+        self.editor.undo()
+        self.assertEqual(self.editor.toPlainText(), before)
+
+
+class WindowLifetimeTests(TestCase):
+    def setUp(self):
+        self.application = app()
+
+    def test_closed_tab_releases_native_editor_and_preserves_surviving_document(self):
+        from shiboken6 import isValid
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            closed_path = root / "closed.tex"
+            kept_path = root / "kept.tex"
+            closed_bytes = b"Closed source\r\n"
+            kept_bytes = b"Surviving source\n" * 250
+            closed_path.write_bytes(closed_bytes)
+            kept_path.write_bytes(kept_bytes)
+            window = MainWindow(settings_store=isolated_settings())
+            try:
+                window.auto_compile_action.setChecked(False)
+                window.project_files.set_project_root(root)
+                window.open_file(closed_path)
+                closed = window.current_tab()
+                window.open_file(kept_path)
+                kept = window.current_tab()
+                window.show()
+                self.application.processEvents()
+                cursor = kept.editor.textCursor()
+                cursor.movePosition(QTextCursor.MoveOperation.End)
+                kept.editor.setTextCursor(cursor)
+                before = (kept.editor.textCursor().position(),
+                          kept.editor.verticalScrollBar().value())
+                closed_gutter = closed.editor.line_number_area
+                closed_highlighter = closed.editor.highlighter
+                window.close_tab(window._index_for_tab_id(id(closed.editor)))
+                self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+                self.application.processEvents()
+                self.assertFalse(isValid(closed.editor))
+                self.assertFalse(isValid(closed_gutter))
+                self.assertFalse(isValid(closed_highlighter))
+                self.assertIs(window.current_tab(), kept)
+                self.assertTrue(isValid(kept.editor))
+                self.assertEqual(window.editor_tabs.findChildren(LaTeXEditor), [kept.editor])
+                self.assertEqual((kept.editor.textCursor().position(),
+                                  kept.editor.verticalScrollBar().value()), before)
+                self.assertEqual(kept.editor.toPlainText(), kept_bytes.decode())
+                self.assertEqual(closed_path.read_bytes(), closed_bytes)
+                self.assertEqual(kept_path.read_bytes(), kept_bytes)
+                self.assertEqual(window.compile_authorized_roots, set())
+            finally:
+                window.close()
+                self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_unowned_editor_releases_before_background_cyclic_collection(self):
+        import gc
+        import weakref
+
+        gc.collect()
+        finalized_on = []
+        automatic_gc = gc.isenabled()
+        editor = LaTeXEditor(r"\textc")
+        observed = weakref.ref(editor, lambda _: finalized_on.append(threading.get_ident()))
+        # No event drain: the highlighter can still have queued Qt work.
+        # A gutter back-reference must not strand this Python-owned widget
+        # until an unrelated worker thread happens to run cyclic GC.
+        editor.close()
+        del editor
+        try:
+            self.assertIsNone(observed())
+            self.assertEqual(finalized_on, [threading.get_ident()])
+            self.assertEqual(gc.isenabled(), automatic_gc)
+        finally:
+            # A failing baseline is cleaned on the GUI thread, not left for
+            # another test's watcher to collect and crash the entire runner.
+            gc.collect()
+            self.application.processEvents()
+
+    def test_failed_close_save_preserves_named_and_unnamed_editors(self):
+        from shiboken6 import isValid
+
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "original.tex"
+            original = b"Original bytes\r\n"
+            path.write_bytes(original)
+            for source_path in (None, path):
+                with self.subTest(named=source_path is not None):
+                    window = MainWindow(settings_store=isolated_settings())
+                    window.auto_compile_action.setChecked(False)
+                    editor = window._make_editor("Unsaved draft")
+                    tab = EditorTab(editor=editor, path=source_path, modified=True, dirty=True)
+                    window._add_tab(tab, "draft.tex")
+                    try:
+                        with patch("app.gui.editor_tab_manager.QMessageBox.warning",
+                                   return_value=QMessageBox.StandardButton.Save), \
+                             patch.object(window, "save_current_as", return_value=False) as save_as, \
+                             patch.object(window, "flush_pending_save", return_value=False) as save:
+                            window.close_tab(0)
+                        self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+                        self.assertIs(window.current_tab(), tab)
+                        self.assertTrue(isValid(editor))
+                        self.assertEqual(editor.toPlainText(), "Unsaved draft")
+                        self.assertTrue(tab.modified and tab.dirty)
+                        self.assertEqual(path.read_bytes(), original)
+                        if source_path is None:
+                            save_as.assert_called_once_with()
+                            save.assert_not_called()
+                        else:
+                            save.assert_called_once_with(tab, compile_after_save=False)
+                            save_as.assert_not_called()
+                    finally:
+                        tab.modified = tab.dirty = False
+                        window.close()
+                        self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_qt_parent_keeps_editor_and_gutter_alive_without_external_reference(self):
+        import gc
+        import weakref
+        from PySide6.QtWidgets import QWidget
+        from shiboken6 import isValid
+
+        host = QWidget()
+        editor = LaTeXEditor("line one\nline two")
+        editor.setParent(host)
+        observed = weakref.ref(editor)
+        del editor
+        try:
+            gc.collect()
+            self.assertTrue(isValid(observed()))
+            self.assertEqual(observed().toPlainText(), "line one\nline two")
+            host.show()
+            self.application.processEvents()
+            self.assertEqual(observed().line_number_area.sizeHint().width(),
+                             observed().line_number_area_width())
+            self.assertFalse(observed().line_number_area.grab().isNull())
+        finally:
+            host.close()
+            host.deleteLater()
+            self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        self.assertIsNone(observed())
+
+    def test_scale_pins_cyclic_widgets_only_during_synchronous_update(self):
+        import gc
+        import weakref
+        from PySide6.QtWidgets import QLabel
+        from shiboken6 import isValid
+
+        window = MainWindow(settings_store=isolated_settings())
+        manager = self.application.ui_scale_manager
+        old_scale = manager.scale
+        target = 1.25 if old_scale != 1.25 else 1.0
+        automatic_gc = gc.isenabled()
+        refs, observed = [], []
+        original_font = self.application.setFont
+        original_style = self.application.setStyleSheet
+        original_event = self.application.sendEvent
+
+        def collect_and_call(name, callback, value):
+            gc.collect()
+            self.assertTrue(all(ref() is not None and isValid(ref()) for ref in refs), name)
+            observed.append(name)
+            callback(value)
+
+        def dispatch_style(widget, event):
+            if event.type() == QEvent.Type.StyleChange and "style" not in observed:
+                collect_and_call("style", lambda value: original_event(widget, value), event)
+                return True
+            return original_event(widget, event)
+
+        try:
+            gc.disable()
+            for _ in range(4):
+                widget = QLabel("Synthetic cyclic widget")
+                widget.ensurePolished()
+                widget.cycle = widget
+                refs.append(weakref.ref(widget))
+                del widget
+            with patch.object(self.application, "setFont", side_effect=lambda value:
+                              collect_and_call("font", original_font, value)), \
+                 patch.object(self.application, "setStyleSheet", side_effect=lambda value:
+                              collect_and_call("style", original_style, value)), \
+                 patch.object(self.application, "sendEvent", side_effect=dispatch_style):
+                manager.apply_scale(target)
+            self.assertEqual(observed, ["font", "style"])
+            self.assertFalse(gc.isenabled())  # Application must not change GC policy.
+            gc.collect()
+            self.assertTrue(all(ref() is None for ref in refs))  # No lasting widget cache.
+        finally:
+            gc.collect()
+            manager.apply_scale(old_scale)
+            window.close()
+            self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+            if automatic_gc:
+                gc.enable()
+
+    def test_scale_collection_inside_real_qt_style_dispatch_is_safe(self):
+        import json
+        import subprocess
+        import sys
+
+        # A regression must fail this test, not crash the entire GUI test runner.
+        with TemporaryDirectory() as directory:
+            output = Path(directory) / "style-gc"
+            result = subprocess.run([
+                sys.executable, str(Path(__file__).resolve().parents[1] / "tools/probe_qt_style_lifecycle.py"),
+                "--output", str(output), "--windows", "1", "--cycles", "1",
+                "--collect-during-style", "--orphan-widgets", "8", "--expect-released",
+            ], env={**os.environ, "QT_QPA_PLATFORM": "offscreen", "PYTHONFAULTHANDLER": "1"},
+                capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, (result.stdout + result.stderr)[-4000:])
+            evidence = json.loads((output / "result.json").read_text(encoding="utf-8"))
+            self.assertFalse(evidence["hold_style_widgets"])  # No probe-only keepalive control.
+            self.assertEqual(len(evidence["orphan_deletions"]), 8)
+            self.assertEqual({row["phase"] for row in evidence["orphan_deletions"]}, {"final-gc"})
+            self.assertGreater(evidence["rows"][-1]["style_collections"], 0)
+            # Qt can also retire transient popup widgets; track only the owned
+            # cyclic targets, not an assumed constant QApplication total.
+            self.assertEqual(evidence["rows"][0]["live_orphan_wrappers"], 8)
+            self.assertEqual(evidence["rows"][-1]["live_orphan_wrappers"], 0)
+            self.assertEqual(evidence["rows"][-1]["live_closed_wrappers"], 0)
+
+    def test_confirmed_close_destroys_only_closed_window_at_event_boundary(self):
+        from shiboken6 import isValid
+
+        survivor = MainWindow(settings_store=isolated_settings())
+        closed = survivor.spawn_window()
+        child = closed.pdf_panel
+        manager = self.application.ui_scale_manager
+        try:
+            self.assertTrue(closed.close())
+            self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+            self.assertFalse(isValid(closed))
+            self.assertFalse(isValid(child))
+            self.assertNotIn(closed, manager._windows)
+            self.assertNotIn(closed, self.application._icstex_windows)
+            self.assertIn(survivor, self.application._icstex_windows)
+            self.assertTrue(isValid(survivor))
+            self.assertFalse(survivor.readiness._closed)
+            manager.apply_scale(1.25)
+            manager.apply_scale(1.0)
+            self.assertTrue(isValid(survivor.pdf_panel))
+        finally:
+            for window in (closed, survivor):
+                if isValid(window):
+                    window.close()
+                    window.deleteLater()
+            self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_cancelled_close_keeps_draft_and_window_alive_until_discard(self):
+        from shiboken6 import isValid
+
+        window = MainWindow(settings_store=isolated_settings())
+        window.auto_compile_action.setChecked(False)
+        editor = window._make_editor("Unstored synthetic draft")
+        tab = EditorTab(editor=editor, modified=True, dirty=True)
+        window._add_tab(tab, "unsaved.tex")
+        try:
+            with patch("app.gui.editor_tab_manager.QMessageBox.warning",
+                       return_value=QMessageBox.StandardButton.Cancel):
+                self.assertFalse(window.close())
+            self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+            self.assertTrue(isValid(window))
+            self.assertEqual(editor.toPlainText(), "Unstored synthetic draft")
+            self.assertFalse(window.readiness._closed)
+            self.assertIn(window, self.application.ui_scale_manager._windows)
+            with patch("app.gui.editor_tab_manager.QMessageBox.warning",
+                       return_value=QMessageBox.StandardButton.Discard):
+                self.assertTrue(window.close())
+            self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+            self.assertFalse(isValid(window))
+        finally:
+            if isValid(window):
+                tab.modified = tab.dirty = False
+                window.close()
+                window.deleteLater()
+                self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
+class TutorialGuiTests(TestCase):
+    def test_trusted_base_alias_resolves_before_building_settings_path(self):
+        self.base.mkdir()
+        alias = self.base.parent / "base-alias"
+        alias.symlink_to(self.base, target_is_directory=True)
+        with patch("app.gui.tutorial_controller.example_directory", return_value=alias), \
+             patch("app.gui.tutorial_controller.QMessageBox.warning") as warning:
+            window = self.exercise()
+        self.assertEqual(window.tutorial.root.parent.parent, self.base)
+        warning.assert_not_called()
+
+    def test_reopening_uses_current_application_scale_not_old_exercise_scale(self):
+        from app.gui.tutorial_controller import open_example
+        window = self.exercise()
+        root = window.tutorial.root
+        filename = window.app_settings.settings.fileName()
+        window.close()
+        self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        settings = AppSettings(QSettings(filename, QSettings.Format.IniFormat))
+        manager = self.application.ui_scale_manager
+        active = manager.scale
+        settings.save_preferences(replace(settings.load_preferences(), ui_scale=1.5 if active != 1.5 else 1.0))
+        original = self.owner.preferences
+        with patch.object(manager, "apply_scale", wraps=manager.apply_scale) as apply:
+            resumed = open_example(self.owner, root)
+            self.windows.append(resumed)
+        apply.assert_called_once_with(active)
+        self.assertEqual(manager.scale, active)
+        self.assertEqual(resumed.preferences.ui_scale, active)
+        self.assertEqual(self.owner.preferences, original)
+
+    def setUp(self):
+        self.application = app()
+        self.temp = TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.base = Path(self.temp.name).resolve() / "tutorials"
+        self.location = patch("app.gui.tutorial_controller.example_directory", return_value=self.base)
+        self.location.start()
+        self.addCleanup(self.location.stop)
+        self.owner = MainWindow(settings_store=isolated_settings())
+        self.owner.auto_compile_action.setChecked(False)
+        self.owner.new_document()
+        self.owner.current_tab().editor.insertPlainText("Original unsaved draft")
+        self.windows = [self.owner]
+        self.addCleanup(self.dispose)
+
+    def dispose(self):
+        from shiboken6 import isValid
+        for window in reversed(self.windows):
+            if not isValid(window):
+                continue
+            for tab in window.tabs.values():
+                window.documents.cancel_save_timer(tab)
+                tab.modified = tab.dirty = False
+            window.close()
+        self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def exercise(self):
+        from app.gui.tutorial_controller import open_example
+        window = open_example(self.owner)
+        self.assertIsNotNone(window)
+        self.windows.append(window)
+        return window
+
+    def test_starts_in_independent_window_and_settings_without_compilation(self):
+        before = (self.owner.current_tab().editor.toPlainText(), self.owner.preferences,
+                  self.owner.current_tab().editor.textCursor().position(), self.owner.editor_tabs.count())
+        with patch.object(CompileManager, "compile_async") as async_, patch.object(CompileManager, "compile_now") as now:
+            window = self.exercise()
+        self.assertIsNot(window.app_settings, self.owner.app_settings)
+        self.assertNotEqual(window.app_settings.settings.fileName(), self.owner.app_settings.settings.fileName())
+        self.assertEqual(before, (self.owner.current_tab().editor.toPlainText(), self.owner.preferences,
+                                 self.owner.current_tab().editor.textCursor().position(), self.owner.editor_tabs.count()))
+        self.assertEqual(window.current_engine, LaTeXEngine.AUTO)
+        self.assertFalse(window.compile_authorized_roots)
+        self.assertFalse(hasattr(self.owner, "tutorial"))
+        self.assertEqual(window.tutorial.title.text(), "1/3 · 改一下标题")
+        async_.assert_not_called()
+        now.assert_not_called()
+
+    def test_title_action_selects_unicode_text_without_editing_or_saving(self):
+        from app.core.tutorial import INITIAL_TITLE
+        window = self.exercise()
+        editor = window.current_tab().editor
+        text = "% \U0001f600\n" + editor.toPlainText()
+        editor.setPlainText(text)
+        before_disk = window.tutorial.root.read_bytes()
+        window.tutorial.act()
+        self.assertEqual(editor.textCursor().selectedText(), INITIAL_TITLE)
+        self.assertEqual(editor.toPlainText(), text)
+        self.assertEqual(window.tutorial.root.read_bytes(), before_disk)
+
+    def test_hide_resume_reuses_controller_and_saved_copy_after_window_close(self):
+        from app.gui.tutorial_controller import open_example, remembered_example
+        window = self.exercise()
+        controller = window.tutorial
+        editor = window.current_tab().editor
+        editor.insertPlainText("% saved practice\n")
+        self.assertTrue(window.save_current())
+        before = controller.root.read_bytes()
+        controller.dock.hide()
+        self.assertFalse(controller.active)
+        controller.schedule()
+        self.assertFalse(controller._timer.isActive())
+        self.assertIs(open_example(self.owner, controller.root), window)
+        self.assertIs(window.tutorial, controller)
+        self.assertTrue(controller.active)
+        root = controller.root
+        window.close()
+        self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        resumed = open_example(self.owner, remembered_example(self.owner))
+        self.windows.append(resumed)
+        self.assertEqual(root.read_bytes(), before)
+        self.assertEqual(resumed.current_tab().editor.toPlainText().encode(), before)
+        self.assertFalse(resumed.tutorial.manual_requested)
+
+    def test_existing_student_path_in_saved_tutorial_setting_is_not_opened(self):
+        from app.gui.tutorial_controller import EXAMPLE_SETTING, remembered_example, open_example
+        outside = Path(self.temp.name) / "student.tex"
+        outside.write_text("Do not modify")
+        self.owner.app_settings.settings.setValue(EXAMPLE_SETTING, str(outside))
+        self.assertIsNone(remembered_example(self.owner))
+        with patch("app.gui.tutorial_controller.QMessageBox.warning") as warning:
+            self.assertIsNone(open_example(self.owner, outside))
+        warning.assert_called_once()
+        self.assertEqual(outside.read_text(), "Do not modify")
+
+    def test_stale_busy_foreign_and_failed_pdf_never_complete_the_exercise(self):
+        from app.core.tutorial import INITIAL_TITLE, TutorialStep
+        from app.gui.main_window_support import DisplayedPdf
+        from tests.test_pdf_panel import _write_zoom_pdf
+        window = self.exercise()
+        controller, tab = window.tutorial, window.current_tab()
+        tab.editor.setPlainText(tab.editor.toPlainText().replace(INITIAL_TITLE, "My first page"))
+        self.assertTrue(window.save_current())
+        root = controller.root
+        pdf = root.parent / "fixture.pdf"
+        _write_zoom_pdf(pdf)  # State/loader fixture, not a real TeX build.
+        record = window.pdf_state.record_for(root)
+        record.last_successful_pdf = pdf
+        record.last_successful_revision = record.source_revision
+        record.latest_build_id = 50
+        record.freshness = PdfFreshness.CURRENT
+        displayed = DisplayedPdf(root, BuildPurpose.FINAL, record.source_revision, pdf, 50)
+        window.displayed_pdfs[root] = displayed
+        window.pdf_panel.load_pdf(pdf, logical_key=root)
+        controller.refresh()
+        self.assertEqual(controller.step, TutorialStep.COMPILE)
+        with patch.object(window, "compile_current") as compile_:
+            window.compile_action.trigger()
+        compile_.assert_called_once()
+        controller.refresh()
+        self.assertEqual(controller.step, TutorialStep.VIEW)
+        window.set_toolbox_visible(True)
+        window.resize(1080, 720)
+        self.application.processEvents()
+        window.source_preview_area.select_pdf(False)
+        controller.refresh()
+        self.application.processEvents()
+        self.assertTrue(window.source_preview_area._compact)
+        self.assertFalse(controller.action.isEnabled())
+        controller.secondary_action()
+        self.application.processEvents()
+        self.assertTrue(controller.dock.isVisibleTo(window))
+        self.assertTrue(controller.action.visibleRegion().contains(controller.action.rect()))
+        self.assertGreaterEqual(controller.action.width(), controller.action.fontMetrics().horizontalAdvance(controller.action.text()) + 16)
+        controller.act()
+        self.assertEqual(controller.step, TutorialStep.DONE)
+        for target, name, value in ((record, "freshness", PdfFreshness.FAILED_STALE),
+                                   (record, "source_revision", record.source_revision + 1),
+                                   (record, "latest_build_id", 51),
+                                   (tab, "external_conflict", True),
+                                   (window.pdf_panel, "current_logical_key", root.parent / "other.tex")):
+            with patch.object(target, name, value):
+                controller.refresh()
+                self.assertEqual(controller.step, TutorialStep.COMPILE)
+        with patch.object(type(tab.manager), "is_busy", new_callable=PropertyMock, return_value=True):
+            controller.refresh()
+            self.assertEqual(controller.step, TutorialStep.COMPILE)
+        window.new_document()
+        controller.refresh()
+        self.assertEqual(controller.action.text(), "打开练习文件")
+        self.assertNotEqual(window.current_tab().path, root)
+
+    def test_guide_has_local_readable_illustrations_and_an_explicit_start(self):
+        from PySide6.QtGui import QImage
+        from app.gui.assets import asset_path
+        from app.gui.user_guide import GUIDE_PAGES, UserGuideDialog
+        dialog = UserGuideDialog(self.owner)
+        self.addCleanup(dialog.deleteLater)
+        dialog.show()
+        self.assertEqual(dialog.pages.count(), 4)
+        self.assertEqual(dialog.start_button.text(), "开始练习（独立副本）")
+        for index, (_name, filename, _caption, _body) in enumerate(GUIDE_PAGES):
+            with self.subTest(image=filename):
+                image = QImage(str(asset_path("user-guide/" + filename)))
+                self.assertFalse(image.isNull())
+                self.assertGreater(image.width(), 300)
+                dialog.pages.setCurrentIndex(index)
+                self.application.processEvents()
+                self.assertIn("file:", dialog.pages.widget(index).toHtml())
+                self.assertNotIn("https://", dialog.pages.widget(index).toHtml())
+        with patch("app.gui.user_guide.QDesktopServices.openUrl", return_value=True) as opened:
+            url = QUrl.fromLocalFile(str(asset_path("user-guide/" + GUIDE_PAGES[0][1])))
+            dialog.pages.widget(0).anchorClicked.emit(url)
+            opened.assert_called_once_with(url)
+            dialog.pages.widget(0).anchorClicked.emit(QUrl("https://example.invalid/"))
+            self.assertEqual(opened.call_count, 1)
+        dialog.start_button.click()
+        self.assertEqual(dialog.result(), QDialog.DialogCode.Accepted)
+        with patch("app.gui.main_window.UserGuideDialog", return_value=dialog), \
+             patch.object(dialog, "exec", return_value=QDialog.DialogCode.Accepted):
+            self.owner.show_user_guide()
+        from app.gui.tutorial_controller import remembered_example
+        root = remembered_example(self.owner)
+        self.assertIsNotNone(root)
+        for window in getattr(self.application, "_icstex_windows", []):
+            from shiboken6 import isValid
+            if isValid(window) and getattr(getattr(window, "tutorial", None), "root", None) == root:
+                self.windows.append(window)
+        resumed = UserGuideDialog(self.owner)
+        self.addCleanup(resumed.deleteLater)
+        self.assertEqual(resumed.start_button.text(), "继续上次练习")
+        self.assertEqual(resumed.example_root, root)
+        resumed.new_button.click()
+        self.assertIsNone(resumed.example_root)
+
+    def test_failed_source_open_does_not_publish_a_tutorial_session(self):
+        from app.gui.tutorial_controller import EXAMPLE_SETTING, open_example
+        before = self.owner.current_tab().editor.toPlainText()
+        with patch.object(MainWindow, "open_file"), patch("app.gui.tutorial_controller.QMessageBox.warning") as warning:
+            self.assertIsNone(open_example(self.owner))
+        warning.assert_called_once()
+        self.assertIsNone(self.owner.app_settings.settings.value(EXAMPLE_SETTING))
+        self.assertEqual(self.owner.current_tab().editor.toPlainText(), before)
+
+
+class FirstTaskUiTests(TestCase):
+    def test_repeated_saves_preserve_recent_widgets_and_do_not_refresh_environment(self):
+        from app.gui.welcome_page import _clear_layout
+        root = Path(self.temp.name) / "main.tex"
+        root.write_text("\\documentclass{article}\n\\begin{document}Test\\end{document}\n")
+        window = self.window
+        window.open_file(root)
+        window.update_recent_menu()
+        page, tab = window.welcome_page, window.current_tab()
+        buttons, actions = list(page._recent_buttons), list(window.recent_menu.actions())
+        with patch.object(window.recent_menu, "clear", wraps=window.recent_menu.clear) as menu_clear, \
+             patch("app.gui.welcome_page._clear_layout", wraps=_clear_layout) as list_clear, \
+             patch.object(page, "set_toolchain_status", wraps=page.set_toolchain_status) as environment:
+            for _ in range(3):
+                tab.editor.insertPlainText("% saved change\n")
+                cursor = tab.editor.textCursor().position()
+                self.assertTrue(window.documents.save_tab(tab, root))
+                self.assertEqual(root.read_text(), tab.editor.toPlainText())
+                self.assertEqual(tab.editor.textCursor().position(), cursor)
+                self.assertFalse(tab.dirty)
+        menu_clear.assert_not_called()
+        list_clear.assert_not_called()
+        environment.assert_not_called()
+        self.assertEqual(page._recent_buttons, buttons)
+        self.assertEqual(window.recent_menu.actions(), actions)
+
+    def test_recent_view_tracks_file_identity_order_save_as_and_missing_paths(self):
+        window = self.window
+        root = Path(self.temp.name)
+        first, second = root / "first.tex", root / "second.tex"
+        for path in (first, second):
+            path.write_text("\\documentclass{article}\n\\begin{document}Test\\end{document}\n")
+        window.open_file(first)
+        old_button = window.welcome_page._recent_buttons[0]
+        window.open_file(second)
+        button = window.welcome_page._recent_buttons[0]
+        self.assertIsNot(button, old_button)
+        self.assertIn(second.name, button.accessibleName())
+        self.assertEqual(window.app_settings.recent_files()[:2], [second.resolve(), first.resolve()])
+        renamed = root / "renamed.tex"
+        self.assertTrue(window.documents.save_tab(window.current_tab(), renamed))
+        self.assertTrue(second.is_file())
+        self.assertIn(renamed.name, window.welcome_page._recent_buttons[0].accessibleName())
+        self.assertEqual(window.app_settings.recent_files()[0], renamed.resolve())
+        renamed.unlink()
+        with patch("app.gui.preferences_controller.QMessageBox.warning") as warning:
+            window.preferences_controller.open_recent_file(renamed)
+        warning.assert_called_once()
+        self.assertNotIn(renamed.resolve(), window.app_settings.recent_files())
+        for index in reversed(range(window.editor_tabs.count())):
+            window.close_tab(index)
+        window.update_document_view_state()
+        self.assertIs(window.source_stack.currentWidget(), window.welcome_page)
+        self.assertIn(second.name, window.welcome_page._recent_buttons[0].accessibleName())
+
+    def test_recent_project_caption_cache_includes_file_and_path_labels(self):
+        page = self.window.welcome_page
+        root = Path(self.temp.name)
+        page.set_recent_projects([root], recent_files=[root / "first.tex"])
+        first = page._recent_buttons[0]
+        page.set_recent_projects([root], recent_files=[root / "first.tex", root / "older.tex"])
+        self.assertIs(page._recent_buttons[0], first)
+        page.set_recent_projects([root], recent_files=[root / "second.tex"])
+        self.assertIsNot(page._recent_buttons[0], first)
+        self.assertIn("second.tex", page._recent_buttons[0].toolTip())
+
+    def test_batch_preferences_apply_final_options_once_without_implicit_save_or_compile(self):
+        window = self.window
+        for _ in range(2):
+            window.new_document()
+        controller = window.preferences_controller
+        stored = window.app_settings.load_preferences()
+        target = replace(window.preferences, default_engine=LaTeXEngine.XELATEX, auto_compile=True,
+                         auto_item=False, auto_environment=False, auto_pairs=False, snippets=False,
+                         fast_preview=False, compile_debounce_ms=1700)
+        observed = []
+        apply = controller.apply_editor_options
+        def apply_and_observe(editor):
+            observed.append(window.preferences)
+            apply(editor)
+        with patch.object(controller, "apply_editor_options", side_effect=apply_and_observe) as options, \
+             patch.object(window.app_settings, "save_preferences", wraps=window.app_settings.save_preferences) as save, \
+             patch.object(window.compile, "rebuild_managers", wraps=window.compile.rebuild_managers) as rebuild, \
+             patch.object(window.compile, "compile_current") as compile_:
+            window.apply_preferences(target, save=False)
+        self.assertEqual(observed, [target, target])
+        self.assertEqual(options.call_count, 2)
+        rebuild.assert_called_once_with()
+        save.assert_not_called()
+        compile_.assert_not_called()
+        self.assertEqual(window.app_settings.load_preferences(), stored)
+        self.assertEqual(window.preferences, target)
+        self.assertEqual(controller.preferences_from_ui(), target)
+        self.assertEqual(window.engine_selector.currentData(), LaTeXEngine.XELATEX.value)
+        self.assertEqual(window.auto_compile_toggle.text(), "自动正式编译")
+        self.assertTrue(window.auto_compile_toggle.isChecked())
+        self.assertFalse(window.compile_authorized_roots)
+        for tab in window.tabs.values():
+            self.assertFalse(tab.editor.auto_item_enabled)
+            self.assertFalse(tab.editor.auto_environment_enabled)
+            self.assertFalse(tab.editor.auto_pairs_enabled)
+            self.assertFalse(tab.editor.snippets_enabled)
+
+    def test_batch_preferences_persist_once_and_restore_prior_signal_blocks(self):
+        window = self.window
+        window.new_document()
+        tab = window.current_tab()
+        tab.editor.moveCursor(QTextCursor.MoveOperation.End)
+        tab.editor.insertPlainText("unsaved")
+        before = (tab.editor.toPlainText(), tab.editor.textCursor().position(), tab.dirty,
+                  tab.editor.verticalScrollBar().value(), tab.save_timer)
+        target = replace(window.preferences, default_engine=LaTeXEngine.LUALATEX, auto_compile=True,
+                         auto_item=False, auto_environment=False, auto_pairs=False, snippets=False)
+        blocked = (window.auto_item_action, window.auto_compile_toggle, window.engine_selector,
+                   window.engine_actions[LaTeXEngine.LUALATEX])
+        for widget in blocked:
+            widget.blockSignals(True)
+        try:
+            with patch.object(window.app_settings, "save_preferences", wraps=window.app_settings.save_preferences) as save, \
+                 patch.object(window.compile, "compile_current") as compile_:
+                window.apply_preferences(target, save=True)
+            save.assert_called_once_with(target)
+            compile_.assert_not_called()
+            self.assertTrue(all(widget.signalsBlocked() for widget in blocked))
+            self.assertFalse(window.snippets_action.signalsBlocked())
+            self.assertEqual(window.app_settings.load_preferences(), target)
+            self.assertEqual((tab.editor.toPlainText(), tab.editor.textCursor().position(), tab.dirty,
+                              tab.editor.verticalScrollBar().value(), tab.save_timer), before)
+        finally:
+            for widget in blocked:
+                widget.blockSignals(False)
+
+    def test_single_option_and_engine_changes_keep_immediate_behavior(self):
+        window = self.window
+        window.new_document()
+        editor = window.current_tab().editor
+        with patch.object(window.app_settings, "save_preferences", wraps=window.app_settings.save_preferences) as save:
+            window.auto_pairs_action.trigger()
+        self.assertFalse(editor.auto_pairs_enabled)
+        self.assertFalse(window.preferences.auto_pairs)
+        save.assert_called_once()
+        with patch.object(window.app_settings, "save_preferences", wraps=window.app_settings.save_preferences) as save:
+            window.auto_compile_toggle.click()
+        self.assertTrue(window.auto_compile_action.isChecked())
+        self.assertIn("自动快速预览", window.status_auto_label.text())
+        save.assert_called_once()
+        with patch.object(window.app_settings, "save_preferences", wraps=window.app_settings.save_preferences) as save:
+            window.engine_selector.setCurrentIndex(window.engine_selector.findData(LaTeXEngine.XELATEX.value))
+        self.assertEqual(window.current_engine, LaTeXEngine.XELATEX)
+        save.assert_called_once()
+
+    def test_successful_save_clears_waiting_message_without_claiming_pdf_updated(self):
+        path = Path(self.temp.name) / "main.tex"
+        path.write_text("\\documentclass{article}\n\\begin{document}Test\\end{document}")
+        self.window.open_file(path)
+        self.window.current_tab().editor.insertPlainText("% changed\n")
+        self.window.statusBar().showMessage("等待保存...")
+        self.assertTrue(self.window.save_current())
+        self.assertIn("文档已保存", self.window.statusBar().currentMessage())
+        self.assertNotIn("PDF 已更新", self.window.statusBar().currentMessage())
+
+    def setUp(self):
+        self.application = app()
+        self.temp = TemporaryDirectory()
+        self.window = MainWindow(settings_store=isolated_settings())
+        self.window.auto_compile_action.setChecked(False)
+        self.dialogs = []
+
+    def tearDown(self):
+        for dialog in self.dialogs:
+            dialog.close()
+            dialog.deleteLater()
+        for tab in self.window.tabs.values():
+            self.window.documents.cancel_save_timer(tab)
+            tab.modified = tab.dirty = False
+        self.window.close()
+        self.window.deleteLater()
+        self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        self.temp.cleanup()
+
+    def wizard(self):
+        dialog = ProjectWizardDialog(self.window)
+        self.dialogs.append(dialog)
+        dialog.parent_edit.setText(self.temp.name)
+        return dialog
+
+    def test_creation_filters_language_and_keeps_advanced_auto_and_source_collapsed(self):
+        from PySide6.QtWidgets import QDialogButtonBox
+        with patch.object(CompileManager, "compile_async") as compile_, \
+             patch.object(CompileManager, "compile_now") as compile_now:
+            dialog = self.wizard()
+            self.assertFalse(dialog.buttons.button(QDialogButtonBox.StandardButton.Ok).isEnabled())
+            self.assertTrue(dialog.advanced.isHidden())
+            self.assertTrue(dialog.preview.isHidden())
+            self.assertEqual(dialog.engine_combo.currentText(), "自动选择（推荐）")
+            dialog.language_combo.setCurrentText("中文")
+            self.assertEqual(dialog.template_combo.count(), 2)
+            dialog.template_combo.setCurrentIndex(1)
+            self.assertEqual(dialog.values().template_key, "chinese_xelatex_article")
+            self.assertEqual(dialog.values().profile.engine, "xelatex")
+            self.assertFalse(dialog.layout_preview.pixmap().isNull())
+            dialog.source_toggle.click()
+            self.assertFalse(dialog.preview.isHidden())
+            self.assertIn("\\documentclass", dialog.preview.toPlainText())
+            dialog.advanced_toggle.click()
+            self.assertFalse(dialog.advanced.isHidden())
+            dialog.language_combo.setCurrentText("英文")
+            self.assertFalse(dialog.buttons.button(QDialogButtonBox.StandardButton.Ok).isEnabled())
+            self.assertEqual(list(Path(self.temp.name).iterdir()), [])
+            compile_.assert_not_called()
+            compile_now.assert_not_called()
+
+    def test_all_builtin_previews_match_exact_template_sources(self):
+        from app.core.latex_insertions import TEMPLATES
+        dialog = self.wizard()
+        for key in TEMPLATES:
+            dialog.template_combo.setCurrentIndex(dialog.template_combo.findData(key))
+            self.assertFalse(dialog.layout_preview.pixmap().isNull(), key)
+            self.assertEqual(dialog.preview.toPlainText(), TEMPLATES[key].text)
+
+    def test_engine_change_preserves_source_selection_and_static_preview(self):
+        dialog = self.wizard()
+        dialog.language_combo.setCurrentText("中文")
+        dialog.template_combo.setCurrentIndex(1)
+        dialog.source_toggle.setChecked(True)
+        dialog.advanced_toggle.setChecked(True)
+        dialog.show()
+        self.application.processEvents()
+        cursor = dialog.preview.textCursor()
+        cursor.setPosition(8)
+        cursor.setPosition(30, QTextCursor.MoveMode.KeepAnchor)
+        dialog.preview.setTextCursor(cursor)
+        dialog.preview.verticalScrollBar().setValue(10)
+        before = (cursor.anchor(), cursor.position(), dialog.preview.verticalScrollBar().value(),
+                  dialog.layout_preview.pixmap().cacheKey())
+        with patch.object(dialog.preview, "setPlainText", wraps=dialog.preview.setPlainText) as source, \
+             patch("app.gui.project_panels.hashlib.sha256", wraps=__import__("hashlib").sha256) as digest, \
+             patch("app.gui.project_panels.QPixmap", side_effect=AssertionError("unrelated image reload")), \
+             patch.object(CompileManager, "compile_async") as compile_async, \
+             patch.object(CompileManager, "compile_now") as compile_now:
+            for engine in (LaTeXEngine.PDFLATEX, LaTeXEngine.AUTO, LaTeXEngine.XELATEX):
+                dialog.engine_combo.setCurrentIndex(dialog.engine_combo.findData(engine.value))
+                expected = LaTeXEngine.XELATEX if engine is LaTeXEngine.AUTO else engine
+                self.assertEqual(dialog.values().profile.engine, expected.value)
+        source.assert_not_called()
+        digest.assert_not_called()
+        compile_async.assert_not_called()
+        compile_now.assert_not_called()
+        cursor = dialog.preview.textCursor()
+        self.assertEqual((cursor.anchor(), cursor.position(), dialog.preview.verticalScrollBar().value(),
+                          dialog.layout_preview.pixmap().cacheKey()), before)
+        self.assertEqual(list(Path(self.temp.name).iterdir()), [])
+
+    def test_missing_template_image_keeps_fallback_and_creation_available(self):
+        from PySide6.QtWidgets import QDialogButtonBox
+        from app.gui.assets import asset_path
+        dialog = self.wizard()
+        def missing_image(filename):
+            return Path(self.temp.name) / "missing.png" if filename.endswith(".png") else asset_path(filename)
+        with patch("app.gui.project_panels.asset_path", side_effect=missing_image):
+            dialog.template_combo.setCurrentIndex(dialog.template_combo.findData("blank_article"))
+        self.assertIn("暂无排版示例", dialog.layout_preview.text())
+        self.assertTrue(dialog.buttons.button(QDialogButtonBox.StandardButton.Ok).isEnabled())
+        self.assertEqual(dialog.values().template_key, "blank_article")
+
+    def test_modified_or_custom_template_has_honest_fallback(self):
+        from app.core.latex_insertions import TEMPLATES
+        changed = replace(TEMPLATES["blank_article"], text=TEMPLATES["blank_article"].text + "% changed\n")
+        with patch("app.gui.project_panels.all_templates", return_value=(changed,)):
+            dialog = self.wizard()
+        dialog.template_combo.setCurrentIndex(1)
+        self.assertTrue(dialog.layout_preview.pixmap().isNull())
+        self.assertIn("暂无排版示例", dialog.layout_preview.text())
+
+    def test_welcome_is_compact_and_recent_identity_needs_no_directory_scan(self):
+        page = self.window.welcome_page
+        page.set_toolchain_status(True, "latexmk ready")
+        self.assertTrue(page.environment_help.isHidden())
+        self.assertTrue(page.recheck_button.isHidden())
+        self.assertEqual(page.cards_grid.count(), 1)
+        root = Path(self.temp.name) / "成品"
+        recent = root / "Very_Long_Research_Project_Main_Document.tex"
+        with patch.object(Path, "rglob", side_effect=AssertionError("unexpected scan")):
+            page.set_recent_projects([root], recent_files=[recent])
+        button = page._recent_buttons[0]
+        self.assertIn(recent.name, button.accessibleName())
+        self.assertIn(str(root), button.toolTip())
+        page.set_toolchain_status(False, "missing latexmk")
+        self.assertFalse(page.environment_help.isHidden())
+        self.assertFalse(page.recheck_button.isHidden())
+        self.assertEqual(page.environment_button.text(), "查看安装指引")
+
+    def test_recheck_reuses_detector_without_compilation(self):
+        ready = LaTeXToolchain(latexmk="/fixture/latexmk", pdflatex="/fixture/pdflatex", texcount=None, synctex=None)
+        with patch("app.gui.preferences_controller.detect_toolchain", return_value=ready) as detect, \
+             patch.object(CompileManager, "compile_async") as compile_, \
+             patch.object(self.window.welcome_page, "set_recent_projects") as recent:
+            self.window.welcome_page.recheck_button.click()
+        detect.assert_called_once_with()
+        compile_.assert_not_called()
+        recent.assert_not_called()
+        self.assertIs(self.window.toolchain, ready)
+
+    def test_auto_label_tracks_real_compile_mode(self):
+        for fast, expected in ((False, "自动正式编译"), (True, "自动快速预览")):
+            self.window.apply_preferences(replace(self.window.preferences, fast_preview=fast, auto_compile=True))
+            self.assertEqual(self.window.auto_compile_toggle.text(), expected)
+            self.assertEqual(self.window.auto_compile_action.text(), expected)
+            self.assertEqual(self.window.status_auto_label.text(), expected)
+
+    def test_guide_close_is_chinese(self):
+        from app.gui.user_guide import UserGuideDialog
+        from PySide6.QtWidgets import QDialogButtonBox
+        dialog = UserGuideDialog(self.window)
+        self.dialogs.append(dialog)
+        self.assertEqual(dialog.findChild(QDialogButtonBox).button(QDialogButtonBox.StandardButton.Close).text(), "关闭")
+
+    def test_diagnostic_location_raw_log_and_selected_fix_are_explicit(self):
+        from app.core.diagnostics import Diagnostic, FixSuggestion
+        panel = self.window.diagnostic_panel
+        panel.set_diagnostics([
+            Diagnostic("error", "找不到图片", "检查图片路径", Path(self.temp.name) / "main.tex", 8, "File x.png not found"),
+            Diagnostic("warning", "缺少宏包", "补充 graphicx", fix=FixSuggestion("补充宏包", ("graphicx",))),
+        ])
+        self.assertIn("main.tex：8", panel.table.item(0, 2).text())
+        self.assertEqual(panel.detail_label.text(), "检查图片路径")
+        self.assertTrue(panel.jump_button.isEnabled())
+        self.assertFalse(panel.fix_button.isEnabled())
+        panel.raw_toggle.click()
+        self.assertFalse(panel.raw_view.isHidden())
+        self.assertEqual(panel.raw_view.toPlainText(), "File x.png not found")
+        panel.table.selectRow(1)
+        self.assertTrue(panel.fix_button.isEnabled())
+        self.assertTrue(panel.raw_view.isHidden())
+
+    def test_fix_preview_cancel_and_changed_source_never_apply(self):
+        from app.core.diagnostics import Diagnostic, FixSuggestion
+        self.window.new_document()
+        editor = self.window.current_tab().editor
+        original = "\\documentclass{article}\n\\begin{document}Test\\end{document}"
+        editor.setPlainText(original)
+        self.window.diagnostic_panel.set_diagnostics([
+            Diagnostic("warning", "缺少宏包", "补充 graphicx", fix=FixSuggestion("补充宏包", ("graphicx",)))])
+        with patch("app.gui.project_panel_controller.QMessageBox.exec", return_value=QMessageBox.StandardButton.Cancel):
+            self.window.fix_diagnostic(0)
+        self.assertEqual(editor.toPlainText(), original)
+        def changed(dialog):
+            self.assertIn("\\usepackage{graphicx}", dialog.informativeText())
+            self.assertIn("修改前", dialog.detailedText())
+            editor.setPlainText(original + "\n% meanwhile")
+            return QMessageBox.StandardButton.Apply
+        with patch("app.gui.project_panel_controller.QMessageBox.exec", new=changed):
+            self.window.fix_diagnostic(0)
+        self.assertNotIn("\\usepackage{graphicx}", editor.toPlainText())
+        self.assertIn("已变化", self.window.statusBar().currentMessage())
+
+
+class ProjectArchiveGuiTests(TestCase):
+    def setUp(self):
+        self.app = app()
+        self.temp = TemporaryDirectory(prefix="icstex-archive-gui-")
+        self.addCleanup(self.temp.cleanup)
+        self.home = Path(self.temp.name).resolve()
+        self.project = self.home / "工程"
+        self.project.mkdir()
+        self.source = self.project / "report.tex"
+        self.source.write_text("\\documentclass{article}\n\\begin{document}Saved\\end{document}\n")
+        (self.project / "table.csv").write_text("x,y\n1,2\n")
+        self.window = MainWindow(settings_store=isolated_settings())
+        self.window.save_debounce_ms = 3600000
+        self.window.auto_compile_action.setChecked(False)
+        self.window._watch_file = lambda _: None
+        self.window.project_files.set_project_root(self.project)
+        self.window.open_file(self.source)
+        self.tab = self.window.current_tab()
+        self.dialogs = []
+        self.addCleanup(self.dispose)
+
+    def wait(self, condition):
+        until = time.monotonic() + 6
+        while not condition() and time.monotonic() < until:
+            self.app.processEvents()
+            time.sleep(0.003)
+        self.assertTrue(condition())
+
+    def dialog(self):
+        from app.gui.project_archive_dialog import ProjectArchiveDialog
+        dialog = ProjectArchiveDialog(self.window)
+        self.dialogs.append(dialog)
+        dialog.show()
+        self.app.processEvents()
+        self.wait(lambda: not dialog.busy)
+        return dialog
+
+    def dispose(self):
+        from PySide6.QtCore import QCoreApplication
+        self.app._icstex_project_archive_dialog = None
+        for dialog in self.dialogs:
+            dialog.reject()
+            self.wait(lambda: not dialog.busy)
+            dialog.deleteLater()
+        for tab in self.window.tabs.values():
+            self.window.documents.cancel_save_timer(tab)
+            tab.modified = tab.dirty = False
+        self.window.close()
+        self.window.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_saved_project_exports_without_pdf_compile_or_cursor_change(self):
+        import zipfile
+        self.tab.editor.moveCursor(QTextCursor.MoveOperation.End)
+        position = self.tab.editor.textCursor().position()
+        original = self.source.read_bytes()
+        with patch.object(self.window, "compile_current") as compile_call:
+            dialog = self.dialog()
+            self.assertTrue(dialog.export_button.isEnabled())
+            self.assertEqual(set(dialog.selected()), {"report.tex", "table.csv"})
+            self.assertIn("2 个文件", dialog.status.text())
+            dialog.export_to(self.home / "工程.zip")
+            self.wait(lambda: not dialog.busy)
+            self.assertIsNotNone(dialog.result, dialog.status.text())
+            self.assertIn("工程文件已导出", dialog.status.text())
+            self.assertFalse(dialog.export_button.isEnabled())
+            with zipfile.ZipFile(dialog.result) as archive:
+                self.assertEqual(archive.read("project/report.tex"), original)
+                self.assertIn("project/table.csv", archive.namelist())
+            compile_call.assert_not_called()
+        self.assertEqual(self.tab.editor.textCursor().position(), position)
+        self.assertEqual(self.source.read_bytes(), original)
+        self.assertFalse(self.window.compile_managers)
+
+    def test_dirty_and_conflicted_source_are_not_silently_saved(self):
+        original = self.source.read_bytes()
+        self.tab.editor.insertPlainText("unsaved")
+        self.window.documents.cancel_save_timer(self.tab)
+        dialog = self.dialog()
+        self.assertIn("未保存", dialog.status.text())
+        self.assertFalse(dialog.export_button.isEnabled())
+        self.assertEqual(self.source.read_bytes(), original)
+        dialog.reject()
+        self.tab.modified = self.tab.dirty = False
+        self.tab.external_conflict = True
+        second = self.dialog()
+        self.assertIn("冲突", second.status.text())
+        self.assertFalse(second.export_button.isEnabled())
+
+    def test_menu_route_and_cancelled_destination_create_nothing(self):
+        with patch("app.gui.main_window_signals.show_project_archive") as show:
+            self.window.export_project_action.trigger()
+            show.assert_called_once_with(self.window)
+        dialog = self.dialog()
+        with patch("app.gui.project_archive_dialog.QFileDialog.getSaveFileName", return_value=("", "")):
+            dialog.choose_target()
+        self.assertIsNone(dialog.result)
+        self.assertFalse(list(self.home.glob("*.zip")))
+
+    def test_close_guard_waits_for_worker_and_releases_capture(self):
+        from app.gui.project_checkpoint_dialog import checkpoint_close_guard
+        dialog = self.dialog()
+        self.app._icstex_project_archive_dialog = dialog
+        gate = threading.Event()
+        def work(stop):
+            gate.wait(3)
+            from app.core.project_checkpoint import _cancel
+            _cancel(stop)
+        dialog._launch("export", work)
+        self.assertFalse(checkpoint_close_guard(self.window))
+        self.assertTrue(dialog.cancel.is_set())
+        gate.set()
+        self.wait(lambda: not dialog.busy)
+        self.assertIsNone(dialog.lease)
+        self.assertFalse(dialog.isVisible())
+        self.assertNotIn(id(self.tab), self.window.documents.checkpoint_tabs)
+
+    def test_warning_confirmation_and_edit_after_review_do_not_export_silently(self):
+        # Open a coherent fixture; replacing bytes behind an already-open tab
+        # exercises the earlier external-conflict guard, not the warning dialog.
+        self.source = self.project / "missing-case.tex"
+        self.source.write_text("\\documentclass{article}\n\\input{missing}\n")
+        self.window.open_file(self.source)
+        self.tab = self.window.current_tab()
+        dialog = self.dialog()
+        self.assertIsNotNone(dialog.review, dialog.status.text())
+        target = self.home / "partial.zip"
+        with patch("app.gui.project_archive_dialog.QMessageBox.question", return_value=QMessageBox.StandardButton.No) as question:
+            dialog.export_to(target)
+            question.assert_called_once()
+        self.assertFalse(target.exists())
+        self.tab.editor.insertPlainText("new input")
+        dialog.export_to(target)
+        self.assertFalse(target.exists())
+        self.assertIn("变化", dialog.status.text())
+        self.assertFalse(dialog.export_button.isEnabled())
+
+
 class GuiEditorTests(TestCase):
     def setUp(self) -> None:
         app()
+
+    def test_window_close_block_cancel_preserves_both_controllers_and_draft(self):
+        from app.core.blocks.project_repository import load_project
+        from app.core.blocks.model import content_for_text
+        from app.gui.blocks.project_session import ProjectSession
+        from app.gui.block_mode import _install_session, _set_block_mode
+        from tests.v1_fixtures import create_project
+        with TemporaryDirectory() as directory:
+            sample = create_project(Path(directory).resolve(), "block")
+            loaded = load_project(sample.root.parent)
+            session = ProjectSession(**{key: loaded[key] for key in
+                ("registry", "layout", "sources", "document_theme", "project_dir")})
+            window = MainWindow(settings_store=isolated_settings())
+            try:
+                _install_session(window, session)
+                _set_block_mode(window, True)
+                block = session.registry.blocks()[0]
+                before = {p: p.read_bytes() for p in sample.root.parent.rglob("*") if p.is_file()}
+                session.registry.update(block.id, {"content": content_for_text("Pending close draft")})
+                session.notify_model_changed("qa")
+                with patch("app.gui.blocks.close_guard.QMessageBox.warning", return_value=QMessageBox.StandardButton.Cancel):
+                    event = QCloseEvent()
+                    window.closeEvent(event)
+                self.assertFalse(event.isAccepted())
+                self.assertIs(window.block_session, session)
+                self.assertFalse(session._closed)
+                self.assertTrue(session._save_timer.isActive())
+                self.assertFalse(window.workspace._closed)
+                self.assertEqual({p: p.read_bytes() for p in before}, before)
+                self.assertIn("Pending close draft", str(block.content))
+            finally:
+                session.shutdown()
+                window.close()
+
+    def test_source_close_cancel_keeps_pending_block_save_paused_until_decision(self):
+        from app.gui.blocks.project_session import ProjectSession
+        from app.gui.block_mode import _install_session
+        with TemporaryDirectory() as directory:
+            session = ProjectSession(project_dir=Path(directory).resolve())
+            window = MainWindow(settings_store=isolated_settings())
+            try:
+                _install_session(window, session)
+                session.notify_model_changed("pending Block change")
+                window.new_document()
+                tab = window.current_tab()
+                tab.editor.insertPlainText("Unsaved source")
+                def cancel(_tab):
+                    self.assertFalse(session._save_timer.isActive())
+                    return QMessageBox.StandardButton.Cancel
+                with patch.object(window.tab_manager, "_ask_unsaved_choice", side_effect=cancel):
+                    event = QCloseEvent()
+                    window.closeEvent(event)
+                self.assertFalse(event.isAccepted())
+                self.assertTrue(session._save_timer.isActive())
+                self.assertFalse(session._closed)
+            finally:
+                session.shutdown()
+                for item in window.tabs.values():
+                    window.documents.cancel_save_timer(item)
+                    item.modified = item.dirty = False
+                window.close()
+
+    def test_project_wizard_cancel_and_conflict_preserve_destination_and_fields(self):
+        with TemporaryDirectory() as directory:
+            dialog = ProjectWizardDialog()
+            dialog.parent_edit.setText(directory)
+            dialog.name_edit.setText("中文 项目")
+            dialog.template_combo.setCurrentIndex(dialog.template_combo.findData("blank_article"))
+            self.assertIn("中文 项目", dialog.destination.text())
+            dialog.reject()
+            self.assertEqual(list(Path(directory).iterdir()), [])
+            existing = Path(directory) / "中文 项目"
+            existing.mkdir()
+            dialog.accept()
+            self.assertIsNone(dialog.created_project)
+            self.assertIn("目标已存在", dialog.error.text())
+            self.assertEqual(dialog.name_edit.text(), "中文 项目")
+            self.assertEqual(list(existing.iterdir()), [])
+
+    def test_create_project_opens_verified_files_without_compiling(self):
+        from app.core.project_profile import load_profile
+        with TemporaryDirectory() as directory:
+            window = MainWindow(settings_store=isolated_settings())
+            self.addCleanup(window.close)
+            dialog = ProjectWizardDialog(window)
+            dialog.parent_edit.setText(directory)
+            dialog.name_edit.setText("中文 项目")
+            dialog.template_combo.setCurrentIndex(dialog.template_combo.findData("chinese_xelatex_article"))
+            dialog.open_new_window.setChecked(False)
+            dialog.accept()
+            self.assertIsNotNone(dialog.created_project, dialog.error.text())
+            with patch("app.gui.main_window.ProjectWizardDialog", return_value=dialog), \
+                 patch.object(dialog, "exec", return_value=QDialog.DialogCode.Accepted), \
+                 patch.object(window.compile, "compile_current") as compile_, \
+                 patch.object(CompileManager, "compile_async") as compiler:
+                window.new_project()
+                compile_.assert_not_called()
+                compiler.assert_not_called()
+            project = dialog.created_project
+            self.assertEqual(window.current_tab().path, project.tex_file)
+            self.assertEqual(window.current_engine, LaTeXEngine.AUTO)
+            self.assertEqual(load_profile(project.root_dir).profile.engine, "xelatex")
+            self.assertEqual(window.compile_authorized_roots, set())
+            window.workspace.refresh()
+            self.assertIn("中文 项目", window.workspace.title.full_text)
+            self.assertIn("main.tex", window.workspace.details.full_text)
+            window.close()
+
+    def test_project_wizard_defaults_to_new_window_when_source_is_open(self):
+        window = MainWindow(settings_store=isolated_settings())
+        window.new_document()
+        dialog = ProjectWizardDialog(window)
+        self.assertTrue(dialog.open_new_window.isChecked())
+        dialog.reject()
+        window.current_tab().modified = window.current_tab().dirty = False
+        window.close()
+
+    def test_workspace_header_reads_cached_state_and_does_not_compile_or_scan(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            path = root / "main.tex"
+            path.write_text("\\documentclass{article}\n\\begin{document}A\\end{document}")
+            window = MainWindow(settings_store=isolated_settings())
+            window.auto_compile_action.setChecked(False)
+            window.project_files.set_project_root(root)
+            window.open_file(path)
+            with patch("app.core.project_dependencies.static_dependencies", side_effect=AssertionError("scan")), \
+                 patch.object(window, "_compile_root_for_tab", side_effect=AssertionError("resolve")), \
+                 patch.object(window, "create_compile_manager", side_effect=AssertionError("manager")), \
+                 patch.object(window.compile, "compile_current") as compile_:
+                window.workspace.refresh()
+                compile_.assert_not_called()
+            self.assertIn("入口：main.tex", window.workspace.details.full_text)
+            self.assertIn("已保存", window.workspace.details.full_text)
+            window.toolchain = LaTeXToolchain(None, None)
+            window.workspace.refresh()
+            self.assertIs(window.workspace.next_button.defaultAction(), window.environment_doctor_action)
+            window.close()
+            window.workspace.schedule()
+            self.assertFalse(window.workspace._timer.isActive())
+
+    def test_workspace_saves_current_root_and_preserves_cursor(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            path = root / "main.tex"
+            path.write_text("\\documentclass{article}\n\\begin{document}A\\end{document}")
+            window = MainWindow(settings_store=isolated_settings())
+            window.auto_compile_action.setChecked(False)
+            window.open_file(path)
+            tab = window.current_tab()
+            with patch.object(window.documents, "schedule_save"):
+                tab.editor.insertPlainText("% changed\n")
+            position = tab.editor.textCursor().position()
+            window.workspace.refresh()
+            self.assertIs(window.workspace.next_button.defaultAction(), window.workspace.save_action)
+            with patch.object(CompileManager, "compile_async") as compile_:
+                window.workspace.next_button.click()
+                from tests.test_gui_dependencies import wait_until
+                self.assertTrue(wait_until(lambda: not window.dependencies.is_busy))
+                compile_.assert_not_called()
+            self.assertFalse(tab.modified)
+            self.assertEqual(tab.editor.textCursor().position(), position)
+            self.assertEqual(path.read_text(), tab.editor.toPlainText())
+            window.close()
+
+    def test_workspace_root_child_navigation_keeps_project_asset_and_search_scope(self):
+        with TemporaryDirectory() as directory:
+            from tests.v1_fixtures import create_project
+            sample = create_project(Path(directory).resolve())
+            window = MainWindow(settings_store=isolated_settings())
+            window.project_files.set_project_root(sample.root.parent)
+            window.open_file(sample.draft_path)
+            self.addCleanup(window.close)
+            window.show()
+            QApplication.processEvents()
+            window.workspace.refresh()
+            self.assertIn("入口：main.tex", window.workspace.details.full_text)
+            with patch("app.gui.project_panel_controller.search_project", return_value=[]) as search:
+                window.project_panels.run_project_search("sample", False, False)
+                self.assertEqual(search.call_args.args[0], sample.root.parent)
+            window.workspace._source_navigation(3)
+            self.assertIn(sample.root.parent, window.project_panels._asset_indexes)
+            self.assertNotIn(sample.draft_path.parent, window.project_panels._asset_indexes)
+            window.close()
 
     def test_panel_edit_burst_refreshes_only_visible_dirty_domain(self) -> None:
         window = MainWindow(settings_store=isolated_settings())
@@ -150,13 +2262,17 @@ class GuiEditorTests(TestCase):
             window.toolbox_dock.show()
             window.sidebar_tabs.setCurrentIndex(3)
             QApplication.processEvents()
-            with patch("app.gui.project_panel_controller.AssetIndex.scan", wraps=window.project_panels._asset_indexes[root].scan) as scan:
+            with patch("app.gui.project_panel_controller.AssetIndex.scan", wraps=window.project_panels._asset_indexes[root].scan) as scan, \
+                    patch("app.core.asset_index._graphics_references") as usage_scan:
                 tab.editor.insertPlainText("changed")
                 self.assertTrue(wait_until(lambda: not window.project_panels._timer.isActive()))
                 scan.assert_not_called()
+                usage_scan.assert_not_called()
             (root / "new.png").write_bytes(b"image")
             window.project_panels.reconcile()
             self.assertEqual(window.images_panel.table.rowCount(), 1)
+            self.assertEqual(window.images_panel.table.item(0, 2).text(), "使用待检查")
+            self.assertTrue(window.images_panel.check_detail.isReadOnly())
             tab.modified = False
             tab.dirty = False
             window.close()
@@ -340,6 +2456,11 @@ class GuiEditorTests(TestCase):
             window.auto_compile_action.setChecked(False)
             window.project_files.set_project_root(root)
             window.open_file(source)
+            window.show()
+            app().processEvents()
+            editor = window.current_tab().editor
+            editor.moveCursor(QTextCursor.MoveOperation.End)
+            before_view = (editor.textCursor().position(), editor.verticalScrollBar().value())
 
             moved = window.project_files.perform_move(
                 source,
@@ -353,6 +2474,11 @@ class GuiEditorTests(TestCase):
             self.assertEqual(window.current_tab().path, destination)
             self.assertIn(destination, window.app_settings.recent_files())
             self.assertNotIn(source, window.app_settings.recent_files())
+            self.assertTrue(wait_until(lambda: Path(window.model.filePath(window.tree.currentIndex())) == destination))
+            self.assertEqual(Path(window.model.filePath(window.tree.rootIndex())), root)
+            self.assertIs(window.current_tab().editor, editor)
+            self.assertEqual((editor.textCursor().position(), editor.verticalScrollBar().value()), before_view)
+            self.assertFalse(window.compile_authorized_roots)
             window.close()
 
     def test_safe_rename_blocks_referenced_file_without_mutation(self) -> None:
@@ -378,6 +2504,60 @@ class GuiEditorTests(TestCase):
             self.assertFalse(destination.exists())
             self.assertIn("引用失效", warning.call_args.args[2])
             window.close()
+
+    def test_rename_deferred_selection_is_cancelled_when_window_is_destroyed(self) -> None:
+        import sys
+        from shiboken6 import isValid
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            source, destination = root / "draft.tex", root / "notes.tex"
+            source.write_bytes(b"Synthetic source\r\n")
+            window = MainWindow(settings_store=isolated_settings())
+            window.project_files.set_project_root(root)
+            errors = []
+            try:
+                with patch.object(sys, "excepthook", side_effect=lambda _type, value, _tb: errors.append(str(value))):
+                    self.assertTrue(window.project_files.perform_move(source, destination))
+                    self.assertTrue(window.close())
+                    app().sendPostedEvents(None, QEvent.Type.DeferredDelete)
+                    self.assertFalse(isValid(window))
+                    drained = []
+                    QTimer.singleShot(0, lambda: drained.append(True))
+                    self.assertTrue(wait_until(lambda: bool(drained)))
+                self.assertEqual(errors, [])
+                self.assertFalse(source.exists())
+                self.assertEqual(destination.read_bytes(), b"Synthetic source\r\n")
+            finally:
+                if isValid(window):
+                    window.close()
+                app().sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_rename_deferred_selection_cannot_select_into_a_different_project(self) -> None:
+        with TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root, other = base / "one", base / "two"
+            root.mkdir()
+            other.mkdir()
+            source, destination, active = root / "draft.tex", root / "notes.tex", other / "active.tex"
+            source.write_bytes(b"Synthetic source\r\n")
+            active.write_bytes(b"Unrelated source\n")
+            window = MainWindow(settings_store=isolated_settings())
+            try:
+                window.project_files.set_project_root(root)
+                self.assertTrue(window.project_files.perform_move(source, destination))
+                window.project_files.set_project_root(other)
+                window.tree.setCurrentIndex(window.model.index(str(active)))
+                drained = []
+                QTimer.singleShot(0, lambda: drained.append(True))
+                self.assertTrue(wait_until(lambda: bool(drained)))
+                self.assertEqual(Path(window.model.filePath(window.tree.currentIndex())), active)
+                self.assertEqual(Path(window.model.filePath(window.tree.rootIndex())), other)
+                self.assertEqual(destination.read_bytes(), b"Synthetic source\r\n")
+                self.assertEqual(active.read_bytes(), b"Unrelated source\n")
+            finally:
+                window.close()
+                app().sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
     def test_safe_rename_refuses_to_race_active_compile(self) -> None:
         with TemporaryDirectory() as directory:
@@ -476,13 +2656,13 @@ class GuiEditorTests(TestCase):
             self.assertTrue(window.pdf_panel.reveal_pdf_button.isEnabled())
             self.assertEqual(window.pdf_panel.freshness_label.text(), "PDF 已是最新")
 
-            exported = Path(tmp) / "exported"
-            with patch(
-                "app.gui.main_window.QFileDialog.getSaveFileName",
-                return_value=(str(exported), ""),
-            ):
-                self.assertTrue(window.export_pdf())
-            self.assertEqual(exported.with_suffix(".pdf").read_bytes(), b"%PDF-1.4 fake")
+            # A cached fake PDF record is not build-input evidence. The UI now
+            # dispatches to explicit review; exact-byte publication is covered
+            # by test_submission_delivery_gui and the real-FINAL product probe.
+            with patch("app.gui.submission_delivery_dialog.show_submission_delivery", return_value=None) as review:
+                self.assertFalse(window.export_pdf())
+            review.assert_called_once_with(window)
+            self.assertEqual(source.read_bytes(), b"%PDF-1.4 fake")
 
             with patch("app.gui.main_window.subprocess.Popen") as popen, patch(
                 "app.gui.main_window.QDesktopServices.openUrl"
@@ -495,7 +2675,7 @@ class GuiEditorTests(TestCase):
             else:
                 open_url.assert_called_once()
 
-    def test_export_pdf_rejects_empty_and_rebuilds_when_stale(self) -> None:
+    def test_export_pdf_rejects_empty_and_reviews_stale_without_implicit_rebuild(self) -> None:
         window = MainWindow(settings_store=isolated_settings())
         window._watch_file = lambda _path: None  # type: ignore[method-assign]
 
@@ -516,7 +2696,8 @@ class GuiEditorTests(TestCase):
                 self.assertFalse(window.export_pdf())
             dialog.assert_not_called()
 
-            # A stale PDF is never copied: export queues a proper original-image build.
+            # A stale PDF is never copied. Save/FINAL now require separate
+            # explicit actions within the reviewed submission workflow.
             pdf = Path(tmp) / "main.pdf"
             pdf.write_bytes(b"%PDF-1.4 old")
             window.pdf_state.begin_build(source, 2)
@@ -529,16 +2710,13 @@ class GuiEditorTests(TestCase):
             exported = Path(tmp) / "exported"
             tab.manager = window.create_compile_manager(source)
             with patch.object(tab.manager, "compile_async") as compile_async, patch(
-                "app.gui.main_window.QFileDialog.getSaveFileName",
-                return_value=(str(exported), ""),
-            ):
-                self.assertTrue(window.export_pdf())
-            compile_async.assert_called_once_with(BuildPurpose.FINAL)
+                "app.gui.submission_delivery_dialog.show_submission_delivery", return_value=None,
+            ) as review:
+                self.assertFalse(window.export_pdf())
+            review.assert_called_once_with(window)
+            compile_async.assert_not_called()
             self.assertFalse(exported.with_suffix(".pdf").exists())
-            pending = window.pdf_export.pending_for(source)
-            self.assertIsNotNone(pending)
-            assert pending is not None
-            self.assertEqual(pending.target, exported.with_suffix(".pdf").resolve())
+            self.assertIsNone(window.pdf_export.pending_for(source))
 
     def test_main_window_smoke(self) -> None:
         window = MainWindow(settings_store=isolated_settings())
@@ -592,7 +2770,7 @@ class GuiEditorTests(TestCase):
         self.assertGreaterEqual(window.templates_panel.template_combo.count(), 9)
         insert_labels = {button.text() for button in window.insert_panel.findChildren(QPushButton)}
         self.assertIn("章节标题", insert_labels)
-        self.assertIn("分段函数", insert_labels)
+        self.assertNotIn("分段函数", insert_labels)
         self.assertIn("图片布局", insert_labels)
         self.assertEqual(window.welcome_page.guide_button.text(), "新手导引")
         self.assertTrue(hasattr(window, "auto_compile_toggle"))
@@ -617,7 +2795,7 @@ class GuiEditorTests(TestCase):
         self.assertFalse(window.auto_compile_action.isChecked())
         window.auto_compile_action.setChecked(True)
         self.assertTrue(window.auto_compile_toggle.isChecked())
-        self.assertEqual(window.status_auto_label.text(), "自动编译")
+        self.assertEqual(window.status_auto_label.text(), "自动快速预览")
         window.close()
 
     def test_document_actions_follow_editor_availability(self) -> None:
@@ -646,6 +2824,38 @@ class GuiEditorTests(TestCase):
         self.assertFalse(window.save_action.isEnabled())
         window.close()
 
+    def test_support_project_only_opens_repository_after_explicit_action(self) -> None:
+        with patch("app.gui.main_window_actions.QDesktopServices.openUrl", return_value=True) as open_url:
+            window = MainWindow(settings_store=isolated_settings())
+            try:
+                app().processEvents()
+                open_url.assert_not_called()
+                action = window.support_project_action
+                menu_actions = window.menuBar().actions()
+                help_action = next(item for item in menu_actions if item.text() == "帮助")
+                help_menu = help_action.menu()
+                self.assertIn(action, help_menu.actions())
+                self.assertTrue(action.isEnabled())
+                self.assertFalse(action.isCheckable())
+                self.assertIn("Star", action.text())
+                self.assertIn("完全自愿", action.toolTip())
+                action.trigger()
+                open_url.assert_called_once_with(QUrl("https://github.com/leoXu-612/ICSTeX"))
+                self.assertNotIn("已 Star", window.statusBar().currentMessage())
+            finally:
+                window.close()
+
+    def test_support_project_browser_failure_reports_link_without_modal(self) -> None:
+        window = MainWindow(settings_store=isolated_settings())
+        try:
+            with patch("app.gui.main_window_actions.QDesktopServices.openUrl", return_value=False), \
+                    patch.object(QMessageBox, "information") as information:
+                window.support_project_action.trigger()
+            self.assertIn("https://github.com/leoXu-612/ICSTeX", window.statusBar().currentMessage())
+            information.assert_not_called()
+        finally:
+            window.close()
+
     def test_recent_projects_hide_internal_folders_and_remember_real_root(self) -> None:
         with TemporaryDirectory() as directory:
             root = Path(directory) / "paper"
@@ -671,9 +2881,9 @@ class GuiEditorTests(TestCase):
                 for button in window.welcome_page.findChildren(QPushButton)
                 if button.objectName() == "welcomeRecent"
             }
-            self.assertIn(str(root.resolve()), recent_tooltips)
-            self.assertNotIn(str(build_dir.resolve()), recent_tooltips)
-            self.assertNotIn(str(history_dir.resolve()), recent_tooltips)
+            self.assertIn(f"项目位置：{root.resolve()}", recent_tooltips)
+            self.assertNotIn(f"项目位置：{build_dir.resolve()}", recent_tooltips)
+            self.assertNotIn(f"项目位置：{history_dir.resolve()}", recent_tooltips)
 
             window._remember_recent_file(build_file)
             self.assertEqual(settings.recent_projects()[0], root.resolve())
@@ -683,14 +2893,18 @@ class GuiEditorTests(TestCase):
 
     def test_bottom_console_header_stays_available_when_collapsed(self) -> None:
         window = MainWindow(settings_store=isolated_settings())
+        window.new_document()
         window.show()
         app().processEvents()
 
+        self.assertLessEqual(window.vertical_splitter.sizes()[1], 44)
+        window.bottom_collapse_button.click()
+        app().processEvents()
         self.assertGreater(window.vertical_splitter.sizes()[1], 44)
         window.bottom_collapse_button.click()
         app().processEvents()
         self.assertLessEqual(window.vertical_splitter.sizes()[1], 44)
-        self.assertEqual(window.bottom_collapse_button.toolTip(), "展开编译控制台")
+        self.assertEqual(window.bottom_collapse_button.toolTip(), "展开控制台：日志、错误、字数和检查")
 
         window.bottom_collapse_button.click()
         app().processEvents()
@@ -843,10 +3057,10 @@ class GuiEditorTests(TestCase):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / "main.tex"
-            snapshot = root / "snapshot.tex"
             pdf = root / "main.pdf"
             source.write_text("Current paper", encoding="utf-8")
-            snapshot.write_text("Older paper", encoding="utf-8")
+            saved_history = create_snapshot(source, "Older paper", "saved")
+            snapshot = saved_history.snapshot_path
             pdf.write_bytes(b"%PDF-1.4 current")
             window = MainWindow(settings_store=isolated_settings())
             editor = window._make_editor("Current paper")
@@ -870,7 +3084,157 @@ class GuiEditorTests(TestCase):
             tab.modified = tab.dirty = False
             window.close()
 
+    def test_history_restore_is_one_undo_and_never_saves_or_compiles(self):
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "main.tex"
+            source.write_text("saved bytes")
+            history = create_snapshot(source, "older history", "saved")
+            window = MainWindow(settings_store=isolated_settings())
+            editor = window._make_editor("unsaved current draft")
+            tab = EditorTab(editor=editor, path=source, modified=True, dirty=True)
+            window._add_tab(tab, source.name)
+            window.documents.schedule_save(tab, compile_after_save=True)
+            with patch("app.gui.insertion_actions.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes):
+                window.restore_history_snapshot(str(history.snapshot_path))
+            self.assertEqual(editor.toPlainText(), "older history")
+            self.assertTrue(editor.document().isUndoAvailable())
+            self.assertFalse(tab.save_timer.isActive())
+            self.assertFalse(tab.pending_compile_after_save)
+            self.assertEqual(source.read_text(), "saved bytes")
+            editor.undo()
+            self.assertEqual(editor.toPlainText(), "unsaved current draft")
+            editor.redo()
+            self.assertEqual(editor.toPlainText(), "older history")
+            window.documents.cancel_save_timer(tab)
+            tab.modified = tab.dirty = False
+            window.close()
+
+    def test_history_restore_rejects_unregistered_path(self):
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "main.tex"
+            source.write_text("saved bytes")
+            outside = Path(directory) / "not-history.tex"
+            outside.write_text("not a registered history")
+            window = MainWindow(settings_store=isolated_settings())
+            editor = window._make_editor("current draft")
+            tab = EditorTab(editor=editor, path=source)
+            window._add_tab(tab, source.name)
+            with patch("app.gui.insertion_actions.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes), patch(
+                    "app.gui.insertion_actions.QMessageBox.warning") as warning:
+                window.restore_history_snapshot(str(outside))
+            self.assertEqual(editor.toPlainText(), "current draft")
+            self.assertTrue(warning.called)
+            tab.modified = tab.dirty = False
+            window.close()
+
+    def test_history_confirmation_cannot_overwrite_newer_editor_or_history(self):
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "main.tex"
+            source.write_text("saved bytes")
+            history = create_snapshot(source, "older history", "saved")
+            window = MainWindow(settings_store=isolated_settings())
+            editor = window._make_editor("current draft")
+            tab = EditorTab(editor=editor, path=source)
+            window._add_tab(tab, source.name)
+            def change_editor(*_args, **_kwargs):
+                editor.setPlainText("newer input during confirmation")
+                return QMessageBox.StandardButton.Yes
+            with patch("app.gui.insertion_actions.QMessageBox.question", side_effect=change_editor), patch(
+                    "app.gui.insertion_actions.QMessageBox.warning"):
+                window.restore_history_snapshot(str(history.snapshot_path))
+            self.assertEqual(editor.toPlainText(), "newer input during confirmation")
+            window.documents.cancel_save_timer(tab)
+            def change_history(*_args, **_kwargs):
+                history.snapshot_path.write_text("changed valid UTF-8 history")
+                return QMessageBox.StandardButton.Yes
+            with patch("app.gui.insertion_actions.QMessageBox.question", side_effect=change_history), patch(
+                    "app.gui.insertion_actions.QMessageBox.warning"):
+                window.restore_history_snapshot(str(history.snapshot_path))
+            self.assertEqual(editor.toPlainText(), "newer input during confirmation")
+            self.assertEqual(source.read_text(), "saved bytes")
+            tab.modified = tab.dirty = False
+            window.close()
+
+    def test_history_cancel_preserves_draft_undo_and_paused_save_request(self):
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "main.tex"
+            source.write_text("disk original")
+            history = create_snapshot(source, "older history", "saved")
+            window = MainWindow(settings_store=isolated_settings())
+            editor = window._make_editor("draft")
+            tab = EditorTab(editor=editor, path=source, modified=True, dirty=True)
+            window._add_tab(tab, source.name)
+            editor.moveCursor(QTextCursor.MoveOperation.End)
+            editor.insertPlainText(" plus edit")
+            def cancel(*_args, **_kwargs):
+                self.assertFalse(tab.save_timer.isActive())
+                self.assertEqual(source.read_text(), "disk original")
+                return QMessageBox.StandardButton.No
+            with patch("app.gui.insertion_actions.QMessageBox.question", side_effect=cancel):
+                window.restore_history_snapshot(str(history.snapshot_path))
+            self.assertEqual(editor.toPlainText(), "draft plus edit")
+            self.assertTrue(tab.save_timer.isActive())
+            editor.undo()
+            self.assertEqual(editor.toPlainText(), "draft")
+            window.documents.cancel_save_timer(tab)
+            tab.modified = tab.dirty = False
+            window.close()
+
+    def test_history_confirmation_rejects_tab_switch_and_window_close(self):
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "main.tex"
+            source.write_text("disk original")
+            history = create_snapshot(source, "older history", "saved")
+            window = MainWindow(settings_store=isolated_settings())
+            editor = window._make_editor("first draft")
+            tab = EditorTab(editor=editor, path=source)
+            window._add_tab(tab, source.name)
+            other = EditorTab(editor=window._make_editor("other draft"))
+            window._add_tab(other, "other")
+            window.editor_tabs.setCurrentWidget(editor)
+            def switch(*_args, **_kwargs):
+                window.editor_tabs.setCurrentWidget(other.editor)
+                return QMessageBox.StandardButton.Yes
+            with patch("app.gui.insertion_actions.QMessageBox.question", side_effect=switch), patch(
+                    "app.gui.insertion_actions.QMessageBox.warning"):
+                window.restore_history_snapshot(str(history.snapshot_path))
+            self.assertEqual(editor.toPlainText(), "first draft")
+            self.assertEqual(other.editor.toPlainText(), "other draft")
+            window.editor_tabs.setCurrentWidget(editor)
+            def close(*_args, **_kwargs):
+                window.close()
+                return QMessageBox.StandardButton.Yes
+            with patch("app.gui.insertion_actions.QMessageBox.question", side_effect=close), patch(
+                    "app.gui.insertion_actions.QMessageBox.warning") as warning:
+                window.restore_history_snapshot(str(history.snapshot_path))
+            self.assertFalse(warning.called)
+            self.assertEqual(editor.toPlainText(), "first draft")
+            self.assertEqual(source.read_text(), "disk original")
+
+    def test_history_index_error_is_visible_and_does_not_break_source_save(self):
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "main.tex"
+            source.write_text("disk original")
+            history = create_snapshot(source, "older history", "saved")
+            manifest = history.snapshot_path.parent / "manifest.json"
+            manifest.write_bytes(b"malformed index")
+            window = MainWindow(settings_store=isolated_settings())
+            editor = window._make_editor("new saved source")
+            tab = EditorTab(editor=editor, path=source)
+            window._add_tab(tab, source.name)
+            window.refresh_project_panels()
+            self.assertIn("历史不可用", window.history_panel.status_label.text())
+            self.assertFalse(window.history_panel.restore_button.isEnabled())
+            with patch.object(window, "_watch_file"), patch.object(window, "create_compile_manager", return_value=None):
+                self.assertTrue(window.documents.save_tab(tab, source))
+            self.assertEqual(source.read_text(), "new saved source")
+            self.assertEqual(manifest.read_bytes(), b"malformed index")
+            tab.modified = tab.dirty = False
+            window.close()
+
     def test_cancel_keeps_modified_tab_open(self) -> None:
+        from shiboken6 import isValid
+
         window = MainWindow(settings_store=isolated_settings())
         window.auto_compile_action.setChecked(False)
         editor = window._make_editor("Draft")
@@ -885,6 +3249,9 @@ class GuiEditorTests(TestCase):
 
         self.assertEqual(window.editor_tabs.count(), 1)
         self.assertIs(window.current_tab(), tab)
+        app().sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        self.assertTrue(isValid(editor))
+        self.assertEqual(editor.toPlainText(), "Draft")
         buttons = warning.call_args.args[3]
         self.assertTrue(buttons & QMessageBox.StandardButton.Save)
         self.assertTrue(buttons & QMessageBox.StandardButton.Discard)
@@ -918,6 +3285,8 @@ class GuiEditorTests(TestCase):
         window.close()
 
     def test_discard_closes_modified_tab_without_saving(self) -> None:
+        from shiboken6 import isValid
+
         window = MainWindow(settings_store=isolated_settings())
         window.auto_compile_action.setChecked(False)
         editor = window._make_editor("Draft")
@@ -935,6 +3304,8 @@ class GuiEditorTests(TestCase):
 
         self.assertEqual(window.editor_tabs.count(), 0)
         save_current_as.assert_not_called()
+        app().sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        self.assertFalse(isValid(editor))
         window.close()
 
     def test_late_cancel_keeps_all_tab_managers_running(self) -> None:
@@ -1476,7 +3847,8 @@ class GuiEditorTests(TestCase):
         with TemporaryDirectory() as directory:
             source = Path(directory) / "main.tex"
             text = "\n".join(f"Line {index}" for index in range(80))
-            source.write_text(text, encoding="utf-8")
+            original = text.replace("\n", "\r\n").encode("utf-8")
+            source.write_bytes(original)
             window = MainWindow(settings_store=isolated_settings())
             window.auto_compile_action.setChecked(False)
             window._watch_file = lambda _path: None  # type: ignore[method-assign]
@@ -1492,6 +3864,7 @@ class GuiEditorTests(TestCase):
 
             self.assertEqual(editor.textCursor().position(), len(text))
             compile_current.assert_not_called()
+            self.assertEqual(source.read_bytes(), original)
             window.close()
 
     def test_external_conflict_pauses_autosave_until_explicit_save_confirmation(self) -> None:
@@ -1605,6 +3978,8 @@ class GuiEditorTests(TestCase):
                     before = window.pdf_state.record_for(manager.root_file).source_revision
                     with patch.object(manager, "schedule_compile") as scheduled:
                         window.reload_external_change(str(source))
+                        from tests.test_gui_dependencies import wait_until
+                        self.assertTrue(wait_until(lambda: not window.dependencies.is_busy))
                     self.assertEqual(tab.editor.toPlainText(), f"external {index}")
                     self.assertEqual(scheduled.call_count, int(enabled and authorized))
                     self.assertGreater(window.pdf_state.record_for(manager.root_file).source_revision, before)
@@ -1698,6 +4073,8 @@ class GuiEditorTests(TestCase):
 
             with patch.object(tab.manager, "schedule_compile") as schedule_compile:
                 window.compile_current()
+                from tests.test_gui_dependencies import wait_until
+                self.assertTrue(wait_until(lambda: schedule_compile.called))
 
             self.assertEqual(tab.manager.engine, LaTeXEngine.XELATEX)
             schedule_compile.assert_called_once()
@@ -2055,7 +4432,8 @@ class GuiEditorTests(TestCase):
 
             context = window._build_feedback_context()
 
-            self.assertEqual(context.project_file, chapter)
+            # Tab registration now fixes the canonical buffer identity once.
+            self.assertEqual(context.project_file, chapter.resolve())
             self.assertIsNotNone(context.metadata)
             assert context.metadata is not None
             self.assertEqual(Path(str(context.metadata.root_file)).name, "main.tex")
@@ -2205,6 +4583,10 @@ class GuiEditorTests(TestCase):
 
             self.assertEqual(window.labels_panel.table.item(0, 0).text(), "sec:intro")
             self.assertEqual(window.references_panel.table.item(0, 0).text(), "Storm2024")
+            self.assertTrue(window.references_panel.check_detail.isReadOnly())
+            self.assertEqual(window.references_panel.health_table.editTriggers(),
+                             QAbstractItemView.EditTrigger.NoEditTriggers)
+            self.assertIn("快捷库", window.references_panel.status_label.text())
             self.assertEqual(window.outline_panel.table.item(0, 0).text(), "Intro")
             self.assertEqual(window.images_panel.table.item(0, 0).text(), "plot.png")
             self.assertEqual(editor._completion_labels, ["sec:intro"])
@@ -2288,9 +4670,16 @@ class GuiEditorTests(TestCase):
 
         diagnostics = window.run_project_check(switch_to_panel=False)
         fix_index = next(index for index, diagnostic in enumerate(diagnostics) if diagnostic.fix is not None)
-        window.fix_diagnostic(fix_index)
+        before = editor.toPlainText()
+        with patch("app.gui.project_panel_controller.QMessageBox.exec", return_value=QMessageBox.StandardButton.Apply):
+            window.fix_diagnostic(fix_index)
 
         self.assertIn("\\usepackage{graphicx}", editor.toPlainText())
+        after = editor.toPlainText()
+        editor.undo()
+        self.assertEqual(editor.toPlainText(), before)
+        editor.redo()
+        self.assertEqual(editor.toPlainText(), after)
         tab.modified = False
         tab.dirty = False
         window.close()
@@ -2322,17 +4711,70 @@ class GuiEditorTests(TestCase):
 class GuiPdfStateTests(TestCase):
     """Root-scoped PDF freshness scenarios from the state-machine assignment."""
 
+    def test_preview_navigation_refresh_reuses_root_and_both_file_observations(self):
+        from app.core.file_observation import is_nonempty_file
+        from tests.test_pdf_panel import _write_zoom_pdf
+        tab = self._add_doc("main.tex")
+        final = self._finish_success(tab, 1)
+        self.window._mark_source_edited(tab)
+        root = tab.manager.root_file
+        preview = tab.manager.pdf_file_for(BuildPurpose.PREVIEW)
+        preview.parent.mkdir(parents=True, exist_ok=True)
+        _write_zoom_pdf(preview)
+        self.window.preview_state.begin_build(root, 2)
+        self.window.preview_state.finish_build(root, 2, success=True, pdf_file=preview, fidelity="proxy")
+        self.window._sync_pdf_panel_to_active_root()
+        with (patch.object(self.window, "_compile_root_for_tab", wraps=self.window._compile_root_for_tab) as lookup,
+              patch("app.core.pdf_state.is_nonempty_file", wraps=is_nonempty_file) as final_file,
+              patch("app.core.preview_state.is_nonempty_file", wraps=is_nonempty_file) as preview_file):
+            self.window._update_pdf_action_state()
+        lookup.assert_called_once()
+        final_file.assert_called_once_with(final)
+        preview_file.assert_called_once_with(preview)
+        self.assertTrue(self.window.sync_pdf_action.isEnabled())
+        self.assertEqual(self.window.pdf_state.record_for(root).freshness, PdfFreshness.DIRTY)
+
+    def test_action_refresh_reads_root_and_each_needed_file_once_then_export_rechecks(self):
+        from app.core.file_observation import is_nonempty_file
+        tab = self._add_doc("main.tex")
+        pdf = self._finish_success(tab, 1)
+        root = tab.manager.root_file
+        with patch.object(self.window, "_compile_root_for_tab", wraps=self.window._compile_root_for_tab) as root_lookup, \
+             patch("app.core.pdf_state.is_nonempty_file", wraps=is_nonempty_file) as observe:
+            self.window._update_pdf_action_state()
+        root_lookup.assert_called_once()
+        observe.assert_called_once_with(pdf)
+        self.assertTrue(self.window.export_pdf_action.isEnabled())
+        self.assertTrue(self.window.reveal_pdf_action.isEnabled())
+        pdf.unlink()
+        preview = self.window.preview_state.record_for(root)
+        preview.last_successful_pdf = pdf  # Same missing path must not be re-statted.
+        with patch("app.core.pdf_state.is_nonempty_file", wraps=is_nonempty_file) as observe, \
+             patch("app.core.preview_state.is_nonempty_file", side_effect=AssertionError("duplicate file read")):
+            self.window._update_pdf_action_state()
+        observe.assert_called_once_with(pdf)
+        self.assertFalse(self.window.export_pdf_action.isEnabled())
+        with patch.object(self.window, "prepare_submission") as prepare:
+            self.assertFalse(self.window.export_pdf())
+        prepare.assert_not_called()
+
     def setUp(self) -> None:
         app()
         self._tmp = TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
         self.dir = Path(self._tmp.name)
         self.window = MainWindow(settings_store=isolated_settings())
+        # Current success fixtures are real PDFs; do not suppress loaded identity.
+        warning = patch.object(QMessageBox, "warning", side_effect=AssertionError(
+            "Unexpected modal warning in PDF state test"))
+        warning.start()
+        self.addCleanup(warning.stop)
         self.window._watch_file = lambda _path: None  # type: ignore[method-assign]
         self.window.auto_compile_action.setChecked(False)
         self.addCleanup(self._close_window)
 
     def _close_window(self) -> None:
+        self.window.pdf_panel.clear_pdf()
         for tab in self.window.tabs.values():
             tab.modified = False
             tab.dirty = False
@@ -2399,11 +4841,15 @@ class GuiPdfStateTests(TestCase):
             preview_asset_paths=(asset,),
         )
 
-    def _finish_success(self, tab: EditorTab, build_id: int, pdf_bytes: bytes = b"%PDF-1.4 x") -> Path:
+    def _finish_success(self, tab: EditorTab, build_id: int, pdf_bytes: bytes | None = None) -> Path:
         manager = tab.manager
         assert manager is not None
         manager.output_dir.mkdir(parents=True, exist_ok=True)
-        manager.pdf_file.write_bytes(pdf_bytes)
+        if pdf_bytes is None:
+            from tests.test_pdf_panel import _write_zoom_pdf
+            _write_zoom_pdf(manager.pdf_file)
+        else:
+            manager.pdf_file.write_bytes(pdf_bytes)
         self.window.compile._emit_started(manager, manager.root_file, build_id)
         self.window.compile.on_finished(self._result(manager, CompileOutcome.SUCCESS, build_id))
         return manager.pdf_file
@@ -2485,13 +4931,13 @@ class GuiPdfStateTests(TestCase):
         tab = self._add_doc("a.tex")
         pdf = self._finish_success(tab, 1)
         self.assertEqual(self.window.pdf_panel.current_pdf, pdf)
-        self.assertEqual(self._banner(), "PDF 已是最新")
+        self.assertEqual(self._banner(), "正式 PDF · PDF 已是最新")
         self.assertTrue(self.window.export_pdf_action.isEnabled())
 
         tab.editor.insertPlainText("more text")
 
         self.assertEqual(self.window.pdf_panel.current_pdf, pdf)
-        self.assertEqual(self._banner(), "源码已修改，PDF 待更新")
+        self.assertEqual(self._banner(), "正式 PDF · 源码已修改，PDF 待更新 · 当前显示旧版本")
         self.assertTrue(self.window.export_pdf_action.isEnabled())
 
     def test_new_revision_reloads_same_pdf_path_with_root_logical_key(self) -> None:
@@ -2517,7 +4963,7 @@ class GuiPdfStateTests(TestCase):
 
         displayed = self.window.displayed_pdfs[manager.root_file]
         self.assertIs(displayed.purpose, BuildPurpose.FINAL)
-        self.assertEqual(self._banner(), "PDF 已是最新")
+        self.assertEqual(self._banner(), "正式 PDF · PDF 已是最新")
 
     def test_failed_stale_preview_banner_preserves_failure_semantics(self) -> None:
         tab = self._add_doc("a.tex")
@@ -2557,7 +5003,7 @@ class GuiPdfStateTests(TestCase):
         )
 
         self.assertEqual(self.window.pdf_panel.current_pdf, pdf)
-        self.assertEqual(self._banner(), "编译未成功，当前显示上次成功版本")
+        self.assertEqual(self._banner(), "正式 PDF · 编译未成功，当前显示上次成功版本")
         self.assertTrue(self.window.export_pdf_action.isEnabled())
 
     def test_stop_after_success_keeps_old_pdf_with_stale_warning(self) -> None:
@@ -2572,7 +5018,7 @@ class GuiPdfStateTests(TestCase):
         )
 
         self.assertEqual(self.window.pdf_panel.current_pdf, pdf)
-        self.assertEqual(self._banner(), "编译未成功，当前显示上次成功版本")
+        self.assertEqual(self._banner(), "正式 PDF · 编译未成功，当前显示上次成功版本")
         self.assertIn("编译已停止", self.window.log_view.toPlainText())
 
     def test_first_compile_failure_shows_empty_panel_and_no_pdf(self) -> None:
@@ -2627,7 +5073,7 @@ class GuiPdfStateTests(TestCase):
             self.assertFalse(self.window.export_pdf())
         dialog.assert_not_called()
 
-    def test_each_tab_loads_and_exports_only_its_own_pdf(self) -> None:
+    def test_each_tab_loads_and_prepares_only_its_own_pdf(self) -> None:
         tab_a = self._add_doc("a.tex")
         pdf_a = self._finish_success(tab_a, 1, b"%PDF-1.4 AAA")
         tab_b = self._add_doc("b.tex")
@@ -2637,24 +5083,25 @@ class GuiPdfStateTests(TestCase):
         index_a = self.window._index_for_tab_id(id(tab_a.editor))
         self.window.editor_tabs.setCurrentIndex(index_a)
         self.assertEqual(self.window.pdf_panel.current_pdf, pdf_a)
-        exported = self.dir / "out-a.pdf"
-        with patch(
-            "app.gui.main_window.QFileDialog.getSaveFileName",
-            return_value=(str(exported), ""),
-        ):
-            self.assertTrue(self.window.export_pdf())
-        self.assertEqual(exported.read_bytes(), b"%PDF-1.4 AAA")
+        reviewed = []
+        def inspect(window):
+            request = window.readiness.capture_request()
+            reviewed.append((request.root, request.final.last_successful_pdf))
+            return None  # No confirmed delivery from this synthetic record.
+        with patch("app.gui.submission_delivery_dialog.show_submission_delivery", side_effect=inspect):
+            self.assertFalse(self.window.export_pdf())
+        self.assertEqual(reviewed[-1], (tab_a.path.resolve(), pdf_a))
 
         index_b = self.window._index_for_tab_id(id(tab_b.editor))
         self.window.editor_tabs.setCurrentIndex(index_b)
         self.assertEqual(self.window.pdf_panel.current_pdf, pdf_b)
-        exported_b = self.dir / "out-b.pdf"
-        with patch(
-            "app.gui.main_window.QFileDialog.getSaveFileName",
-            return_value=(str(exported_b), ""),
-        ):
-            self.assertTrue(self.window.export_pdf())
-        self.assertEqual(exported_b.read_bytes(), b"%PDF-1.4 BBB")
+        with patch("app.gui.submission_delivery_dialog.show_submission_delivery", side_effect=inspect):
+            self.assertFalse(self.window.export_pdf())
+        self.assertEqual(reviewed[-1], (tab_b.path.resolve(), pdf_b))
+        self.assertEqual(pdf_a.read_bytes(), b"%PDF-1.4 AAA")
+        self.assertEqual(pdf_b.read_bytes(), b"%PDF-1.4 BBB")
+        self.assertFalse((self.dir / "out-a.pdf").exists())
+        self.assertFalse((self.dir / "out-b.pdf").exists())
 
     def test_child_tabs_share_root_record_and_dirty_it(self) -> None:
         root_tab = self._add_doc("main.tex", "\\documentclass{article}\n\\input{child}\n\\input{part}\n")
@@ -2667,12 +5114,12 @@ class GuiPdfStateTests(TestCase):
         child_tab = EditorTab(editor=self.window._make_editor("% !TEX root = main.tex\ntext"), path=child_path)
         self.window._add_tab(child_tab, child_path.name)
         self.assertEqual(self.window.pdf_panel.current_pdf, pdf)
-        self.assertEqual(self._banner(), "PDF 已是最新")
+        self.assertEqual(self._banner(), "正式 PDF · PDF 已是最新")
 
         child_tab.editor.insertPlainText("edited ")
         record = self.window.pdf_state.record_for(root)
         self.assertEqual(record.freshness, PdfFreshness.DIRTY)
-        self.assertEqual(self._banner(), "源码已修改，PDF 待更新")
+        self.assertEqual(self._banner(), "正式 PDF · 源码已修改，PDF 待更新 · 当前显示旧版本")
 
         # \input child without a magic comment still dirties the known root record.
         self._finish_success(root_tab, 2)
@@ -2693,11 +5140,12 @@ class GuiPdfStateTests(TestCase):
         tab.editor.insertPlainText("edited during build")
 
         manager.output_dir.mkdir(parents=True, exist_ok=True)
-        manager.pdf_file.write_bytes(b"%PDF-1.4 x")
+        from tests.test_pdf_panel import _write_zoom_pdf
+        _write_zoom_pdf(manager.pdf_file)
         self.window.compile.on_finished(self._result(manager, CompileOutcome.SUCCESS, 1))
 
         self.assertEqual(self.window.pdf_panel.current_pdf, manager.pdf_file)
-        self.assertEqual(self._banner(), "源码已修改，PDF 待更新")
+        self.assertEqual(self._banner(), "正式 PDF · 源码已修改，PDF 待更新 · 当前显示旧版本")
 
     def test_late_result_from_older_build_is_ignored(self) -> None:
         tab = self._add_doc("a.tex")
@@ -2734,23 +5182,29 @@ class GuiPdfStateTests(TestCase):
         self._finish_success(tab, 1)
         self.assertTrue(self.window.export_pdf_action.isEnabled())
 
-        self.assertTrue(self.window.clean_build_cache())
+        import shutil
+        original_rmtree = shutil.rmtree
+        def delete_after_reader_close(path):
+            self.assertIsNone(self.window.pdf_panel.current_pdf)
+            original_rmtree(path)
+        with patch("app.gui.compile_controller.shutil.rmtree", side_effect=delete_after_reader_close):
+            self.assertTrue(self.window.clean_build_cache())
 
         self.assertIsNone(self.window.pdf_panel.current_pdf)
         self.assertEqual(self._banner(), "尚未编译")
         self.assertFalse(self.window.export_pdf_action.isEnabled())
         self.assertFalse(self.window.pdf_panel.export_pdf_button.isEnabled())
 
-    def test_atomic_export_failure_leaves_no_partial_files(self) -> None:
+    def test_legacy_copy_controller_failure_leaves_no_partial_files(self) -> None:
         tab = self._add_doc("a.tex")
         self._finish_success(tab, 1)
         target = self.dir / "exported.pdf"
 
+        # Internal compatibility helper, not the reviewed user-facing entrance.
         with patch("app.gui.pdf_export_controller.shutil.copy2", side_effect=OSError("disk full")), patch(
-            "app.gui.main_window.QFileDialog.getSaveFileName",
-            return_value=(str(target), ""),
-        ), patch("app.gui.main_window.QMessageBox.warning") as warning:
-            self.assertFalse(self.window.export_pdf())
+            "app.gui.main_window.QMessageBox.warning"
+        ) as warning:
+            self.assertFalse(self.window.pdf_export.request_export(tab.path, target))
 
         warning.assert_called_once()
         self.assertFalse(target.exists())
@@ -2782,6 +5236,34 @@ class GuiPdfStateTests(TestCase):
         first_line = next(line for line in log_text.splitlines() if line.startswith("编译失败："))
         self.assertNotIn("Latexmk", first_line)
 
+    def test_lua_font_loader_failure_is_visible_without_source_fix_or_current_pdf(self) -> None:
+        from app.core.log_parser import parse_latex_errors
+
+        source = "\\documentclass{article}\n\\begin{document}\nSynthetic text.\n\\end{document}\n"
+        tab = self._add_doc("lua.tex", source)
+        manager = tab.manager
+        self._finish_success(tab, 1)
+        before = (tab.editor.textCursor().position(), tab.editor.verticalScrollBar().value())
+        output = ('luaotfload | load : FATAL ERROR\n'
+                  'luaotfload | load : Failed to load "luaotfload" module "multiscript".\n')
+        self.window.compile._emit_started(manager, manager.root_file, 2)
+        self.window.compile.on_finished(self._result(
+            manager, CompileOutcome.LATEX_ERROR, 2, returncode=12,
+            errors=parse_latex_errors(output), stderr=output,
+        ))
+        panel = self.window.diagnostic_panel
+        self.assertEqual(len(panel.diagnostics), 1)
+        self.assertEqual(panel.table.item(0, 1).text(), "LuaLaTeX 字体组件失败")
+        self.assertFalse(panel.fix_button.isEnabled())
+        self.assertIsNone(panel.diagnostics[0].file)
+        self.assertIsNone(panel.diagnostics[0].line)
+        self.assertIs(self.window.bottom_tabs.currentWidget(), panel)
+        # The menu remains available to open M5's review, not to publish an old PDF.
+        self.assertNotEqual(self.window.pdf_state.record_for(manager.root_file).freshness, PdfFreshness.CURRENT)
+        self.assertEqual(tab.path.read_text(encoding="utf-8"), source)
+        self.assertEqual(tab.editor.toPlainText(), source)
+        self.assertEqual((tab.editor.textCursor().position(), tab.editor.verticalScrollBar().value()), before)
+
     def test_missing_toolchain_compile_updates_active_root_state(self) -> None:
         tab = self._add_doc("a.tex")
         self.window.toolchain = LaTeXToolchain(
@@ -2796,7 +5278,7 @@ class GuiPdfStateTests(TestCase):
     def test_external_reload_marks_pdf_dirty_immediately(self) -> None:
         tab = self._add_doc("a.tex", "original")
         pdf = self._finish_success(tab, 1)
-        self.assertEqual(self._banner(), "PDF 已是最新")
+        self.assertEqual(self._banner(), "正式 PDF · PDF 已是最新")
 
         assert tab.path is not None and tab.manager is not None
         tab.path.write_text("changed on disk", encoding="utf-8")
@@ -2804,7 +5286,7 @@ class GuiPdfStateTests(TestCase):
             self.window.reload_external_change(str(tab.path))
 
         self.assertEqual(tab.editor.toPlainText(), "changed on disk")
-        self.assertEqual(self._banner(), "源码已修改，PDF 待更新")
+        self.assertEqual(self._banner(), "正式 PDF · 源码已修改，PDF 待更新 · 当前显示旧版本")
         self.assertEqual(self.window.pdf_panel.current_pdf, pdf)
         record = self.window.pdf_state.record_for(tab.manager.root_file)
         self.assertEqual(record.freshness, PdfFreshness.DIRTY)
@@ -2944,6 +5426,11 @@ class GuiPdfStateTests(TestCase):
         chapter.write_text("\\input{sec1}", encoding="utf-8")
         section = self.dir / "chapters" / "sec1.tex"
         section.write_text("deep text", encoding="utf-8")
+        # A successful compile now follows a completed graph preflight. Keep
+        # this fixture's injected success consistent with that real boundary.
+        from tests.test_gui_dependencies import wait_until
+        self.window.dependencies.refresh_memberships(force=True)
+        self.assertTrue(wait_until(lambda: not self.window.dependencies.is_busy))
         self._finish_success(root_tab, 1)
         root = root_tab.manager.root_file
 
@@ -2977,11 +5464,403 @@ class GuiPdfStateTests(TestCase):
         self.assertIn("无法打开文件管理器", self.window.log_view.toPlainText())
 
 
+class FormulaSourceTargetTests(TestCase):
+    def setUp(self):
+        self.application = app()
+        self.directory = TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.path = Path(self.directory.name) / "main.tex"
+        self.before = ("% \U0001f600\U0001f680\n\\documentclass{article}\n"
+                       "\\newcommand{\\studentMacro}[1]{#1}\n\\begin{document}\n"
+                       "Before $x$ after.\n\\end{document}\n")
+        self.original = self.before.replace("\n", "\r\n").encode()
+        self.path.write_bytes(self.original)
+        self.window = MainWindow(settings_store=isolated_settings())
+        self.addCleanup(self.dispose)
+        self.window.auto_compile_action.setChecked(False)
+        self.window.save_debounce_ms = 60_000
+        self.window.open_file(self.path)
+        self.tab = self.window.current_tab()
+        self.editor = self.tab.editor
+
+    def dispose(self):
+        from shiboken6 import isValid
+        if isValid(self.window):
+            for tab in self.window.tabs.values():
+                self.window.documents.cancel_save_timer(tab)
+                tab.modified = tab.dirty = False
+            self.window.close()
+            self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def select_formula(self, *, backward=False):
+        cursor = self.editor.document().find("$x$")
+        self.assertFalse(cursor.isNull())
+        if backward:
+            start, end = cursor.selectionStart(), cursor.selectionEnd()
+            cursor.setPosition(end)
+            cursor.setPosition(start, QTextCursor.MoveMode.KeepAnchor)
+        self.editor.setTextCursor(cursor)
+
+    def drive(self, replacement, *, mutation=None, cancel=False):
+        observed = {}
+        class DrivenDialog(FormulaDialog):
+            def exec(self):
+                observed["seed"] = self.source_edit.toPlainText()
+
+                def respond():
+                    try:
+                        self.source_mode_check.setChecked(True)
+                        self.source_edit.setPlainText(replacement)
+                        if mutation:
+                            mutation()
+                        if cancel:
+                            observed["draft"] = self.source_edit.toPlainText()
+                            self.reject()
+                            return
+                        self._on_apply()
+                        observed.update(open=self.isVisible(), draft=self.source_edit.toPlainText(),
+                                        plan=self.plan(), preview=self.preview_edit.toPlainText(),
+                                        target_error=self.target_error_label.isVisible())
+                    except Exception as exc:
+                        observed["error"] = exc
+                    finally:
+                        # Failed/blocked Apply must not leave a modal test hanging.
+                        if self.isVisible():
+                            self.reject()
+
+                QTimer.singleShot(0, self, respond)
+                return super().exec()
+
+        with patch("app.gui.insertion_actions.FormulaDialog", DrivenDialog), \
+                patch("app.gui.insertion_actions.QMessageBox.information") as information, \
+                patch("app.gui.insertion_actions.QMessageBox.warning") as warning:
+            self.window.open_formula_composer()
+        self.assertNotIn("error", observed)
+        information.assert_not_called()
+        warning.assert_not_called()
+        self.assertIn("seed", observed)
+        return observed
+
+    def test_actual_selection_after_non_bmp_opens_and_replaces_exact_formula(self):
+        replacement = r"\(\studentMacro{x}+y\)"
+        for backward in (False, True):
+            with self.subTest(backward=backward):
+                self.editor.setPlainText(self.before)
+                self.select_formula(backward=backward)
+                observed = self.drive(replacement)
+                self.assertEqual(observed["seed"], "$x$")
+                self.assertFalse(observed["open"])
+                after = self.before.replace("$x$", replacement)
+                self.assertEqual(self.editor.toPlainText(), after)
+                self.editor.undo()
+                self.assertEqual(self.editor.toPlainText(), self.before)
+                self.editor.redo()
+                self.assertEqual(self.editor.toPlainText(), after)
+                self.assertEqual(self.path.read_bytes(), self.original)
+                self.assertEqual(self.window.compile_authorized_roots, set())
+
+    def test_cancel_after_non_bmp_retains_unknown_formula_and_selection(self):
+        source = self.before.replace("$x$", r"$\studentMacro{x}$")
+        self.editor.setPlainText(source)
+        cursor = self.editor.document().find(r"$\studentMacro{x}$")
+        self.editor.setTextCursor(cursor)
+        view = (cursor.position(), cursor.anchor(), self.editor.verticalScrollBar().value())
+        self.drive(r"$\studentMacro{changed}$", cancel=True)
+        current = self.editor.textCursor()
+        self.assertEqual(self.editor.toPlainText(), source)
+        self.assertEqual((current.position(), current.anchor(), self.editor.verticalScrollBar().value()), view)
+        self.assertEqual(self.path.read_bytes(), self.original)
+
+    def test_python_plan_converts_package_range_and_unicode_body_cursor(self):
+        cursor = self.editor.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        cursor.beginEditBlock()
+        cursor.insertText("% prior edit\n")
+        cursor.endEditBlock()
+        source = self.editor.toPlainText()
+        body = "\\text{\U0001f600}+x"
+        start = source.index("$x$")
+        plan = final_edit_plan(source, start, start + 3,
+                               FormulaDraft(FormulaMode.EQUATION_STAR, body),
+                               body_cursor_offset=body.index("+") + 1)
+        self.assertIsNotNone(plan)
+        self.assertTrue(self.window.insertions.apply_formula_plan(self.tab, plan))
+        expected = source.replace("$x$", plan.text).replace(
+            "\\newcommand", "\\usepackage{amsmath}\n\\newcommand", 1,
+        )
+        self.assertEqual(self.editor.toPlainText(), expected)
+        prefix = expected[:expected.index(plan.text)] + plan.text[:plan.cursor_offset]
+        self.assertEqual(self.editor.textCursor().position(), len(prefix.encode("utf-16-le")) // 2)
+        self.editor.undo()
+        self.assertEqual(self.editor.toPlainText(), source)
+        self.editor.undo()
+        self.assertEqual(self.editor.toPlainText(), self.before)
+
+    def test_non_bmp_inside_original_formula_remains_exact(self):
+        seed = "$\\text{\U0001f600}+x$"
+        source = self.before.replace("$x$", seed)
+        self.editor.setPlainText(source)
+        self.editor.setTextCursor(self.editor.document().find(seed))
+        replacement = "$\\text{\U0001f600}+y$"
+        observed = self.drive(replacement)
+        self.assertEqual(observed["seed"], seed)
+        self.assertEqual(self.editor.toPlainText(), source.replace(seed, replacement))
+        self.editor.undo()
+        self.assertEqual(self.editor.toPlainText(), source)
+
+    def test_source_mode_wrapper_change_preserves_utf16_cursor(self):
+        seed = "$\\studentMacro{\U0001f600\U0001f680\U0001f600\U0001f680}$"
+        dialog = FormulaDialog(self.window, seed, 0, len(seed))
+        dialog.source_mode_check.setChecked(True)
+        cursor = dialog.source_edit.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        dialog.source_edit.setTextCursor(cursor)
+        position = cursor.position()
+        self.assertTrue(dialog.set_mode(FormulaMode.INLINE_PAREN))
+        self.assertEqual(dialog.source_edit.textCursor().position(), position)
+        self.assertEqual(dialog.source_edit.toPlainText(), "\\(" + seed[1:-1] + "\\)")
+
+    def test_insertion_at_non_bmp_eof_uses_actual_cursor(self):
+        source = "Before \U0001f600\U0001f680"
+        self.editor.setPlainText(source)
+        cursor = self.editor.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        self.editor.setTextCursor(cursor)
+        observed = self.drive("$x+y$")
+        self.assertFalse(observed["open"])
+        self.assertEqual(self.editor.toPlainText(), source + "$x+y$")
+        self.editor.undo()
+        self.assertEqual(self.editor.toPlainText(), source)
+
+    def test_external_reload_during_insertion_preserves_draft_and_new_source(self):
+        # ASCII isolates the target guard from the independent coordinate bug.
+        source = self.before.split("\n", 1)[1]
+        self.path.write_text(source)
+        self.window.documents.reload_external_change(str(self.path))
+        cursor = self.editor.document().find("$x$")
+        cursor.clearSelection()
+        self.editor.setTextCursor(cursor)
+        changed = "% external header\n" + source
+
+        def reload():
+            self.path.write_text(changed)
+            self.window.documents.reload_external_change(str(self.path))
+
+        observed = self.drive("$x+y$", mutation=reload)
+        self.assertTrue(observed["open"])
+        self.assertTrue(observed["target_error"])
+        self.assertIsNone(observed["plan"])
+        self.assertEqual(observed["draft"], "$x+y$")
+        self.assertEqual(observed["preview"], "$x+y$")
+        self.assertEqual(self.editor.toPlainText(), changed)
+        self.assertEqual(self.path.read_text(), changed)
+        self.assertEqual(self.window.compile_authorized_roots, set())
+
+    def test_closed_target_keeps_formula_draft_without_native_access(self):
+        source = self.before.split("\n", 1)[1]
+        self.editor.setPlainText(source)
+        self.tab.modified = self.tab.dirty = False
+        self.select_formula()
+
+        def close_tab():
+            self.window.close_tab(self.window._index_for_tab_id(id(self.editor)))
+            self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+        observed = self.drive("$x+y$", mutation=close_tab)
+        self.assertTrue(observed["open"])
+        self.assertTrue(observed["target_error"])
+        self.assertIsNone(observed["plan"])
+        self.assertEqual(observed["draft"], "$x+y$")
+        self.assertEqual(self.path.read_bytes(), self.original)
+
+    def test_zero_length_plan_after_document_truncation_is_refused(self):
+        position = len(self.before)
+        plan = final_edit_plan(self.before, position, position, FormulaDraft(FormulaMode.INLINE_DOLLAR, "x"))
+        self.assertIsNotNone(plan)
+        self.editor.setPlainText("New shorter source")
+        with patch("app.gui.insertion_actions.QMessageBox.warning"):
+            self.assertFalse(self.window.insertions.apply_formula_plan(self.tab, plan))
+        self.assertEqual(self.editor.toPlainText(), "New shorter source")
+
+
 class FormulaComposerTests(TestCase):
     """Focused tests for the DS-001 formula composer GUI slice."""
 
+    def test_spaced_formula_repaint_and_navigation_preserve_source(self):
+        source = r"$x_i^2+\frac{a}{b}$"
+        dialog = FormulaDialog(None, source, 0, len(source))
+        self.addCleanup(dialog.deleteLater)
+        before = dialog.current_draft().body
+        dialog.resize(850, 700)
+        dialog.grab()
+        dialog.visual_edit.cursor_home()
+        dialog.visual_edit.cursor_up()
+        dialog.grab()
+        self.assertIn("上标", dialog.navigation_hint.text())
+        self.assertGreaterEqual(dialog.visual_edit.minimumHeight(), 120)
+        self.assertEqual(dialog.source_edit.toPlainText(), source)
+        self.assertEqual(dialog.current_draft().body, before)
+        self.assertFalse(dialog.visual_edit.can_undo)
+        dialog.reject()
+        self.assertIsNone(dialog.plan())
+
+    def test_picture_ocr_remains_without_experimental_handwriting_entry(self):
+        from PySide6.QtWidgets import QPushButton
+        dialog = FormulaDialog(None, "$x+1$", 0, 5)
+        self.addCleanup(dialog.deleteLater)
+        self.assertNotIn("手写公式…", [button.text() for button in dialog.findChildren(QPushButton)])
+        self.assertEqual(dialog.ocr_button.text(), "图片识别…")
+        self.assertTrue(dialog.ocr_button.isEnabled())
+        self.assertEqual(dialog.current_draft().body, "x+1")
+        self.assertIsNone(dialog.plan())
+        dialog.reject()
+
+    def test_navigation_hint_matches_active_slot_without_changing_source(self):
+        dialog = FormulaDialog(None, "$x^2$", 0, 5)
+        self.addCleanup(dialog.deleteLater)
+        before = dialog.source_edit.toPlainText()
+        from PySide6.QtTest import QTest
+        QTest.keyClick(dialog.visual_edit, Qt.Key.Key_Up)
+        self.assertIn("上标", dialog.navigation_hint.text())
+        self.assertEqual(dialog.source_edit.toPlainText(), before)
+        dialog.source_mode_check.setChecked(True)
+        self.assertTrue(dialog.navigation_hint.isHidden())
+        dialog.reject()
+
     def setUp(self) -> None:
         app()
+
+    def test_source_composition_is_local_until_commit_and_cancel_never_applies(self):
+        seed = r"$\studentMacro{x}$"
+        document = "Before " + seed + " after"
+        dialog = FormulaDialog(None, document, 7, 7 + len(seed))
+        self.addCleanup(dialog.deleteLater)
+        dialog.source_mode_check.setChecked(True)
+        editor = dialog.source_edit
+        cursor = editor.textCursor()
+        cursor.setPosition(len(seed) - 1)
+        editor.setTextCursor(cursor)
+        for preedit in ("zhong", "zhongwen", ""):
+            QApplication.sendEvent(editor, QInputMethodEvent(preedit, []))
+            self.assertEqual(editor.toPlainText(), seed)
+            self.assertEqual(dialog.build_plan().text, seed)
+            self.assertIsNone(dialog.plan())
+        event = QInputMethodEvent()
+        event.setCommitString("中文")
+        QApplication.sendEvent(editor, event)
+        self.assertEqual(editor.toPlainText(), seed[:-1] + "中文$")
+        self.assertEqual(dialog._document_text, document)
+        dialog.undo_button.click()
+        self.assertEqual(editor.toPlainText(), seed)
+        dialog.redo_button.click()
+        self.assertEqual(editor.toPlainText(), seed[:-1] + "中文$")
+        dialog.reject()
+        self.assertIsNone(dialog.plan())
+        self.assertEqual(dialog._document_text, document)
+
+    def test_visual_preedit_blocks_apply_and_source_switch_until_ime_finishes(self):
+        document = "Before $x+$ after"
+        dialog = FormulaDialog(None, document, 7, 11)
+        self.addCleanup(dialog.deleteLater)
+        QApplication.sendEvent(dialog.visual_edit, QInputMethodEvent("zhongwen", []))
+        self.assertFalse(dialog._ok_button.isEnabled())
+        self.assertIn("组合输入", dialog.status_label.text())
+        dialog._on_apply()
+        self.assertIsNone(dialog.plan())
+        dialog.source_mode_check.setChecked(True)
+        self.assertFalse(dialog.source_mode_check.isChecked())
+        self.assertTrue(dialog.visual_edit.has_preedit)
+        event = QInputMethodEvent()
+        event.setCommitString("中文")
+        QApplication.sendEvent(dialog.visual_edit, event)
+        self.assertTrue(dialog._ok_button.isEnabled())
+        self.assertEqual(dialog.source_edit.toPlainText(), "$x+中文$")
+        dialog.undo_button.click()
+        self.assertEqual(dialog.build_plan().text, "$x+$")
+        dialog.redo_button.click()
+        dialog._on_apply()
+        self.assertEqual(dialog.plan().text, "$x+中文$")
+        self.assertEqual(dialog._document_text, document)
+
+    def test_source_preedit_blocks_apply_and_visual_switch_until_ime_finishes(self):
+        dialog = FormulaDialog(None, "Before $x+$ after", 7, 11)
+        self.addCleanup(dialog.deleteLater)
+        dialog.source_mode_check.setChecked(True)
+        cursor = dialog.source_edit.textCursor()
+        cursor.setPosition(3)
+        dialog.source_edit.setTextCursor(cursor)
+        QApplication.sendEvent(dialog.source_edit, QInputMethodEvent("zhongwen", []))
+        self.assertTrue(dialog._source_has_preedit())
+        self.assertFalse(dialog._ok_button.isEnabled())
+        dialog._on_apply()
+        self.assertIsNone(dialog.plan())
+        dialog.source_mode_check.setChecked(False)
+        self.assertTrue(dialog.source_mode_check.isChecked())
+        self.assertTrue(dialog._source_has_preedit())
+        event = QInputMethodEvent()
+        event.setCommitString("中文")
+        QApplication.sendEvent(dialog.source_edit, event)
+        self.assertFalse(dialog._source_has_preedit())
+        dialog._on_apply()
+        self.assertEqual(dialog.plan().text, "$x+中文$")
+
+    def test_visual_replacement_cannot_apply_an_ambiguous_new_envelope(self):
+        dialog = FormulaDialog(None, "Before $x$ after", 7, 10)
+        self.addCleanup(dialog.deleteLater)
+        dialog.visual_edit.type_key("$")
+        self.assertIsNone(dialog.build_plan())
+        self.assertFalse(dialog._ok_button.isEnabled())
+        self.assertIn("草稿", dialog.status_label.text())
+        self.assertNotIn("公式有效", dialog.status_label.text())
+        self.assertNotIn("重新选择", dialog.status_label.text())
+        with patch.object(QMessageBox, "warning") as warning:
+            dialog._on_apply()
+        warning.assert_called_once()
+        self.assertIsNone(dialog.plan())
+        self.assertFalse(dialog._submitted)
+        dialog.visual_edit.undo()
+        self.assertEqual(dialog.build_plan().text, "$x$")
+        self.assertTrue(dialog._ok_button.isEnabled())
+        dialog.reject()
+
+    def test_unknown_formula_source_survives_failed_visual_switch_and_cancel(self):
+        body = "\n  " + r"\studentMacro{a}{b} + x_1^2 + \unknown^{2} % keep $ \)" + "\n\t"
+        seed = "\\(" + body + "\\)"
+        document = "Before " + seed + " after"
+        dialog = FormulaDialog(None, document, 7, 7 + len(seed))
+        self.addCleanup(dialog.deleteLater)
+        self.assertTrue(dialog.source_mode_check.isChecked())
+        cursor = dialog.source_edit.textCursor()
+        cursor.setPosition(len(seed) - 2)
+        dialog.source_edit.setTextCursor(cursor)
+        dialog.source_edit.insertPlainText("+z")
+        draft = seed[:-2] + "+z" + seed[-2:]
+        dialog.source_mode_check.setChecked(False)
+        self.assertTrue(dialog.source_mode_check.isChecked())
+        self.assertEqual(dialog.source_edit.toPlainText(), draft)
+        self.assertEqual(dialog.build_plan().text, draft)
+        dialog.undo_button.click()
+        self.assertEqual(dialog.source_edit.toPlainText(), seed)
+        self.assertEqual(dialog.build_plan().text, seed)
+        dialog.reject()
+        self.assertIsNone(dialog.plan())
+        self.assertEqual(dialog._document_text, document)
+
+    def test_visual_paste_preserves_comment_newlines_unknown_macro_and_undo(self):
+        dialog = FormulaDialog(None, "Before $x$ after", 7, 10)
+        self.addCleanup(dialog.deleteLater)
+        pasted = "\n + " + r"\studentMacro{a}{b} % keep $ \)" + "\n\t + z\n"
+        dialog.visual_edit.paste_clipboard("\\(" + pasted + "\\)")
+        self.assertEqual(dialog.visual_edit.latex(), "x" + pasted)
+        self.assertEqual(dialog.build_plan().text, "$x" + pasted + "$")
+        self.assertEqual(dialog.preview_edit.toPlainText(), "$x" + pasted + "$")
+        dialog.source_mode_check.setChecked(True)
+        self.assertEqual(dialog.source_edit.toPlainText(), "$x" + pasted + "$")
+        dialog.source_mode_check.setChecked(False)
+        dialog.undo_button.click()
+        self.assertEqual(dialog.build_plan().text, "$x$")
+        dialog.reject()
+        self.assertIsNone(dialog.plan())
 
     def test_physical_typing_undo_and_paste_refresh_source_preview(self):
         from PySide6.QtTest import QTest
@@ -3447,12 +6326,15 @@ class FormulaComposerTests(TestCase):
         self._select(editor, start, end)
 
         class FakeDialog:
-            def __init__(self, _parent, document_text: str, sel_start: int, sel_end: int) -> None:
+            def __init__(self, _parent, document_text: str, sel_start: int, sel_end: int,
+                         *, validate_target) -> None:
                 self._document_text = document_text
                 self._sel_start = sel_start
                 self._sel_end = sel_end
+                self._validate_target = validate_target
 
             def exec(self) -> QDialog.DialogCode:
+                assert self._validate_target() == ""
                 return QDialog.DialogCode.Accepted
 
             def plan(self):
@@ -3498,7 +6380,7 @@ class FormulaComposerTests(TestCase):
         self.assertEqual(editor.toPlainText(), source)
         self._close(window, tab)
 
-    def test_images_refresh_uses_incremental_index(self) -> None:
+    def test_images_refresh_reuses_memory_index_without_project_cache_writes(self) -> None:
         with TemporaryDirectory() as directory:
             root = Path(directory)
             figures = root / "figures"
@@ -3509,21 +6391,41 @@ class FormulaComposerTests(TestCase):
                 "\\documentclass{article}\n\\begin{document}\n\\end{document}\n",
                 encoding="utf-8",
             )
+            before = {path.relative_to(root): path.read_bytes() for path in root.rglob("*") if path.is_file()}
             window = MainWindow(settings_store=isolated_settings())
             window.auto_compile_action.setChecked(False)
             editor = window._make_editor(source.read_text(encoding="utf-8"))
             tab = EditorTab(editor=editor, path=source)
-            window._add_tab(tab, source.name)
-
-            window.refresh_project_panels()
-            self.assertEqual(window.images_panel.table.rowCount(), 1)
-            self.assertTrue((root / ".icstex" / "asset-index.json").exists())
-
-            window.refresh_project_panels()
-            self.assertEqual(window.images_panel.table.rowCount(), 1)
-            tab.modified = False
-            tab.dirty = False
-            window.close()
+            try:
+                with patch("app.gui.project_panel_controller._read_image_size", return_value=(120, 60)) as metadata, \
+                        patch("app.gui.project_panel_controller.import_metrics.record_index_scan") as scans, \
+                        patch("app.core.asset_index.AssetIndex.load") as load, \
+                        patch("app.core.asset_index.AssetIndex.save") as save:
+                    window._add_tab(tab, source.name)
+                    window.refresh_project_panels()
+                    self.assertEqual(window.images_panel.table.rowCount(), 1)
+                    index = next(iter(window.project_panels._asset_indexes.values()))
+                    record = index._records["figures/a.png"]
+                    window.refresh_project_panels()
+                    self.assertIs(next(iter(window.project_panels._asset_indexes.values())), index)
+                    self.assertIs(index._records["figures/a.png"], record)
+                    self.assertEqual(window.images_panel.table.rowCount(), 1)
+                    self.assertIn("使用待检查", window.images_panel.table.item(0, 2).text())
+                    metadata.assert_called_once()
+                    load.assert_not_called()
+                    save.assert_not_called()
+                    self.assertGreaterEqual(scans.call_count, 2)
+                    self.assertTrue(scans.call_args_list[0].kwargs["full"])
+                    self.assertTrue(all(not call.kwargs["full"] for call in scans.call_args_list[1:]))
+                self.assertEqual(before, {path.relative_to(root): path.read_bytes()
+                                          for path in root.rglob("*") if path.is_file()})
+                self.assertFalse((root / ".icstex" / "asset-index.json").exists())
+                self.assertFalse(window.compile_authorized_roots)
+            finally:
+                tab.modified = tab.dirty = False
+                window.close()
+                window.deleteLater()
+                QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
     def test_import_perf_dialog_shows_summaries(self) -> None:
         from app.core.import_metrics import import_metrics

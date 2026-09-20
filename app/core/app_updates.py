@@ -18,6 +18,7 @@ from app import __version__
 
 CONFIG_NAME = "app-update.json"
 CHECK_INTERVAL_SECONDS = 24 * 60 * 60
+STARTUP_CHECK_COOLDOWN_SECONDS = 5 * 60
 SUPPORTED_TARGETS = {("darwin", "arm64"), ("darwin", "x86_64"),
                      ("win32", "arm64"), ("win32", "x86_64")}
 
@@ -145,9 +146,10 @@ def installed_update_availability() -> UpdateAvailability:
     return UpdateAvailability(config, library_path=library)
 
 
-def automatic_check_due(last_attempt: float, now: float) -> bool:
+def automatic_check_due(last_attempt: float, now: float, *, startup: bool = False) -> bool:
     # A future saved timestamp (clock correction) must not suppress checks forever.
-    return last_attempt <= 0 or now < last_attempt or now - last_attempt >= CHECK_INTERVAL_SECONDS
+    interval = STARTUP_CHECK_COOLDOWN_SECONDS if startup else CHECK_INTERVAL_SECONDS
+    return last_attempt <= 0 or now < last_attempt or now - last_attempt >= interval
 
 
 def other_installed_instances(*, run=subprocess.run) -> bool:

@@ -27,17 +27,21 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
-from PySide6.QtCore import QSettings, QTimer
+from PySide6.QtCore import QEvent, QSettings, QTimer
 from PySide6.QtGui import QImage, QTextCursor
 from PySide6.QtPdf import QPdfDocument
 from PySide6.QtWidgets import QApplication
+from shiboken6 import isValid
 
 from app.core.asset_index import AssetIndex
-from app.core.compiler import CompileManager
+from app.core.build_evidence import capture_compile_inputs
+from app.core.compiler import BuildPurpose, CompileManager
 from app.core.latex_tools import LaTeXEngine, detect_toolchain
+from app.core.project_dependencies import static_dependencies
 from app.core.settings import AppSettings
 from app.core.word_count import count_project
 from app.gui.main_window import MainWindow
+from app.gui import dependency_controller
 
 
 SENTENCE = "This sentence has ten words and includes another few tokens.\n"
@@ -128,6 +132,7 @@ def gui_probe(base: Path) -> dict:
     window.file_watcher.stop()
     original_watch = window.file_watcher.watch
     window.file_watcher.watch = Mock()
+    results = {}
     try:
         asynchronous = hasattr(window, "word_counts")
         if asynchronous:
@@ -205,6 +210,32 @@ def gui_probe(base: Path) -> dict:
         results["external_tex_reloaded"] = "An external sentence" in tab.editor.toPlainText()
         if asynchronous:
             wait_gui(lambda: not window.word_counts.is_busy)
+
+        # Additional V1 case, separate from the unchanged M0 timing samples.
+        # Wrappers observe real work; they do not replace its implementation.
+        window.show()
+        window.readiness.show()
+        wait_gui(lambda: not window.readiness.is_busy and not window.word_counts.is_busy
+                 and not window.dependencies.is_busy)
+        with patch.object(window.readiness, "_launch", wraps=window.readiness._launch) as checks, \
+             patch.object(window.word_counts, "_launch", wraps=window.word_counts._launch) as counts, \
+             patch.object(dependency_controller, "static_dependencies",
+                          wraps=dependency_controller.static_dependencies) as dependencies, \
+             patch.object(AssetIndex, "scan", autospec=True, side_effect=AssetIndex.scan) as scans:
+            burst = measure(lambda: tab.editor.insertPlainText("x"), 15)
+            window.documents.cancel_save_timer(tab)
+            immediate = {"checks": checks.call_count, "word_counts": counts.call_count,
+                         "dependencies": dependencies.call_count, "assets": scans.call_count}
+            assert not any(immediate.values()), immediate
+            wait_gui(lambda: not window.dependencies.is_busy and not window.word_counts.is_busy
+                     and not window.project_panels._timer.isActive())
+            after = {"checks": checks.call_count, "word_counts": counts.call_count,
+                     "dependencies": dependencies.call_count, "assets": scans.call_count}
+            assert after["checks"] == after["assets"] == 0, after
+            results["edit_with_submission_check_visible"] = {
+                **burst, "immediate_work_calls": immediate, "after_debounce_work_calls": after,
+                "check_result_invalidated": window.readiness._displayed_key is None,
+            }
         return results
     finally:
         window.file_watcher.watch = original_watch
@@ -212,7 +243,10 @@ def gui_probe(base: Path) -> dict:
             window.documents.cancel_save_timer(open_tab)
             open_tab.modified = False
             open_tab.dirty = False
-        window.close()
+        assert window.close(), "Synthetic clean window refused close"
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        assert not isValid(window), "Accepted window retained its Qt object"
+        results["closed_window_destroyed"] = True
         QApplication.processEvents()
 
 
@@ -229,13 +263,38 @@ def asset_scan_probe(base: Path) -> list[dict]:
     return results
 
 
-def compile_probe(base: Path) -> list[dict]:
+def dependency_probe(base: Path) -> list[dict]:
+    results = []
+    for children in (10, 50, 200):
+        project = base / f"dependencies-{children}"
+        project.mkdir()
+        root = project / "main.tex"
+        root.write_text("".join(f"\\input{{child-{i}.tex}}\n" for i in range(children)), encoding="utf-8")
+        for number in range(children):
+            (project / f"child-{number}.tex").write_text(SENTENCE * (400 // children), encoding="utf-8")
+        graph = static_dependencies(root, project)
+        snapshot = capture_compile_inputs(root, project)
+        assert graph.complete and snapshot.complete
+        assert len(graph.paths) == len(snapshot.observations) == children + 1
+        original = {path: path.read_bytes() for path in graph.paths}
+        results.append({
+            "children": children, "files": len(graph.paths),
+            "source_bytes": sum(map(len, original.values())),
+            "static_graph": measure(lambda: static_dependencies(root, project)),
+            "graph_and_content_hashes": measure(lambda: capture_compile_inputs(root, project)),
+            "cache_condition": "Repeated reads; OS cache not flushed; no app graph cache",
+        })
+        assert all(path.read_bytes() == data for path, data in original.items())
+    return results
+
+
+def compile_probe(base: Path, purpose: BuildPurpose = BuildPurpose.FINAL) -> list[dict]:
     tools = detect_toolchain()
     if not tools.latexmk or not tools.xelatex:
         return [{"skipped": "latexmk and xelatex required; no installation attempted"}]
     results = []
     for trial in range(3):
-        project = base / f"compile-{trial}"
+        project = base / f"compile-{purpose.value}-{trial}"
         project.mkdir()
         root = project / "main.tex"
         source = (
@@ -258,7 +317,9 @@ def compile_probe(base: Path) -> list[dict]:
                 root.write_text(source, encoding="utf-8")
             elif label == "text_edit":
                 root.write_text(source.replace("This sentence", "The sentence", 1), encoding="utf-8")
-            result = manager.compile_now(timeout_seconds=60)
+            started = time.perf_counter()
+            result = manager.compile_now(purpose, timeout_seconds=60)
+            call_ms = (time.perf_counter() - started) * 1000
             assert result is not None and result.ok, (label, result)
             digest = hashlib.sha256(result.pdf_file.read_bytes()).hexdigest()
             pdf = QPdfDocument()
@@ -269,7 +330,11 @@ def compile_probe(base: Path) -> list[dict]:
             results.append({
                 "trial": trial,
                 "case": label,
+                "purpose": result.purpose.value,
                 "duration_ms": round(result.duration_seconds * 1000, 3),
+                "call_ms": round(call_ms, 3),
+                "forced_rebuild": "-g" in result.command,
+                "input_evidence_stable": bool(result.input_evidence and result.input_evidence.stable),
                 "rules": re.findall(r"Run number \d+ of rule '([^']+)'", result.stdout),
                 "pages": pages,
                 "pdf_bytes": result.pdf_file.stat().st_size,
@@ -277,12 +342,14 @@ def compile_probe(base: Path) -> list[dict]:
                 "safe_command": "-norc" in result.command and "-no-shell-escape" in result.command,
             })
             previous_hash = digest
+        assert manager.retire(), "Synchronous benchmark manager did not retire"
     return results
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--sections", nargs="+", choices=("word_count", "gui", "asset_scan", "dependencies", "compile", "preview"))
     args = parser.parse_args()
     app = QApplication.instance() or QApplication([])
     app_digest = hashlib.sha256()
@@ -310,10 +377,23 @@ def main() -> None:
             ("word_count", word_count_probe),
             ("gui", gui_probe),
             ("asset_scan", asset_scan_probe),
+            ("dependencies", dependency_probe),
             ("compile", compile_probe),
+            ("preview", lambda base: compile_probe(base, BuildPurpose.PREVIEW)),
         ):
+            if args.sections and name not in args.sections:
+                continue
             print(f"Probing {name}...", file=sys.stderr, flush=True)
             report[name] = probe(base)
+    post_digest = hashlib.sha256()
+    for source in sorted((REPO / "app").rglob("*.py")):
+        post_digest.update(source.relative_to(REPO).as_posix().encode() + b"\0" + source.read_bytes() + b"\0")
+    assert post_digest.hexdigest() == report["app_python_tree_sha256"], "Shared app source changed during measurement"
+    report["app_hash_matches_after_run"] = True
+    report["compile_comparison_boundary"] = (
+        "FINAL now forces TeX work; old warm FINAL with no latexmk rules is not equivalent. "
+        "PREVIEW uses a separate output tree here with original inputs and no image proxy preparer."
+    )
     payload = json.dumps(report, ensure_ascii=False, indent=2)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

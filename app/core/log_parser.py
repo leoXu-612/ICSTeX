@@ -6,6 +6,7 @@ import re
 
 
 FILE_LINE_RE = re.compile(r"^(?P<file>.+?\.tex):(?P<line>\d+):\s*(?P<message>.+)$")
+LUAOTFLOAD_LINE_RE = re.compile(r"^\s*luaotfload\s*\|\s*[^:]+:\s*(?P<message>.*)$")
 
 
 @dataclass(frozen=True)
@@ -27,6 +28,33 @@ def parse_latex_errors(output: str, project_dir: str | Path | None = None) -> li
     lines = output.splitlines()
 
     for index, line in enumerate(lines):
+        loader_line = LUAOTFLOAD_LINE_RE.match(line)
+        if loader_line and loader_line.group("message").strip() == "FATAL ERROR":
+            details = []
+            for following in lines[index + 1:index + 9]:
+                detail_line = LUAOTFLOAD_LINE_RE.match(following)
+                if not detail_line:
+                    # TeX's log wraps the loader's quoted error without
+                    # repeating its prefix. Only extend that unfinished quote,
+                    # never a subsequent TeX error, source line or traceback.
+                    fragment = following.strip()
+                    if (details and details[-1].startswith('"') and not details[-1].endswith('".')
+                            and fragment and not FILE_LINE_RE.match(fragment)
+                            and not fragment.startswith(("!", "stack traceback:", "<"))
+                            and not re.match(r"l\.\d+", fragment)):
+                        details[-1] = _append_message_fragment(details[-1], fragment)
+                        continue
+                    break
+                detail = detail_line.group("message").lstrip("\u00d7 ").strip()
+                if detail == "FATAL ERROR":
+                    break
+                if detail:
+                    details.append(detail)
+            message = "; ".join(["luaotfload: FATAL ERROR", *details])
+            # Font-loader line numbers are not locations in the student's TeX.
+            errors.append(LaTeXError(message=message))
+            continue
+
         file_line = FILE_LINE_RE.match(line.strip())
         if file_line:
             raw_file = Path(file_line.group("file"))
@@ -54,6 +82,18 @@ def parse_log_file(log_file: str | Path, project_dir: str | Path | None = None) 
     if not path.exists():
         return []
     return parse_latex_errors(path.read_text(encoding="utf-8", errors="replace"), project_dir)
+
+
+def parse_reference_warnings(output: str) -> tuple[LaTeXError, ...]:
+    """Common TeX rerun/unresolved-reference warnings; no arbitrary log diagnosis."""
+    warnings = []
+    for match in re.finditer(r"(?:LaTeX|Package [\w-]+) Warning:\s*([^\n]*(?:\n(?!\s*$|.*Warning:)[^\n]*)?)", output):
+        message = " ".join(match.group(1).split())
+        if re.search(r"undefined|multiply[- ]defined|Label\(s\) may have changed|Rerun to get cross-references", message, re.I):
+            line = re.search(r"on input line (\d+)", message)
+            # A log line alone does not identify which included source owns it.
+            warnings.append(LaTeXError(message, line=int(line.group(1)) if line else None))
+    return tuple(_dedupe_errors(warnings))
 
 
 def _line_number_near(lines: list[str], index: int) -> int | None:

@@ -5,8 +5,8 @@ This file contains the operational rules for any coding agent working on
 
 ## Start Here
 
-1. Run `git rev-parse --show-toplevel` and `pwd -P`; confirm both identify the
-   current `ICSTeX` repository root.
+1. Run `pwd -P` and `git rev-parse --show-toplevel`; confirm both identify
+   the current ICSTeX checkout or isolated task worktree.
 2. Read `docs/PROJECT_STATE.md` for the current verified source and artifact state.
 3. Read the active bounded assignment for the current agent: `FORCODEX.md`,
    `FORCLAUDE.md`, or `FORDEEPSEEK.md`.
@@ -112,6 +112,8 @@ to the relevant core test module.
   current path and known authoritative repository path before asking for
   clarification; ask only if the target repository remains ambiguous. Do not
   initialize or replace a repository to work around a failed check.
+- Follow `CONTRIBUTING.md`: one task per short-lived branch and PR; do not push
+  directly to `main` or use a release branch for ordinary development.
 - Preserve unrelated user or agent changes in the shared workspace.
 - Never use destructive reset/checkout workflows without explicit approval.
 - Use ASCII in code unless a file already contains Chinese UI strings.

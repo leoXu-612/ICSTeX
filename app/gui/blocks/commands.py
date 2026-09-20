@@ -215,6 +215,32 @@ class UpdateBlockCommand(_SessionCommand):
         self._notify(f"block_updated:{self._block_id}")
 
 
+class ApplyPropertyDraftsCommand(_SessionCommand):
+    """One explicitly confirmed property batch after all bases were checked."""
+
+    def __init__(self, session, patches, layout):
+        super().__init__(session, "应用编辑草稿")
+        self._after = deepcopy(patches)
+        self._before = {block_id: {key: deepcopy(getattr(session.registry.get(block_id), key))
+                                  for key in patch} for block_id, patch in patches.items()}
+        self._old_layout = deepcopy(session.layout)
+        self._new_layout = deepcopy(layout)
+        self._reason = (f"block_updated:{next(iter(patches))}" if len(patches) == 1 and layout == session.layout
+                        else "property_drafts_applied")
+
+    def _apply(self, patches, layout):
+        for block_id, patch in patches.items():
+            self._session.registry.update(block_id, deepcopy(patch))
+        self._session.layout = deepcopy(layout)
+        self._notify(self._reason)
+
+    def redo(self):
+        self._apply(self._after, self._new_layout)
+
+    def undo(self):
+        self._apply(self._before, self._old_layout)
+
+
 class AssignBlockToSlotCommand(_SessionCommand):
     def __init__(self, session, block_id: str, slot_id: str) -> None:
         super().__init__(session, "分配到布局槽位")
@@ -312,31 +338,3 @@ class ChangeLayoutCommand(QUndoCommand):
 
     def undo(self) -> None:
         self._panel.apply_layout_state(self._old_layout)
-
-
-class UpdateTableCommand(_SessionCommand):
-    """Snapshot-based table data change (row/column ops, paste, cell batch)."""
-
-    def __init__(self, session, apply_fn, text: str = "修改表格") -> None:
-        super().__init__(session, text)
-        self._apply_fn = apply_fn
-        self._before: object | None = None
-        self._after: object | None = None
-
-    def redo(self) -> None:
-        model = self._session.table_model
-        if self._before is None:
-            self._before = deepcopy(model.data)
-            self._apply_fn()
-            self._after = deepcopy(model.data)
-        else:
-            model.data = deepcopy(self._after)
-        self._session.table_edited()
-        self._notify("table_updated")
-
-    def undo(self) -> None:
-        model = self._session.table_model
-        if self._before is not None:
-            model.data = deepcopy(self._before)
-        self._session.table_edited()
-        self._notify("table_updated")

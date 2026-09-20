@@ -92,6 +92,9 @@ class SingleProcessTests(TestCase):
     def test_one_edit_launches_one_latex_process(self) -> None:
         tmp, session, controller, _ids = _project()
         try:
+            # First compilation is explicit; subsequent edits may request preview.
+            self.assertTrue(session.compile_final().ok)
+            launches_before = session._compile_launches
             finished = []
             session.compile_finished.connect(finished.append)
             controller.update_block(_ids[0], {"content": content_for_text("触发一次编译")}, text="edit")
@@ -100,7 +103,7 @@ class SingleProcessTests(TestCase):
                 QApplication.processEvents()
                 time.sleep(0.02)
             self.assertEqual(len(finished), 1)
-            self.assertEqual(session._compile_launches, 1)
+            self.assertEqual(session._compile_launches - launches_before, 1)
         finally:
             tmp.cleanup()
 
@@ -109,7 +112,7 @@ class DeferredAssembleTests(TestCase):
     def test_assemble_is_deferred_off_the_edit_path(self) -> None:
         tmp, session, controller, _ids = _project()
         try:
-            session.assemble_latex()  # warm state
+            self.assertTrue(session.compile_final().ok)  # explicit authorization and warm state
             session._last_assemble_stats = {}
             controller.update_block(_ids[0], {"content": content_for_text("再改一次")}, text="edit")
             self.assertTrue(session._preview_timer.isActive())

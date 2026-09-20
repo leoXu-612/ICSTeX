@@ -1,6 +1,22 @@
 # macOS arm64 Beta activation handoff
 
-Updated: 2026-09-10. Status: source synchronized; public activation on hold.
+Updated: 2026-09-15. Status: historical Beta 2 evidence; superseded by the delivered Beta 3 updater.
+
+The current online service, accepted installation guard and public HTTPS delivery
+are recorded in [`BETA3_DELIVERY.md`](BETA3_DELIVERY.md). Do not treat the old
+activation hold below as an outstanding implementation or authorization request.
+
+The 2026-09-14 local preparation and proposed installation coordination are in
+[`UPDATE_ACTIVATION_PREPARATION.md`](UPDATE_ACTIVATION_PREPARATION.md). The r2
+candidate below is historical evidence, not the current performance/UI source.
+The user authorized public activation on 2026-09-14; the website has been deployed
+independently, but application-update activation remains held on the unchanged
+installation gate. See `PROJECT_STATE.md` for fresh readiness checks.
+
+On 2026-09-15, the current a8bb8ee6 GUI source was published separately as a
+macOS Beta 2 manual-download release, without the update runtime. The public
+v2.1.0-beta.2 tag now points to fea315a; never overwrite its assets with the old
+r2 candidate below. A future automatic-update bootstrap needs a new version.
 
 Keychain authorization is complete. No additional signing action is currently
 needed from the maintainer. The dedicated `com.icstex.app.beta` key remains in

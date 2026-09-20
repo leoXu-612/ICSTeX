@@ -144,6 +144,23 @@ def explain_latex_error(error: LaTeXError, *, root_file: Path | None = None) -> 
     lower = raw.lower()
     file = error.file or root_file
 
+    if "unable to load picture or pdf file" in lower:
+        return Diagnostic(
+            severity=SEVERITY_ERROR,
+            title="图片或 PDF 读取失败",
+            message="请检查图片文件、引用路径和 graphicspath 设置。带行号的检查项可定位引用；原始日志中保留了文件名。",
+            file=file, line=error.line, raw_message=raw,
+        )
+
+    if raw.startswith("luaotfload: FATAL ERROR"):
+        return Diagnostic(
+            severity=SEVERITY_ERROR,
+            title="LuaLaTeX 字体组件失败",
+            message="luaotfload 字体组件报告致命错误。请查看原始日志并检查工具链与文件访问配置；"
+                    "这不等同于正文语法错误。不会自动放宽读取限制或切换引擎。",
+            raw_message=raw,
+        )
+
     if "undefined control sequence" in lower:
         command = _extract_command(raw)
         package = COMMAND_PACKAGE_HINTS.get(command or "")

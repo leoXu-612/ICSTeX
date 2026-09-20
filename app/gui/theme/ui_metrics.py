@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+SCALE_TIERS = (0.90, 1.00, 1.10, 1.25, 1.50)
+
 
 @dataclass(frozen=True)
 class UiMetrics:
@@ -116,7 +118,7 @@ class TypographyMetrics:
 
     @property
     def toolbar_pt(self) -> float:
-        return 12.0 * self.scale
+        return 13.0 * self.scale
 
     @property
     def section_title_pt(self) -> float:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import ExitStack
 from dataclasses import dataclass, field, replace
 from enum import Enum
 from itertools import count
@@ -8,12 +9,17 @@ import os
 from pathlib import Path
 import signal
 import subprocess
+import sys
 import threading
 import time
 from typing import Callable
 
 from app.core.latex_tools import LaTeXEngine, LaTeXToolchain, detect_toolchain
-from app.core.log_parser import LaTeXError, parse_latex_errors, parse_log_file
+from app.core.log_parser import LaTeXError, parse_latex_errors, parse_log_file, parse_reference_warnings
+from app.core.build_evidence import BuildInputEvidence, capture_compile_inputs, finish_compile_inputs
+from app.core.build_tool_versions import BuildToolVersions, capture_tool_versions
+from app.core.file_observation import file_signature
+from app.core.pdf_identity import PdfContentIdentity, capture_pdf_identity
 from app.core.paths import (
     build_dir_for,
     built_log_for,
@@ -22,7 +28,8 @@ from app.core.paths import (
     preview_build_dir_for,
 )
 from app.core.process_env import latex_subprocess_env
-from app.core.project_dependencies import read_recorder_dependencies
+from app.core.macos_compiler_sandbox import macos_sandbox_launch
+from app.core.project_dependencies import read_project_bytes, read_recorder_dependencies
 
 
 logger = logging.getLogger(__name__)
@@ -100,6 +107,11 @@ class CompileResult:
     preview_asset_paths: tuple[Path, ...] = ()
     job_key: CompileJobKey | None = None
     recorder_inputs: tuple[Path, ...] | None = None
+    input_evidence: BuildInputEvidence | None = None
+    warnings: tuple[LaTeXError, ...] = ()
+    log_complete: bool = False
+    tool_versions: BuildToolVersions | None = None
+    pdf_identity: PdfContentIdentity | None = None
 
     @property
     def ok(self) -> bool:
@@ -201,6 +213,11 @@ class CompileManager:
     def is_busy(self) -> bool:
         """Whether a worker has launched or a compile is currently running."""
         return not self._idle_event.is_set()
+
+    @property
+    def is_scheduled(self) -> bool:
+        with self._lock:
+            return self._scheduled_request is not None or self._pending_request is not None
 
     @property
     def is_retired(self) -> bool:
@@ -377,6 +394,14 @@ class CompileManager:
         try:
             if self.on_started:
                 self.on_started(self.root_file, build_id)
+            before = None
+            if selected is BuildPurpose.FINAL:
+                previous = read_recorder_dependencies(
+                    request.key.output_dir / f"{self.root_file.stem}.fls",
+                    root=self.root_file, scope=self.project_scope,
+                )
+                before = capture_compile_inputs(self.root_file, self.project_scope,
+                                                tuple(previous.paths) if previous else ())
             result = self._run_compile(build_id, selected, timeout_seconds=timeout_seconds)
             # Read the recorder before another job can overwrite the same FLS.
             recorder = None
@@ -387,7 +412,20 @@ class CompileManager:
                 )
                 if inputs is not None:
                     recorder = tuple(sorted(inputs.paths))
-            result = replace(result, job_key=request.key, recorder_inputs=recorder)
+            pdf_signature = file_signature(result.pdf_file) if result.ok else None
+            evidence = (finish_compile_inputs(before, self.root_file, self.project_scope,
+                                              recorder or (), result.pdf_file if result.ok else None)
+                        if before is not None else None)
+            identity = None
+            if result.ok:
+                identity = (capture_pdf_identity(result.pdf_file, self.project_scope,
+                    observation=evidence.pdf, observed_from=pdf_signature) if evidence and evidence.pdf else
+                    capture_pdf_identity(result.pdf_file, self.project_scope))
+            versions = (capture_tool_versions(result.stdout, request.key.engine,
+                                              via_latexmk=bool(request.key.toolchain.latexmk))
+                        if selected is BuildPurpose.FINAL else None)
+            result = replace(result, job_key=request.key, recorder_inputs=recorder,
+                             input_evidence=evidence, tool_versions=versions, pdf_identity=identity)
             if self.on_finished:
                 self.on_finished(result)
             return result
@@ -431,9 +469,49 @@ class CompileManager:
                 return False
             self._stop_requested = True
             process = self._process
-        if process is not None and process.poll() is None:
-            self._terminate_process(process)
+        if process is not None:
+            remaining = max(0.0, deadline - time.monotonic())
+            self._signal_process_tree(process, force=False, budget=remaining)
+            # Reserve time for hard termination AND worker/pipe cleanup. Waiting
+            # out the entire deadline before kill() can never confirm completion.
+            grace = min(remaining / 2, max(0.0, deadline - time.monotonic()))
+            if self.wait_until_idle(grace):
+                return True
+            self._signal_process_tree(process, force=True,
+                                      budget=max(0.0, deadline - time.monotonic()))
         return self.wait_until_idle(max(0.0, deadline - time.monotonic()))
+
+    @staticmethod
+    def _signal_process_tree(process: subprocess.Popen[str], *, force: bool, budget: float) -> None:
+        """Signal only our isolated compile tree; the idle event proves completion."""
+        pid = getattr(process, "pid", None)
+        if isinstance(pid, int) and os.name != "nt":
+            try:
+                # Popen creates a session whose PGID is pid. Do not use getpgid:
+                # the leader may have exited while a child still holds a pipe.
+                os.killpg(pid, signal.SIGKILL if force else signal.SIGTERM)
+                return
+            except ProcessLookupError:
+                return  # No remaining members of our group.
+            except OSError:
+                pass
+        elif isinstance(pid, int) and os.name == "nt" and budget > 0:
+            try:
+                # Kill the tree before its parent disappears. terminate() alone
+                # loses the ancestry needed by taskkill and can orphan engines.
+                result = subprocess.run(
+                    ["taskkill", "/PID", str(pid), "/T", "/F"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    timeout=budget, check=False, creationflags=subprocess.CREATE_NO_WINDOW,
+                )
+                if result.returncode == 0:
+                    return
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        try:
+            (process.kill if force else process.terminate)()
+        except OSError:
+            pass  # Exit races are expected; never turn this into an idle claim.
 
     def wait_until_idle(self, timeout: float = 1.5) -> bool:
         return self._idle_event.wait(max(0.0, timeout))
@@ -459,6 +537,7 @@ class CompileManager:
         toolchain = key.toolchain if key is not None else self.toolchain
         engine = key.engine if key is not None else self.engine
         restricted_io = key.restricted_io if key is not None else self.restricted_io
+        project_scope = self.project_scope
         output_dir = key.output_dir if key is not None else self.output_dir_for(purpose)
         output_dir.mkdir(parents=True, exist_ok=True)
         pdf_file = built_pdf_for(self.root_file, output_dir)
@@ -509,9 +588,27 @@ class CompileManager:
             command_root = Path(os.path.relpath(self.root_file, self.root_file.parent))
             command_output = Path(os.path.relpath(output_dir, self.root_file.parent))
         command = toolchain.compile_command(command_root, command_output, engine)
+        if (purpose is BuildPurpose.PREVIEW and engine is LaTeXEngine.XELATEX
+                and toolchain.latexmk and not restricted_io):
+            # Lossless fast compression: preview latency matters more than a
+            # slightly smaller temporary PDF. FINAL retains the driver defaults.
+            command[1:1] = ["-e", '$xdvipdfmx = "xdvipdfmx -E -z 1 -o %D %O %S";']
+        if purpose is BuildPurpose.FINAL and toolchain.latexmk:
+            # A cache hit cannot bind the current input hashes to its old PDF.
+            # Re-run all rules without cleaning; PREVIEW remains incremental.
+            command.insert(1, "-g")
         self._log("运行命令：" + " ".join(command))
         timed_out = False
+        sandbox_context = ExitStack()
         try:
+            environment = self._compile_environment(preparation.overlay_dir, restricted_io=restricted_io)
+            if restricted_io and sys.platform == "darwin":
+                launch = sandbox_context.enter_context(macos_sandbox_launch(
+                    command, toolchain=toolchain, engine=engine,
+                    project_scope=project_scope, root_file=self.root_file,
+                    output_dir=output_dir, overlay_dir=preparation.overlay_dir,
+                ))
+                command, environment = launch.command, launch.environment
             popen_kwargs: dict[str, object] = {
                 "stdout": subprocess.PIPE,
                 "stderr": subprocess.PIPE,
@@ -519,8 +616,26 @@ class CompileManager:
                 "encoding": "utf-8",
                 "errors": "replace",
                 "cwd": self.root_file.parent,
-                "env": self._compile_environment(preparation.overlay_dir, restricted_io=restricted_io),
+                "env": environment,
             }
+            if restricted_io and sys.platform == "darwin":
+                popen_kwargs.update(stdin=subprocess.DEVNULL, close_fds=True)
+            with self._lock:
+                stop_requested = self._stop_requested or self._retired
+            if stop_requested:
+                return self._simple_result(
+                    build_id, CompileOutcome.STOPPED, returncode=-15,
+                    stderr="编译已在准备阶段停止。", purpose=purpose,
+                    duration_seconds=time.perf_counter() - start,
+                )
+            if timeout_seconds is not None:
+                timeout_seconds = max(0.0, timeout_seconds - (time.perf_counter() - start))
+                if timeout_seconds == 0:
+                    return self._simple_result(
+                        build_id, CompileOutcome.TIMEOUT, returncode=-15,
+                        stderr="编译准备超时，未启动编译器。", purpose=purpose,
+                        duration_seconds=time.perf_counter() - start,
+                    )
             if os.name == "nt":
                 # A new process group lets stop/timeout kill latexmk and the
                 # engine children it spawns (taskkill /T targets the tree).
@@ -535,11 +650,7 @@ class CompileManager:
                 self._process = process
                 stop_requested = self._stop_requested or self._retired
             if stop_requested:
-                try:
-                    process.terminate()
-                except OSError:
-                    pass
-            timed_out = False
+                self._signal_process_tree(process, force=True, budget=1.0)
             if timeout_seconds is None:
                 stdout, stderr = process.communicate()
             else:
@@ -562,6 +673,7 @@ class CompileManager:
                 purpose=purpose,
             )
         finally:
+            sandbox_context.close()
             with self._lock:
                 self._process = None
         with self._lock:
@@ -573,6 +685,11 @@ class CompileManager:
         duration = time.perf_counter() - start
         combined = "\n".join(part for part in (stdout, stderr) if part)
         errors = parse_log_file(log_file, self.root_file.parent) or parse_latex_errors(combined, self.root_file.parent)
+        try:
+            log_text = read_project_bytes(log_file, self.project_scope, allow_internal=True).decode("utf-8", errors="replace")
+            log_complete = True
+        except (OSError, ValueError):
+            log_text, log_complete = combined, False
 
         if timed_out:
             stderr = "\n".join(part for part in (stderr, "编译超时，已终止进程。") if part)
@@ -600,6 +717,8 @@ class CompileManager:
             errors=errors,
             build_id=build_id,
             purpose=purpose,
+            warnings=parse_reference_warnings(log_text),
+            log_complete=log_complete,
             preview_fidelity=preparation.fidelity if purpose is BuildPurpose.PREVIEW else None,
             preview_manifest_digest=(
                 preparation.manifest_digest if purpose is BuildPurpose.PREVIEW else None
@@ -614,72 +733,24 @@ class CompileManager:
     ) -> dict[str, str]:
         environment = latex_subprocess_env(texinputs_prefix=overlay_dir)
         if self.restricted_io if restricted_io is None else restricted_io:
-            # TeX's paranoid mode rejects absolute and parent-path document IO
-            # while retaining reads from the working tree and installed TeX
-            # distribution.  This complements -no-shell-escape; it does not
-            # replace project-root validation at the caller boundary.
+            # TeX's paranoid mode rejects absolute and parent-path document IO.
+            # TeX-resolved inputs can remain available, but Lua io.open on an
+            # absolute distribution path can also be denied. This complements
+            # -no-shell-escape, not project-root validation at the caller.
             environment["openin_any"] = "p"
             environment["openout_any"] = "p"
         return environment
 
     @staticmethod
     def _terminate_process(process: subprocess.Popen[str]) -> None:
-        """Terminate the whole compile tree, not just the direct child.
-
-        latexmk drives engine children (xelatex/pdflatex) that inherit the
-        stdout/stderr pipes. Killing only the driver leaves the engine holding
-        the pipe write ends open, so a subsequent communicate() can block
-        forever waiting for EOF.
-        """
-        process_pid = getattr(process, "pid", None)
-        group_kill = process_pid is not None and os.name != "nt"
-        windows_tree_kill = process_pid is not None and os.name == "nt"
-        if group_kill:
-            try:
-                os.killpg(os.getpgid(process_pid), signal.SIGTERM)
-            except OSError:
-                group_kill = False
-        if windows_tree_kill:
-            try:
-                subprocess.run(
-                    ["taskkill", "/pid", str(process_pid), "/T", "/F"],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    check=False,
-                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                )
-            except OSError:
-                windows_tree_kill = False
-        if not group_kill and not windows_tree_kill:
-            try:
-                process.terminate()
-            except OSError:
-                pass
+        """Timeout cleanup shares cancellation's isolated-tree signaling rules."""
+        CompileManager._signal_process_tree(process, force=False, budget=0.5)
         try:
-            process.wait(timeout=1.0)
+            process.wait(timeout=0.5)
         except subprocess.TimeoutExpired:
-            if group_kill:
-                try:
-                    os.killpg(os.getpgid(process_pid), signal.SIGKILL)
-                    return
-                except OSError:
-                    pass
-            if windows_tree_kill:
-                try:
-                    subprocess.run(
-                        ["taskkill", "/pid", str(process_pid), "/T", "/F"],
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                        check=False,
-                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                    )
-                    return
-                except OSError:
-                    pass
-            try:
-                process.kill()
-            except OSError:
-                pass
+            pass
+        # A reaped leader does not prove that child-held output pipes closed.
+        CompileManager._signal_process_tree(process, force=True, budget=0.5)
 
     def _simple_result(
         self,

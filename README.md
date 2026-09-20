@@ -1,7 +1,10 @@
 # ICSTeX
 
-Current version: 2.1.0-beta.2. Current packaged release: 2.1.0-beta.1. The working source may be ahead of the packaged
-release; see [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) for the exact boundary.
+Current version: 2.1.0-beta.4. Packaged target: macOS Apple Silicon (arm64); current downloads are listed on the release website.
+See [`release/BUILD_RECEIPT.json`](release/BUILD_RECEIPT.json) for the exact packaged source identity.
+This release includes opt-in, signed in-app updates. Older manual builds need one manual
+bootstrap installation. Windows stays on its historical Beta 1 package.
+Verified online delivery is recorded in [`docs/BETA3_DELIVERY.md`](docs/BETA3_DELIVERY.md).
 
 ICSTeX - ICC Student's TeX - is local research-writing infrastructure for ICC
 students, delivered as a Python/PySide6 desktop application. It combines LaTeX
@@ -17,21 +20,48 @@ In the current working source, automatic compilation can use a local fast-image
 preview: statically referenced project PNG/JPEG assets, including common
 `\graphicspath` forms, are cached as smaller proxies in `.icstex/`. Their LaTeX
 natural size is preserved; manual Compile and Export PDF always use the original
-images. Preview and final build state are isolated, and export waits for a current
-final build rather than copying a preview or stale PDF. This dual preview/final
-build path is included in 2.1.0-beta.1.
+images. Preview and final build state are isolated; this dual preview/final build
+path is included in 2.1.0-beta.1. The newer working-source delivery flow below
+adds content checks beyond the older cached final-state export controller.
+
+Working source now routes File/PDF and main/standalone Block export to explicit
+“准备提交” review. Save and FINAL are separate actions; content-bound checks and
+reviewed bytes precede a new-directory delivery. Default PDF-only; source and
+report are independent opt-ins. Unknown checks remain unknown, not academic
+certification. Focused, synthetic native workflows and the frozen full regression
+pass for that GUI source. New Agent/MCP exports add actual FINAL/input/PDF checks,
+exclusive publication and bounded source capture preserving original README and
+manifest bytes. Generated portable metadata is under `.icstex-package/`. The API
+does not provide GUI per-file review or certify private content. A further shared
+FINAL warm-cache defect is repaired and passes targeted and native workflows;
+the new full suite hit a Qt stylesheet crash. An unchanged-source rerun passes,
+but the cause is unresolved. FINAL now retains initial driver/engine version
+labels from its actual stdout in the reviewed report, without extra execution.
+These self-reports are not binary authentication; missing and auxiliary versions
+remain unknown. M5 remains incomplete. See
+[build-time version evidence](docs/v1-m5-tool-versions-verification-2026-09-11.md).
+See [GUI delivery evidence and remaining work](docs/v1-m5-delivery-gui-verification-2026-09-11.md).
+See [Agent/MCP and FINAL verification](docs/v1-m5-agent-export-verification-2026-09-11.md).
+The separate closed-window retention defect is now fixed and verified with
+native workflows and full regression; see [window lifetime evidence](docs/v1-m6-window-lifetime-verification-2026-09-11.md).
+This does not prove the earlier stylesheet SIGSEGV has the same cause.
 
 The newer working source and local development build also support double-clicking a current
 fast-preview PDF to locate its original project source with SyncTeX. Stale or
 rebuilding output cannot drive navigation. The source-to-PDF toolbar action still
 requires a current final PDF, and preview PDFs remain ineligible for export.
-Published release packages have not yet been updated with this follow-up.
+This follow-up is included in the macOS Beta 2 manual-installation package.
 
-The working source also adds “软件更新…” with opt-in daily checks and guarded
+The working source also adds “软件更新…” with opt-in startup/daily checks and guarded
 all-window save/exit, using Sparkle on macOS and WinSparkle on Windows. Source
 runs and ordinary builds remain offline and unconfigured; public in-app upgrades
 are not enabled. Maintainer integration and the signed-installation acceptance
-gate are documented in [`packaging/UPDATES.md`](packaging/UPDATES.md).
+gate are documented in [`packaging/UPDATES.md`](packaging/UPDATES.md). Startup checks
+are deferred during compilation/export and throttled across rapid restarts; see
+the [current preparation scope](docs/UPDATE_ACTIVATION_PREPARATION.md).
+
+“帮助 → 在 GitHub 支持项目（Star）” opens the repository only when clicked.
+Starring is optional and never required to download, update, or use ICSTeX.
 
 ICSTeX also understands common LaTeX editor conventions such as
 `% !TEX root = main.tex` and `% !TEX program = xelatex`, and can infer a root
@@ -44,6 +74,129 @@ are detected, legacy encodings can be selected explicitly, and saves use an
 atomic replace so an encoding error cannot truncate the original paper.
 
 ## Project documentation
+
+The V1 development source on `codex/v1-development` adds **编译 → 提交检查** (or `Ctrl+Shift+J`) for
+read-only checks of saved inputs, actual FINAL/PDF evidence, references,
+resources and Word Count. Refresh never saves, compiles or uploads. Unknown
+coverage is not a pass, and this is not academic or course certification.
+
+Use **文件 → 项目配置…** to edit optional local preferences: a reference template,
+engine recommendation, relative directory suggestions, word targets and static
+check visibility. No course limits are supplied. Saving writes only
+`.icstex/project-profile.json`; it does not replace source, create suggested
+directories or change the active engine. Disabling retains the configuration.
+External conflicts and unknown formats preserve the original; cancel and reopen
+before retrying. These local source features are not in the published packages.
+
+The local project wizard now previews Chinese-name destinations and templates,
+offers an explicit engine choice, and creates only new directories. First
+compilation remains an explicit action. A workspace row shows the current project,
+compile root, save/PDF state and next step, with links to existing project tools.
+The Block menu/header provides guarded Save, explicit FINAL and Stop. Save keeps
+metadata and managed TeX together without compiling; external/unknown-file
+conflicts retain the draft and refuse replacement. Close asks Save/Discard/Cancel;
+Stop does not close the project. Unresolved `.icstex/block-write.pending` evidence
+blocks further writes and is not an automatic recovery feature. Unapplied
+Inspector properties now survive refresh/selection changes in memory and appear
+in the pending-draft list. **应用修改** validates the captured object before one
+Undo command; Discard, Save, close and FINAL require explicit draft handling.
+Conflicts retain the draft, and pending properties cannot pass saved/FINAL checks.
+This is not process-crash recovery or frozen delivery; see the
+[property-draft evidence and remaining editor risks](docs/v1-m2-property-draft-verification-2026-09-11.md).
+Multi-table and formula dialogs now preserve captured targets and pending edits;
+table navigation/read-only checks no longer overwrite the first registry table.
+Live cell input is included in Save/close decisions, and a changed formula target
+retains accepted text without overwriting the newer model. Focused/native checks
+and full regression pass. These changes are not complete editor
+acceptance; see [secondary-editor evidence and limits](docs/v1-m2-editor-target-verification-2026-09-11.md).
+The latest local continuation also checks the new formula envelope before replacing
+a selection, and retains pasted comment newlines and body whitespace. Invalid
+drafts remain editable instead of being applied. See
+[formula source-fidelity verification](docs/v1-m2-formula-fidelity-verification-2026-09-11.md)
+for the still-pending native checks; this follow-up is not a published package.
+
+The local Block **来源** tab now offers explicit read-only source checks and
+affected-Block navigation. Select a row to see recorded/observed hashes and any
+same-content CSV/XLSX candidate. Refresh does not import, save or update baselines;
+limits, unreadable files and ambiguous candidates remain unknown. Results are
+dated observations, not a frozen backup or data-authenticity check. See
+[source-status evidence and limits](docs/v1-m3-source-status-verification-2026-09-11.md).
+
+The existing merge candidate dialog now preserves original inputs and sibling
+cells, requires a fresh complete preview, and distinguishes whole-table structural
+conflicts. Table import helpers reject truncation and retain rendered headers and
+XLSX merge coordinates. A separate **来源 → 比较并合并来源…** flow now requires a
+digest-matching original file, explicit import/column/key mapping, review of all
+linked tables and final confirmation before one undoable source/table update.
+Original data stays untouched; retained source versions must be selected again as
+needed, since this is not a persistent backup. Large previews and native acceptance
+remain limited; see [source repair verification](docs/v1-m3-source-repair-verification-2026-09-11.md).
+See [merge/import verification](docs/v1-m3-merge-import-verification-2026-09-11.md).
+
+Ordinary-source projects also have **引用 → 检查项目引用（只读）** in the local
+development source. It follows supported declared BibTeX paths, checks open drafts,
+lists duplicate/missing/unparsed keys and unused suggestions, and locates definitions
+or uses. Checking does not save, compile, import or delete entries. Dynamic or
+incomplete coverage stays unknown; the conventional **快捷库** is separate. See
+[citation-health evidence and limitations](docs/v1-m3-citation-health-verification-2026-09-11.md).
+
+Local ordinary-source **图片 → 检查素材使用（只读）** now reports supported
+file/line uses, missing files, content changes and possible same-content candidates.
+Open drafts replace disk uses; incomplete coverage stays unknown and unused assets
+are suggestions only. Checking does not save, compile, move or rewrite anything.
+The separate **快捷浏览** uses an in-memory metadata cache; previous readable
+digests are window-local observations, not backups or persistent provenance. See
+[material-usage evidence and limits](docs/v1-m3-material-usage-verification-2026-09-11.md).
+
+The development source's text History validates registered source ownership and
+content digests before restoration. Confirmation produces one undoable, unsaved
+editor change; it does not save or compile. Valid legacy histories remain readable
+without automatic migration or deletion. This single-file UTF-8 text history is
+not a byte-exact project backup. See [history recovery evidence and limits](docs/v1-m4-history-safety-verification-2026-09-11.md).
+
+Use **文件 → 创建项目检查点…** to review selected local files and actual source/Block
+drafts before choosing a new checkpoint file. Saved bytes and UTF-8 drafts remain
+separate. **从检查点恢复为新目录…** verifies and reviews an archive before restoring
+its saved files under `project/` and independent drafts under `drafts/`; it never
+overwrites or switches the current project. Use **审阅恢复副本并继续草稿…** to verify
+the restored container, select drafts and explicitly open a new editing window.
+Source drafts support Undo; Block models and pending properties remain separately
+editable. Automatic writes stay paused until the first explicit save. Unknown or
+changed copies are refused; original projects and independent draft files remain
+untouched. Broader native/platform acceptance remains open;
+see [recovered-draft evidence and limits](docs/v1-m4-recovered-drafts-verification-2026-09-11.md).
+
+For a retained Block write journal, use **文件 → 审阅中断 Block 写入并恢复…**.
+Compare each changed file's before/after/current bytes and explicitly choose a
+coherent version, then recover to a new directory outside the original project.
+All conflict versions and window drafts are retained separately; the original
+journal is never deleted to unlock writes. Unknown/corrupt/inconsistent inputs
+are refused. This is a reviewed recovery, not a complete historical snapshot.
+See [interrupted-write verification and native limitations](docs/v1-m4-write-recovery-verification-2026-09-11.md).
+
+The local development source now offers **文件 → 审阅并迁移到新副本…**. Select
+local files, compare original/candidate bytes, and confirm a new directory outside
+the original. Ordinary/current Block files keep their bytes; only the known legacy
+format is converted, with all selected originals retained separately. Unknown
+formats refuse conversion. Old raw LaTeX remains untrusted and is not rendered.
+A separate evidence check and confirmation can open the saved copy in a new window,
+without applying drafts or authorizing compilation. Old drafts targeting regenerated
+files become independent untitled drafts on recovery. Closing restores pre-existing
+autosave requests in the original window. See [migration workflow evidence and limits](docs/v1-m4-migration-gui-verification-2026-09-11.md);
+the expanded/offscreen product checks and its frozen-source full regression passed.
+
+Block image imports stage bytes before exclusive publication, preserve existing
+assets, and reject observed unsafe paths or source changes. Drag errors leave the
+failed item's model unchanged. Focused checks pass; native picker-to-FINAL and
+Windows race acceptance remain incomplete. See the
+[image-import evidence and limits](docs/v1-m2-image-import-verification-2026-09-11.md).
+
+Block controls now wrap and scroll at small/high-scale sizes; narrow center areas
+switch between **编辑 Block** and **查看 PDF**, keeping the same PDF and zoom.
+The selected slot weight is editable and undoable. In inspector text, Tab still
+inserts a tab; physical Control+Tab moves to Apply without applying, and
+Control+Shift+Tab returns to alias. See the
+[layout/keyboard evidence and limits](docs/v1-m2-block-layout-verification-2026-09-10.md).
 
 - User guide (使用指引): [`docs/user-guide.md`](docs/user-guide.md)
 - Current verified state: [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md)
@@ -151,7 +304,7 @@ macOS:
 bash packaging/build_macos.sh
 ```
 
-This creates both `dist/ICSTeX-2.1.0-beta.2.dmg` and a latest alias at
+This creates both `dist/ICSTeX-2.1.0-beta.4.dmg` and a latest alias at
 `dist/ICSTeX.dmg`. Share the versioned DMG when distributing test builds.
 
 Windows:

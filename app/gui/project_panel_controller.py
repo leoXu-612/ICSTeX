@@ -8,10 +8,13 @@ currently active and routes "jump" events back into the editor.
 from __future__ import annotations
 
 from pathlib import Path
+from difflib import unified_diff
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QImageReader
+from PySide6.QtWidgets import QMessageBox
+from shiboken6 import isValid
 
 from app.core.diagnostics import Diagnostic, analyze_project
 from app.core.history import list_snapshots
@@ -20,6 +23,7 @@ from app.core.file_observation import file_signature
 from app.core.import_metrics import import_metrics
 from app.core.latex_outline import scan_outline
 from app.core.log_parser import LaTeXError
+from app.core.latex_insertions import package_update
 from app.core.project_search import search_project
 from app.core.project_tools import (
     LabelInfo,
@@ -48,7 +52,7 @@ def _read_image_size(path: Path) -> tuple[int | None, int | None]:
 
 class ProjectPanelController:
     _ALL = frozenset({"outline", "assets", "image_usage", "history", "labels", "references", "completion"})
-    _TEXT = frozenset({"outline", "image_usage", "labels", "references", "completion"})
+    _TEXT = frozenset({"outline", "labels", "references", "completion"})
     _PANEL_DOMAINS = {
         1: {"outline"}, 3: {"assets", "image_usage"}, 4: {"history"},
         7: {"references"}, 8: {"labels"},
@@ -100,11 +104,12 @@ class ProjectPanelController:
         if index >= 0:
             window.bottom_tabs.setTabText(index, f"检查 {len(diagnostics)}" if diagnostics else "检查")
         if switch_to_panel:
-            window.bottom_tabs.setCurrentWidget(window.diagnostic_panel)
+            from app.gui.main_window_layout import show_console
+            show_console(window, window.diagnostic_panel)
         if diagnostics:
-            window.statusBar().showMessage(f"检查完成：发现 {len(diagnostics)} 个项目提示。", 4000)
+            window.statusBar().showMessage(f"当前源码静态检查：{len(diagnostics)} 项提示；不代表完整提交检查。", 4000)
         else:
-            window.statusBar().showMessage("检查完成：未发现明显问题。", 4000)
+            window.statusBar().showMessage("当前源码静态检查未发现提示；完整提交状态请查看提交检查。", 4000)
         return diagnostics
 
     def fix_diagnostic(self, index: int) -> None:
@@ -120,6 +125,31 @@ class ProjectPanelController:
             window.statusBar().showMessage("请先打开或新建一个 .tex 文档。", 4000)
             return
         before = tab.editor.toPlainText()
+        update = package_update(before, diagnostic.fix.packages)
+        if update.text == before:
+            window.statusBar().showMessage("对应 package 已经存在，无需重复修复。", 4000)
+            return
+        if diagnostic.file is not None and diagnostic.file != tab.path:
+            window.statusBar().showMessage("请先定位到这个问题所在的文档，再查看修复。", 5000)
+            return
+        dialog = QMessageBox(window)
+        dialog.setWindowTitle("确认源码修改")
+        dialog.setTextFormat(Qt.TextFormat.PlainText)
+        dialog.setText("将添加以下 LaTeX 宏包声明；应用后可撤销。")
+        dialog.setInformativeText(update.inserted_text.strip())
+        dialog.setDetailedText("".join(unified_diff(before.splitlines(True), update.text.splitlines(True),
+                                                  fromfile="修改前", tofile="修改后")))
+        dialog.setStandardButtons(QMessageBox.StandardButton.Apply | QMessageBox.StandardButton.Cancel)
+        dialog.button(QMessageBox.StandardButton.Apply).setText("应用修改")
+        dialog.button(QMessageBox.StandardButton.Cancel).setText("取消")
+        dialog.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        if dialog.exec() != QMessageBox.StandardButton.Apply:
+            return
+        if not isValid(window) or not isValid(tab.editor):
+            return
+        if (window.current_tab() is not tab or tab.editor.toPlainText() != before or tab.external_conflict):
+            window.statusBar().showMessage("文档或磁盘状态已变化，未应用修改。请重新检查。", 5000)
+            return
         window.insertions.ensure_packages(tab, diagnostic.fix.packages)
         after = tab.editor.toPlainText()
         if before == after:
@@ -133,8 +163,11 @@ class ProjectPanelController:
         if index < 0 or index >= len(window.diagnostic_panel.diagnostics):
             return
         diagnostic = window.diagnostic_panel.diagnostics[index]
-        if diagnostic.file is not None and diagnostic.file.exists():
-            window.open_file(diagnostic.file, diagnostic.line)
+        if diagnostic.file is not None:
+            if diagnostic.file.exists():
+                window.open_file(diagnostic.file, diagnostic.line)
+            else:
+                window.statusBar().showMessage("问题所在文件已不可用，未跳转到其他文档。请重新检查项目。", 5000)
             return
         tab = window.current_tab()
         if tab is not None and diagnostic.line:
@@ -156,13 +189,14 @@ class ProjectPanelController:
         if tab is None or tab.path is None:
             window.search_panel.status_label.setText("请先打开或保存一个项目文件")
             return
+        scope = window.selected_project_scope or tab.path.parent
         results = search_project(
-            tab.path.parent,
+            scope,
             query,
             case_sensitive=case_sensitive,
             whole_word=whole_word,
         )
-        window.search_panel.set_results(tab.path.parent, results)
+        window.search_panel.set_results(scope, results)
         window.statusBar().showMessage(f"项目搜索完成：{len(results)} 个结果。", 3000)
 
     def jump_to_project_search_result(self, path: str, line: int, column: int) -> None:
@@ -241,6 +275,10 @@ class ProjectPanelController:
         self._reconcile_timer.stop()
 
     def _refresh_domains(self, domains: set[str]) -> None:
+        # Explicit read-only usage checking must not race an inventory/cache
+        # refresh, and typing must not scan every on-disk source for old counts.
+        if self.window.images_panel.material_tabs.currentIndex() == 1:
+            domains = domains - {"assets", "image_usage"}
         if not domains:
             return
         window = self.window
@@ -259,7 +297,7 @@ class ProjectPanelController:
             self._dirty.difference_update(domains)
             return
 
-        key = (id(tab.editor), tab.editor.document().revision(), tab.path)
+        key = (id(tab.editor), tab.editor.source_revision, tab.path)
         if key != self._source_key:
             self._source_key = key
             self._source_text = tab.editor.toPlainText()
@@ -268,23 +306,26 @@ class ProjectPanelController:
         if "outline" in domains:
             window.outline_panel.set_outline(scan_outline(tex_text))
         if tab.path and domains & {"assets", "image_usage"}:
-            index = self._asset_indexes.get(tab.path.parent)
+            scope = window.selected_project_scope or tab.path.parent
+            index = self._asset_indexes.get(scope)
+            cold_index = index is None
             if index is None:
-                index = AssetIndex(tab.path.parent)
-                index.load()
+                index = AssetIndex(scope)
                 if len(self._asset_indexes) >= 8:
                     self._asset_indexes.pop(next(iter(self._asset_indexes)))
-                self._asset_indexes[tab.path.parent] = index
+                self._asset_indexes[scope] = index
                 domains.add("assets")
             if "assets" in domains:
-                import_metrics.record_index_scan(full=not index.was_cached)
+                import_metrics.record_index_scan(full=cold_index)
                 index.scan(read_metadata=_read_image_size)
-                index.save()
-            window.images_panel.set_assets(index.image_assets(current_text=tex_text))
+            window.images_panel.set_assets(index.image_assets(inspect_usage=False))
         elif domains & {"assets", "image_usage"}:
             window.images_panel.set_assets([])
         if tab.path and "history" in domains:
-            window.history_panel.set_snapshots(list_snapshots(tab.path))
+            try:
+                window.history_panel.set_snapshots(list_snapshots(tab.path))
+            except (OSError, ValueError) as exc:
+                window.history_panel.set_snapshots([], error=str(exc))
         elif "history" in domains:
             window.history_panel.set_snapshots([])
         if "labels" in domains:
@@ -300,6 +341,7 @@ class ProjectPanelController:
             if "references" in domains:
                 window.references_panel.set_references(
                     self._bib_keys, undefined_citations(tex_text, self._bib_text),
+                    library_path=bib_path,
                 )
             if "completion" in domains:
                 tab.editor.set_completion_context(

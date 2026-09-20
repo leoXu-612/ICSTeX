@@ -1,7 +1,7 @@
 """ICSTeX application package."""
 
 __app_name__ = "ICSTeX"
-__version__ = "2.1.0-beta.2"
+__version__ = "2.1.0-beta.4"
 
 # Single application-version source.
 PRODUCT_NAME = "ICSTeX"

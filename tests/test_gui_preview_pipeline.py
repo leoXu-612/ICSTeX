@@ -13,7 +13,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import QPoint, QSettings, Qt
 from PySide6.QtGui import QImage
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from app.core.compiler import BuildPurpose, CompileOutcome, CompileResult
 from app.core.latex_tools import LaTeXEngine, LaTeXToolchain
@@ -57,6 +57,12 @@ class GuiPreviewPipelineTests(TestCase):
             )
         )
         self.window = MainWindow(settings_store=settings)
+        # These fixtures now contain valid PDFs and exercise loaded build identity.
+        # Keep the real reader; the old main-wide stub predates these assertions.
+        warning = patch.object(QMessageBox, "warning", side_effect=AssertionError(
+            "Unexpected modal warning in preview pipeline test"))
+        warning.start()
+        self.addCleanup(warning.stop)
         self.window._watch_file = lambda _path: None  # type: ignore[method-assign]
         self.window.auto_compile_action.setChecked(False)
         self.addCleanup(self._close_window)
@@ -82,14 +88,18 @@ class GuiPreviewPipelineTests(TestCase):
         purpose: BuildPurpose,
         build_id: int,
         *,
-        pdf_bytes: bytes = b"%PDF-1.4 pipeline-test",
+        pdf_bytes: bytes | None = None,
     ) -> CompileResult:
         manager = tab.manager
         assert manager is not None
         output_dir = manager.output_dir_for(purpose)
         pdf_file = manager.pdf_file_for(purpose)
         output_dir.mkdir(parents=True, exist_ok=True)
-        pdf_file.write_bytes(pdf_bytes)
+        if pdf_bytes is None:
+            from tests.test_pdf_panel import _write_zoom_pdf
+            _write_zoom_pdf(pdf_file)
+        else:
+            pdf_file.write_bytes(pdf_bytes)
         return CompileResult(
             root_file=manager.root_file,
             output_dir=output_dir,
@@ -168,11 +178,11 @@ class GuiPreviewPipelineTests(TestCase):
         self.assertTrue(self.window.pdf_panel.export_pdf_button.isEnabled())
         self.assertFalse(self.window.reveal_pdf_action.isEnabled())
         self.assertFalse(self.window.pdf_panel.reveal_pdf_button.isEnabled())
-        self.assertFalse(self.window.sync_pdf_action.isEnabled())
+        self.assertTrue(self.window.sync_pdf_action.isEnabled())
         banner = self.window.pdf_panel.freshness_label.text()
         self.assertIn("快速预览", banner)
         self.assertIn("代理图", banner)
-        self.assertIn("导出", banner)
+        self.assertIn("正式编译", banner)
         self.assertIn("原图", banner)
 
     def test_same_revision_final_success_replaces_preview_with_canonical_pdf(self) -> None:
@@ -193,7 +203,7 @@ class GuiPreviewPipelineTests(TestCase):
             self.window.displayed_pdfs[manager.root_file].purpose,
             BuildPurpose.FINAL,
         )
-        self.assertEqual(self.window.pdf_panel.freshness_label.text(), "PDF 已是最新")
+        self.assertEqual(self.window.pdf_panel.freshness_label.text(), "正式 PDF · PDF 已是最新")
         self.assertTrue(self.window.reveal_pdf_action.isEnabled())
         self.assertTrue(self.window.sync_pdf_action.isEnabled())
 
@@ -217,7 +227,7 @@ class GuiPreviewPipelineTests(TestCase):
             preview_pdf, 1, 10.0, 20.0, self.window.toolchain, source_directory=root.parent,
         )
         open_file.assert_called_once_with(root, 1)
-        self.assertFalse(self.window.sync_pdf_action.isEnabled())
+        self.assertTrue(self.window.sync_pdf_action.isEnabled())
 
     def test_reverse_sync_retains_current_final_navigation(self) -> None:
         tab = self._add_document()
@@ -232,6 +242,132 @@ class GuiPreviewPipelineTests(TestCase):
             self.window.sync_pdf_to_source(1, 10.0, 20.0)
         self.assertEqual(query.call_args.args[0], final_pdf)
         open_file.assert_called_once_with(root, 1)
+
+    def test_forward_sync_uses_displayed_preview_without_compiling_or_moving_source(self):
+        tab = self._add_document("first\nsecond\n")
+        self._finish_success(tab, BuildPurpose.FINAL, 1)
+        self.window._mark_source_edited(tab)
+        pdf = self._finish_success(tab, BuildPurpose.PREVIEW, 2)
+        self.window.toolchain = replace(self.window.toolchain, synctex="synctex")
+        cursor = tab.editor.textCursor()
+        cursor.setPosition(7)
+        tab.editor.setTextCursor(cursor)
+        original = tab.path.read_bytes()
+        target = SyncPosition(tab.path, 2, page=1, x=30, y=40)
+        with (patch("app.gui.main_window.source_to_pdf", return_value=target) as query,
+              patch.object(self.window.pdf_panel, "jump_to_pdf_position") as jump,
+              patch.object(self.window, "compile_current") as compile_current,
+              patch.object(tab.manager, "compile_async") as compile_async):
+            self.window.sync_pdf_action.trigger()
+            self.assertTrue(_wait_until(lambda: jump.called))
+            query.assert_called_once_with(tab.path, 2, pdf, self.window.toolchain)
+            jump.assert_called_once_with(1, 30, 40)
+            compile_current.assert_not_called()
+            compile_async.assert_not_called()
+        self.assertEqual(tab.editor.textCursor().position(), 7)
+        self.assertEqual(tab.path.read_bytes(), original)
+        self.assertEqual(self.window.pdf_state.record_for(tab.manager.root_file).freshness, PdfFreshness.DIRTY)
+
+    def test_forward_sync_rejects_stale_busy_wrong_build_viewer_and_missing_pdf(self):
+        tab = self._add_document()
+        pdf = self._finish_success(tab, BuildPurpose.PREVIEW, 1)
+        self.window.toolchain = replace(self.window.toolchain, synctex="synctex")
+        root = tab.manager.root_file
+        record = self.window.preview_state.record_for(root)
+        cases = [(record, "freshness", state) for state in (
+            PreviewFreshness.DIRTY, PreviewFreshness.COMPILING, PreviewFreshness.FAILED_STALE,
+        )] + [
+            (record, "source_revision", record.source_revision + 1),
+            (record, "latest_build_id", 2),
+            (record, "last_successful_pdf", root.parent / "other.pdf"),
+            (self.window.pdf_panel, "current_pdf", root.parent / "other.pdf"),
+            (self.window.pdf_panel, "current_logical_key", root.parent / "other.tex"),
+            (self.window.pdf_panel, "_has_pages", False),
+        ]
+        for owner, name, value in cases:
+            with (self.subTest(name=name, value=value), patch.object(owner, name, value),
+                  patch("app.gui.main_window.source_to_pdf") as query):
+                self.window._update_pdf_action_state()
+                self.assertFalse(self.window.sync_pdf_action.isEnabled())
+                self.window.sync_current_source_to_pdf()
+                query.assert_not_called()
+        shown = self.window.displayed_pdfs[root]
+        for value in (replace(shown, build_id=None), replace(shown, revision=10),
+                      replace(shown, root_file=root.parent / "other.tex")):
+            with (patch.dict(self.window.displayed_pdfs, {root: value}),
+                  patch("app.gui.main_window.source_to_pdf") as query):
+                self.window.sync_current_source_to_pdf()
+                query.assert_not_called()
+        pdf.unlink()
+        with patch("app.gui.main_window.source_to_pdf") as query:
+            self.window.sync_current_source_to_pdf()
+            query.assert_not_called()
+
+    def test_forward_sync_rechecks_query_and_deferred_jump_identity(self):
+        tab = self._add_document("first\nsecond\n")
+        self._finish_success(tab, BuildPurpose.PREVIEW, 1)
+        self.window.toolchain = replace(self.window.toolchain, synctex="synctex")
+        root = tab.manager.root_file
+        target = SyncPosition(root, 1, page=1, x=20, y=30)
+        def start_worker(*_):
+            self.window.compile_purposes[(root, 2)] = BuildPurpose.PREVIEW
+            return target
+        with (patch("app.gui.main_window.source_to_pdf", side_effect=start_worker),
+              patch.object(self.window.pdf_panel, "jump_to_pdf_position") as jump):
+            self.window.sync_current_source_to_pdf()
+            QApplication.processEvents()
+            jump.assert_not_called()
+        self.window.compile_purposes.clear()
+        with (patch("app.gui.main_window.source_to_pdf", return_value=target),
+              patch.object(self.window.pdf_panel, "jump_to_pdf_position") as jump):
+            self.window.sync_current_source_to_pdf()
+            # Same revision, but a different build arrived before the layout callback.
+            self._finish_success(tab, BuildPurpose.PREVIEW, 3)
+            QApplication.processEvents()
+            jump.assert_not_called()
+            self.window.sync_current_source_to_pdf()
+            cursor = tab.editor.textCursor()
+            cursor.setPosition(7)
+            tab.editor.setTextCursor(cursor)
+            QApplication.processEvents()
+            jump.assert_not_called()
+
+    def test_forward_sync_retains_final_and_ignores_other_purpose_worker(self):
+        tab = self._add_document()
+        self.window.toolchain = replace(self.window.toolchain, synctex="synctex")
+        root = tab.manager.root_file
+        for build, purpose, other in ((1, BuildPurpose.PREVIEW, BuildPurpose.FINAL),
+                                       (2, BuildPurpose.FINAL, BuildPurpose.PREVIEW)):
+            pdf = self._finish_success(tab, purpose, build)
+            with (patch.dict(self.window.compile_purposes, {(root, build + 20): other}),
+                  patch("app.gui.main_window.source_to_pdf", return_value=SyncPosition(root, 1, page=1)) as query,
+                  patch.object(self.window.pdf_panel, "jump_to_page") as jump):
+                self.window.sync_current_source_to_pdf()
+                self.assertTrue(_wait_until(lambda: jump.called))
+                self.assertEqual(query.call_args.args[2], pdf)
+                jump.assert_called_once_with(1)
+
+    def test_forward_sync_missing_tool_data_or_invalid_coordinates_keep_position(self):
+        from PySide6.QtWidgets import QMessageBox
+        tab = self._add_document()
+        self._finish_success(tab, BuildPurpose.PREVIEW, 1)
+        self.window.toolchain = replace(self.window.toolchain, synctex=None)
+        with (patch.object(QMessageBox, "warning") as warning,
+              patch("app.gui.main_window.source_to_pdf") as query):
+            self.window.sync_current_source_to_pdf()
+            warning.assert_called_once()
+            query.assert_not_called()
+        self.window.toolchain = replace(self.window.toolchain, synctex="synctex")
+        for position in (None, SyncPosition(tab.path, 1), SyncPosition(tab.path, 1, page=0),
+                         SyncPosition(tab.path, 1, page=999),
+                         SyncPosition(tab.path, 1, page=1, x=float("nan"), y=0)):
+            with (self.subTest(position=position), patch("app.gui.main_window.source_to_pdf", return_value=position),
+                  patch.object(self.window.pdf_panel, "jump_to_pdf_position") as jump,
+                  patch.object(self.window.pdf_panel, "jump_to_page") as page):
+                self.window.sync_current_source_to_pdf()
+                QApplication.processEvents()
+                jump.assert_not_called()
+                page.assert_not_called()
 
     def test_reverse_sync_rejects_stale_busy_and_mismatched_preview(self) -> None:
         tab = self._add_document()
@@ -283,6 +419,28 @@ class GuiPreviewPipelineTests(TestCase):
                 reload_pdf.assert_called_once_with(pdf, logical_key=tab.manager.root_file)
                 self.assertEqual(self.window.displayed_pdfs[tab.manager.root_file].build_id, second)
 
+    def test_same_pdf_bytes_keep_view_but_update_displayed_build_identity(self):
+        from app.core.pdf_identity import capture_pdf_identity
+        from tests.test_pdf_panel import _write_zoom_pdf
+        tab = self._add_document()
+        actual = self.directory / "fixture.pdf"
+        _write_zoom_pdf(actual)
+        raw = actual.read_bytes()
+        first = self._result(tab, BuildPurpose.PREVIEW, 1, pdf_bytes=raw)
+        first = replace(first, pdf_identity=capture_pdf_identity(first.pdf_file, self.directory))
+        self._start(tab, BuildPurpose.PREVIEW, 1)
+        self._finish(first)
+        self.assertIsNotNone(self.window.pdf_panel._loaded_identity)
+        second = self._result(tab, BuildPurpose.PREVIEW, 2, pdf_bytes=raw)
+        second = replace(second, pdf_identity=capture_pdf_identity(second.pdf_file, self.directory))
+        with patch.object(self.window.pdf_panel._document, "load", wraps=self.window.pdf_panel._document.load) as load:
+            self._start(tab, BuildPurpose.PREVIEW, 2)
+            self._finish(second)
+            load.assert_not_called()
+        self.assertTrue(self.window.pdf_panel.last_load_reused)
+        self.assertEqual(self.window.displayed_pdfs[tab.manager.root_file].build_id, 2)
+        self.assertEqual(self.window.pdf_panel.current_pdf, second.pdf_file)
+
     def test_preview_reverse_sync_refuses_missing_tool_data_or_unsafe_target(self) -> None:
         tab = self._add_document()
         pdf = self._finish_success(tab, BuildPurpose.PREVIEW, 1)
@@ -319,6 +477,32 @@ class GuiPreviewPipelineTests(TestCase):
         self.assertEqual(current.editor.textCursor().blockNumber() + 1, 3)
         self.assertEqual(self.window._compile_root_for_tab(current), root)
         self.assertEqual(self.window.pdf_panel.current_pdf, pdf)
+        self.assertEqual(current.editor._sync_selection.cursor.blockNumber() + 1, 3)
+        self.assertFalse(current.editor.textCursor().hasSelection())
+
+    def test_reverse_sync_only_flashes_successfully_opened_target(self):
+        tab = self._add_document("first\ntarget\n")
+        self._finish_success(tab, BuildPurpose.PREVIEW, 1)
+        self.window.toolchain = replace(self.window.toolchain, synctex="synctex")
+        child = self.directory / "child.tex"
+        child.write_text("target", encoding="utf-8")
+        with (patch("app.gui.main_window.pdf_to_source", return_value=SyncPosition(child, 1)),
+              patch.object(self.window, "open_file"),
+              patch.object(tab.editor, "flash_sync_target") as flash):
+            self.window.sync_pdf_to_source(1, 10, 20)
+            flash.assert_not_called()
+        self.assertIsNone(tab.editor._sync_selection)
+        self.window.source_preview_area.setMaximumWidth(640)
+        self.window.show()
+        QApplication.processEvents()
+        self.window.source_preview_area.select_pdf(True)
+        QApplication.processEvents()
+        self.assertFalse(tab.editor.isVisible())
+        with patch("app.gui.main_window.pdf_to_source", return_value=SyncPosition(tab.path, 2)):
+            self.window.sync_pdf_to_source(1, 10, 20)
+        self.assertTrue(tab.editor.isVisible())
+        self.assertEqual(tab.editor._sync_selection.cursor.blockNumber() + 1, 2)
+        self.assertEqual(tab.path.read_text(encoding="utf-8"), "first\ntarget\n")
 
     def test_foreign_active_tab_cannot_reverse_sync_from_cached_preview(self) -> None:
         tab = self._add_document()
@@ -328,9 +512,12 @@ class GuiPreviewPipelineTests(TestCase):
         self.window.open_file(other)
         self.window.pdf_panel.current_pdf = preview
         self.window.pdf_panel.current_logical_key = tab.manager.root_file
-        with patch("app.gui.main_window.pdf_to_source") as query:
+        with (patch("app.gui.main_window.pdf_to_source") as query,
+              patch("app.gui.main_window.source_to_pdf") as forward):
             self.window.sync_pdf_to_source(1, 10, 20)
+            self.window.sync_current_source_to_pdf()
         query.assert_not_called()
+        forward.assert_not_called()
 
     def test_reverse_sync_guards_worker_start_before_queued_gui_signal(self) -> None:
         tab = self._add_document()
@@ -409,6 +596,24 @@ class GuiPreviewPipelineTests(TestCase):
             assert target.x is not None and target.y is not None
             for zoom in (0.9, 1.25):
                 with self.subTest(zoom=zoom):
+                    self.window.open_file(child.resolve(), 2)
+                    current = self.window.current_tab()
+                    self.assertIsNone(current.manager, "opening a child must not authorize a build")
+                    cursor_position = current.editor.textCursor().position()
+                    panel._view.setZoomMode(panel._view.ZoomMode.Custom)
+                    panel._view.setZoomFactor(zoom)
+                    panel.jump_to_page(1)
+                    with (patch.object(panel, "jump_to_pdf_position", wraps=panel.jump_to_pdf_position) as forward_jump,
+                          patch.object(manager, "compile_async") as extra_compile):
+                        self.window.sync_pdf_action.trigger()
+                        self.assertTrue(_wait_until(lambda: forward_jump.called),
+                            f"{self.window.statusBar().currentMessage()}; enabled={self.window.sync_pdf_action.isEnabled()}; "
+                            f"manager={current.manager}; binding={self.window._current_synctex_pdf()}")
+                        self.assertEqual(forward_jump.call_args.args[0], 2)
+                        self.assertEqual(panel.current_page(), 2)
+                        extra_compile.assert_not_called()
+                    self.assertEqual(current.editor.textCursor().position(), cursor_position)
+                    self.assertIsNone(current.manager)
                     self.window.open_file(manager.root_file, 1)
                     panel._view.setZoomMode(panel._view.ZoomMode.Custom)
                     panel._view.setZoomFactor(zoom)
@@ -426,13 +631,29 @@ class GuiPreviewPipelineTests(TestCase):
                     current = self.window.current_tab()
                     self.assertEqual(current.path, child.resolve())
                     self.assertEqual(current.editor.textCursor().blockNumber() + 1, 2)
+                    self.assertEqual(current.editor._sync_selection.cursor.blockNumber() + 1, 2)
                     self.assertEqual(self.window._compile_root_for_tab(current), manager.root_file)
                     self.assertEqual(panel.current_pdf, result.pdf_file)
                     self.assertEqual(len(self.window.tabs), 2)
+            # Constrain the writing pane as dock panels do; the main window has
+            # its own larger supported minimum size.
+            self.window.source_preview_area.setMaximumWidth(640)
+            QApplication.processEvents()
+            self.window.source_preview_area.select_pdf(False)
+            QApplication.processEvents()
+            self.assertTrue(self.window.source_preview_area._compact)
+            self.assertTrue(self.window.pdf_panel_wrapper.isHidden())
+            self.assertFalse(panel.isVisible())
+            with patch.object(panel, "jump_to_pdf_position", wraps=panel.jump_to_pdf_position) as compact_jump:
+                self.window.sync_pdf_action.trigger()
+                self.assertTrue(_wait_until(lambda: compact_jump.called))
+            self.assertTrue(panel.isVisible())
+            self.assertEqual(panel.current_page(), 2)
+            self.assertFalse(manager.pdf_file.exists(), "navigation must not request a FINAL build")
         self.assertEqual(child.read_text(encoding="utf-8"), child_text)
         self.assertEqual(tab.path.read_text(encoding="utf-8"), source_text)
 
-    def test_preview_only_export_queues_final_and_never_copies_preview_pdf(self) -> None:
+    def test_preview_only_export_requires_review_and_separate_final_never_copies_preview(self) -> None:
         tab = self._add_document()
         manager = tab.manager
         assert manager is not None
@@ -440,17 +661,14 @@ class GuiPreviewPipelineTests(TestCase):
         target = self.directory / "submission.pdf"
 
         with patch.object(manager, "compile_async") as compile_async, patch(
-            "app.gui.main_window.QFileDialog.getSaveFileName",
-            return_value=(str(target), ""),
-        ):
-            self.assertTrue(self.window.export_pdf())
+            "app.gui.submission_delivery_dialog.show_submission_delivery", return_value=None,
+        ) as review:
+            self.assertFalse(self.window.export_pdf())
 
-        compile_async.assert_called_once_with(BuildPurpose.FINAL)
+        review.assert_called_once_with(self.window)
+        compile_async.assert_not_called()
         self.assertFalse(target.exists())
-        pending = self.window.pdf_export.pending_for(manager.root_file)
-        self.assertIsNotNone(pending)
-        assert pending is not None
-        self.assertEqual(pending.target, target.resolve())
+        self.assertIsNone(self.window.pdf_export.pending_for(manager.root_file))
 
     def test_idle_build_uses_preview_but_explicit_compile_defaults_to_final(self) -> None:
         tab = self._add_document()
@@ -468,18 +686,21 @@ class GuiPreviewPipelineTests(TestCase):
             patch.object(manager, "compile_async") as compile_async,
         ):
             self.window.documents.compile_after_idle(tab)
+            self.assertTrue(_wait_until(lambda: compile_async.called))
             compile_async.assert_called_once_with(BuildPurpose.PREVIEW)
 
             self.window.auto_compile_action.setChecked(False)
             compile_async.reset_mock()
             with patch.object(manager, "cancel_pending") as cancel_pending:
                 self.window.compile_current(immediate=True)
+                self.assertTrue(_wait_until(lambda: compile_async.called))
                 cancel_pending.assert_called_once_with()
                 compile_async.assert_called_once_with(BuildPurpose.FINAL)
 
             compile_async.reset_mock()
             with patch.object(manager, "cancel_pending") as cancel_pending:
                 self.window.compile.compile_current(immediate=True)
+                self.assertTrue(_wait_until(lambda: compile_async.called))
                 cancel_pending.assert_called_once_with()
                 compile_async.assert_called_once_with(BuildPurpose.FINAL)
 

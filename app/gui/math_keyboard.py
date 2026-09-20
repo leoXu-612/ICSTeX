@@ -20,14 +20,17 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from app.gui.responsive.helpers import ButtonFlowLayout
+from app.gui.theme import (COLOR_ACCENT, COLOR_BORDER, COLOR_SELECTED, COLOR_SURFACE,
+                           COLOR_SURFACE_ALT, COLOR_TEXT, COLOR_TEXT_FAINT)
 
 
-_BG = QColor(252, 252, 252)
-_BG_NUM = QColor(244, 244, 244)
-_BG_ACTIVE = QColor(210, 228, 250)
-_BORDER = QColor(216, 219, 223)
-_TEXT = QColor(38, 38, 38)
-_PLACEHOLDER = QColor(135, 143, 153)
+_BG = QColor(COLOR_SURFACE)
+_BG_NUM = QColor(COLOR_SURFACE_ALT)
+_BG_ACTIVE = QColor(COLOR_SELECTED)
+_BORDER = QColor(COLOR_BORDER)
+_TEXT = QColor(COLOR_TEXT)
+_PLACEHOLDER = QColor(COLOR_TEXT_FAINT)
 _FONT_MAIN = QFont("Menlo", 22)
 _FONT_MAIN.setStyleHint(QFont.StyleHint.Monospace)
 
@@ -75,7 +78,7 @@ class MathKeyButton(QAbstractButton):
             background = background.darker(106)
         elif self.underMouse():
             background = background.darker(102)
-        painter.setPen(QPen(_BORDER, 1))
+        painter.setPen(QPen(QColor(COLOR_ACCENT) if self.hasFocus() else _BORDER, 2 if self.hasFocus() else 1))
         painter.setBrush(background)
         painter.drawRoundedRect(rect, 8, 8)
 
@@ -331,20 +334,26 @@ class MathKeyboard(QWidget):
 
         self.category_group = QButtonGroup(self)
         self.category_group.setExclusive(True)
-        self.category_bar = QHBoxLayout()
+        self.category_bar = ButtonFlowLayout()
         for key, label in CATEGORY_LABELS.items():
             button = QPushButton(label)
             button.setCheckable(True)
             button.setMinimumHeight(34)
-            button.setStyleSheet(
-                "QPushButton { padding: 2px 8px; min-height: 26px; border-radius: 8px; border: 1px solid #d0d0d0; background: #f7f7f7; }"
-                "QPushButton:checked { background: #d2e4fa; border-color: #9cc3e5; }"
-            )
+            button.setObjectName("mathCategoryButton")
+            button.setAutoDefault(False)
             self.category_group.addButton(button)
             button.clicked.connect(lambda _checked=False, k=key: self._switch_category(k))
             self.category_bar.addWidget(button)
             if key == "base":
                 button.setChecked(True)
+        self.numbers_button = QPushButton("收起数字区")
+        self.numbers_button.setObjectName("mathNumbersButton")
+        self.numbers_button.setCheckable(True)
+        self.numbers_button.setChecked(True)
+        self.numbers_button.setAutoDefault(False)
+        self.numbers_button.setToolTip("只切换数字键区；不改变公式草稿或撤销历史。")
+        self.numbers_button.toggled.connect(self._toggle_numbers)
+        self.category_bar.addWidget(self.numbers_button)
         self._root_layout.addLayout(self.category_bar)
 
         self.stack = QStackedWidget()
@@ -437,21 +446,28 @@ class MathKeyboard(QWidget):
 
     def _apply_layout(self, *, wide: bool | None = None) -> None:
         wide = self.width() >= 740 if wide is None else wide
-        if self._wide_layout == wide:
+        numbers = self.numbers_button.isChecked()
+        if self._wide_layout == (wide, numbers):
             return
-        self._wide_layout = wide
+        self._wide_layout = (wide, numbers)
         for widget in (self.stack, self.number_pad, self.controls):
             self._content_layout.removeWidget(widget)
-        self._content_layout.addWidget(self.stack, 0, 0, 1, 1 if wide else 2)
-        if wide:
-            self._content_layout.addWidget(self.number_pad, 0, 1)
-            self._content_layout.addWidget(self.controls, 0, 2)
+        self._content_layout.addWidget(self.stack, 0, 0, 1, 1 if wide or not numbers else 2)
+        self.number_pad.setVisible(numbers)
+        if wide or not numbers:
+            if numbers:
+                self._content_layout.addWidget(self.number_pad, 0, 1)
+            self._content_layout.addWidget(self.controls, 0, 2 if numbers else 1)
         else:
             self._content_layout.addWidget(self.number_pad, 1, 0)
             self._content_layout.addWidget(self.controls, 1, 1)
         self._content_layout.setColumnStretch(0, 4)
-        self._content_layout.setColumnStretch(1, 3 if wide else 1)
-        self._content_layout.setColumnStretch(2, 1 if wide else 0)
+        self._content_layout.setColumnStretch(1, 3 if wide and numbers else 1)
+        self._content_layout.setColumnStretch(2, 1 if wide and numbers else 0)
+
+    def _toggle_numbers(self, checked):
+        self.numbers_button.setText("收起数字区" if checked else "显示数字区")
+        self._apply_layout()
 
     def resizeEvent(self, event) -> None:  # type: ignore[no-untyped-def]
         super().resizeEvent(event)

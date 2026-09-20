@@ -588,7 +588,7 @@ class _Accum:
         "source_label",
         "text_parts",
         "math_inline", "math_display",
-        "visual_segments",
+        "segment_parts",
     )
 
     def __init__(self, source_text: str, source_label: str | None = None) -> None:
@@ -601,7 +601,7 @@ class _Accum:
         }
         self.math_inline = 0
         self.math_display = 0
-        self.visual_segments: list[WordCountSegment] = []
+        self.segment_parts: list[tuple[str, str | None, list[str]]] = []
 
     def add_chars(self, chars: str, category: str) -> None:
         self.text_parts[category].append(chars)
@@ -648,15 +648,14 @@ class _Accum:
     def add_segment(self, text: str, category: str) -> None:
         if not text:
             return
-        if (
-            self.visual_segments
-            and self.visual_segments[-1].category == category
-            and self.visual_segments[-1].source == self.source_label
-        ):
-            previous = self.visual_segments[-1]
-            self.visual_segments[-1] = WordCountSegment(previous.text + text, category, self.source_label)
-            return
-        self.visual_segments.append(WordCountSegment(text, category, self.source_label))
+        if self.segment_parts:
+            previous_category, previous_source, parts = self.segment_parts[-1]
+            if previous_category == category and previous_source == self.source_label:
+                parts.append(text)
+                return
+        # Join each contiguous category/source run once after parsing. Copying
+        # its growing string per word makes long plain paragraphs quadratic.
+        self.segment_parts.append((category, self.source_label, [text]))
 
 
 def _analyze_project(
@@ -797,7 +796,10 @@ def _analyze_latex_text(
         caption_numbers=len(NUMBER_RE.findall(caption_text)),
         math_inline=accum.math_inline,
         math_display=accum.math_display,
-        visual_segments=tuple(accum.visual_segments),
+        visual_segments=tuple(
+            WordCountSegment("".join(parts), category, label)
+            for category, label, parts in accum.segment_parts
+        ),
     )
 
 

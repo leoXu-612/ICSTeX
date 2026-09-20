@@ -7,6 +7,48 @@ from unittest.mock import patch
 
 from app.core.latex_tools import LaTeXToolchain
 from app.core.word_count import count_project, count_project_snapshot, count_text, count_words
+import app.core.word_count as word_count
+
+
+class VisualSegmentAccumulationTests(TestCase):
+    def test_constructs_only_final_visual_segments_for_a_long_paragraph(self):
+        text = "\\begin{document}" + "ordinary word " * 2000 + "\\end{document}"
+        with patch("app.core.word_count.WordCountSegment", wraps=word_count.WordCountSegment) as construct:
+            result = count_text(text, toolchain=LaTeXToolchain(None, None))
+        self.assertEqual(result.total_words, 4000)
+        self.assertEqual(construct.call_count, len(result.visual_segments))
+        self.assertEqual("".join(item.text for item in result.visual_segments), "ordinary word " * 2000)
+
+    def test_visual_output_matches_previous_stream_merging_across_categories(self):
+        import random
+        randomizer = random.Random(20260913)
+        fragments = ("ordinary text ", "\u4e2d\u6587\u3002 ", "R\u00e9sum\u00e9 na\u00efve ",
+            "teacher's teacher\u2019s ", "12.5 -3e-2% 1,234 ", "\U00020000\U0001f642 e\u0301 ",
+            r"\textbf{bold 14 words}", r"\section{Heading 42}", r"\footnote{note 9 words}",
+            r"$x^2$", r"\[a=b\]", r"\cite{hidden}", r"\url{https://example.invalid/12}",
+            r"\verb|hidden 12|", r"\caption{Caption 5}", "{nested text}")
+        original_add = word_count._Accum.add_segment
+        for case in range(24):
+            expected = []
+
+            def record(accum, text, category):
+                if text:
+                    # The previous implementation is the oracle, independent
+                    # of how the candidate batches intermediate fragments.
+                    if expected and expected[-1].category == category and expected[-1].source == accum.source_label:
+                        previous = expected[-1]
+                        expected[-1] = word_count.WordCountSegment(previous.text + text, category, accum.source_label)
+                    else:
+                        expected.append(word_count.WordCountSegment(text, category, accum.source_label))
+                original_add(accum, text, category)
+
+            source = "\\begin{document}\n" + " ".join(randomizer.choices(fragments, k=40)) + "\n\\end{document}"
+            with self.subTest(case=case), patch.object(word_count._Accum, "add_segment", record):
+                result = word_count._analyze_latex_text(source, source_label="chapter.tex")
+            self.assertEqual(result.visual_segments, tuple(expected))
+
+    def test_empty_input_has_no_visual_segments(self):
+        self.assertEqual(word_count._analyze_latex_text("").visual_segments, ())
 
 
 class WordCountTests(TestCase):

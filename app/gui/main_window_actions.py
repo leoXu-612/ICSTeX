@@ -74,7 +74,9 @@ def build_actions(window: "MainWindow") -> None:
     window.save_action.setShortcut(QKeySequence.StandardKey.Save)
     window.save_as_action = QAction(icon("save"), "另存为", window)
     window.export_pdf_action = QAction(icon("save"), "导出 PDF", window)
-    window.export_pdf_action.setToolTip("进入准备提交：单独保存和正式编译，核对固定输入后导出到新目录。")
+    window.export_pdf_action.setToolTip("选择位置后导出 PDF，以后正式编译成功会自动更新此文件。Block 项目或源码/报告交付请用‘准备提交’。")
+    window.stop_pdf_update_action = QAction("停止自动更新导出 PDF", window)
+    window.stop_pdf_update_action.setEnabled(False)
     window.export_project_action = QAction("导出为工程文件…", window)
     window.export_project_action.setToolTip("整理源码、图片、表格和引用库为 ZIP，方便换设备或分享；无需先编译 PDF。")
     reveal_text = "在 Finder 中显示 PDF" if sys.platform == "darwin" else "在文件夹中显示 PDF"
@@ -175,6 +177,7 @@ def build_actions(window: "MainWindow") -> None:
         window.save_action,
         window.save_as_action,
         window.export_pdf_action,
+        window.stop_pdf_update_action,
         window.export_project_action,
         window.reveal_pdf_action,
         window.new_window_action,

@@ -1,6 +1,6 @@
 # ICSTeX Roadmap
 
-更新时间：2026-09-20（Asia/Taipei）
+更新时间：2026-09-28（Asia/Taipei）
 
 本文件描述产品与技术路线，不是功能愿望清单。每个进入实施的项目都必须
 同时满足用户价值、稳定性、可维护性和可验证性要求。
@@ -21,7 +21,14 @@ ICSTeX 要成为 ICC 学生从“建立写作项目”到“提交可靠成果�
 4. 支持 IA、EE、实验报告等完整工作流，而不是增加孤立按钮。
 5. 在没有明确学生价值时，不引入新的状态、依赖、网络或维护负担。
 
-## Current Source Task - Formula Navigation; Handwriting Withdrawn
+## Current Source Task - Two-action PDF Export
+
+普通 LaTeX 文稿的 PDF 导出只要求打开导出入口、确认位置两步；成功后记住本机目标，
+让后续有效 FINAL 成功结果原子更新同一文件，不再重复选择位置。复用既有构建字节核验，
+保留外部修改保护和停止入口。高级准备提交、Block、工程 ZIP 与 Agent 独占发布不变；
+不增加新的版本系统或改变编译策略。源码验证及安装/发布边界以 PROJECT_STATE 为准。
+
+## Previous Source Task - Formula Navigation; Handwriting Withdrawn
 
 在既有结构编辑器内修正上下标方向、嵌套结构退出和可见光标反馈，保留草稿、Undo、
 未知宏源码回退及显式确认。手写识别未达质量要求，按用户“不交付半成品、不为次要

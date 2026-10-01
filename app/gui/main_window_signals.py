@@ -37,6 +37,7 @@ def connect_signals(window: "MainWindow") -> None:
     window.save_action.triggered.connect(window.save_current)
     window.save_as_action.triggered.connect(window.save_current_as)
     window.export_pdf_action.triggered.connect(window.export_pdf)
+    window.stop_pdf_update_action.triggered.connect(window.pdf_export.stop_automatic)
     window.export_project_action.triggered.connect(lambda: show_project_archive(window))
     window.reveal_pdf_action.triggered.connect(window.reveal_pdf)
     window.new_window_action.triggered.connect(window.spawn_window)

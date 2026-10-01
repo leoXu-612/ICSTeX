@@ -233,7 +233,7 @@ class TutorialController(QObject):
             self._secondary_role = "pdf"
         else:
             self.title.setText("练习完成 · 你已经改过内容，也看到了新 PDF")
-            self.description.setText("可以继续在这个副本里试写。要保存一份发给别人，点“导出 PDF”；窗口会带你检查和选择保存位置。")
+            self.description.setText("可以继续在这个副本里试写。点“导出 PDF”，选位置并点“更新并导出”；以后每次正式编译成功，会自动更新这个 PDF。")
             self.action.setText("导出 PDF…")
 
     @Slot()

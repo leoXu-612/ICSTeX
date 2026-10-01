@@ -649,12 +649,16 @@ class MainWindow(QMainWindow):
 
     def _update_pdf_action_state(self) -> None:
         if getattr(self, "block_session", None) is not None and self.block_mode_action.isChecked():
+            self.stop_pdf_update_action.setEnabled(False)
             from app.gui.block_mode import sync_block_pdf
             sync_block_pdf(self)
             return
         if hasattr(self.pdf_panel, "empty_compile_button"):
             self.pdf_panel.empty_compile_button.setEnabled(self.compile_action.isEnabled())
         root = self._compile_root_for_tab(self.current_tab())
+        remembered = self.app_settings.pdf_export_target(root) if root else None
+        self.stop_pdf_update_action.setEnabled(remembered is not None)
+        self.stop_pdf_update_action.setToolTip(str(remembered[1].target) if remembered else "尚未导出 PDF")
         record = self.pdf_state.record_for(root) if root is not None else None
         preview = self.preview_state.record_for(root) if root is not None else None
         canonical_file_available = record is not None and record.has_valid_pdf
@@ -731,6 +735,7 @@ class MainWindow(QMainWindow):
                                    or (preview is not None and preview.has_valid_pdf)):
                 self.statusBar().showMessage("还没有可用的 PDF；可从‘准备提交’单独保存和正式编译。", 5000)
                 return False
+            return self.pdf_export.choose_destination(root)
         return self.prepare_submission()
 
     def prepare_submission(self) -> bool:
@@ -1176,6 +1181,7 @@ class MainWindow(QMainWindow):
             return
         self.tab_manager.handle_close_event(event)
         if event.isAccepted():
+            self.pdf_export.shutdown()
             self.readiness.shutdown()
             self.citations.shutdown()
             self.materials.shutdown()

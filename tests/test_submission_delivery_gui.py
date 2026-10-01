@@ -454,14 +454,16 @@ class SubmissionDeliveryGuiTests(TestCase):
         self.assertIn("已生成交付", self.dialog.status.text())
         self.assertFalse(self.dialog.action_button.isEnabled())
 
-    def test_file_and_pdf_entrypoints_use_same_review_not_legacy_copy(self):
+    def test_submission_review_remains_separate_from_quick_pdf_export(self):
         from app.gui import submission_delivery_dialog
-        with patch.object(submission_delivery_dialog, "show_submission_delivery", return_value=self.home / "out") as show:
+        with patch.object(submission_delivery_dialog, "show_submission_delivery", return_value=self.home / "out") as show, \
+             patch.object(self.window.pdf_export, "choose_destination", return_value=True) as choose:
             self.window.prepare_submission_action.trigger()
             self.window.pdf_state.begin_build(self.sample.root, 1)
             self.window.pdf_state.finish_build(self.sample.root, 1, self.request.build_evidence.outcome, pdf_file=self.pdf)
             self.assertTrue(self.window.export_pdf())
-            self.assertEqual(show.call_count, 2)
+            show.assert_called_once_with(self.window)
+            choose.assert_called_once_with(self.sample.root)
         self.assertFalse((self.home / "out").exists())
 
     def standalone(self):

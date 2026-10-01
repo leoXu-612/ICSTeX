@@ -6394,3 +6394,126 @@ runs. The application release tag remains81b1672; no published archive was chang
 - Evidence: local icstex-beta4-release/public-check/verified.json, signed-package-receipt.json,
   preflight-final/result.json, build.log and this turn's browser/API output. Preserved old assets,
   tags and installed Beta3; Actions stays disabled. No CI/rule bypass or force-push.
+
+## 2026-09-26 - Simplify ordinary PDF export to one destination confirmation
+
+- User requested simple update/export interaction within two steps. Branched from clean mainb6fa58d
+  to codex/simplify-pdf-export. Ordinary source export now opens one destination picker labelled
+  update-and-export, then saves/builds/verifies/publishes automatically. Current verified FINAL
+  skips recompilation. Existing filenames receive a free-name suggestion; no overwrite publication.
+  Advanced reviewed submission, Block export and project ZIP keep their independent gates.
+- Reused compile controller, immutable FinalBuildEvidence, CaptureLease, existing worker signals,
+  exact PDF/input revalidation and exclusive publication. Compiler entry now reports request
+  acceptance so failed/deferred saves cannot leave an export waiting forever. Preview/old result,
+  input conflict, other-window drafts, source/PDF mutation, cancellation and reentry are covered.
+  QObject/timer ownership and shutdown protect the newly asynchronous export result receiver.
+- Updated UI routing, tutorial copy and docs; D027 records ordinary PDF versus reviewed delivery.
+  Existing legacy-copy/review-only tests were adapted to the requested behavior, retaining file,
+  revision and cancellation assertions. Atomic failure now exercises the actual exclusive publisher.
+- Related106 tests passed12.209s; added deferred-failure test passed0.615s and guide test1.161s.
+  Initial runs exposed an outdated modal stub, a mock-enum expectation and an obsolete shutil
+  test seam; the owned blocked test was terminated143 and fixtures corrected. Early real probe
+  automated QFileDialog.selectFile without actually changing its accepted name; the harness now
+  fills the real name field and verifies selectedFiles before acceptance. A failure-exit timer
+  lifetime error was fixed with QObject/timer ownership and idempotent shutdown.
+- Final real probe on app8f41a822: isolated offscreen Qt with actual local LaTeX. Two exports,
+  one FINAL build, updated PDF text found, first25943-byte artifact identical to canonical FINAL,
+  second export identical without rebuilding, cursor AND nonzero scroll position preserved.
+  User action was automated on a real Qt picker; no native macOS picker/student acceptance claim.
+- Initial full gate was deliberately interrupted275.542s/exit130 to synchronize remaining in-app
+  guidance. Final preflight includes required compileall and full1848 tests569.349s,
+  command572.269s, exit0. Before/after app8f41a822e18608f2971c43baca0b12e46f31166d7a811bc30b439a8415f71e97;
+  app+tests308896c72344383c5f3103e25565f22782111918580e2f7ceeb51352d8d68e1d unchanged.
+  Qt/font/link-model/offscreen and temporary-directory async diagnostics plus stale artifact
+  reminders retained. No percentage performance claim or claim of fixing all historical Qt issues.
+- Evidence: local 2026/09/26/icstex-simple-export/before.tgz, probe.py, result.json,
+  picker-1.png, picker-2.png, export-complete.png, preflight-final[-v2]/result.json and logs.
+  No manuscripts, installed app, GitHub, website, dependencies or models changed. Installation
+  choice was requested but not yet answered; source-only handoff, no commit/push/release or CI.
+
+## 2026-09-28 - Install the two-step PDF export source locally
+
+- User explicitly requested local replacement. Preserved branch codex/simplify-pdf-export,
+  HEAD b6fa58d and existing uncommitted source; no application code changed this turn.
+  App 8f41a822 and app+tests 308896c7 exactly match the completed 2026-09-26 preflight
+  (1848 tests, exit 0). Reused that gate with unchanged Python 3.12.6, PySide6 6.11.1,
+  PyInstaller 6.21.0 and packaging inputs; compileall passed again. No dependency upgrade.
+- Built in a new evidence directory with existing spec and Beta 4 updater runtime, exit 0.
+  Verified 209 modules/entry, assets and three raw optional worker files against current source;
+  no previously bundled module lost. Arm64/ad-hoc deep/strict checks passed. Existing libobjc
+  ctypes warning retained; no Developer ID/notarization or new public-release claim.
+- InstallationLease found no active installed app/installer. Backed up the entire old bundle
+  to ~/Applications/ICSTeX Backups/ICSTeX-2.1.0-beta.3-before-two-step-export-20260928.app,
+  then replaced /Applications/ICSTeX.app. Candidate and installed manifests match across
+  475 files/160 links; backup manifest unchanged. Old executable 0e06c53d, new executable
+  0964f8b8277175f1050c030363e20e3bbb3c4e23129a55bdb718ac18ae24f994.
+  Package all-app-files digest a3bdd344 differs by design from the Python-only app identity.
+- Launched the exact installed path; native guide visibly shows the two-step export instructions.
+  Closed the guide and left the app on its welcome page. No student document opened or modified;
+  no repeated native save-panel/export acceptance claimed. App/tests remained unchanged after build.
+  Version label 2.1.0-beta.4 / 210004 and updater feed/key retained; local bytes intentionally
+  differ from public Beta 4. No commit, push, tag, website/feed update or CI activation.
+- Evidence: ~/.codex/visualizations/2026/09/28/icstex-simple-export-install/build.log,
+  package-receipt.json, install-receipt.json, install_local.py and native tool observations.
+
+## 2026-09-28 - Remember ordinary PDF destination and update after successful FINAL
+
+- Extended the same uncommitted export task on codex/simplify-pdf-export, HEAD b6fa58d.
+  Captured the pre-turn affected files in icstex-auto-export/before.tgz; previous changes to
+  compile_controller and existing preview/submission tests were retained, not counted as new work.
+- Successful ordinary export now persists a local per-root target and its last published
+  content/filesystem identity. Later current FINAL success reuses the export worker, build
+  proof, CaptureLease and same-directory staging. Only that unchanged prior output can be
+  atomically replaced; default Agent/new-file publication stays exclusive. No additional compile.
+  Preview, failure, stale result, changed/missing/linked destination, write failure and input/
+  internal-path protections remain. D028 documents this explicit exception to D027.
+- Reopening retains the target. A successful new export changes it; the File menu can stop
+  updates without deleting the PDF. Background-root completion does not alter active-tab
+  indicators. An in-flight callback cannot re-enable another window's stopped/changed binding.
+  Automatic failures use status/log instead of a modal. In-app guide and user docs explain it.
+- Final related batch: 84 tests, 10.970s, pass. Initial synthetic automatic tests omitted the
+  real compile manager ownership; corrected the fixture rather than weakening root checks.
+  A test-edit placement error caused one NameError and was repaired. Reproduced the cross-window
+  stop/re-enrollment bug with a failing test, then fixed the callback's persistent-intent check.
+- Final real probe at app192fbb24: one automated real Qt picker, six requested local-LaTeX
+  builds (including preview and deliberate failure), zero extra builds. Updated export exactly
+  matches FINAL bytes and new parsed text; preview/failure preserve it, reopening retains the
+  target, external annotation is preserved, cursor/nonzero scroll are unchanged. Offscreen Qt
+  and isolated settings/projects only; not native save-panel, cloud-drive or human acceptance.
+  The first probe's business assertions passed but double-closing an already closed test window
+  failed cleanup; fixed the harness and retained its failed exit/log, not an application change.
+- Two early full runs were intentionally interrupted before source repairs (45.929s/32.113s,
+  child exit -2), not counted as passes. Final compileall and complete unittest discovery passed:
+  1869 tests / 359.943s, command361.765s, exit0. Before/after app
+  192fbb24d61484590207c8c0c40ff7e52b1926ce73c55b0417f4d19e48ace03a and app+tests
+  32d0f8baa701ccfc2186f825e6ba5fc68a98af28012921c9b038e4a68948c90a unchanged.
+  Existing Qt font/offscreen/QPdfLinkModel and temporary-directory async diagnostics retained.
+- Evidence: ~/.codex/visualizations/2026/09/28/icstex-auto-export/{before.tgz,probe.py,
+  probe-final.log,final-probe/result.json,regression-complete/result.json,regression-complete/unittest.log}.
+  No student files, dependency changes, installation, commit/push, website/feed or CI work.
+  Installed executable remains0964f8b8 (the prior two-step export source, without this addition).
+
+## 2026-09-28 - Install remembered-PDF automatic-update build locally
+
+- User authorized local update. Rechecked repository/branch/dirty tree and source identities;
+  no application or test edits. The installed app was already closed; no forced quit or save.
+  Ran required packaging/preflight.sh on app192fbb24 / app+tests32d0f8ba: version checks,
+  compileall and1869 tests passed337.823s, command339.729s, exit0, before/after identities equal.
+- Reused existing PyInstaller spec and Beta4 updater runtime with unchanged Python3.12.6,
+  PySide6 6.11.1 and PyInstaller6.21.0. Build exit0;209 modules/entry, assets and three raw
+  optional worker files match source. Arm64/ad-hoc deep/strict signature passed; no Developer ID
+  or notarization claim. Existing Qt/async temporary-path diagnostics, libobjc ctypes warning
+  and old-artifact reminders retained; no unrelated test matrices or dependency downloads.
+- Existing InstallationLease protected replacement.475 files/160 links match the candidate;
+  complete old bundle remains unchanged at ~/Applications/ICSTeX Backups/
+  ICSTeX-2.1.0-beta.4-before-auto-export-20260928.app. Previous executable0964f8b8, new
+  0c35dca663dfb721939d594d587d547038765fecfe40c104f796ad84359be445. All-app-files identity
+  f047e19af97ee56bcdedbc129355041de75787440df3cbd6e70521bdd90543dc is distinct from Python-only digest.
+- Opened exact /Applications/ICSTeX.app and verified its running executable path/hash. Native
+  File menu shows the new stop-auto-update action, disabled without a document/binding; menu
+  closed and welcome page left open. No student document, setting or recent entry modified.
+  Native compile/export or cloud-drive acceptance was not repeated or inferred from the menu.
+- Version remains a local2.1.0-beta.4/210004 build; embedded feed/key and previous backups retained.
+  No public assets, GitHub/website/feed changes, commit/push or CI activation. Evidence under
+  ~/.codex/visualizations/2026/09/28/icstex-auto-export-install/: preflight/result.json,
+  build.log, package-receipt.json, install-receipt.json, reused install_local.py and native tool observations.

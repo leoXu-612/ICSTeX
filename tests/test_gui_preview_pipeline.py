@@ -653,19 +653,19 @@ class GuiPreviewPipelineTests(TestCase):
         self.assertEqual(child.read_text(encoding="utf-8"), child_text)
         self.assertEqual(tab.path.read_text(encoding="utf-8"), source_text)
 
-    def test_preview_only_export_requires_review_and_separate_final_never_copies_preview(self) -> None:
+    def test_preview_only_export_waits_for_destination_before_updating(self) -> None:
         tab = self._add_document()
         manager = tab.manager
         assert manager is not None
         self._finish_success(tab, BuildPurpose.PREVIEW, 1)
         target = self.directory / "submission.pdf"
 
-        with patch.object(manager, "compile_async") as compile_async, patch(
-            "app.gui.submission_delivery_dialog.show_submission_delivery", return_value=None,
-        ) as review:
+        with patch.object(manager, "compile_async") as compile_async, patch.object(
+            self.window.pdf_export, "choose_destination", return_value=False,
+        ) as choose:
             self.assertFalse(self.window.export_pdf())
 
-        review.assert_called_once_with(self.window)
+        choose.assert_called_once_with(manager.root_file)
         compile_async.assert_not_called()
         self.assertFalse(target.exists())
         self.assertIsNone(self.window.pdf_export.pending_for(manager.root_file))

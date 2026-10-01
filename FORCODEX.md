@@ -1,15 +1,11 @@
 # FORCODEX.md
 
-Completed (2026-09-20): authorized GitHub integration and macOS Beta 4 publication.
+本轮已完成（2026-09-28）：按用户授权，将“正式编译后自动更新已导出 PDF”源码
+打包核验、完整备份并替换 /Applications/ICSTeX.app，原生打开后留在欢迎页。
 
-Source PR #4 and release-freeze PR #5 are merged. v2.1.0-beta.4 / 210004 is public
-with verified DMG/ZIP; the existing Vercel website and signed feed serve that release.
-Live anonymous feed/archive verification and visible download-page checks passed.
-Current facts, hashes and acceptance limits are in docs/PROJECT_STATE.md.
-
-Actions remains disabled. No force-push, rule bypass, key export, document changes,
-model download or installed-app replacement occurred. The local Beta 3 is retained
-as an upgrade starting point. Collaborator owns final other-device automatic discovery,
-download/install/restart acceptance; do not mark that as passed from HTTP tests.
-Stop this release task after the delivery-record PR is merged. Continue only for
-specific new feedback, not more feature development or an unrequested test matrix.
+保持 codex/simplify-pdf-export 的现有未提交工作；源码 app192fbb24、app+tests32d0f8ba
+已完成专项、完整回归和隔离真实 LaTeX 验证；本次打包 preflight 也通过，详见 PROJECT_STATE。
+未改应用源码；沿用既有 spec、Beta 4 runtime 和 InstallationLease。新包/安装文件核验
+匹配，旧包完整保留；原生菜单已出现停止自动更新入口。未重做原生 PDF 导出验收。
+未修改学生文稿、设置、依赖或模型；未提交/推送/发布网站或更新 feed，未启用 Actions。
+到此停止，等待用户反馈；保留源码未提交改动、旧包及证据，不自动扩展或发布。

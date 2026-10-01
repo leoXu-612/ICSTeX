@@ -1474,6 +1474,11 @@ class TutorialGuiTests(TestCase):
         dialog.show()
         self.assertEqual(dialog.pages.count(), 4)
         self.assertEqual(dialog.start_button.text(), "开始练习（独立副本）")
+        self.assertIn("更新并导出", GUIDE_PAGES[3][3])
+        self.assertIn("每次正式编译成功", GUIDE_PAGES[3][3])
+        self.assertIn("停止自动更新导出 PDF", GUIDE_PAGES[3][3])
+        self.assertIn("高级", GUIDE_PAGES[3][2])
+        self.assertNotIn("然后点“检查并固定内容”", GUIDE_PAGES[3][3])
         for index, (_name, filename, _caption, _body) in enumerate(GUIDE_PAGES):
             with self.subTest(image=filename):
                 image = QImage(str(asset_path("user-guide/" + filename)))
@@ -2656,12 +2661,11 @@ class GuiEditorTests(TestCase):
             self.assertTrue(window.pdf_panel.reveal_pdf_button.isEnabled())
             self.assertEqual(window.pdf_panel.freshness_label.text(), "PDF 已是最新")
 
-            # A cached fake PDF record is not build-input evidence. The UI now
-            # dispatches to explicit review; exact-byte publication is covered
-            # by test_submission_delivery_gui and the real-FINAL product probe.
-            with patch("app.gui.submission_delivery_dialog.show_submission_delivery", return_value=None) as review:
+            # Merely opening/cancelling the destination picker must not copy a
+            # cached record; the export controller requires actual FINAL evidence.
+            with patch.object(window.pdf_export, "choose_destination", return_value=False) as choose:
                 self.assertFalse(window.export_pdf())
-            review.assert_called_once_with(window)
+            choose.assert_called_once_with(tex.resolve())
             self.assertEqual(source.read_bytes(), b"%PDF-1.4 fake")
 
             with patch("app.gui.main_window.subprocess.Popen") as popen, patch(
@@ -2675,7 +2679,7 @@ class GuiEditorTests(TestCase):
             else:
                 open_url.assert_called_once()
 
-    def test_export_pdf_rejects_empty_and_reviews_stale_without_implicit_rebuild(self) -> None:
+    def test_export_pdf_rejects_empty_and_defers_stale_until_destination_confirmed(self) -> None:
         window = MainWindow(settings_store=isolated_settings())
         window._watch_file = lambda _path: None  # type: ignore[method-assign]
 
@@ -2696,8 +2700,8 @@ class GuiEditorTests(TestCase):
                 self.assertFalse(window.export_pdf())
             dialog.assert_not_called()
 
-            # A stale PDF is never copied. Save/FINAL now require separate
-            # explicit actions within the reviewed submission workflow.
+            # A stale PDF is never copied; cancelling destination selection
+            # must not save or start the subsequent update/export operation.
             pdf = Path(tmp) / "main.pdf"
             pdf.write_bytes(b"%PDF-1.4 old")
             window.pdf_state.begin_build(source, 2)
@@ -2709,11 +2713,11 @@ class GuiEditorTests(TestCase):
 
             exported = Path(tmp) / "exported"
             tab.manager = window.create_compile_manager(source)
-            with patch.object(tab.manager, "compile_async") as compile_async, patch(
-                "app.gui.submission_delivery_dialog.show_submission_delivery", return_value=None,
-            ) as review:
+            with patch.object(tab.manager, "compile_async") as compile_async, patch.object(
+                window.pdf_export, "choose_destination", return_value=False,
+            ) as choose:
                 self.assertFalse(window.export_pdf())
-            review.assert_called_once_with(window)
+            choose.assert_called_once_with(source.resolve())
             compile_async.assert_not_called()
             self.assertFalse(exported.with_suffix(".pdf").exists())
             self.assertIsNone(window.pdf_export.pending_for(source))
@@ -5084,18 +5088,19 @@ class GuiPdfStateTests(TestCase):
         self.window.editor_tabs.setCurrentIndex(index_a)
         self.assertEqual(self.window.pdf_panel.current_pdf, pdf_a)
         reviewed = []
-        def inspect(window):
-            request = window.readiness.capture_request()
+        def inspect(root):
+            request = self.window.readiness.capture_request()
+            self.assertEqual(root, request.root)
             reviewed.append((request.root, request.final.last_successful_pdf))
-            return None  # No confirmed delivery from this synthetic record.
-        with patch("app.gui.submission_delivery_dialog.show_submission_delivery", side_effect=inspect):
+            return False  # Destination selection cancelled; no synthetic PDF is exported.
+        with patch.object(self.window.pdf_export, "choose_destination", side_effect=inspect):
             self.assertFalse(self.window.export_pdf())
         self.assertEqual(reviewed[-1], (tab_a.path.resolve(), pdf_a))
 
         index_b = self.window._index_for_tab_id(id(tab_b.editor))
         self.window.editor_tabs.setCurrentIndex(index_b)
         self.assertEqual(self.window.pdf_panel.current_pdf, pdf_b)
-        with patch("app.gui.submission_delivery_dialog.show_submission_delivery", side_effect=inspect):
+        with patch.object(self.window.pdf_export, "choose_destination", side_effect=inspect):
             self.assertFalse(self.window.export_pdf())
         self.assertEqual(reviewed[-1], (tab_b.path.resolve(), pdf_b))
         self.assertEqual(pdf_a.read_bytes(), b"%PDF-1.4 AAA")
@@ -5195,18 +5200,19 @@ class GuiPdfStateTests(TestCase):
         self.assertFalse(self.window.export_pdf_action.isEnabled())
         self.assertFalse(self.window.pdf_panel.export_pdf_button.isEnabled())
 
-    def test_legacy_copy_controller_failure_leaves_no_partial_files(self) -> None:
+    def test_export_request_failure_leaves_no_partial_files(self) -> None:
         tab = self._add_doc("a.tex")
         self._finish_success(tab, 1)
         target = self.dir / "exported.pdf"
 
-        # Internal compatibility helper, not the reviewed user-facing entrance.
-        with patch("app.gui.pdf_export_controller.shutil.copy2", side_effect=OSError("disk full")), patch(
-            "app.gui.main_window.QMessageBox.warning"
-        ) as warning:
+        original = tab.manager.pdf_file.read_bytes()
+        # A record alone is not a current build proof. If starting the required
+        # update is rejected, never fall back to copying that cached PDF.
+        with patch.object(self.window.compile, "compile_current", return_value=False) as compile_request:
             self.assertFalse(self.window.pdf_export.request_export(tab.path, target))
 
-        warning.assert_called_once()
+        compile_request.assert_called_once()
+        self.assertEqual(tab.manager.pdf_file.read_bytes(), original)
         self.assertFalse(target.exists())
         self.assertEqual(list(self.dir.glob("*.part")), [])
         self.assertEqual(list(self.dir.glob("*.pdf.part")), [])

@@ -78,16 +78,17 @@ class CompileController:
         _tab_id: int | None = None,
         _reason: str = "手动触发/编辑器修改",
         _dependencies_checked: bool = False,
-    ) -> None:
+    ) -> bool:
+        """Return whether the request started or was deferred, not whether it compiled successfully."""
         window = self.window
         # Calling this entry point is a deliberate/manual compile unless an
         # auto-save caller explicitly requests PREVIEW.
         selected_purpose = purpose or BuildPurpose.FINAL
         tab = window.tabs.get(_tab_id) if _tab_id is not None else window.current_tab()
         if not tab:
-            return
+            return False
         if not user_initiated and not window.auto_compile_action.isChecked():
-            return
+            return False
         root = window._compile_root_for_tab(tab)
         if root is not None:
             root = normalize_path(root)
@@ -95,7 +96,7 @@ class CompileController:
                 window.compile_authorized_roots.add(root)
             elif root not in window.compile_authorized_roots:
                 window.statusBar().showMessage("首次编译需由你显式触发；当前仅保存修改。", 4000)
-                return
+                return False
         if not window.toolchain.is_compile_ready:
             if root is not None:
                 if selected_purpose is BuildPurpose.PREVIEW:
@@ -108,28 +109,28 @@ class CompileController:
             if show_missing_warning:
                 window.append_log(window.toolchain.missing_compile_message)
                 QMessageBox.warning(window, "未找到 LaTeX 编译器", window.toolchain.missing_compile_message)
-            return
+            return False
         if tab.path is None:
             if not window.save_current_as():
-                return
+                return False
         elif tab.dirty or tab.modified or (tab.save_timer is not None and tab.save_timer.isActive()):
             if not window.flush_pending_save(tab, compile_after_save=False):
-                return
+                return False
         if tab.path is None:
-            return
+            return False
         root = window._compile_root_for_tab(tab)
         if root is not None and not _dependencies_checked and window.dependencies.memberships_current:
             window.dependencies.refresh_memberships(force=True)
         if root is not None and not window.dependencies.memberships_current:
             self._defer_dependencies(tab, root, selected_purpose, immediate,
                                      show_missing_warning, user_initiated, _reason)
-            return
+            return True
         if root is not None and not window.documents.flush_root_documents(root):
-            return
+            return False
         if root is not None and not window.dependencies.memberships_current:
             self._defer_dependencies(tab, root, selected_purpose, immediate,
                                      show_missing_warning, user_initiated, _reason)
-            return
+            return True
         if tab.manager is None:
             tab.manager = self.create_manager(tab.path)
         else:
@@ -143,6 +144,7 @@ class CompileController:
             tab.manager.compile_async(selected_purpose)
         else:
             tab.manager.schedule_compile(_reason, selected_purpose)
+        return True
 
     def _defer_dependencies(self, tab, root, purpose, immediate, warning, user, reason, manager_only=False):
         old = self._deferred_dependencies.get(root)
@@ -170,8 +172,10 @@ class CompileController:
             if manager_only:
                 self.compile_for_root(root, purpose, reason=reason, immediate=immediate, _dependencies_checked=True)
             else:
-                self.compile_current(immediate=immediate, show_missing_warning=warning, purpose=purpose,
-                                     user_initiated=user, _tab_id=identity, _reason=reason, _dependencies_checked=True)
+                accepted = self.compile_current(immediate=immediate, show_missing_warning=warning, purpose=purpose,
+                                                user_initiated=user, _tab_id=identity, _reason=reason, _dependencies_checked=True)
+                if not accepted:
+                    window.pdf_export.cancel_root(root)
         window._sync_compile_indicators_to_active_root()
 
     def compile_for_root(self, root, purpose, *, reason, immediate=False, _dependencies_checked=False):

@@ -1,7 +1,7 @@
 # FORCODEX.md
 
-当前交接（2026-10-02）：工作台分区、顶部分组和布局记忆已实现并推送PR #9；
-本机安装尚未完成，因宿主ChatGPT/Codex的Autoupdate仍在运行而停止在安全替换之前。
+当前交接（2026-10-02）：工作台分区、顶部分组和布局记忆已推送PR #9并完成本机安装。
+宿主更新器退出后13项安装互斥补验通过；不改写此前失败收据，不重复其他1891项。
 实际实现位于当前附加工作树，分支 codex/workbench-layout。基线为已推送的
 7284b20（此前导出状态/性能工作独立留痕），app7f0048e3 / app+tests f2f078b0。
 
@@ -15,11 +15,9 @@
 原生宽窗布局、真实编译、导出入口取消和分栏重启已验证；窄窗直接退出另有复现及17项
 相关专项。不要重开设计、扩大测试矩阵或再跑旧性能实验。
 
-宿主更新自然退出后，先检查已安装helper --idle，再仅运行
-QT_QPA_PLATFORM=offscreen python3 -m unittest tests.test_update_install_guard，
-核对应用/测试摘要未变并保留新收据；不要重复已通过且未改的1891项。
-确认门槛后沿用spec及已准备的Beta4 updater runtime打包，验证源码/产物一致与签名；
-完整备份旧安装版，再用InstallationLease安全替换并核对实际运行路径/可见布局。
-若宿主更新仍存在，不终止它、伪造idle或弱化保护；用户文稿未保存时先交还用户处理。
-GitHub通过当前任务PR留痕，不直接推main、不启用Actions、不自动合并。仅本机安装，
-不修改公开版本、feed或网站。当前安装版仍为自动导出状态版，未打新包或覆盖。
+当前安装路径为/Applications/ICSTeX.app，程序摘要7f830b5e…76191fcb；旧版在
+~/Applications/ICSTeX Backups/ICSTeX-2.1.0-beta.4-before-workbench-20261002.app。
+本地标签仍为2.1.0-beta.4/210004，arm64/ad-hoc，不是新的公开版本。源码、产物、
+保护性替换和实际启动证据见PROJECT_STATE；导引已核对，主窗口留在欢迎页。
+本轮交付完成，等待用户验收；不继续重做UI、性能或编译/导出矩阵。不要在未明确
+授权时合并PR、推main、启用Actions或修改网站/feed；不改学生文稿与其他代理任务。

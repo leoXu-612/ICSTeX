@@ -16,11 +16,12 @@
 - 2026-10-01: verified installed-export source committed as 8ddfc13 and pushed to
   codex/simplify-pdf-export. PR #7 targets main, is OPEN/MERGEABLE, not merged.
   Remote main remains b6fa58d; Actions is still disabled. Follow-up visualization was
-  developed locally on codex/pdf-export-status, based on 8ddfc13, and is not yet pushed.
+  developed locally on codex/pdf-export-status, based on 8ddfc13. It was subsequently
+  included in checkpoint7284b20/PR#8; workbench layout is tracked by PR#9, neither merged here.
 
 ## Product and Source State
 
-### 当前源码：工作台分区与布局记忆（2026-10-02，已推送，本机安装受阻）
+### 当前源码与安装版：工作台分区与布局记忆（2026-10-02，已推送并本机安装）
 
 - `codex/workbench-layout` 基于已推送的 `7284b20`；此前导出状态与性能源码在草稿
   PR #8 单独留痕，依赖 PR #7。布局提交 `2532862`、窄窗退出修复 `6e1603c` 均已
@@ -44,17 +45,34 @@
 - 最终离屏四状态截图对应当前源码。旧探针在150%截图早于最后一轮PDF绘制，曾拍到
   空白；补充整窗最终截图的目标像素检查后通过，不改PDF渲染逻辑、不把早期空白算验收。
 - 最终 `packaging/preflight.sh` 完整执行：版本/compileall通过，1902项/353.540s，
-  命令355.318s、退出1。1891项通过；11项安装互斥测试仍被宿主ChatGPT/Codex的
-  Autoupdate阻挡，真实已安装helper的`--idle`也返回1。未模拟通过、终止宿主或绕过保护。
+  命令355.318s、退出1。当时1891项通过，11项安装互斥测试被宿主ChatGPT/Codex的
+  Autoupdate阻挡，真实已安装helper的`--idle`也返回1。该原始失败收据保持不变。
   首轮1901项/377.423s的失败收据也保留，最终检查对应窄窗修复后的源码，不拼接版本。
 - 最终app `7cb9d8f6bc17b6fc2bb925f03638fecde5cdfe99c811751b4f7e9166c1aa3204`；
   app+tests `7a5cabf37ca21024d19cd846314694ec9337e15cd07211c9c67fbd4d59873da5`，
   最终全套前后相同。Qt/字体、临时目录异步日志及原生IMK提示保留，不声称零警告。
 - 证据：`~/.codex/visualizations/2026/10/02/icstex-workbench-layout/` 的
   `after-paint-verified/`、`native/{first,restart}-receipt.json`、`compact_close_probe.json`、
-  `preflight-final/result.json`。没有打包或替换本机；旧程序摘要仍为 `ae4d24e1…1f959d`。
-  待宿主更新自然结束后，只补验`tests.test_update_install_guard`并核对同一源码身份，再
-  继续已授权的打包、备份、安装和实际启动验证；不重复不相关性能实验或公开发布。
+  `preflight-final/result.json`。后续用户明确要求继续安装，完成以下同源码补验与交付。
+- 宿主更新器退出且真实helper `--idle`返回0后，仅补跑安装互斥模块：13项/3.264s，
+  命令3.391s、退出0，覆盖全部11项受阻检查。补验前后摘要与上次全套完全相同；
+  组合门槛满足，不把原preflight退出1追溯改成0，也未重复其他1891项。
+- 沿用现有spec、Python3.12.6/PySide6 6.11.1/PyInstaller6.21.0和Beta4 runtime，
+  新包构建33.093s、退出0。209个模块/入口及资源匹配源码，无新增漏包；三个raw
+  可选worker逐字节匹配。arm64、ad-hoc deep/strict签名通过；保留libobjc ctypes警告，
+  不声称Developer ID或公证。版本标签仍为本地2.1.0-beta.4/210004，feed/公钥不变。
+- 通过InstallationLease备份并替换`/Applications/ICSTeX.app`，475文件/160链接与
+  候选逐项一致；验证在释放互斥前完成。新程序SHA256：
+  `7f830b5e9f810a1bf61944bca9d57a12f2ad503106a359c539fb834276191fcb`。
+  旧版完整保留于`~/Applications/ICSTeX Backups/ICSTeX-2.1.0-beta.4-before-workbench-20261002.app`，
+  旧摘要`ae4d24e1…1f959d`未变。含资源源码摘要为`ceff216a…fe1ce27`。
+- 从实际安装路径启动，运行路径/摘要匹配；原生工具栏显示文件/编译输出/视图分组，
+  导引实际显示新分区与布局记忆说明。关闭导引后留在欢迎页；未打开学生文稿、改变
+  最近列表或测试偏好，不把此检查扩称新的安装版完整编译/导出验收。
+- 安装证据在`~/.codex/visualizations/2026/10/02/icstex-workbench-install/`：
+  `validation-receipt.json`、`guard-recheck.log`、`build-receipt.json`、`package-receipt.json`、
+  `install-receipt.json`与沿用保护流程的本地脚本。本轮交付结束，不自动发布、合并PR
+  或继续UI/性能实验；官网、公开更新源、Actions和依赖均未改。
 
 ### 已并入当前源码的性能基线：首次打开/编译让行与文档关闭回收（2026-10-02）
 
@@ -90,7 +108,7 @@
   `ee-{a1,c1,c2,a2}`、`ee-final-{a,c}`、`lifetime-{before,after}`、`native-corrected`、
   `regression/result.json`。源码完成局部修复，不宣称完整验收；未提交、推送、打包或安装。
 
-### 当前安装版基线：常驻自动导出状态（源码 2026-10-01，本机安装 2026-10-02，未推送本增量）
+### 前一安装版：常驻自动导出状态（源码 2026-10-01，本机安装 2026-10-02，已被上节替换）
 
 - 普通 PDF 首次导出后，在 PDF 区下方显示目标路径、上次导出时间和当前同步状态；
   未开启的项目不占预览空间。长路径中间省略、悬停可见完整路径，三个操作按钮复用

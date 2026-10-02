@@ -6717,3 +6717,41 @@ runs. The application release tag remains81b1672; no published archive was chang
   on these same source identities, then build/verify, intact backup, guarded local replacement
   and actual installed launch. No new public version/feed/website, dependency installation,
   student edits or installed-app acceptance claim. Stop additional UI/performance experiments.
+
+## 2026-10-02 - Resume and complete local workbench installation
+
+- User explicitly requested continuing installation. Re-established primary and actual worktree
+  roots; preserved primary dirty source/index. Actual codex/workbench-layout was clean at5fa92d3.
+  Host Autoupdate was gone, installed helper--idle exited0 and ICSTeX was not running; no process
+  was killed, no manuscript was saved/closed by the agent and no protection was bypassed.
+- Rechecked only tests.test_update_install_guard:13 tests3.264s, command3.391s/exit0, covering
+  all11 errors in the previous1902-test preflight. Application/test identities exactly matched
+  that original before/after receipt; its exit1 remains unchanged. The local combined validation
+  receipt records the prior failure names and successful targeted recheck, not a fictitious
+  green full-preflight run. Did not repeat the unaffected1891 cases or earlier UI/performance probes.
+- Built fresh via existing PyInstaller spec and prepared Beta4 updater runtime:33.093s/exit0,
+  Python3.12.6, PySide6 6.11.1, PyInstaller6.21.0 unchanged, no dependency install.209 modules/
+  entry plus assets match source; not_packaged list is identical to the previous local build,
+  and three raw pix2tex worker files match byte-for-byte. Arm64/ad-hoc deep/strict integrity
+  passed. Retained libobjc ctypes warning; no Developer ID/notarization/public-release claim.
+- Verified candidate, copied to a fresh same-volume hidden stage, verified again, then acquired
+  InstallationLease. Rechecked the old bundle under the lock, renamed it intact to backup,
+  installed the candidate and verified both complete manifests/signatures before releasing the
+  lease.475 files/160 links match candidate; backup is unchanged. A failed post-replacement
+  verification would preserve the failed candidate and restore the old bundle; not exercised here.
+- Target:/Applications/ICSTeX.app. Backup:~/Applications/ICSTeX Backups/
+  ICSTeX-2.1.0-beta.4-before-workbench-20261002.app. Old executableae4d24e1…1f959d retained;
+  new executable7f830b5e9f810a1bf61944bca9d57a12f2ad503106a359c539fb834276191fcb.
+  App7cb9d8f6bc17b6fc2bb925f03638fecde5cdfe99c811751b4f7e9166c1aa3204;
+  app+tests7a5cabf37ca21024d19cd846314694ec9337e15cd07211c9c67fbd4d59873da5 unchanged;
+  source including assetsceff216a970a9aec35cf8c8ce9c1fcc8f63c94c697a81b2f9fb0a5485fe1ce27.
+- Opened exact installed path through native app control, verified live executable path/hash
+  and visible File/Compile-Output/View groups. Opened the guide and observed current workbench/
+  splitter-memory instructions; closed only the guide, leaving welcome open. No student document,
+  recent-file mutation or preference test. This is installed startup/content verification, not
+  a repeated installed compile/export matrix or user acceptance. Local label remainsBeta4/210004;
+  feed and public key preserved, website/public assets/Actions unchanged, no PR merge.
+- Evidence:~/.codex/visualizations/2026/10/02/icstex-workbench-install/{validation-receipt.json,
+  guard-recheck.log,build-receipt.json,build.log,package-receipt.json,install-receipt.json} and
+  native tool observations. Local scripts adapt the earlier verified workflow; original failed
+  preflight receipts and all prior application backups remain. Authorized local delivery complete.

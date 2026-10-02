@@ -1168,6 +1168,142 @@ class WritingWorkspaceLayoutTests(TestCase):
         self.assertEqual(area.splitter.sizes(), widths)
 
 
+class WorkbenchSurfaceTests(TestCase):
+    """Local paint feedback must not move controls or delay their actions."""
+
+    setUp = WritingWorkspaceLayoutTests.setUp
+    settle = WritingWorkspaceLayoutTests.settle
+    dispose = WritingWorkspaceLayoutTests.dispose
+
+    def test_tool_surfaces_distinguish_states_without_changing_geometry(self):
+        from PySide6.QtGui import QImage, QPainter
+        from PySide6.QtWidgets import QStyle, QStyleOptionToolButton
+        self.window.new_document()
+        self.window.resize(1440, 900)
+        self.settle()
+        toolbar = self.window.findChild(QToolBar, "mainToolbar")
+        targets = (toolbar.widgetForAction(self.window.save_action),
+                   toolbar.widgetForAction(self.window.compile_action),
+                   self.window.workspace.navigation, self.window.bottom_collapse_button,
+                   self.window.source_preview_area.editor_button)
+        state = QStyle.StateFlag
+        extras = {"normal": state.State_Enabled,
+                  "hover": state.State_Enabled | state.State_MouseOver,
+                  "pressed": state.State_Enabled | state.State_MouseOver | state.State_Sunken,
+                  "focus": state.State_Enabled | state.State_HasFocus | state.State_KeyboardFocusChange,
+                  "checked": state.State_Enabled | state.State_On,
+                  "checked_pressed": state.State_Enabled | state.State_On | state.State_Sunken,
+                  "disabled": state.State_None, "disabled_hover": state.State_MouseOver}
+        for button in targets:
+            option = QStyleOptionToolButton()
+            button.initStyleOption(option)
+            base = option.state & ~(state.State_Enabled | state.State_MouseOver | state.State_Sunken |
+                                    state.State_HasFocus | state.State_KeyboardFocusChange | state.State_On)
+            geometry, hint = button.geometry(), button.sizeHint()
+            images = {}
+            for name, extra in extras.items():
+                option.state = base | extra
+                image = QImage(button.size(), QImage.Format.Format_ARGB32_Premultiplied)
+                image.fill(Qt.GlobalColor.transparent)
+                painter = QPainter(image)
+                button.style().drawComplexControl(QStyle.ComplexControl.CC_ToolButton, option, painter, button)
+                painter.end()
+                images[name] = image
+            for left, right in (("normal", "hover"), ("hover", "pressed"),
+                                ("normal", "focus"), ("normal", "disabled")):
+                self.assertNotEqual(images[left], images[right], (button.objectName(), left, right))
+            if button.isCheckable():
+                self.assertNotEqual(images["normal"], images["checked"], button.objectName())
+                self.assertNotEqual(images["checked"], images["checked_pressed"], button.objectName())
+            self.assertEqual(images["disabled"], images["disabled_hover"], button.objectName())
+            self.assertEqual((button.geometry(), button.sizeHint()), (geometry, hint))
+            enabled = button.isEnabled()
+            for down, active in ((True, True), (False, False), (False, enabled)):
+                button.setDown(down)
+                button.setEnabled(active)
+                self.settle()
+                self.assertEqual((button.geometry(), button.sizeHint()), (geometry, hint), button.objectName())
+            self.assertIsNone(button.graphicsEffect())
+        self.assertFalse(self.window.compile_authorized_roots)
+
+    def test_enabled_surface_text_contrast_including_checked_press(self):
+        from app.gui.theme import (COLOR_ACCENT, COLOR_ACCENT_HOVER, COLOR_PRESSED,
+                                   COLOR_SELECTED, COLOR_SURFACE, COLOR_TEXT)
+        for foreground, background in ((COLOR_TEXT, COLOR_PRESSED),
+                (COLOR_ACCENT, COLOR_SELECTED), (COLOR_SURFACE, COLOR_ACCENT),
+                (COLOR_SURFACE, COLOR_ACCENT_HOVER)):
+            self.assertGreaterEqual(_contrast_ratio(foreground, background), 4.5)
+
+    def test_auto_compile_surface_has_static_hover_press_focus_and_disabled_states(self):
+        self.window.new_document()
+        self.settle()
+        toggle = self.window.auto_compile_toggle
+        geometry, hint = toggle.geometry(), toggle.sizeHint()
+        images = {}
+        for name, checked, hover, down, enabled, focus in (
+                ("normal", False, False, False, True, False),
+                ("hover", False, True, False, True, False),
+                ("pressed", False, True, True, True, False),
+                ("checked", True, False, False, True, False),
+                ("focus", False, False, False, True, True),
+                ("disabled", False, False, False, False, False),
+                ("disabled_hover", False, True, True, False, False)):
+            toggle.setChecked(checked)
+            toggle.setEnabled(enabled)
+            toggle.setAttribute(Qt.WidgetAttribute.WA_UnderMouse, hover)
+            toggle.setDown(down)
+            if focus:
+                toggle.setFocus(Qt.FocusReason.TabFocusReason)
+            else:
+                toggle.clearFocus()
+            images[name] = toggle.grab().toImage()
+            self.assertEqual((toggle.geometry(), toggle.sizeHint()), (geometry, hint), name)
+        for name in ("hover", "checked", "focus", "disabled"):
+            self.assertNotEqual(images["normal"], images[name], name)
+        self.assertNotEqual(images["hover"], images["pressed"])
+        self.assertEqual(images["disabled"], images["disabled_hover"])
+        self.assertIsNone(toggle.graphicsEffect())
+        self.assertFalse(self.window.compile_authorized_roots)
+
+    def test_feedback_preserves_immediate_actions_without_timers_or_restyling(self):
+        from PySide6.QtCore import QAbstractAnimation, QTimer
+        from PySide6.QtTest import QSignalSpy
+        self.window.new_document()
+        self.settle()
+        toggle = self.window.auto_compile_toggle
+        action = self.window.auto_compile_action
+        signal = QSignalSpy(action.toggled)
+        timers = set(self.window.findChildren(QTimer))
+        animations = self.window.findChildren(QAbstractAnimation)
+        with patch.object(self.application, "setStyleSheet") as restyle, \
+                patch.object(self.window, "compile_current") as compile:
+            QTest.mouseClick(toggle, Qt.MouseButton.LeftButton)
+            self.assertEqual(signal.count(), 1)
+            self.assertTrue(toggle.isChecked())
+            self.assertTrue(action.isChecked())
+            self.assertEqual(self.window.status_auto_label.text(), action.text())
+            toggle.setFocus(Qt.FocusReason.TabFocusReason)
+            QTest.keyClick(toggle, Qt.Key.Key_Space)
+            self.assertEqual(signal.count(), 2)
+            self.assertFalse(toggle.isChecked())
+            self.assertFalse(action.isChecked())
+            self.assertEqual(self.window.status_auto_label.text(), "手动编译")
+            toggle.setEnabled(False)
+            QTest.mouseClick(toggle, Qt.MouseButton.LeftButton)
+            QTest.keyClick(toggle, Qt.Key.Key_Space)
+            self.assertEqual(signal.count(), 2)
+            button = self.window.findChild(QToolBar, "mainToolbar").widgetForAction(self.window.compile_action)
+            self.window.compile_action.setEnabled(False)
+            QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+            self.window.current_tab().editor.insertPlainText("local draft")
+            self.settle()
+            compile.assert_not_called()
+            restyle.assert_not_called()
+        self.assertEqual(set(self.window.findChildren(QTimer)), timers)
+        self.assertEqual(self.window.findChildren(QAbstractAnimation), animations)
+        self.assertFalse(self.window.compile_authorized_roots)
+
+
 class SourceWorkspacePanelTests(TestCase):
     setUp = WritingWorkspaceLayoutTests.setUp
     settle = WritingWorkspaceLayoutTests.settle
@@ -1255,7 +1391,9 @@ class SourceWorkspacePanelTests(TestCase):
         self.window.set_ui_scale(1.5)
         self.window.resize(1080, 720)
         self.window.workspace.refresh()
-        self.window.workspace._timer.stop()
+        # This fixture supplies display text, not live project state. A pending
+        # dependency callback can otherwise restart a stopped refresh timer.
+        self.window.workspace.shutdown()
         details = self.window.workspace.details
         self.assertIsInstance(details, QPlainTextEdit)
         text = "入口：" + "中文目录/" * 80 + "main.tex\n保存：尚未保存\nPDF：未编译\n提交检查：未知"

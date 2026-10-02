@@ -45,7 +45,9 @@ class ToolboxNavigation(QWidget):
 
         self.group = QButtonGroup(self)
         self.group.setExclusive(True)
-        self.group.idClicked.connect(self.setCurrentIndex)
+        # AX Toggle changes checked state without emitting clicked. Keep the
+        # selected page synchronized for mouse, keyboard and accessible actions.
+        self.group.idToggled.connect(lambda index, checked: self.setCurrentIndex(index) if checked else None)
 
         self.stack = QStackedWidget()
         self.stack.setObjectName("toolboxStack")

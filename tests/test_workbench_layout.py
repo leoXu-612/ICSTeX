@@ -131,6 +131,37 @@ class WorkbenchLayoutMemoryTests(TestCase):
             self.assertTrue(title.visibleRegion().contains(title.rect()), title.text())
             self.assertGreaterEqual(title.width(), title.fontMetrics().horizontalAdvance(title.text()) + 12)
 
+    def test_accessible_toggle_switches_the_page_once_and_keeps_exclusive_selection(self):
+        from PySide6.QtGui import QAccessible, QAccessibleActionInterface
+        from PySide6.QtTest import QSignalSpy
+        window = self.window(width=1440)
+        navigation = window.toolbox_navigation
+        changed = QSignalSpy(navigation.currentChanged)
+        clicked = QSignalSpy(navigation.group.idClicked)
+        for number, index in enumerate((2, 1, 7, 0), start=1):
+            button = navigation.navigationButton(index)
+            accessible = QAccessible.queryAccessibleInterface(button)
+            actions = accessible.actionInterface()
+            self.assertIn(QAccessibleActionInterface.toggleAction(), actions.actionNames())
+            actions.doAction(QAccessibleActionInterface.toggleAction())
+            self.drain()
+            self.assertTrue(button.isChecked())
+            self.assertEqual(navigation.currentIndex(), index)
+            self.assertEqual(changed.count(), number)
+            self.assertEqual(changed.at(number - 1), [index])
+            self.assertIs(navigation.currentWidget(), navigation.widget(index))
+            shown_page = navigation.project_splitter if index < 2 else navigation.widget(index)
+            self.assertIs(navigation.stack.currentWidget(), shown_page)
+            self.assertTrue(shown_page.isVisible())
+            self.assertEqual([i for i in range(9) if navigation.navigationButton(i).isChecked()], [index])
+            actions.doAction(QAccessibleActionInterface.toggleAction())
+            self.drain()
+            self.assertTrue(button.isChecked())
+            self.assertEqual(navigation.currentIndex(), index)
+            self.assertEqual(changed.count(), number)
+        self.assertEqual(clicked.count(), 0)
+        self.assertFalse(window.compile_authorized_roots)
+
     def test_files_page_refreshes_only_shown_outline_and_preserves_editor(self):
         from tests.test_gui_editor import wait_until
         window = self.window(width=1440)

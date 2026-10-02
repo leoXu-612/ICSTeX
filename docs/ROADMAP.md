@@ -26,8 +26,10 @@ ICSTeX 要成为 ICC 学生从“建立写作项目”到“提交可靠成果�
 按用户确认的 MATLAB 参考，复用现有控件，整理顶部分组、项目导航、源码/PDF 和
 控制台的视觉分区；记住分栏比例，保留窄窗切换、旧显隐选择与文件/编译保护。
 本轮已授权任务分支/PR留痕及本机安装，不包含公开发布、官网或更新 feed 修改。
-专项、原生分栏重启检查及 packaging/preflight.sh 后，安全备份并替换安装版。
-宿主活动更新或未保存文稿阻挡时不得绕过；当前结果以 PROJECT_STATE 为准。
+源码和原生分栏重启检查已完成并推送PR #9；最终 packaging/preflight.sh 的1891项
+通过，11项被宿主更新器阻挡。宿主更新自然结束后仅补验安装互斥模块，并核对同一
+源码身份，再安全备份/替换和实际启动验证。不继续扩展布局；阻挡时不得绕过保护。
+当前安装版和验证边界以 PROJECT_STATE 为准。
 
 ## Previous Source Task - First Compile and Writing Session Performance
 

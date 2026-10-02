@@ -6657,3 +6657,63 @@ runs. The application release tag remains81b1672; no published archive was chang
   ee-final-a/c, small-a1/c1, lifetime-before/after, native-corrected and regression receipts.
   Local source handoff only;11 environment-blocked checks and hours-long acceptance remain
   explicit. No commit/push/merge, packaging/install/release, dependency change or student edits.
+
+## 2026-10-02 - Workbench regions and layout memory; pushed, local install blocked
+
+- User approved the MATLAB-inspired layout proposal and explicitly requested GitHub traceability
+  and local installation. Preserved the primary dirty checkout/index. Checkpointed previous
+  export-status/performance work as7284b20, pushed its task branch and attached draft PR#8
+  stacked on#7. New codex/workbench-layout branch isolates this UI task;2532862 and6e1603c
+  were pushed promptly to attached draft PR#9, based on#8. No merge/main push or Actions change.
+- Applied Ponytail and frontend-design local-refinement rules: reuse QAction, dock, tab and
+  splitter instances, retain palette/fonts and all nine navigation pages. Added File / Compile
+  and Output / View labels, existing ordinary export action on the toolbar, source tab-corner
+  title, navigation group labels, and a separate project-status row. Renamed the context menu
+  to Project Actions to distinguish it from the navigation toggle. Updated Chinese guides.
+- New wide-window users see navigation by default; saved hide/show choices remain authoritative.
+  Visual inspection found default navigation forced1440/100% into a single editor/PDF pane;
+  changed only the source area's column budget90→76, retaining960px and font-size boundaries.
+  Real test-PDF geometry confirms all three regions at1440/100%, and switching at1080/150%.
+- Splitter moves update in-memory ratios; accepted close writes two existing-settings keys.
+  Cancelled close, missing/invalid values, compact/welcome/no-PDF/minimum-size constraints,
+  console tab changes and Block round trips are covered; no resize-time disk writes or new
+  timers/framework. Cross-review reproduced wide navigation lost after closing a compact
+  document window. The regression test failed before a two-line window_state guard change;
+  it now serializes the remembered wide choice for compact as well as welcome states.
+- Layout/action targeted checks5 passed1.187s, narrow navigation1 passed0.536s, layout memory
+  scope7 passed3.218s plus7 existing responsive tests1.755s; default/explicit-hide tests2 passed
+  0.652s. GUI batch96 tests35.620s exited1 on two geometry assumptions: hidden PDF toolbar
+  controls carried default640x480 geometry, and960px was no longer a compact boundary. Fixed
+  the oracles with empty/real-PDF states plus visible ancestor bounds and production-supported
+  1080/150%→1920/100% restart; affected3 tests1.753s and1 test0.994s passed. Final compact-close
+  repair plus affected scope17 passed4.687s. No protection assertion was removed.
+- Reused probe_writing_ui on isolated synthetic files. Initial150% whole-window capture could
+  precede a second PDF layout despite prior viewport readiness. Added actual final-capture
+  marker validation, then four current-source captures passed and were inspected; early blank
+  images remain evidence, not acceptance. No PDF renderer change, student input or benchmark
+  speedup claim. Final captures use app7cb9d8f6 and preserve source/no-compile assertions.
+- Native source window on appe610fc7c: real FINAL visible with project/source/PDF/console;
+  actual splitter drags, accepted close, relaunch and second explicit FINAL restored ratios
+  0.5973534971644613 /0.3562913907284768 exactly. New toolbar export opened the original native
+  Save panel; cancellation created no export or extra build. Two sessions each compiled once
+  and exited0. An initial logical-coordinate drag selected synthetic text; corrected pixel
+  coordinates moved the dividers, without editing content. Final7cb9d8f6 differs only in the
+  later compact-close save guard, verified separately, not falsely attributed to this native run.
+- First packaging/preflight.sh completed1901 tests377.423s, command379.159s, exit1/11 install
+  errors. After compact-close repair, final preflight completed1902 tests353.540s, command
+  355.318s, exit1:1891 passed,11 InstallationGuardTests blocked at the unchanged helper--idle
+  gate. Full receipts preserved separately; final app/tests identity unchanged throughout.
+  Existing font/offscreen/QPdfLinkModel/temp-directory and native IMK diagnostics retained.
+- Host /Applications/ChatGPT.app/.../Autoupdate PID33344 and its Updater PID33345 remain active;
+  installed ICSTeXInstallGuard --idle also exited1. Did not kill the host updater, simulate idle,
+  weaken assertions or bypass InstallationLease. Packaging/replacement stopped before mutation.
+  Installed executable remainsae4d24e1841b443c6b46dddca0529a657601a058d82088ee1c1e882d8f1f959d.
+- Final app7cb9d8f6bc17b6fc2bb925f03638fecde5cdfe99c811751b4f7e9166c1aa3204; app+tests
+  7a5cabf37ca21024d19cd846314694ec9337e15cd07211c9c67fbd4d59873da5. Evidence under
+  ~/.codex/visualizations/2026/10/02/icstex-workbench-layout/: before, after, after-wide-fix,
+  after-paint-verified, compact_close_probe.json, native first/restart receipts, preflight and
+  preflight-final. App/tests stayed frozen; docs and the screenshot oracle are separate changes.
+- Remaining authorized work: after host update exits, recheck the installation-guard module
+  on these same source identities, then build/verify, intact backup, guarded local replacement
+  and actual installed launch. No new public version/feed/website, dependency installation,
+  student edits or installed-app acceptance claim. Stop additional UI/performance experiments.

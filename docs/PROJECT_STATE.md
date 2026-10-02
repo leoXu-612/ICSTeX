@@ -21,7 +21,7 @@
 
 ## Product and Source State
 
-### 当前开发：项目文件/大纲同屏与局部按钮质感（2026-10-02，尚未替换安装版）
+### 当前安装版：项目文件/大纲同屏与局部按钮质感（2026-10-02）
 
 - 新任务分支`codex/workbench-structure-polish`基于已安装源码772aa7d。阶段一88ac73f
   已推送：现有文件树与大纲上下同屏，保留九个逻辑入口、原实例和dirty-domain防抖；
@@ -43,11 +43,21 @@
   在全套及补验间不变；夹具修正后app+tests为`91f73d20…1c1e828`，补验前后一致。
   `icstex-structure-polish/validation-receipt.json`记录组合验证，不声称全量命令退出0。
   既有Qt/字体/QPdfLinkModel/临时目录诊断保留，无整体性能提升比例结论。
-- 当前安装版仍为下节7f830b5e构建；源码验证完成，待统一构建和本机替换。
-  学生文稿和主树原有未提交修改保持不动。证据目录为
-  `~/.codex/visualizations/2026/10/02/icstex-structure-polish/`。
+- 两阶段源码分别以88ac73f、f24ceb4推送至草稿PR#10（base为PR#9），未合并。
+  构建52.624s退出0；209模块/入口、资源、三个raw worker、更新配置均匹配；缺失
+  模块列表无新增。arm64/ad-hoc deep/strict通过，保留libobjc ctypes警告，不声称公证。
+- InstallationLease内复核、备份与替换完成，475文件/160链接与候选一致；
+  `/Applications/ICSTeX.app`程序摘要为
+  `bba9a75154b2d0027c214b013f4d88e8de4cbcdc63b67631ee0b8ecd639c4a07`。
+  旧7f830b5e构建完整保留在`~/Applications/ICSTeX Backups/ICSTeX-2.1.0-beta.4-before-structure-polish-20261002.app`。
+  实际安装路径启动已核对运行路径/摘要与欢迎页按钮外观；停在欢迎页，未动用户文稿、
+  最近列表或编辑偏好。结构/真实编译验收来自上述独立源码窗口，不扩大为安装版全流程验收。
+- 标签仍为本地Beta4/210004，不是新公开版本；官网/feed/公钥/Actions未改。
+  主树原有未提交源码保持不动。证据目录为
+  `~/.codex/visualizations/2026/10/02/icstex-structure-polish/`，含完整/补验/构建/安装收据。
+  本轮交付结束，等待用户体验反馈，不自动追加改造。
 
-### 当前安装版基线：工作台分区与布局记忆（2026-10-02，已推送并本机安装）
+### 前一安装版：工作台分区与布局记忆（2026-10-02，已被上节替换）
 
 - `codex/workbench-layout` 基于已推送的 `7284b20`；此前导出状态与性能源码在草稿
   PR #8 单独留痕，依赖 PR #7。布局提交 `2532862`、窄窗退出修复 `6e1603c` 均已

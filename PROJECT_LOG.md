@@ -6805,3 +6805,27 @@ runs. The application release tag remains81b1672; no published archive was chang
 - Evidence:~/.codex/visualizations/2026/10/02/icstex-structure-polish/ including before,
   structure-verified, polished, paint-before/after, ax-abi-observation.json, native-guarded,
   native-navigation and preflight. No public release, website/feed or Actions changes.
+
+## 2026-10-02 - Deliver the structure and surface build locally
+
+- Pushed source/test/docs checkpointf24ceb4 to codex/workbench-structure-polish/PR#10.
+  The only change after full validation was the evidenced display-fixture correction above;
+  combined validation is explicit, with the original full exit1 preserved. No app-source change.
+- Existing PyInstaller/spec/Beta4 runtime built the fresh commit-labelled candidate in52.624s,
+  exit0, source/test hashes unchanged.209 modules/entry and all assets match; omission list
+  unchanged, three raw optional worker files byte-identical. Arm64/ad-hoc deep/strict verified;
+  libobjc ctypes warning retained, no Developer ID/notarization claim or dependency upgrade.
+- No ICSTeX or host Autoupdate process was running at replacement. InstallationLease rechecked
+  eligibility and the old manifest under lock, backed up the old bundle, installed and validated
+  all475 files/160 links/signatures before unlock. Candidate and package receipt identity were
+  explicitly bound. Old executable7f830b5e…76191fcb remains intact in
+  ~/Applications/ICSTeX Backups/ICSTeX-2.1.0-beta.4-before-structure-polish-20261002.app.
+- Installed executablebba9a75154b2d0027c214b013f4d88e8de4cbcdc63b67631ee0b8ecd639c4a07;
+  app with assetsc439bfd1a6d548ef12b3746e1c5592394ea8e0f01e76cc338910d75ad180be1f.
+  Opened /Applications/ICSTeX.app and verified live executable path/hash plus visible welcome
+  toolbar surfaces. Left welcome open; no student document, real recent list or editing setting
+  changed. This installed startup check is distinct from native independent-source compilation.
+- Evidence:icstex-structure-polish/{validation-receipt.json,fixture-recheck.log,build-receipt.json,
+  package-receipt.json,install-receipt.json}; originals and earlier backups preserved.
+  Local label remains2.1.0-beta.4/210004; no PR merge, public release, feed, website or Actions
+  mutation. Current bounded task complete; do not continue into unrelated UI/performance work.

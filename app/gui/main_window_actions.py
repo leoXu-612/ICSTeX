@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QSize, Qt, QUrl
 from PySide6.QtGui import QAction, QDesktopServices, QKeySequence
-from PySide6.QtWidgets import QComboBox, QToolBar
+from PySide6.QtWidgets import QComboBox, QLabel, QToolBar
 
 from app.core.latex_tools import LaTeXEngine
 from app.gui.icons import icon
@@ -68,8 +68,9 @@ def build_actions(window: "MainWindow") -> None:
     window.new_action = QAction(icon("file-plus-2"), "新建文档", window)
     window.open_file_action = QAction(icon("folder-open"), "打开文件", window)
     window.open_folder_action = QAction(icon("folder"), "打开文件夹", window)
-    window.toolbox_action = QAction(icon("panel-left"), "工具箱", window)
+    window.toolbox_action = QAction(icon("panel-left"), "项目导航", window)
     window.toolbox_action.setCheckable(True)
+    window.toolbox_action.setToolTip("显示或隐藏项目文件、大纲及写作工具；保留当前选中的面板。")
     window.save_action = QAction(icon("save"), "保存", window)
     window.save_action.setShortcut(QKeySequence.StandardKey.Save)
     window.save_as_action = QAction(icon("save"), "另存为", window)
@@ -142,16 +143,26 @@ def build_actions(window: "MainWindow") -> None:
     engine_index = window.engine_selector.findData(window.current_engine.value)
     window.engine_selector.setCurrentIndex(max(engine_index, 0))
 
+    def group_label(text: str) -> None:
+        label = QLabel(text)
+        label.setObjectName("toolbarGroupLabel")
+        toolbar.addWidget(label)
+
+    group_label("文件")
     for action in (window.new_project_action, window.open_file_action, window.save_action):
         toolbar.addAction(action)
     toolbar.addSeparator()
+    group_label("编译 / 输出")
     toolbar.addAction(window.compile_action)
     toolbar.addAction(window.stop_compile_action)
     window.auto_compile_toolbar_action = toolbar.addWidget(window.auto_compile_toggle)
     window.engine_toolbar_action = toolbar.addWidget(window.engine_selector)
     window.engine_toolbar_action.setVisible(False)
+    toolbar.addAction(window.export_pdf_action)
+    toolbar.addAction(window.sync_pdf_action)
     toolbar.addSeparator()
-    for action in (window.toolbox_action, window.console_action, window.sync_pdf_action):
+    group_label("视图")
+    for action in (window.toolbox_action, window.console_action):
         toolbar.addAction(action)
     compile_button = toolbar.widgetForAction(window.compile_action)
     if compile_button:

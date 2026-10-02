@@ -106,6 +106,117 @@ class PdfExportControllerTests(TestCase):
         self.assertEqual(self.window.app_settings.pdf_export_target(self.root)[1].target, target)
         return target
 
+    def test_persistent_status_follows_export_revision_not_statusbar_timeout(self):
+        panel = self.window.pdf_panel
+        self.window._update_pdf_action_state()
+        self.assertTrue(panel.export_status.isHidden())
+        target = self.export_once()
+        self.assertFalse(panel.export_status.isHidden())
+        self.assertIn("已同步", panel.export_state_label.text())
+        self.assertEqual(panel.export_state_label.property("severity"), "success")
+        self.assertEqual(panel.export_target_label.toolTip(), str(target))
+        self.assertIn("上次导出", panel.export_state_label.text())
+        self.window.statusBar().clearMessage()
+        self.window._update_pdf_action_state()
+        self.assertIn("已同步", panel.export_state_label.text())
+        self.store.mark_edited(self.root)
+        self.window._update_pdf_action_state()
+        self.assertIn("待正式编译", panel.export_state_label.text())
+        self.assertNotIn("已同步", panel.export_state_label.text())
+        self.controller.handle_compile_result(self.result(2, purpose=BuildPurpose.PREVIEW),
+                                              self.store.record_for(self.root))
+        self.window._update_pdf_action_state()
+        self.assertIn("待正式编译", panel.export_state_label.text())
+
+    def test_failed_update_remains_visible_across_root_switch_until_success(self):
+        target = self.export_once()
+        target.write_bytes(b"external edit")
+        self.compile_again()
+        self.wait(self.auto_idle)
+        panel = self.window.pdf_panel
+        self.assertIn("更新失败", panel.export_state_label.text())
+        self.assertTrue(panel.export_detail_label.text())
+        self.window.statusBar().clearMessage()
+        other = self.directory / "other.tex"
+        other.write_text("\\documentclass{article}\\begin{document}Other\\end{document}")
+        self.window.open_file(other)
+        self.assertTrue(panel.export_status.isHidden())
+        self.window.open_file(self.root)
+        self.assertIn("更新失败", panel.export_state_label.text())
+        self.assertEqual(panel.export_target_label.toolTip(), str(target))
+        # Re-export to a new path through the existing controller, without adopting external edits.
+        replacement = self.directory / "replacement.pdf"
+        self.controller.request_export(self.root, replacement)
+        self.wait(lambda: not self.controller._pending)
+        self.assertIn("已同步", panel.export_state_label.text())
+        self.assertEqual(panel.export_target_label.toolTip(), str(replacement))
+        self.assertEqual(target.read_bytes(), b"external edit")
+
+    def test_restart_does_not_infer_synced_from_persisted_path_or_current_record(self):
+        from app.gui.pdf_export_controller import PdfExportController
+        self.export_once()
+        self.controller.shutdown()
+        self.controller = self.window.pdf_export = PdfExportController(self.window)
+        self.window._update_pdf_action_state()
+        self.assertIn("待正式编译确认", self.window.pdf_panel.export_state_label.text())
+        self.assertNotIn("已同步", self.window.pdf_panel.export_state_label.text())
+
+    def test_status_actions_reuse_destination_and_stop_without_extra_compilation(self):
+        target = self.export_once()
+        panel = self.window.pdf_panel
+        with patch("app.gui.pdf_export_controller.QDesktopServices.openUrl", return_value=True) as open_url:
+            panel.export_location_button.click()
+        self.assertEqual(open_url.call_args.args[0].toLocalFile(), str(target.parent))
+        with patch.object(self.controller, "choose_destination", return_value=False) as choose:
+            panel.export_destination_button.click()
+        choose.assert_called_once_with(self.root)
+        panel.export_stop_button.click()
+        self.assertIsNone(self.window.app_settings.pdf_export_target(self.root))
+        self.assertIn("已停止更新", panel.export_state_label.text())
+        self.assertTrue(panel.export_location_button.isEnabled())
+        self.assertFalse(panel.export_stop_button.isEnabled())
+        self.compile.assert_not_called()
+
+    def test_status_refresh_does_not_read_pdf_or_start_a_timer(self):
+        self.export_once()
+        record = self.store.record_for(self.root)
+        remembered = self.window.app_settings.pdf_export_target(self.root)
+        with patch.object(Path, "stat", side_effect=AssertionError("no I/O in presentation")), \
+             patch.object(Path, "read_bytes", side_effect=AssertionError("no PDF read")):
+            for _ in range(10):
+                self.controller.refresh_status(self.root, record, remembered, can_choose=True)
+        self.assertFalse(self.controller._timer.isActive())
+        self.compile.assert_not_called()
+
+    def test_failed_compile_and_pending_write_have_distinct_visible_states(self):
+        self.export_once()
+        self.store.begin_build(self.root, 2)
+        self.window._update_pdf_action_state()
+        panel = self.window.pdf_panel
+        self.assertIn("正在正式编译", panel.export_state_label.text())
+        result, record = self.finish(2, b"%PDF-1.4 second")
+        self.controller.handle_compile_result(result, record)
+        self.window._update_pdf_action_state()
+        self.assertIn("正在更新", panel.export_state_label.text())
+        self.controller.cancel_root(self.root)
+        self.store.begin_build(self.root, 3)
+        self.store.finish_build(self.root, 3, CompileOutcome.LATEX_ERROR)
+        self.window._update_pdf_action_state()
+        self.assertIn("更新失败", panel.export_state_label.text())
+        self.assertIn("正式编译未成功", panel.export_detail_label.text())
+
+    def test_changed_binding_does_not_keep_another_destinations_failure(self):
+        from app.core.artifact_export import exported_pdf
+        self.export_once()
+        self.controller._set_notice(self.root, self.directory / "export.pdf", "更新失败", "old failure")
+        other = self.directory / "from-another-window.pdf"
+        other.write_bytes(b"%PDF-1.4 other export")
+        self.window.app_settings.remember_pdf_export(self.root, self.directory,
+                                                    exported_pdf(other, other.read_bytes()))
+        self.window._update_pdf_action_state()
+        self.assertIn("待正式编译确认", self.window.pdf_panel.export_state_label.text())
+        self.assertEqual(self.window.pdf_panel.export_target_label.toolTip(), str(other))
+
     def compile_again(self, build_id=2, payload=b"%PDF-1.4 automatic update"):
         # Mirror the real compile entry's manager ownership; the engine result is synthetic.
         tab = self.window._tab_for_path(self.root)

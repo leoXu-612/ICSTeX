@@ -1010,6 +1010,175 @@ class WindowLifetimeTests(TestCase):
     def setUp(self):
         self.application = app()
 
+    def test_closed_saved_tab_releases_save_timer_and_tab_wrapper(self):
+        import weakref
+        from shiboken6 import isValid
+
+        with TemporaryDirectory() as directory:
+            path = Path(directory).resolve() / "closed.tex"
+            path.write_text("Original source", encoding="utf-8")
+            window = MainWindow(settings_store=isolated_settings())
+            try:
+                window.auto_compile_action.setChecked(False)
+                window.open_file(path)
+                tab = window.current_tab()
+                tab.editor.insertPlainText("Saved ")
+                timer = tab.save_timer
+                observed = weakref.ref(tab)
+                self.assertTrue(window.flush_pending_save(tab, compile_after_save=False))
+                saved = path.read_bytes()
+                window.close_tab(window._index_for_tab_id(id(tab.editor)))
+                del tab
+                self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+                self.application.processEvents()
+                self.assertFalse(isValid(timer))
+                self.assertIsNone(observed())
+                self.assertEqual(path.read_bytes(), saved)
+                self.assertFalse(window.compile_authorized_roots)
+            finally:
+                window.close()
+                self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_closed_saved_tab_releases_its_save_echo_text(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory).resolve() / "closed.tex"
+            path.write_text("Original source", encoding="utf-8")
+            window = MainWindow(settings_store=isolated_settings())
+            try:
+                window.auto_compile_action.setChecked(False)
+                window.open_file(path)
+                tab = window.current_tab()
+                tab.editor.insertPlainText("Saved ")
+                self.assertTrue(window.flush_pending_save(tab, compile_after_save=False))
+                self.assertIn(path, window.local_save_contents)
+                saved = path.read_bytes()
+                window.close_tab(window._index_for_tab_id(id(tab.editor)))
+                self.assertNotIn(path, window.local_save_contents)
+                self.assertEqual(path.read_bytes(), saved)
+            finally:
+                window.close()
+                self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_save_as_releases_old_save_echo_text(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            path, destination = root / "original.tex", root / "copy.tex"
+            path.write_text("Original source", encoding="utf-8")
+            window = MainWindow(settings_store=isolated_settings())
+            try:
+                window.auto_compile_action.setChecked(False)
+                window.open_file(path)
+                tab = window.current_tab()
+                tab.editor.insertPlainText("Saved ")
+                self.assertTrue(window.flush_pending_save(tab, compile_after_save=False))
+                saved = path.read_bytes()
+                self.assertTrue(window._save_tab(tab, destination))
+                self.assertNotIn(path, window.local_save_contents)
+                self.assertEqual(window.local_save_contents[destination], tab.editor.toPlainText())
+                self.assertEqual(path.read_bytes(), saved)
+                self.assertEqual(destination.read_bytes(), saved)
+            finally:
+                window.close()
+                self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_close_and_save_as_keep_echo_for_another_open_buffer(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            for action in ("close", "save_as"):
+                with self.subTest(action=action):
+                    path, destination = root / f"{action}.tex", root / f"{action}-copy.tex"
+                    path.write_text("Original source", encoding="utf-8")
+                    window = MainWindow(settings_store=isolated_settings())
+                    try:
+                        window.auto_compile_action.setChecked(False)
+                        window.open_file(path)
+                        original = window.current_tab()
+                        original.editor.insertPlainText("Saved ")
+                        self.assertTrue(window.flush_pending_save(original, compile_after_save=False))
+                        saved = path.read_text(encoding="utf-8")
+                        # Compatibility callers may create another buffer for
+                        # the same path without going through open_file's reuse.
+                        kept = EditorTab(window._make_editor(saved), path=path, manager=original.manager)
+                        window._add_tab(kept, path.name)
+                        if action == "close":
+                            window.close_tab(window._index_for_tab_id(id(original.editor)))
+                        else:
+                            self.assertTrue(window._save_tab(original, destination))
+                        self.assertEqual(window.local_save_contents[path], saved)
+                        kept.editor.insertPlainText("New draft ")
+                        draft = kept.editor.toPlainText()
+                        window.documents.reload_external_change(str(path))
+                        self.assertEqual(kept.editor.toPlainText(), draft)
+                        self.assertTrue(kept.modified and kept.dirty)
+                        self.assertFalse(kept.external_conflict)
+                        self.assertEqual(path.read_text(encoding="utf-8"), saved)
+                    finally:
+                        for tab in window.tabs.values():
+                            tab.modified = tab.dirty = False
+                        window.close()
+                        self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_cancelled_close_preserves_save_timer_and_echo(self):
+        from shiboken6 import isValid
+
+        with TemporaryDirectory() as directory:
+            path = Path(directory).resolve() / "draft.tex"
+            path.write_text("Original source", encoding="utf-8")
+            window = MainWindow(settings_store=isolated_settings())
+            try:
+                window.auto_compile_action.setChecked(False)
+                window.open_file(path)
+                tab = window.current_tab()
+                tab.editor.insertPlainText("Saved ")
+                self.assertTrue(window.flush_pending_save(tab, compile_after_save=False))
+                saved = path.read_text(encoding="utf-8")
+                tab.editor.insertPlainText("New draft ")
+                draft = tab.editor.toPlainText()
+                timer = tab.save_timer
+                with patch("app.gui.editor_tab_manager.QMessageBox.warning",
+                           return_value=QMessageBox.StandardButton.Cancel):
+                    window.close_tab(window._index_for_tab_id(id(tab.editor)))
+                self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+                self.assertIs(window.current_tab(), tab)
+                self.assertTrue(isValid(timer) and timer.isActive())
+                self.assertEqual(window.local_save_contents[path], saved)
+                self.assertEqual(tab.editor.toPlainText(), draft)
+                self.assertEqual(path.read_text(encoding="utf-8"), saved)
+            finally:
+                tab.modified = tab.dirty = False
+                window.close()
+                self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_failed_save_as_preserves_original_save_echo_and_draft(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            path, destination = root / "original.tex", root / "copy.tex"
+            path.write_text("Original source", encoding="utf-8")
+            window = MainWindow(settings_store=isolated_settings())
+            try:
+                window.auto_compile_action.setChecked(False)
+                window.open_file(path)
+                tab = window.current_tab()
+                tab.editor.insertPlainText("Saved ")
+                self.assertTrue(window.flush_pending_save(tab, compile_after_save=False))
+                saved = path.read_text(encoding="utf-8")
+                tab.editor.insertPlainText("New draft ")
+                draft = tab.editor.toPlainText()
+                with patch("app.gui.document_lifecycle.write_latex_text_atomic", side_effect=OSError("denied")), \
+                     patch("app.gui.document_lifecycle.QMessageBox.warning"):
+                    self.assertFalse(window._save_tab(tab, destination))
+                self.assertEqual(tab.path, path)
+                self.assertEqual(window.local_save_contents[path], saved)
+                self.assertNotIn(destination, window.local_save_contents)
+                self.assertEqual(tab.editor.toPlainText(), draft)
+                self.assertTrue(tab.modified and tab.dirty)
+                self.assertEqual(path.read_text(encoding="utf-8"), saved)
+                self.assertFalse(destination.exists())
+            finally:
+                tab.modified = tab.dirty = False
+                window.close()
+                self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
     def test_closed_tab_releases_native_editor_and_preserves_surviving_document(self):
         from shiboken6 import isValid
 

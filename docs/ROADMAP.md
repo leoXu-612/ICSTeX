@@ -1,6 +1,6 @@
 # ICSTeX Roadmap
 
-更新时间：2026-09-28（Asia/Taipei）
+更新时间：2026-10-02（Asia/Taipei）
 
 本文件描述产品与技术路线，不是功能愿望清单。每个进入实施的项目都必须
 同时满足用户价值、稳定性、可维护性和可验证性要求。
@@ -21,7 +21,24 @@ ICSTeX 要成为 ICC 学生从“建立写作项目”到“提交可靠成果�
 4. 支持 IA、EE、实验报告等完整工作流，而不是增加孤立按钮。
 5. 在没有明确学生价值时，不引入新的状态、依赖、网络或维护负担。
 
-## Current Source Task - Two-action PDF Export
+## Current Source Task - First Compile and Writing Session Performance
+
+基于已交付的自动导出状态源码，以真实项目隔离副本测量首次打开到当前 PDF 可见，
+以及重复编辑/保存/关闭后的残留对象。只保留可复现的字数统计让行和文档生命周期
+修复；复用现有定时器与 Qt 所有权，不改编译命令、画质、输入身份和导出安全流程。
+局部修复、专项和有界原生检查已完成；完整回归已结束，但宿主更新进程阻挡了 11 项
+安装互斥测试。该进程退出后只补验 `tests.test_update_install_guard`，不重复无关全套。
+小时级运行、学生试用和本机安装/远端提交另行安排；不因本轮重开压缩参数、全局样式
+或引入统计服务重构。测量波动和未验证范围以 PROJECT_STATE 为准。
+
+## Completed Source Task - Visible Automatic Export State
+
+复用普通导出控制器与 PDF 面板，在首次导出后常驻显示目标、上次导出时间和同步状态。
+失败不随状态栏消息消失；提供打开位置、换位置和停止入口。重开项目不凭路径推断同步，
+不新增扫描器、编译或覆盖权限；保留 root/revision/build 和已有写入保护。
+当前源码、原生验证及安装/提交边界以 PROJECT_STATE 为准。
+
+## Completed Source Task - Two-action PDF Export
 
 普通 LaTeX 文稿的 PDF 导出只要求打开导出入口、确认位置两步；成功后记住本机目标，
 让后续有效 FINAL 成功结果原子更新同一文件，不再重复选择位置。复用既有构建字节核验，

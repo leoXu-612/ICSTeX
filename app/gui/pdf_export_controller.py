@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from datetime import datetime
 from pathlib import Path
 import threading
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import QObject, QTimer, Qt
+from PySide6.QtCore import QObject, QTimer, Qt, QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QFileDialog, QDialog, QProgressDialog
 from shiboken6 import isValid
 
@@ -45,6 +47,9 @@ class PdfExportController(QObject):
         self._pending: dict[Path, PendingExport] = {}
         self._automatic_results = {}  # Latest accepted FINAL per root, drained by the existing timer.
         self._stopped_roots = set()
+        # Display-only observations. Neither authorizes a write or makes a FINAL current.
+        self._last_success: dict[Path, tuple[ExportedPdf, int, int]] = {}
+        self._notices: dict[Path, tuple[Path | None, str, str, ExportedPdf | None]] = {}
         self._publication = None
         self._closed = False
         self._progress = None
@@ -57,6 +62,62 @@ class PdfExportController(QObject):
 
     def pending_for(self, root: str | Path) -> PendingExport | None:
         return self._pending.get(normalize_path(root))
+
+    def refresh_status(self, root, record, remembered, *, can_choose: bool) -> None:
+        """GUI-thread projection of existing state; do not stat/hash outputs while typing."""
+        panel = self.window.pdf_panel
+        if root is None:
+            panel.export_status.hide()
+            return
+        pending = self._pending.get(root)
+        exported = remembered[1] if remembered else None
+        notice = self._notices.get(root)
+        if exported is None and pending is None and notice is None:
+            panel.export_status.hide()
+            return
+        target = pending.target if pending else exported.target if exported else notice[0] if notice else None
+        detail, severity = "", "neutral"
+        if pending or root in self._automatic_results:
+            state = "正在更新…"
+        elif exported is not None and record is not None and record.freshness is PdfFreshness.COMPILING:
+            state = "正在正式编译…"
+        elif exported is not None and record is not None and record.freshness in (PdfFreshness.FAILED_STALE, PdfFreshness.FAILED_NO_PDF):
+            state, severity, detail = "更新失败", "error", "正式编译未成功；请修正错误后重新编译。"
+        elif notice and notice[3] == exported:
+            _, state, detail, _ = notice
+            severity = "error" if state == "更新失败" else "warning"
+        elif exported is None:
+            state, detail = "未开启", "成功导出一次后，每次正式编译会更新目标文件。"
+        elif record is not None and record.freshness is PdfFreshness.DIRTY:
+            state, severity = "待正式编译", "warning"
+        elif (record is not None and record.freshness is PdfFreshness.CURRENT
+              and self._last_success.get(root) == (exported, record.source_revision, record.latest_build_id)):
+            state, severity = "已同步", "success"
+        else:
+            state, detail = "待正式编译确认", "已记住位置；尚未确认与本次打开的文稿一致。"
+        if exported is not None:
+            try:
+                timestamp = datetime.fromtimestamp(exported.signature[3] / 1_000_000_000).strftime("%m-%d %H:%M")
+                state += f" · 上次导出 {timestamp}"
+            except (ValueError, OverflowError, OSError):
+                pass  # A malformed stored timestamp must not break the UI; never used for freshness.
+        panel.set_export_status(state=state, severity=severity, target=target, detail=detail,
+                                can_choose=can_choose and not self._pending,
+                                can_stop=remembered is not None)
+
+    def open_export_location(self) -> None:
+        """Open the selected export's folder, never the compiler's internal output directory."""
+        root = self.window._compile_root_for_tab(self.window.current_tab())
+        remembered = self.window.app_settings.pdf_export_target(root) if root else None
+        pending = self._pending.get(root)
+        notice = self._notices.get(root)
+        target = pending.target if pending else remembered[1].target if remembered else notice[0] if notice else None
+        if target is not None and not QDesktopServices.openUrl(QUrl.fromLocalFile(str(target.parent))):
+            self._report_status("无法打开导出文件夹；可在状态条悬停查看完整路径。", 6000)
+
+    def _set_notice(self, root, target, state, detail):
+        remembered = self.window.app_settings.pdf_export_target(root)
+        self._notices[root] = (target, state, detail, remembered[1] if remembered else None)
 
     def choose_destination(self, root: Path) -> bool:
         if self._pending:
@@ -133,6 +194,7 @@ class PdfExportController(QObject):
             if tab is None:
                 return False
             self._stopped_roots.discard(root)
+            self._notices.pop(root, None)
             self._pending[root] = PendingExport(root, target, request.source_revision,
                                                 request.scope, id(tab.editor), ready=self._current(request),
                                                 previous=previous)
@@ -141,6 +203,7 @@ class PdfExportController(QObject):
                 return False
             self._timer.start()
             self._report_status("正在更新 PDF，完成后自动导出…", 0)
+            self.window._update_pdf_action_state()
             return True
         except (OSError, ValueError) as exc:
             self._pending.pop(root, None)
@@ -183,7 +246,7 @@ class PdfExportController(QObject):
             return False
         if not result.ok:
             self.cancel_root(root)
-            self._report_error("PDF 更新失败，未导出旧版本。请查看编译错误。")
+            self._report_failure(pending, "PDF 更新失败，未导出旧版本。请查看编译错误。")
             return True
         try:
             request = self._request(root)
@@ -198,7 +261,7 @@ class PdfExportController(QObject):
                 raise ValueError("PDF 尚未验证为最新版本，未导出。请重新正式编译。")
         except (OSError, ValueError) as exc:
             self.cancel_root(root)
-            self._report_error(str(exc))
+            self._report_failure(pending, str(exc))
         return True
 
     def _poll(self) -> None:
@@ -218,7 +281,7 @@ class PdfExportController(QObject):
             if any(tab.external_conflict for tab in tabs):
                 raise ValueError("文件有外部修改冲突，请先处理后再导出。")
             if self._publication is not None:
-                _, lease, expected = self._publication
+                _, lease, expected, _proof = self._publication
                 lease.validate()
                 if key != expected:
                     lease.cancelled.set()
@@ -243,7 +306,7 @@ class PdfExportController(QObject):
                 if lease.drafts or any(tab.editor.has_preedit() for _, tab, *_ in lease.tabs):
                     raise ValueError("另一个窗口有未保存内容，请先处理后再导出。")
                 proof, scope, target, cancel = request.build_evidence, pending.scope, pending.target, lease.cancelled
-                self._publication = pending, lease, request.key
+                self._publication = pending, lease, request.key, proof
 
                 def work(stop):
                     context = capture_export_inputs(scope, EXPORT_CONTEXT_PATHS, cancelled=stop)
@@ -289,13 +352,18 @@ class PdfExportController(QObject):
     def stop_automatic(self):
         root = self.window._compile_root_for_tab(self.window.current_tab())
         if root is not None:
+            remembered = self.window.app_settings.pdf_export_target(root)
             self._stopped_roots.add(root)
             self.window.app_settings.forget_pdf_export(root)
             self.cancel_root(root)
+            self._set_notice(root, remembered[1].target if remembered else None,
+                             "已停止更新", "已有 PDF 保留；重新导出可再次开启。")
             self.window._update_pdf_action_state()
             self._report_status("已停止自动更新导出 PDF；已有文件保留。", 5000)
 
     def _report_failure(self, pending, message):
+        self._set_notice(pending.root_file, pending.target, "更新失败", message)
+        self.window._update_pdf_action_state()
         if pending.automatic:
             self.window.append_log(message)
             self._report_pending_status(pending,
@@ -314,7 +382,7 @@ class PdfExportController(QObject):
         publication, self._publication = self._publication, None
         if publication is None:
             return
-        pending, lease, _ = publication
+        pending, lease, _, proof = publication
         lease.release()
         cancelled = lease.cancelled.is_set()
         self._pending.pop(pending.root_file, None)
@@ -331,11 +399,16 @@ class PdfExportController(QObject):
                         and (not pending.automatic or remembered == (pending.scope, pending.previous)))
             if remember:
                 self.window.app_settings.remember_pdf_export(pending.root_file, pending.scope, value)
+                self._last_success[pending.root_file] = (value, proof.job_key.source_revision, proof.build_id)
+                self._notices.pop(pending.root_file, None)
             self.window._update_pdf_action_state()
             hint = "；正式编译后自动更新。" if remember else "；自动更新已停止或目标已更改。"
             self._report_pending_status(pending,
                 f"已{'更新' if pending.previous else '导出'} PDF：{value.target}{hint}", 8000)
         elif cancelled:
+            if pending.root_file not in self._stopped_roots:
+                self._set_notice(pending.root_file, pending.target, "更新已取消", "尚未完成同步；可再次正式编译。")
+            self.window._update_pdf_action_state()
             self._report_pending_status(pending, "导出已取消，未覆盖已有文件。", 5000)
         else:
             self.window.append_log(error)
@@ -359,6 +432,8 @@ class PdfExportController(QObject):
             self._timer.stop()
             self._close_progress()
         if pending is not None and not self._closed:
+            self._set_notice(root, pending.target, "更新已取消", "尚未完成同步；可再次正式编译。")
+            self.window._update_pdf_action_state()
             self._report_pending_status(pending, "已取消导出；没有覆盖已有文件。", 4000)
         return pending is not None
 

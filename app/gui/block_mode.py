@@ -232,6 +232,7 @@ def sync_block_pdf(window) -> None:
     session = window.block_session
     if session is None or not window.block_mode_action.isChecked():
         return
+    window.pdf_panel.export_status.hide()
     busy = bool(session.compile_manager and session.compile_manager.is_busy)
     window.block_compile_action.setEnabled(session.project_dir is not None and not busy)
     if hasattr(window.pdf_panel, "empty_compile_button"):

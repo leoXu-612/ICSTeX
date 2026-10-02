@@ -73,7 +73,8 @@ class DocumentLifecycle:
             return
         tab.pending_compile_after_save = tab.pending_compile_after_save or compile_after_save
         if tab.save_timer is None:
-            tab.save_timer = QTimer(window)
+            # The timeout captures tab; closing its editor must release both.
+            tab.save_timer = QTimer(tab.editor)
             tab.save_timer.setSingleShot(True)
             tab.save_timer.timeout.connect(lambda tab=tab: window.flush_pending_save(tab))
         tab.save_timer.start(window.save_debounce_ms)
@@ -106,6 +107,11 @@ class DocumentLifecycle:
     def cancel_save_timer(self, tab: EditorTab) -> None:
         if tab.save_timer is not None and tab.save_timer.isActive():
             tab.save_timer.stop()
+
+    def release_save_echo(self, path: Path) -> None:
+        """Release saved text only after the last open buffer leaves its path."""
+        if not any(tab.path == path for tab in self.window.tabs.values()):
+            self.window.local_save_contents.pop(path, None)
 
     def compile_after_idle(self, tab: EditorTab) -> None:
         if tab.manager is None or tab.recovery_pending or id(tab) in self.checkpoint_tabs:
@@ -239,6 +245,7 @@ class DocumentLifecycle:
                     window.pdf_export.cancel_root(old_manager.root_file)
         if old_path and old_path != path:
             window.file_watcher.unwatch(old_path)
+            self.release_save_echo(old_path)
         if old_path != path and tab is window.current_tab():
             # Save-As changed the compile root: bind the new root's record and
             # never leave the old root's PDF visible/exportable.

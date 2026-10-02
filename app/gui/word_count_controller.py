@@ -103,19 +103,18 @@ class WordCountController(QObject):
         self._timer.start(delay_ms)
         self._mark_pending(self._key())
 
-    def _automatic_compile_pending(self) -> bool:
+    def _compile_pending(self) -> bool:
         window = self.window
         root = window.dependencies.root_for_tab(window.current_tab())
-        if (not window.auto_compile_action.isChecked()
-                or root not in window.compile_authorized_roots
-                or window.block_mode_action.isChecked()):
+        if root is None or window.block_mode_action.isChecked():
             return False
-        return root in window.compile._deferred_dependencies or any(
-            window.dependencies.root_for_tab(tab) == root and (
-                (tab.save_timer is not None and tab.save_timer.isActive())
-                or (tab.manager is not None and (tab.manager.is_busy or tab.manager.is_scheduled)))
-            for tab in window.tabs.values()
-        )
+        tabs = [tab for tab in window.tabs.values() if window.dependencies.root_for_tab(tab) == root]
+        # Explicit builds still take priority when automatic compilation is off.
+        if root in window.compile._deferred_dependencies or any(
+                tab.manager is not None and (tab.manager.is_busy or tab.manager.is_scheduled) for tab in tabs):
+            return True
+        return (window.auto_compile_action.isChecked() and root in window.compile_authorized_roots
+                and any(tab.save_timer is not None and tab.save_timer.isActive() for tab in tabs))
 
     def _mark_pending(self, key: tuple | None) -> None:
         view = self.window.word_count_view
@@ -132,7 +131,7 @@ class WordCountController(QObject):
         if self._closed:
             return
         self._timer.stop()
-        if not force and self._automatic_compile_pending():
+        if not force and self._compile_pending():
             # Autosave, dependency resolution and PDF compilation have priority.
             self.schedule()
             return

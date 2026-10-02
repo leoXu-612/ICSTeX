@@ -8,7 +8,7 @@ import threading
 import sys
 import time
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import PropertyMock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -88,6 +88,76 @@ class GuiDependencyTests(TestCase):
         self.assertFalse(self.window.compile_authorized_roots)
         self.assertTrue({self.source, self.child, self.bib}.issubset(self.window.file_watcher._files))
         self.assertIn(self.root / "article.cls", self.window.file_watcher._files)
+
+    def test_first_tab_defers_count_and_last_tab_resets_immediately(self) -> None:
+        controller = self.window.word_counts
+        self.assertTrue(wait_until(lambda: not controller.is_busy))
+        self.window.close_tab(self.window.editor_tabs.currentIndex())
+        self.assertIsNone(self.window.current_tab())
+        with patch.object(controller, "_launch", wraps=controller._launch) as launch:
+            self.window.open_file(self.source)
+            launch.assert_not_called()
+            self.assertTrue(controller._timer.isActive())
+            self.assertEqual(controller._timer.interval(), 500)
+            self.assertEqual(self.window.word_count_labels["effective"].text(), "-")
+            self.assertTrue(wait_until(lambda: not controller.is_busy))
+            launch.assert_called_once()
+        self.assertEqual(self.window.word_count_labels["effective"].text(), "2")
+        controller.schedule()
+        self.window.close_tab(self.window.editor_tabs.currentIndex())
+        self.assertIsNone(self.window.current_tab())
+        self.assertFalse(controller._timer.isActive())
+        self.assertIsNone(controller._displayed_key)
+        self.assertEqual(self.window.word_count_meta.text(), "未选择文档")
+        self.assertEqual(self.window.word_count_labels["effective"].text(), "-")
+
+    def test_manual_compile_busy_or_scheduled_defers_nonforce_count_with_auto_off(self) -> None:
+        manager = self._manager()
+        controller = self.window.word_counts
+        self.assertTrue(wait_until(lambda: not self.window.dependencies.is_busy and not controller.is_busy))
+        self.assertFalse(self.window.auto_compile_action.isChecked())
+        for flag in ("is_busy", "is_scheduled"):
+            with self.subTest(flag=flag):
+                controller._cache.clear()
+                with patch.object(type(manager), flag, new_callable=PropertyMock, return_value=True), \
+                     patch.object(controller, "_launch", wraps=controller._launch) as launch:
+                    self.window.update_word_count()
+                    launch.assert_not_called()
+                    self.assertTrue(controller._timer.isActive())
+                    self.assertIn("待更新", self.window.word_count_meta.text())
+                # The existing delayed request resumes real counting after the build clears.
+                self.assertTrue(wait_until(lambda: not controller.is_busy))
+                self.assertEqual(self.window.word_count_labels["effective"].text(), "2")
+                self.assertEqual(controller._displayed_key, controller._key())
+
+    def test_dependency_deferred_manual_compile_yields_but_force_count_is_immediate(self) -> None:
+        manager = self._manager()
+        controller = self.window.word_counts
+        self.assertTrue(wait_until(lambda: not self.window.dependencies.is_busy and not controller.is_busy))
+        controller._cache.clear()
+        with patch.object(self.window.compile, "_deferred_dependencies", {manager.root_file: ()}), \
+             patch.object(controller, "_launch", wraps=controller._launch) as launch:
+            self.window.update_word_count()
+            launch.assert_not_called()
+            self.assertTrue(controller._timer.isActive())
+            self.window.update_word_count(force=True)
+            launch.assert_called_once()
+            self.assertFalse(controller._timer.isActive())
+        self.assertTrue(wait_until(lambda: not controller.is_busy))
+        self.assertEqual(self.window.word_count_labels["effective"].text(), "2")
+
+    def test_idle_save_only_defers_count_for_authorized_automatic_compile(self) -> None:
+        manager = self._manager()
+        controller = self.window.word_counts
+        self.assertTrue(wait_until(lambda: not self.window.dependencies.is_busy and not controller.is_busy))
+        self.window.documents.schedule_save(self.tab, compile_after_save=True)
+        self.assertFalse(controller._compile_pending())
+        self.window.auto_compile_action.setChecked(True)
+        self.assertFalse(controller._compile_pending())
+        self.window.compile_authorized_roots.add(manager.root_file)
+        self.assertTrue(controller._compile_pending())
+        self.window.documents.cancel_save_timer(self.tab)
+        self.assertFalse(controller._compile_pending())
 
     def test_source_edit_reuses_the_open_tabs_path_identity(self) -> None:
         record = self.window.pdf_state.record_for(self.source)

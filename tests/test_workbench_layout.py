@@ -95,6 +95,32 @@ class WorkbenchLayoutMemoryTests(TestCase):
         self.assertTrue(restarted.toolbox_dock.isHidden())
         self.assertFalse(restarted.source_panels._wide["toolbox"])
 
+    def test_close_in_compact_mode_preserves_wide_navigation_choice(self):
+        for visible in (True, False):
+            with self.subTest(visible=visible):
+                self.settings.settings.remove("window/block_console_state")
+                window = self.window()
+                if not visible:
+                    window.set_toolbox_visible(False)
+                window.current_tab().editor.setFocus()
+                self.drain()
+                self.assertEqual(window.toolbox_dock.isVisible(), visible)
+                self.assertEqual(window.source_panels._wide["toolbox"], visible)
+                window.resize(1080, 720)
+                self.drain()
+                self.assertTrue(window.source_panels._is_compact())
+                self.assertTrue(window.toolbox_dock.isHidden())
+                self.assertIsNotNone(window.current_tab())
+                self.assertTrue(window.close())
+                self.drain()
+                self.settings.settings.sync()
+                self.settings = AppSettings(QSettings(self.settings.settings.fileName(), QSettings.Format.IniFormat))
+                restarted = self.window()
+                self.assertEqual(restarted.toolbox_dock.isVisible(), visible)
+                self.assertEqual(restarted.source_panels._wide["toolbox"], visible)
+                self.assertTrue(restarted.close())
+                self.drain()
+
     def test_preferences_write_only_after_accepted_close(self):
         window = self.window()
         horizontal, console = self.choose_layout(window)

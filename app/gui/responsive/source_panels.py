@@ -87,8 +87,8 @@ class SourcePanelController(QObject):
             self._applying = False
 
     def window_state(self):
-        """Persist writing preferences, not a temporary welcome-page collapse."""
-        if not self._welcome:
+        """Persist wide preferences, not temporary welcome/compact visibility."""
+        if not self._welcome and not self._is_compact():
             return self.window.saveState()
         dock = self.window.toolbox_dock
         visible = not dock.isHidden()

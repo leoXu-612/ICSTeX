@@ -145,6 +145,8 @@ def _install_sidebar(window: "MainWindow") -> None:
     window.insert_panel = InsertPanel()
     window.templates_panel = TemplatesPanel()
     window.outline_panel = OutlinePanel()
+    window.outline_panel.setFocusProxy(window.outline_panel.table)
+    window.outline_panel.table.setAccessibleName("章节大纲")
     window.search_panel = ProjectSearchPanel()
     window.images_panel = ImagesPanel()
     window.history_panel = HistoryPanel()
@@ -166,6 +168,7 @@ def _install_sidebar(window: "MainWindow") -> None:
     sidebar.addTab(scrollable_panel(window.templates_panel), "模板", "layout-template", SIDEBAR_TAB_TIPS[6])
     sidebar.addTab(scrollable_panel(window.references_panel), "引用", "book-open", SIDEBAR_TAB_TIPS[7])
     sidebar.addTab(scrollable_panel(window.labels_panel), "标签", "tag", SIDEBAR_TAB_TIPS[8])
+    sidebar.combine_project_panels()
     sidebar.finish()
     for index, tip in enumerate(SIDEBAR_TAB_TIPS):
         sidebar.setTabToolTip(index, tip)

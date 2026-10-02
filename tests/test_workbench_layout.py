@@ -8,8 +8,9 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QEvent, QSettings
-from PySide6.QtWidgets import QApplication, QMessageBox, QWidget
+from PySide6.QtCore import QEvent, QSettings, Qt
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QApplication, QLabel, QMessageBox, QWidget
 from shiboken6 import isValid
 
 from app.core.settings import AppSettings
@@ -79,6 +80,174 @@ class WorkbenchLayoutMemoryTests(TestCase):
         self.drain()
         self.assertIsNone(window.current_tab())
         self.assertTrue(window.toolbox_dock.isHidden())
+
+    def test_files_and_outline_share_visible_project_page_without_recreation(self):
+        window = self.window(width=1440)
+        navigation = window.toolbox_navigation
+        splitter = navigation.project_splitter
+        original = [navigation.widget(index) for index in range(9)]
+        signals = []
+        navigation.currentChanged.connect(signals.append)
+        self.assertEqual(navigation.currentIndex(), 0)
+        self.assertIs(original[0], window.tree)
+        self.assertIs(original[1], window.outline_panel)
+        self.assertEqual([splitter.widget(i).findChild(QLabel, "workbenchPanelTitle").text() for i in range(2)],
+                         ["项目文件", "章节大纲"])
+        for index in (0, 1, 2, 7, 8, 3, 0):
+            navigation.setCurrentIndex(index)
+            self.drain()
+            self.assertEqual(navigation.currentIndex(), index)
+            self.assertIs(navigation.currentWidget(), original[index])
+            self.assertTrue(navigation.navigationButton(index).isChecked())
+            self.assertEqual([navigation.widget(i) for i in range(9)], original)
+            self.assertEqual(window.tree.isVisible(), index < 2)
+            self.assertEqual(window.outline_panel.isVisible(), index < 2)
+            if index < 2:
+                self.assertIs(navigation.stack.currentWidget(), splitter)
+                self.assertTrue(all(size > 120 for size in splitter.sizes()), splitter.sizes())
+        self.assertEqual(signals, [1, 2, 7, 8, 3, 0])
+        self.assertFalse(window.compile_authorized_roots)
+
+    def test_shared_project_page_keyboard_entry_and_titles_fit_narrow_large_scale(self):
+        window = self.window(width=1080)
+        self.addCleanup(self.app.ui_scale_manager.apply_scale, self.app.ui_scale_manager.scale)
+        window.set_ui_scale(1.5)
+        window.set_toolbox_visible(True)
+        window.activateWindow()
+        self.drain()
+        navigation = window.toolbox_navigation
+        for index, target in ((0, window.tree), (1, window.outline_panel.table)):
+            navigation.setCurrentIndex(index)
+            button = navigation.navigationButton(index)
+            button.setFocus()
+            self.drain()
+            QTest.keyClick(button, Qt.Key.Key_Tab)
+            self.drain()
+            self.assertIs(self.app.focusWidget(), target)
+            self.assertTrue(target.isVisible())
+            QTest.keyClick(target, Qt.Key.Key_Backtab)
+            self.assertIsNot(self.app.focusWidget(), target)
+        for title in navigation.project_splitter.findChildren(QLabel, "workbenchPanelTitle"):
+            self.assertTrue(title.visibleRegion().contains(title.rect()), title.text())
+            self.assertGreaterEqual(title.width(), title.fontMetrics().horizontalAdvance(title.text()) + 12)
+
+    def test_accessible_toggle_switches_the_page_once_and_keeps_exclusive_selection(self):
+        from PySide6.QtGui import QAccessible, QAccessibleActionInterface
+        from PySide6.QtTest import QSignalSpy
+        window = self.window(width=1440)
+        navigation = window.toolbox_navigation
+        changed = QSignalSpy(navigation.currentChanged)
+        clicked = QSignalSpy(navigation.group.idClicked)
+        for number, index in enumerate((2, 1, 7, 0), start=1):
+            button = navigation.navigationButton(index)
+            accessible = QAccessible.queryAccessibleInterface(button)
+            actions = accessible.actionInterface()
+            self.assertIn(QAccessibleActionInterface.toggleAction(), actions.actionNames())
+            actions.doAction(QAccessibleActionInterface.toggleAction())
+            self.drain()
+            self.assertTrue(button.isChecked())
+            self.assertEqual(navigation.currentIndex(), index)
+            self.assertEqual(changed.count(), number)
+            self.assertEqual(changed.at(number - 1), [index])
+            self.assertIs(navigation.currentWidget(), navigation.widget(index))
+            shown_page = navigation.project_splitter if index < 2 else navigation.widget(index)
+            self.assertIs(navigation.stack.currentWidget(), shown_page)
+            self.assertTrue(shown_page.isVisible())
+            self.assertEqual([i for i in range(9) if navigation.navigationButton(i).isChecked()], [index])
+            actions.doAction(QAccessibleActionInterface.toggleAction())
+            self.drain()
+            self.assertTrue(button.isChecked())
+            self.assertEqual(navigation.currentIndex(), index)
+            self.assertEqual(changed.count(), number)
+        self.assertEqual(clicked.count(), 0)
+        self.assertFalse(window.compile_authorized_roots)
+
+    def test_files_page_refreshes_only_shown_outline_and_preserves_editor(self):
+        from tests.test_gui_editor import wait_until
+        window = self.window(width=1440)
+        tab = window.current_tab()
+        with patch.object(window.outline_panel, "set_outline", wraps=window.outline_panel.set_outline) as outline, \
+             patch("app.gui.project_panel_controller.AssetIndex.scan") as assets, \
+             patch("app.gui.project_panel_controller.list_snapshots") as history, \
+             patch.object(window.references_panel, "set_references") as references, \
+             patch.object(window.compile, "compile_current") as compile_:
+            tab.editor.setPlainText("\\section{Visible}\nText")
+            position = tab.editor.textCursor().position()
+            scroll = tab.editor.verticalScrollBar().value()
+            self.assertTrue(wait_until(lambda: window.outline_panel.table.rowCount() == 1))
+            self.assertEqual(window.outline_panel.table.item(0, 0).text(), "Visible")
+            self.assertEqual(tab.editor.textCursor().position(), position)
+            self.assertEqual(tab.editor.verticalScrollBar().value(), scroll)
+            assets.assert_not_called()
+            history.assert_not_called()
+            references.assert_not_called()
+            compile_.assert_not_called()
+            window.sidebar_tabs.setCurrentIndex(2)
+            outline.reset_mock()
+            tab.editor.setPlainText("\\section{Later}\nText")
+            self.assertTrue(wait_until(lambda: not window.project_panels._timer.isActive()))
+            outline.assert_not_called()
+            window.sidebar_tabs.setCurrentIndex(0)
+            self.assertEqual(window.outline_panel.table.item(0, 0).text(), "Later")
+            outline.assert_called_once()
+            window.set_toolbox_visible(False)
+            outline.reset_mock()
+            tab.editor.setPlainText("\\section{Hidden}\nText")
+            self.assertTrue(wait_until(lambda: not window.project_panels._timer.isActive()))
+            outline.assert_not_called()
+            window.set_toolbox_visible(True)
+            self.assertEqual(window.outline_panel.table.item(0, 0).text(), "Hidden")
+        self.assertFalse(window.compile_authorized_roots)
+
+    def test_project_split_saved_only_after_accepted_close_and_restored(self):
+        window = self.window(width=1440)
+        splitter = window.toolbox_navigation.project_splitter
+        splitter.moveSplitter(round(sum(splitter.sizes()) * 0.64), 1)
+        self.drain()
+        ratio = window.source_panels._project_ratio
+        self.assertAlmostEqual(ratio, 0.64, delta=0.015)
+        self.assertFalse(self.settings.settings.contains("window/project_outline_ratio"))
+        window.current_tab().editor.insertPlainText("Unsaved")
+        with patch("app.gui.editor_tab_manager.QMessageBox.warning", return_value=QMessageBox.StandardButton.Cancel):
+            self.assertFalse(window.close())
+        self.assertFalse(self.settings.settings.contains("window/project_outline_ratio"))
+        window.current_tab().modified = window.current_tab().dirty = False
+        self.assertTrue(window.close())
+        self.drain()
+        self.assertAlmostEqual(float(self.settings.settings.value("window/project_outline_ratio")), ratio)
+        restarted = self.window(width=1440)
+        restored = restarted.toolbox_navigation.project_splitter.sizes()
+        self.assertAlmostEqual(restored[0] / sum(restored), ratio, delta=0.01)
+
+    def test_project_split_hidden_compact_and_minimum_clamps_preserve_ratio(self):
+        window = self.window(width=1440)
+        splitter = window.toolbox_navigation.project_splitter
+        splitter.moveSplitter(round(sum(splitter.sizes()) * 0.64), 1)
+        self.drain()
+        ratio = window.source_panels._project_ratio
+        for visible in (False, True):
+            window.set_toolbox_visible(visible)
+            self.drain()
+            self.assertAlmostEqual(window.source_panels._project_ratio, ratio)
+        splitter.widget(1).setMinimumHeight(540)
+        window.resize(1440, 760)
+        self.drain()
+        self.assertAlmostEqual(window.source_panels._project_ratio, ratio)
+        splitter.widget(1).setMinimumHeight(0)
+        window.resize(1080, 720)
+        self.drain()
+        window.set_toolbox_visible(True)
+        splitter.moveSplitter(round(sum(splitter.sizes()) * 0.4), 1)
+        self.assertAlmostEqual(window.source_panels._project_ratio, ratio)
+        window.resize(1440, 1000)
+        self.drain()
+        sizes = splitter.sizes()
+        self.assertAlmostEqual(sizes[0] / sum(sizes), ratio, delta=0.01)
+        window.close_tab(window.editor_tabs.currentIndex())
+        self.drain()
+        self.assertTrue(window.close())
+        self.drain()
+        self.assertAlmostEqual(float(self.settings.settings.value("window/project_outline_ratio")), ratio)
 
     def test_explicitly_hidden_navigation_stays_hidden_after_accepted_close(self):
         window = self.window()
@@ -191,12 +360,15 @@ class WorkbenchLayoutMemoryTests(TestCase):
             with self.subTest(value=value):
                 self.settings.settings.remove("window/source_pdf_ratio")
                 self.settings.settings.remove("window/source_console_ratio")
+                self.settings.settings.remove("window/project_outline_ratio")
                 if value is not None:
                     self.settings.settings.setValue("window/source_pdf_ratio", value)
                     self.settings.settings.setValue("window/source_console_ratio", value)
+                    self.settings.settings.setValue("window/project_outline_ratio", value)
                 window = self.window(document=False)
                 self.assertAlmostEqual(window.source_preview_area.wide_ratio(), 790 / (790 + 650))
                 self.assertIsNone(window.source_panels._console_ratio)
+                self.assertAlmostEqual(window.source_panels._project_ratio, 0.55)
                 window.close()
                 self.drain()
 

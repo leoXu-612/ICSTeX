@@ -54,7 +54,7 @@ class ProjectPanelController:
     _ALL = frozenset({"outline", "assets", "image_usage", "history", "labels", "references", "completion"})
     _TEXT = frozenset({"outline", "labels", "references", "completion"})
     _PANEL_DOMAINS = {
-        1: {"outline"}, 3: {"assets", "image_usage"}, 4: {"history"},
+        0: {"outline"}, 1: {"outline"}, 3: {"assets", "image_usage"}, 4: {"history"},
         7: {"references"}, 8: {"labels"},
     }
 

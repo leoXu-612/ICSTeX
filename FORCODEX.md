@@ -1,23 +1,19 @@
 # FORCODEX.md
 
-当前交接（2026-10-02）：工作台分区、顶部分组和布局记忆已推送PR #9并完成本机安装。
-宿主更新器退出后13项安装互斥补验通过；不改写此前失败收据，不重复其他1891项。
-实际实现位于当前附加工作树，分支 codex/workbench-layout。基线为已推送的
-7284b20（此前导出状态/性能工作独立留痕），app7f0048e3 / app+tests f2f078b0。
+本轮交付已结束（2026-10-02）：先完成文件/大纲上下分区和顶部留白收紧，再完成
+局部按钮高光、边框和即时状态反馈。源码88ac73f、f24ceb4已推送草稿PR#10，
+分支codex/workbench-structure-polish；不自动合并或发布。
 
-复用现有 QAction、项目导航、源码/PDF splitter 和控制台。宽屏清晰分区，窄屏继续
-折叠避让；只补现有分栏比例/控制台尺寸的设置读写，不引入布局框架或重建控件。
-保留 ICSTeX 配色、中文文案、原有编译、文件、root/build/revision 和导出保护。
-不新增后台刷新、联网、动画或全局 QSS 热路径，不重做已结束的性能实验。
+最终app1cc875a9，夹具修正后app+tests91f73d20。全量1912项执行后唯一旧展示
+夹具时序问题已受控复现并仅修测试，8项补验通过；原全量退出1保留，不宣称全量
+命令退出0。原生示例编译/PDF与最后导航补验分别保留源码身份；细节见PROJECT_STATE。
 
-当前应用源码对应6e1603c：app7cb9d8f6 / app+tests7a5cabf3。最终preflight完整执行
-1902项：1891通过、11项安装互斥环境错误，原始退出1不可改称通过；详见PROJECT_STATE。
-原生宽窗布局、真实编译、导出入口取消和分栏重启已验证；窄窗直接退出另有复现及17项
-相关专项。不要重开设计、扩大测试矩阵或再跑旧性能实验。
+已备份并替换/Applications/ICSTeX.app，运行程序bba9a751…39c4a07与候选一致，
+当前停在欢迎页。旧版位于~/Applications/ICSTeX Backups/
+ICSTeX-2.1.0-beta.4-before-structure-polish-20261002.app。
+本地版本标签仍Beta4/210004，官网、feed、公钥、Actions和依赖未变。
 
-当前安装路径为/Applications/ICSTeX.app，程序摘要7f830b5e…76191fcb；旧版在
-~/Applications/ICSTeX Backups/ICSTeX-2.1.0-beta.4-before-workbench-20261002.app。
-本地标签仍为2.1.0-beta.4/210004，arm64/ad-hoc，不是新的公开版本。源码、产物、
-保护性替换和实际启动证据见PROJECT_STATE；导引已核对，主窗口留在欢迎页。
-本轮交付完成，等待用户验收；不继续重做UI、性能或编译/导出矩阵。不要在未明确
-授权时合并PR、推main、启用Actions或修改网站/feed；不改学生文稿与其他代理任务。
+后续等待用户验收，不自动追加UI、性能或无障碍重构；macOS27.0/Qt6.11.1的
+selectedChildren缓解仍不等于完整无障碍验收。学生文稿不改，运行版不强退。
+主树codex/pdf-export-status的未提交源码/索引保持原样，不从主树旧源码打包。
+所有当前事实和收据以本工作树docs/PROJECT_STATE.md及PROJECT_LOG.md为准。

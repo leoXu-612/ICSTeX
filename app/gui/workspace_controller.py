@@ -5,7 +5,7 @@ read project contents, create managers, write files or authorize compilation.
 """
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, QObject, QTimer, Qt, Slot
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, QTimer, Qt, Slot
 from PySide6.QtGui import QAction, QTextCursor
 from PySide6.QtWidgets import (QHBoxLayout, QLabel, QMenu, QPlainTextEdit, QSizePolicy, QToolBar, QToolButton,
                                QVBoxLayout, QWidget)
@@ -121,6 +121,11 @@ class WorkspaceController(QObject):
         self.toolbar.addWidget(self.bar)
         window.addToolBarBreak(Qt.ToolBarArea.TopToolBarArea)
         window.addToolBar(Qt.ToolBarArea.TopToolBarArea, self.toolbar)
+        # Refresh QToolBar's cached layout margins after its named style and
+        # window placement are final; default-scale startup has no scale event.
+        self.toolbar.style().unpolish(self.toolbar)
+        self.toolbar.style().polish(self.toolbar)
+        QCoreApplication.sendEvent(self.toolbar, QEvent(QEvent.Type.StyleChange))
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.setInterval(80)

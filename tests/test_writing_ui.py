@@ -126,7 +126,7 @@ class WritingUiTests(TestCase):
 
     def test_toolbar_labels_scale_with_separate_project_status_row(self):
         toolbar = self.window.findChild(QToolBar, "mainToolbar")
-        for scale in (.9, 1., 1.1, 1.25, 1.5, 1.):
+        for scale in (1., .9, 1., 1.1, 1.25, 1.5, 1.):
             self.window.set_ui_scale(scale)
             self.settle()
             toggle = self.window.auto_compile_toggle
@@ -137,4 +137,8 @@ class WritingUiTests(TestCase):
                 self.assertEqual(toolbar.widgetForAction(action).toolButtonStyle(), Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
             button = toolbar.widgetForAction(self.window.compile_action)
             self.assertTrue(button.visibleRegion().contains(button.rect()))
+            # Compact rows remove unused outer padding, not button hit areas.
+            self.assertLessEqual(toolbar.height(), max(toggle.height(), button.height()) + 8)
+            self.assertLessEqual(self.window.workspace.toolbar.height(),
+                                 max(self.window.workspace.bar.height(), round(34 * scale)))
         self.assertFalse(self.window.current_tab().editor.highlighter.comment_format.fontItalic())

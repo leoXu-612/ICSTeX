@@ -6755,3 +6755,77 @@ runs. The application release tag remains81b1672; no published archive was chang
   guard-recheck.log,build-receipt.json,build.log,package-receipt.json,install-receipt.json} and
   native tool observations. Local scripts adapt the earlier verified workflow; original failed
   preflight receipts and all prior application backups remain. Authorized local delivery complete.
+
+## 2026-10-02 - Paired project navigation and local button surfaces
+
+- Followed the user's structure-first order on codex/workbench-structure-polish, based on
+  installed772aa7d. Stage one88ac73f was committed/pushed to draft PR#10, stacked on#9.
+  Primary worktree source/index and student manuscripts were not changed.
+- Reused file tree/outline widgets in one vertical splitter with headings; preserved nine
+  logical identities, current-file revision refresh and other tool pages. The ratio is written
+  only after accepted close; temporary hidden/compact/Block clamps do not overwrite it.
+  Removed unused toolbar margins with fixed QSS and one initialization style notification.
+  Initial1440x900 editor height657→697px is geometry evidence, not a speedup benchmark.
+- Then added scoped static gradients/fine edges and hover/pressed/checked/focus/disabled
+  feedback to workbench controls. AutoCompileToggle paints its own local gradient. No blur,
+  new dependency, animation timer, global hover restyle, size movement or compile request.
+  Corrected checked-pressed contrast before freeze; normal and pressed geometry stay equal.
+- Structure batch20 passed7.346s; broader UI batch105 passed93.239s before final contrast
+  adjustment, then final surface tests4 passed1.951s. Four-state offscreen captures were
+  inspected; intermediate toolbar-padding attempts remain outside the repository as evidence.
+  Paint-only samples showed no material cost increase; they do not measure input/PDF latency
+  or justify an application-performance percentage. Read-only cross-review found no blocker.
+- Native independent example first exitedSIGBUS during AX hierarchy inspection on macOS27.0,
+  Qt6.11.1/ARM64. Crash return0x87794 and independently read method0x876bc/ABI@16@0:8 match
+  the existing selected-children mitigation, which only opted in macOS26. Extended it to
+  exact27.0, retaining future-OS/Qt exclusion, GUI-thread and ABI checks, callback lifetime,
+  and the single selector. Six guard tests plus one MainWindow ordering test passed.
+  Selected-child enumeration remains unavailable in this environment; no full AX/VoiceOver
+  acceptance is claimed. Original crash report and failed native attempt remain local.
+- Guarded native run on appf3457db4: edited Results→Observations, saw outline update and
+  latest real FINAL with the changed section; one build, exit0, source identity unchanged.
+  Coordinate input was unavailable (noWindowsAvailable), so it is not counted as verified.
+  AX checks exposed an older idClicked-only navigation bug, also reproduced on772aa7d.
+  Switched to checked idToggled; real QAccessible/keyboard/structure batch22 passed16.881s.
+  Final-source native navigation opened search fields and returned to both project panels,
+  exited0 with zero builds. No repeated compile/performance matrix.
+- Frozen app1cc875a9dac5d0d439d8d5bb0920eaf55dd7f84d4c7f00b02bec5c596fce07b0;
+  app+tests3a34d6768114c0f8b67d33b968098b10cdde59230ad892ad80ad590c49d32b4f.
+  Full preflight completed1912 tests928.625s (command933.777s), exit1:1911 passed, one
+  display-fixture failure. A pending dependency membership callback restarted the workspace
+  timer after the fixture injected long text. Controlled callback delivery reproduced the
+  same failure using772aa7d's test/WorkspaceController with current dependencies; replacing
+  only stop with shutdown passed all original assertions in both variants.
+- Product source stayed frozen. Corrected only that fixture; compileall passed and eight
+  affected display/live-state tests passed4.158s (command5.280s). Original full receipt remains
+  failed, not a retroactively green run. Combined validation records the exact one-fixture
+  delta, unchanged app and final app+tests91f73d20158730a1abe0291a6fd81999a8555764581f89f7cc0a6dd321c1e828.
+  Existing Qt/offscreen/font/QPdfLinkModel/temp-directory diagnostics retained. Full runtime
+  is not a comparable application-speed benchmark; local delivery is recorded separately.
+- Evidence:~/.codex/visualizations/2026/10/02/icstex-structure-polish/ including before,
+  structure-verified, polished, paint-before/after, ax-abi-observation.json, native-guarded,
+  native-navigation and preflight. No public release, website/feed or Actions changes.
+
+## 2026-10-02 - Deliver the structure and surface build locally
+
+- Pushed source/test/docs checkpointf24ceb4 to codex/workbench-structure-polish/PR#10.
+  The only change after full validation was the evidenced display-fixture correction above;
+  combined validation is explicit, with the original full exit1 preserved. No app-source change.
+- Existing PyInstaller/spec/Beta4 runtime built the fresh commit-labelled candidate in52.624s,
+  exit0, source/test hashes unchanged.209 modules/entry and all assets match; omission list
+  unchanged, three raw optional worker files byte-identical. Arm64/ad-hoc deep/strict verified;
+  libobjc ctypes warning retained, no Developer ID/notarization claim or dependency upgrade.
+- No ICSTeX or host Autoupdate process was running at replacement. InstallationLease rechecked
+  eligibility and the old manifest under lock, backed up the old bundle, installed and validated
+  all475 files/160 links/signatures before unlock. Candidate and package receipt identity were
+  explicitly bound. Old executable7f830b5e…76191fcb remains intact in
+  ~/Applications/ICSTeX Backups/ICSTeX-2.1.0-beta.4-before-structure-polish-20261002.app.
+- Installed executablebba9a75154b2d0027c214b013f4d88e8de4cbcdc63b67631ee0b8ecd639c4a07;
+  app with assetsc439bfd1a6d548ef12b3746e1c5592394ea8e0f01e76cc338910d75ad180be1f.
+  Opened /Applications/ICSTeX.app and verified live executable path/hash plus visible welcome
+  toolbar surfaces. Left welcome open; no student document, real recent list or editing setting
+  changed. This installed startup check is distinct from native independent-source compilation.
+- Evidence:icstex-structure-polish/{validation-receipt.json,fixture-recheck.log,build-receipt.json,
+  package-receipt.json,install-receipt.json}; originals and earlier backups preserved.
+  Local label remains2.1.0-beta.4/210004; no PR merge, public release, feed, website or Actions
+  mutation. Current bounded task complete; do not continue into unrelated UI/performance work.

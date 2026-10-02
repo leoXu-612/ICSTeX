@@ -650,6 +650,7 @@ class MainWindow(QMainWindow):
     def _update_pdf_action_state(self) -> None:
         if getattr(self, "block_session", None) is not None and self.block_mode_action.isChecked():
             self.stop_pdf_update_action.setEnabled(False)
+            self.pdf_panel.export_status.hide()
             from app.gui.block_mode import sync_block_pdf
             sync_block_pdf(self)
             return
@@ -675,6 +676,7 @@ class MainWindow(QMainWindow):
         canonical_ready = record is not None and record.can_export(file_available=canonical_file_available)
         self.export_pdf_action.setEnabled(export_ready)
         self.pdf_panel.export_pdf_button.setEnabled(export_ready)
+        self.pdf_export.refresh_status(root, record, remembered, can_choose=export_ready)
         self.reveal_pdf_action.setEnabled(canonical_ready)
         self.pdf_panel.reveal_pdf_button.setEnabled(canonical_ready)
         self.sync_pdf_action.setEnabled(
@@ -960,7 +962,11 @@ class MainWindow(QMainWindow):
         self.find_replace_bar.set_editor(tab.editor if tab else None)
         self._sync_pdf_panel_to_active_root()
         self._sync_compile_indicators_to_active_root()
-        self.update_word_count()
+        if tab is not None:
+            # Let opening/switching finish before the Python count worker competes for the GIL.
+            self.word_counts.schedule()
+        else:
+            self.update_word_count()
         self.project_panels.context_changed()
 
     def _sync_compile_indicators_to_active_root(self) -> None:

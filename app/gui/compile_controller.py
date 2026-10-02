@@ -463,8 +463,9 @@ class CompileController:
             if not result.ok:
                 from app.gui.main_window_layout import show_console
                 show_console(window, window.diagnostic_panel, error_notice=True)
-            if result.ok and result.purpose is BuildPurpose.PREVIEW:
+            if result.ok:
                 # Let the newly loaded PDF paint before background text parsing.
+                # FINAL's first count is just as expensive as PREVIEW's.
                 window.word_counts.schedule(delay_ms=1000)
             else:
                 window.update_word_count()

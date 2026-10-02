@@ -6517,3 +6517,143 @@ runs. The application release tag remains81b1672; no published archive was chang
   No public assets, GitHub/website/feed changes, commit/push or CI activation. Evidence under
   ~/.codex/visualizations/2026/09/28/icstex-auto-export-install/: preflight/result.json,
   build.log, package-receipt.json, install-receipt.json, reused install_local.py and native tool observations.
+
+## 2026-10-01 - Submit verified export work, then visualize automatic-export status
+
+- User requested existing changes submitted to GitHub first, then status visualization. Verified
+  app192fbb24 / app+tests32d0f8ba match the completed1869-test receipt and preserved the entire
+  previously accepted dirty source. Committed22 files as8ddfc13a46b38633993fcbdd7f7ffe6dd44ee123,
+  pushed codex/simplify-pdf-export and opened/attached PR#7 against main. Remote head matches;
+  PR was OPEN/MERGEABLE, not merged. Actions API still false; main remainedb6fa58d.
+- Started clean follow-up branch codex/pdf-export-status from8ddfc13. Added an ordinary-PDF
+  footer using existing widgets, colors, flow layout and export callbacks: target/full tooltip,
+  last export timestamp, synced/waiting/working/failed/cancelled/stopped states, folder/change/stop
+  actions. Hidden for unbound projects, welcome and Block. Notices do not expire with statusbar.
+  Reopening a remembered target reports unconfirmed until a verified current export succeeds.
+- Display observations remain per-root and target-bound; success includes actual exported
+  revision/build evidence. No new persistent state schema, watcher, compile request, file scan
+  or write authority. No PDF read/stat in presentation refresh. Current source state, required
+  writer revalidation and original byte/overwrite guards are unchanged. Guide copy updated.
+- PDF/export focused suite60 tests passed15.299s. Added state timeout/root-switch/reopen checks,
+  mocked folder/destination actions plus real stop action, zero presentation I/O/timer checks,
+  and360/1000-width path/button geometry checks without replacing widget instances.
+- Native isolated fixture: first actual Save panel export, reopened state unconfirmed, edit
+  became waiting, explicit real LaTeX FINAL produced current visible PDF and green sync. Renaming
+  only the owned exported fixture left current FINAL green but export red; change-location UI
+  recovered to a new file without an extra build, then stop disabled updates while keeping files.
+  Exported/recovered bytes match canonical FINAL and parsed updated title. Initial harness lacked
+  apply_theme; production theme was applied on restart before color/layout acceptance. CUA used
+  explicit Python3.12 app path after ambiguous bundle-ID lookup. Owned window exited normally;
+  user's installed ICSTeX process/document/settings were not touched.
+- Required compileall passed. Full discovery ran1877 tests356.081s, command357.731s, exit1:
+  only test_release_consistency_verifier_checks_all_pages failed because an ignored local old
+  release DMG was missing. The verifier, test and manifest were unchanged. Downloaded that exact
+  existing GitHub Release asset, verified65672242bytes/SHA256
+  cfcffab1e0b80f7c78df49fd953d4c4d213ab138a2735862306a9f7ed2821c94, and restored it without
+  overwrite. Affected tests.test_release_site:17 tests0.159s, exit0. Did not weaken assertions,
+  relabel the original failed full receipt, regenerate packages or repeat unrelated tests.
+- Before/after full suite and asset restoration: app
+  5aece7ca6825e20b1fafa5d7eb2b0af0bc2516015b71167fef8a6d4b140debee; app+tests
+  8df33741ce681ee71fd088c87523e8df1984325383d83f477dd0ba9e6dfad4cf unchanged. Existing Qt
+  QPdfLinkModel/offscreen/temp-directory and native IMK/window-move diagnostics retained.
+- Evidence: ~/.codex/visualizations/2026/10/01/icstex-export-status/{baseline-pr.md,
+  native_probe.py,native/,regression/result.json,regression/unittest.log,release-recheck.json}.
+  Follow-up UI remains local/uncommitted, not in PR#7; no new release, install, website/feed,
+  dependency/model update or CI change. Current installed build stays the September28 version.
+
+## 2026-10-02 - Install persistent export-status visualization locally
+
+- User explicitly requested local replacement. Rechecked authoritative root, branch
+  codex/pdf-export-status, HEAD8ddfc13 and preserved existing uncommitted UI/source work.
+  Installed application was already closed; no forced quit, user save or manuscript operation.
+  Current app5aece7ca/app+tests8df33741 exactly match the prior validated visualization source.
+- Required packaging/preflight.sh completed with version checks, compileall and1877 tests,
+  tests335.014s, command338.267s, exit0; before/after source identities unchanged. The restored
+  original Beta4 DMG was present and hash-matched before execution. Prior failed receipt remains
+  historical evidence; no assertion changes or unrelated acceptance matrices added.
+- Built via existing PyInstaller spec and prepared Beta4 updater runtime, exit0; unchanged
+  Python3.12.6, PySide6 6.11.1 and PyInstaller6.21.0.209 modules/entry, assets and three raw
+  optional worker files match current source. Arm64/ad-hoc deep/strict verification passed;
+  libobjc ctypes build warning, Qt/temp-directory diagnostics and stale-artifact notices retained.
+  No Developer ID/notarization, new public version, dependency update or bundled-model claim.
+- InstallationLease protected complete old-bundle backup and replacement.475 files/160 links
+  match candidate; backup unchanged at ~/Applications/ICSTeX Backups/
+  ICSTeX-2.1.0-beta.4-before-export-status-20261002.app. New executable SHA256
+  ae4d24e1841b443c6b46dddca0529a657601a058d82088ee1c1e882d8f1f959d, previous0c35dca6.
+  All-app-files digest4ad6a01082456e795ccd06b6082fc1e0d9abaf75925eaf17afe3f80cdb96a974;
+  Python-only source identities remain5aece7ca/8df33741. Local label2.1.0-beta.4/210004,
+  embedded feed/public key and all previous backups retained.
+- Launched exact /Applications/ICSTeX.app, verified running executable path/hash, and read the
+  native guide's new persistent-status/change-location/stop instructions. Closed only the guide
+  and left welcome page open. Did not repeat the source's native compile/export matrix or touch
+  student documents/settings. No Git commit/push/merge, website/feed, release or CI action.
+- Evidence: ~/.codex/visualizations/2026/10/02/icstex-export-status-install/{preflight/result.json,
+  preflight/preflight.log,build.log,package-receipt.json,install-receipt.json,install_local.py}
+  and native tool observations. Source and installed identities are recorded in PROJECT_STATE.
+
+## 2026-10-02 - Bounded first-compile and writing-session performance changes
+
+- Verified primary root/HEAD8ddfc13/branch codex/pdf-export-status and preserved its dirty
+  export-status source and index. Reused the attached completed GitHub-workflow checkout on
+  a new codex/first-compile-session-perf branch; seeded the effective working source, not just
+  HEAD. Initial app5aece7ca/app+tests8df33741 matched primary exactly. Only the primary task
+  brief now routes here; no primary app/tests, installed bundle or remote changes.
+- Used Ponytail's bounded real-workload/whole-latency rule. Independent audits narrowed the
+  changes to five GUI files: existing automatic Word Count scheduling now yields during tab
+  opening/switching and all current-root pending compiles; successful FINAL reuses PREVIEW's
+  1000ms post-build delay. Count content, explicit force, failure handling and build acceptance
+  are unchanged. A running count is not cancelled. No engine/command/compression changes.
+- Reproduced three closed-tab/Save-As lifetime failures before repair. Save timers now belong
+  to editors, and saved-text echoes are released only when no remaining tab uses that path.
+  Six new lifetime tests passed1.858s plus19 related tests11.047s; four count scheduling tests
+  plus related async/dependency/IME scope37 tests passed15.774s. Two FINAL/PREVIEW success and
+  failure scheduling/state tests passed0.637s. Mocks cover scheduling/result callbacks; real
+  LaTeX and native observations below are distinct evidence.
+- Read-only open-wall/thread-CPU A-B-B-A diagnostic: baseline open1465-1487ms versus defer
+  60-64ms, GUI CPU55-67ms. Early pure-Python counting contention is supported; this is not a
+  GIL-level trace. Initial candidate B moved the cost into FINAL paint: open-to-visible7525.7ms
+  versus original7190.5ms, rejected. Extending the existing successful-preview delay to FINAL
+  repaired that regression; the repair itself is not counted as a separate gain.
+- Isolated real26-page EE, same evaluator, new process/empty project build+proxy caches,
+  auto initially off, immediate first explicit FINAL then four real auto-save/PREVIEW cycles:
+  A-C-C-A open-to-current-marker upper bounds7190.5/5634.2/5556.6/7315.1ms; medians7252.8→5595.4.
+  Open-call medians1528.8→62.6ms; request-to-first-visible5723.4→5532.0ms. Warm medians3209.8
+  versus3238.3ms: no demonstrated warm gain. Cursor/scroll, current root/build/revision,
+  latest marker pixels, exact expected build count and cleanup assertions passed.
+- Hardened the reusable evaluator with unique colors, old-frame negative checks, separate
+  grab/scan timestamps and original-entry after-hash. Final A/C verification passed on the same
+  app identities and evaluator3d744704: open-to-visible14760.0/9886.4ms, warm3798.4/6357.0ms.
+  The compiler durations also rose (cold PREVIEW6435/18018ms); concurrent host snapshot load
+  averages23.55/17.24/11.84. Do not pool this with the earlier series or infer a stable warm
+  gain/regression cause. First screenshot scans134.1/91.8ms are included in the upper bounds.
+  No unchanged-condition retry or user-process termination. Small multi-file/BibTeX A/C runs
+  passed; first open-to-visible2759.5/2450.3ms, warm1595.6/1589.9ms, one pair only.
+- 20 independent~64KiB documents edited/saved/closed: retained save timers/tab wrappers/echo
+  entries20/20/20→0/0/0; held saved text1,310,420→0 bytes. Files preserved/no compilation.
+  RSS155520→172064KiB across separate short runs does not establish memory-footprint reduction.
+  Lifetime probe used candidate e73663bc; the later only app change is the successful-FINAL
+  count delay, not executed in this no-compile probe. Final full suite covers lifetime tests.
+- Native isolated small project: clicked actual FINAL, saw complete new PDF; changed title
+  and enabled automatic PREVIEW, saw updated title/current banner and completed count23 total,
+  15 effective,6 heading. Manual refresh remained usable and only two builds occurred. Closed
+  owned window normally. Initial probe referenced nonexistent PdfBuildRecord.status and was
+  corrected outside app; its failed observation is not acceptance. Qt font/QPdfLinkModel and
+  IMK/keyboard diagnostics retained. Native interaction is not a timing benchmark or IME proof.
+- Required compileall and diff check passed. Full discovery completed1889 tests542.158s,
+  command545.392s/exit1:1878 passed,11 InstallationGuardTests errors at begin/--idle. Read-only
+  evidence found PID33344 /Applications/ChatGPT.app/.../Autoupdate and PID33345 host Updater,
+  started15:54:30, still active after test end. Existing native guard conservatively blocks
+  any live Autoupdate; Python/C guard and assertions were unchanged. No fake idle result,
+  termination or repeated full suite. Once host update naturally exits, recheck only
+  QT_QPA_PLATFORM=offscreen python3 -m unittest tests.test_update_install_guard.
+- Existing missing-temporary-directory dependency diagnostics were matched to the prior
+  successful export-status-install preflight at the same unchanged function lines; likely
+  test-lifetime cleanup, not proven fixed here. The original Beta4 release fixtures were copied
+  from primary and consistency-verified, preventing the previous unrelated missing-asset case.
+- Final app7f0048e36e308b58182339215cd08033d6094ccd3b7cbfb4fc44bf4589f08fb4 and app+tests
+  f2f078b067c8738ea0dea72336247243ee50cab2646ce2ee2517c52cc1d1eac6 stayed identical across
+  full regression and final measurements. Real original entry stayed SHA256ab4179b6…2858b750.
+  Evidence: ~/.codex/visualizations/2026/10/02/icstex-first-session-perf/ including ee-a1/b1/c1/c2/a2,
+  ee-final-a/c, small-a1/c1, lifetime-before/after, native-corrected and regression receipts.
+  Local source handoff only;11 environment-blocked checks and hours-long acceptance remain
+  explicit. No commit/push/merge, packaging/install/release, dependency change or student edits.

@@ -795,6 +795,15 @@ def stylesheet(
     QLabel#pdfFreshnessBanner[severity="warning"] {{ color: {COLOR_WARNING}; }}
     QLabel#pdfFreshnessBanner[severity="error"] {{ color: {COLOR_ERROR}; }}
 
+    QWidget#pdfExportStatus {{
+        background: {COLOR_SURFACE_ALT};
+        border-top: 1px solid {COLOR_BORDER_SOFT};
+    }}
+    QLabel#pdfExportState {{ color: {COLOR_TEXT_MUTED}; font-size: {fs_caption}px; font-weight: 600; }}
+    QLabel#pdfExportState[severity="success"] {{ color: {COLOR_SUCCESS}; }}
+    QLabel#pdfExportState[severity="warning"] {{ color: {COLOR_WARNING}; }}
+    QLabel#pdfExportState[severity="error"] {{ color: {COLOR_ERROR}; }}
+
     QLabel#pdfEmptyIcon {{
         background: transparent;
         border: 0;

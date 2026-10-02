@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QScrollArea,
+    QSplitter,
     QStackedWidget,
     QToolButton,
     QVBoxLayout,
@@ -28,6 +29,9 @@ class ToolboxNavigation(QWidget):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._labels: list[str] = []
         self._buttons: list[QToolButton] = []
+        self._pages: list[QWidget] = []
+        self._current_index = -1
+        self.project_splitter: QSplitter | None = None
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -76,7 +80,9 @@ class ToolboxNavigation(QWidget):
             title.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.rail_layout.addWidget(title)
 
-        index = self.stack.addWidget(widget)
+        index = len(self._pages)
+        self._pages.append(widget)
+        self.stack.addWidget(widget)
         button = QToolButton()
         button.setObjectName("toolboxNavButton")
         button.setCheckable(True)
@@ -100,13 +106,49 @@ class ToolboxNavigation(QWidget):
         self._buttons.append(button)
         self._labels.append(text)
         if index == 0:
+            self._current_index = 0
             button.setChecked(True)
             self.setFocusProxy(button)
         return index
 
+    def combine_project_panels(self) -> None:
+        """Install files/outline once; keep the nine logical tool identities."""
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        splitter.setObjectName("projectOutlineSplitter")
+        splitter.setChildrenCollapsible(False)
+        splitter.setHandleWidth(6)
+        for index, title in enumerate(("项目文件", "章节大纲")):
+            panel = self._pages[index]
+            self.stack.removeWidget(panel)
+            section = QWidget()
+            section.setObjectName("projectNavigationSection")
+            layout = QVBoxLayout(section)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(0)
+            heading = QLabel(title)
+            heading.setObjectName("workbenchPanelTitle")
+            heading.setMargin(6)
+            layout.addWidget(heading)
+            layout.addWidget(panel, 1)
+            panel.show()
+            splitter.addWidget(section)
+        splitter.setSizes([550, 450])
+        self.stack.insertWidget(0, splitter)
+        self.project_splitter = splitter
+        self.stack.setCurrentWidget(splitter)
+
     def eventFilter(self, watched, event):
         if event.type() == QEvent.Type.FocusIn and watched in self._buttons:
             self.rail_scroll.ensureWidgetVisible(watched)
+        if (self.project_splitter is not None and watched in self._buttons[:2]
+                and event.type() == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Tab
+                and not event.modifiers()):
+            # Both panels share one page. Tab enters the selected logical tool,
+            # rather than always entering the file tree above the outline.
+            index = self._buttons.index(watched)
+            self.setCurrentIndex(index)
+            self._pages[index].setFocus(Qt.FocusReason.TabFocusReason)
+            return True
         return super().eventFilter(watched, event)
 
     def finish(self) -> None:
@@ -122,16 +164,18 @@ class ToolboxNavigation(QWidget):
             self.setFocusProxy(self._buttons[self.currentIndex()])
 
     def count(self) -> int:
-        return self.stack.count()
+        return len(self._pages)
 
     def currentIndex(self) -> int:
-        return self.stack.currentIndex()
+        return self._current_index
 
     def setCurrentIndex(self, index: int) -> None:
-        if not 0 <= index < self.stack.count():
+        if not 0 <= index < len(self._pages):
             return
-        changed = index != self.stack.currentIndex()
-        self.stack.setCurrentIndex(index)
+        changed = index != self._current_index
+        self._current_index = index
+        page = self.project_splitter if self.project_splitter is not None and index < 2 else self._pages[index]
+        self.stack.setCurrentWidget(page)
         self._buttons[index].setChecked(True)
         for position, button in enumerate(self._buttons):
             button.setFocusPolicy(Qt.FocusPolicy.StrongFocus if position == index else Qt.FocusPolicy.ClickFocus)
@@ -140,10 +184,10 @@ class ToolboxNavigation(QWidget):
             self.currentChanged.emit(index)
 
     def currentWidget(self) -> QWidget | None:
-        return self.stack.currentWidget()
+        return self.widget(self._current_index)
 
     def widget(self, index: int) -> QWidget | None:
-        return self.stack.widget(index) if 0 <= index < self.stack.count() else None
+        return self._pages[index] if 0 <= index < len(self._pages) else None
 
     def tabText(self, index: int) -> str:
         return self._labels[index] if 0 <= index < len(self._labels) else ""

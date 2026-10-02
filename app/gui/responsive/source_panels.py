@@ -26,13 +26,20 @@ class SourcePanelController(QObject):
         except (TypeError, ValueError, OverflowError):
             ratio = 0
         self._console_ratio = ratio if 0 < ratio < 1 else None
+        try:
+            ratio = float(settings.value("window/project_outline_ratio", 0.55))
+        except (TypeError, ValueError, OverflowError):
+            ratio = 0.55
+        self._project_ratio = ratio if 0 < ratio < 1 else 0.55
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self._arrange)
-        for widget in (window, window.toolbox_dock, window.bottom_panel):
+        for widget in (window, window.toolbox_dock, window.bottom_panel,
+                       window.toolbox_navigation.project_splitter):
             widget.installEventFilter(self)
         window.toolbox_dock.visibilityChanged.connect(self._toolbox_changed)
         window.vertical_splitter.splitterMoved.connect(self._remember_console_ratio)
+        window.toolbox_navigation.project_splitter.splitterMoved.connect(self._remember_project_ratio)
 
     def _is_compact(self):
         manager = getattr(QApplication.instance(), "ui_scale_manager", None)
@@ -43,6 +50,9 @@ class SourcePanelController(QObject):
     def eventFilter(self, watched, event):
         if not self._active or self._applying:
             return False
+        if (watched is self.window.toolbox_navigation.project_splitter
+                and event.type() in (QEvent.Type.Resize, QEvent.Type.Show)):
+            self._timer.start(0)
         if watched is self.window and event.type() in (QEvent.Type.Resize, QEvent.Type.FontChange,
                                                         QEvent.Type.StyleChange, QEvent.Type.Show):
             self._timer.start(0)
@@ -66,6 +76,26 @@ class SourcePanelController(QObject):
         settings.setValue("window/source_pdf_ratio", self.window.source_preview_area.wide_ratio())
         if self._console_ratio is not None:
             settings.setValue("window/source_console_ratio", self._console_ratio)
+        settings.setValue("window/project_outline_ratio", self._project_ratio)
+
+    def _remember_project_ratio(self, *_):
+        splitter = self.window.toolbox_navigation.project_splitter
+        if (not self._active or self._applying or self._welcome or self._is_compact()
+                or not splitter.isVisible()):
+            return
+        sizes = splitter.sizes()
+        if len(sizes) == 2 and all(sizes):
+            self._project_ratio = sizes[0] / sum(sizes)
+
+    def _restore_project_ratio(self):
+        """Restore the user's split after transient height/minimum-size clamps."""
+        splitter = self.window.toolbox_navigation.project_splitter
+        if self._welcome or not splitter.isVisible():
+            return
+        total = sum(splitter.sizes())
+        if total:
+            top = round(total * self._project_ratio)
+            splitter.setSizes([max(1, top), max(1, total - top)])
 
     def set_active(self, active):
         if active == self._active:
@@ -109,6 +139,7 @@ class SourcePanelController(QObject):
             return
         compact = self._is_compact()
         if compact == self._compact:
+            self._restore_project_ratio()
             return
         was_compact = self._compact
         self._compact = compact
@@ -130,6 +161,7 @@ class SourcePanelController(QObject):
                     self._wide["console"] = True
             visible = {key for key, shown in self._wide.items() if shown}
         self._apply(visible, restore_sizes=not compact)
+        self._restore_project_ratio()
 
     def _apply(self, visible, *, restore_sizes=False):
         from app.gui.main_window_layout import _set_bottom_panel_collapsed

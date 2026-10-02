@@ -308,7 +308,7 @@ def stylesheet(
     }}
 
     QToolBar#mainToolbar, QToolBar#workspaceToolbar {{
-        padding: 2px 8px;
+        padding: 0px;
     }}
 
     QLabel#toolbarGroupLabel, QLabel#toolboxSectionLabel {{

@@ -52,6 +52,9 @@ def build_actions(window: "MainWindow") -> None:
     """Build toolbar, menus, and per-action shortcuts on ``window``."""
     toolbar = QToolBar("主工具栏")
     toolbar.setObjectName("mainToolbar")
+    # Its layout was created before the object-name-specific compact QSS matched.
+    toolbar.style().unpolish(toolbar)
+    toolbar.style().polish(toolbar)
     toolbar.setMovable(False)
     toolbar.setIconSize(QSize(18, 18))
     toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)

@@ -19,7 +19,9 @@ from tests.test_pdf_panel import _write_zoom_pdf
 
 def run(output, native):
     output.mkdir(parents=True, exist_ok=False)
-    root = output / "writing.tex"
+    project = output / "project"
+    project.mkdir()
+    root = project / "writing.tex"
     text = ("% Notes for this section stay readable without competing with the main text.\n" * 8 +
             "\\documentclass{article}\n\\begin{document}\n\\section{A clear writing workspace}\n"
             "Write, revise, and check the result. Keep the editor comfortable while the first preview is prepared.\n"

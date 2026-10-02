@@ -180,6 +180,9 @@ class MainWindow(QMainWindow):
         saved_window_state = self.app_settings.settings.value("window/block_console_state")
         if saved_window_state:
             self.restoreState(saved_window_state)
+        else:
+            # First-use writing layout; saved dock visibility remains the user's choice.
+            self.toolbox_dock.show()
         from app.gui.responsive.block_panels import BlockPanelController
         self.block_panels = BlockPanelController(self)
         from app.gui.responsive.source_panels import SourcePanelController
@@ -890,9 +893,7 @@ class MainWindow(QMainWindow):
         self.bottom_panel.setVisible(has_documents and not self.bottom_tabs.isHidden())
         self.bottom_collapse_button.setVisible(has_documents and source_active)
         if hasattr(self, "workspace"):
-            if source_active and self.toolBarBreak(self.workspace.toolbar):
-                self.removeToolBarBreak(self.workspace.toolbar)
-            elif not source_active and not self.toolBarBreak(self.workspace.toolbar):
+            if not self.toolBarBreak(self.workspace.toolbar):
                 self.insertToolBarBreak(self.workspace.toolbar)
             self.workspace.toolbar.setVisible(has_documents or not source_active)
         for action in (
@@ -1192,6 +1193,7 @@ class MainWindow(QMainWindow):
             self.citations.shutdown()
             self.materials.shutdown()
             self.block_panels.save_preferences()
+            self.source_panels.save_preferences()
             self.app_settings.settings.setValue("window/block_console_state", self.source_panels.window_state())
             _unregister_app_window(self)
             manager = getattr(QApplication.instance(), "ui_scale_manager", None)

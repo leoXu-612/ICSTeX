@@ -311,6 +311,22 @@ def stylesheet(
         padding: 2px 8px;
     }}
 
+    QLabel#toolbarGroupLabel, QLabel#toolboxSectionLabel {{
+        color: {COLOR_TEXT_MUTED};
+        font-size: {fs_caption}px;
+        font-weight: 600;
+        padding: 3px 4px;
+    }}
+
+    QLabel#sourcePaneTitle {{
+        background: {COLOR_SURFACE_ALT};
+        color: {COLOR_TEXT_MUTED};
+        font-size: {fs_section}px;
+        font-weight: 600;
+        border-right: 1px solid {COLOR_BORDER_SOFT};
+        padding: 4px 8px;
+    }}
+
     QPlainTextEdit#workspaceDetails {{
         background: {COLOR_SURFACE_ALT};
         color: {COLOR_TEXT};

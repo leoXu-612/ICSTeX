@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
     QButtonGroup,
     QFrame,
     QHBoxLayout,
+    QLabel,
     QScrollArea,
     QStackedWidget,
     QToolButton,
@@ -62,12 +63,18 @@ class ToolboxNavigation(QWidget):
         tooltip: str = "",
         *,
         section_break: bool = False,
+        section_title: str = "",
     ) -> int:
         if section_break and self._buttons:
             divider = QFrame()
             divider.setObjectName("toolboxDivider")
             divider.setFrameShape(QFrame.Shape.HLine)
             self.rail_layout.addWidget(divider)
+        if section_title:
+            title = QLabel(section_title)
+            title.setObjectName("toolboxSectionLabel")
+            title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.rail_layout.addWidget(title)
 
         index = self.stack.addWidget(widget)
         button = QToolButton()

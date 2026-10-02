@@ -21,7 +21,15 @@ ICSTeX 要成为 ICC 学生从“建立写作项目”到“提交可靠成果�
 4. 支持 IA、EE、实验报告等完整工作流，而不是增加孤立按钮。
 5. 在没有明确学生价值时，不引入新的状态、依赖、网络或维护负担。
 
-## Current Source Task - First Compile and Writing Session Performance
+## Current Source Task - Workbench Layout and Local Delivery
+
+按用户确认的 MATLAB 参考，复用现有控件，整理顶部分组、项目导航、源码/PDF 和
+控制台的视觉分区；记住分栏比例，保留窄窗切换、旧显隐选择与文件/编译保护。
+本轮已授权任务分支/PR留痕及本机安装，不包含公开发布、官网或更新 feed 修改。
+专项、原生分栏重启检查及 packaging/preflight.sh 后，安全备份并替换安装版。
+宿主活动更新或未保存文稿阻挡时不得绕过；当前结果以 PROJECT_STATE 为准。
+
+## Previous Source Task - First Compile and Writing Session Performance
 
 基于已交付的自动导出状态源码，以真实项目隔离副本测量首次打开到当前 PDF 可见，
 以及重复编辑/保存/关闭后的残留对象。只保留可复现的字数统计让行和文档生命周期

@@ -97,7 +97,7 @@ class WorkspaceController(QObject):
         self.next_button = QToolButton()
         self.next_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         self.navigation = QToolButton()
-        self.navigation.setText("项目导航")
+        self.navigation.setText("项目操作")
         self.navigation.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.menu = QMenu(self.navigation)
         self.menu.aboutToShow.connect(self._build_navigation)
@@ -113,13 +113,13 @@ class WorkspaceController(QObject):
         layout.addWidget(self.details)
         self.save_action = QAction("保存项目文档", self)
         self.save_action.triggered.connect(self._save_project)
-        # Ordinary writing shares the main toolbar row; Block keeps a separate
-        # row when its context requires more controls.
+        # Keep project status in one thin row, leaving the primary action groups visible.
         self.toolbar = QToolBar("项目工作区", window)
         self.toolbar.setObjectName("workspaceToolbar")
         self.toolbar.setMovable(False)
         self.toolbar.setFloatable(False)
         self.toolbar.addWidget(self.bar)
+        window.addToolBarBreak(Qt.ToolBarArea.TopToolBarArea)
         window.addToolBar(Qt.ToolBarArea.TopToolBarArea, self.toolbar)
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)

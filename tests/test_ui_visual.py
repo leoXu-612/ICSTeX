@@ -707,7 +707,114 @@ class WritingWorkspaceLayoutTests(TestCase):
         self.assertFalse(self.window.pdf_panel_wrapper.isVisible())
         self.assertFalse(self.window.bottom_panel.isVisible())
         self.assertFalse(self.window.workspace.toolbar.isVisible())
+        self.assertFalse(self.window.source_title.isVisible())
         self.assertGreater(self.window.welcome_page.width(), self.window.width() * 0.95)
+
+    def test_workbench_groups_reuse_actions_and_expose_ordinary_pdf_export(self):
+        toolbar = self.window.findChild(QToolBar, "mainToolbar")
+        self.assertEqual([label.text() for label in toolbar.findChildren(QLabel, "toolbarGroupLabel")],
+                         ["文件", "编译 / 输出", "视图"])
+        actions = toolbar.actions()
+        expected = (self.window.new_project_action, self.window.open_file_action, self.window.save_action,
+                    self.window.compile_action, self.window.stop_compile_action, self.window.export_pdf_action,
+                    self.window.sync_pdf_action, self.window.toolbox_action, self.window.console_action)
+        positions = [actions.index(action) for action in expected]
+        self.assertEqual(positions, sorted(positions))
+        for action in expected:
+            self.assertEqual(actions.count(action), 1)
+            self.assertIs(toolbar.widgetForAction(action).defaultAction(), action)
+        menu_actions = self.window.menuBar().actions()
+        file_action = next(action for action in menu_actions if action.text() == "文件")
+        file_menu = file_action.menu()
+        self.assertIn(self.window.export_pdf_action, file_menu.actions())
+        self.assertFalse(self.window.export_pdf_action.isEnabled())
+        self.assertFalse(self.window.compile_authorized_roots)
+        self.assertEqual(self.window.toolbox_action.text(), "项目导航")
+
+    def test_source_title_and_project_navigation_keep_existing_widget_identity(self):
+        from PySide6.QtCore import QPoint, QRect
+        self.window.resize(1440, 900)
+        self.window.new_document()
+        self.window.set_toolbox_visible(True)
+        self.settle()
+        title = self.window.source_title
+        self.assertEqual(title.text(), "LaTeX 源码")
+        self.assertIs(self.window.editor_tabs.cornerWidget(Qt.Corner.TopLeftCorner), title)
+        self.assertTrue(title.visibleRegion().contains(title.rect()))
+        title_rect = QRect(title.mapTo(self.window, QPoint()), title.size())
+        tab_bar = self.window.editor_tabs.tabBar()
+        tab_rect = QRect(tab_bar.mapTo(self.window, tab_bar.tabRect(0).topLeft()), tab_bar.tabRect(0).size())
+        self.assertFalse(title_rect.intersects(tab_rect))
+        navigation = self.window.toolbox_navigation
+        self.assertEqual(navigation.count(), 9)
+        self.assertIs(navigation.widget(0), self.window.tree)
+        self.assertIs(navigation.widget(1), self.window.outline_panel)
+        self.assertEqual([label.text() for label in navigation.findChildren(QLabel, "toolboxSectionLabel")],
+                         ["项目", "工具", "写作"])
+        buttons = [navigation.navigationButton(index) for index in range(9)]
+        for index in (1, 7, 0):
+            navigation.setCurrentIndex(index)
+            self.assertIs(navigation.currentWidget(), navigation.widget(index))
+            self.assertTrue(buttons[index].isChecked())
+        self.window.resize(1080, 720)
+        self.settle()
+        self.window.resize(1440, 900)
+        self.settle()
+        self.assertIs(self.window.source_title, title)
+        self.assertEqual([navigation.navigationButton(index) for index in range(9)], buttons)
+        self.assertFalse(self.window.compile_authorized_roots)
+
+    def test_wide_navigation_keeps_source_and_loaded_pdf_beside_each_other(self):
+        from PySide6.QtCore import QPoint, QRect
+        from tests.test_gui_editor import wait_until
+        from tests.test_pdf_panel import _write_zoom_pdf
+        self.window.resize(1440, 900)
+        self.window.new_document()
+        self.window.set_toolbox_visible(True)
+        self.assertTrue(wait_until(lambda: not self.window.dependencies.is_busy))
+        editor = self.window.current_tab().editor
+        text = editor.toPlainText()
+        area = self.window.source_preview_area
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "layout.pdf"
+            _write_zoom_pdf(path)
+            self.window.pdf_panel.load_pdf(path)
+            self.assertTrue(wait_until(lambda: area._preview_available))
+            self.settle()
+            self.assertTrue(self.window.toolbox_dock.isVisible())
+            self.assertFalse(area._compact)
+            self.assertTrue(editor.isVisible())
+            self.assertTrue(area.pdf.isVisible())
+            self.assertFalse(area.switcher.isVisible())
+
+            def bounds(widget):
+                return QRect(widget.mapTo(self.window, QPoint()), widget.size())
+
+            panes = [bounds(widget) for widget in (self.window.toolbox_dock, area.editor, area.pdf)]
+            for index, pane in enumerate(panes):
+                self.assertTrue(self.window.rect().contains(pane), (index, pane))
+                self.assertGreater(pane.width(), 250)
+                for other in panes[index + 1:]:
+                    self.assertFalse(pane.intersects(other), (pane, other))
+
+            self.window.set_ui_scale(1.5)
+            self.window.resize(1080, 720)
+            self.window.set_toolbox_visible(True)
+            self.settle()
+            self.assertTrue(area._compact)
+            for selected in (True, False):
+                area.select_pdf(selected)
+                self.settle()
+                self.assertEqual(area.pdf.isVisible(), selected)
+                self.assertEqual(editor.isVisible(), not selected)
+                pane = area.pdf if selected else area.editor
+                self.assertTrue(self.window.rect().contains(bounds(pane)))
+                for button in (area.editor_button, area.pdf_button):
+                    self.assertTrue(button.visibleRegion().contains(button.rect()))
+            self.assertIs(self.window.current_tab().editor, editor)
+            self.assertEqual(editor.toPlainText(), text)
+            self.assertFalse(self.window.compile_authorized_roots)
+            self.window.pdf_panel.clear_pdf()
 
     def test_restored_toolbox_waits_for_project_and_survives_welcome_restart(self):
         self.window.resize(1440, 900)
@@ -994,6 +1101,9 @@ class WritingWorkspaceLayoutTests(TestCase):
     def test_narrow_pair_preserves_widgets_selection_scroll_undo_and_wide_split(self):
         from PySide6.QtGui import QTextCursor
         self.window.new_document()
+        # Compare the same explicit wide layout before and after compact mode;
+        # new workspaces now start with navigation visible.
+        self.window.set_toolbox_visible(False)
         editor = self.window.current_tab().editor
         editor.setPlainText("line\n" * 300)
         editor.moveCursor(QTextCursor.MoveOperation.End)
@@ -1391,8 +1501,13 @@ class BlockWorkspacePanelTests(TestCase):
 class WorkbenchVisualSmokeTests(TestCase):
     def test_source_and_pdf_panes_do_not_overlap_at_supported_small_window(self):
         from PySide6.QtCore import QPoint, QRect
-        from tests.test_gui_editor import isolated_settings
+        from tests.test_gui_editor import isolated_settings, wait_until
+        from tests.test_pdf_panel import _write_zoom_pdf
         application = _app()
+        fixture = TemporaryDirectory()
+        self.addCleanup(fixture.cleanup)
+        pdf_path = Path(fixture.name) / "layout.pdf"
+        _write_zoom_pdf(pdf_path)
         window = MainWindow(settings_store=isolated_settings())
         previous = application.ui_scale_manager.scale
         try:
@@ -1400,41 +1515,61 @@ class WorkbenchVisualSmokeTests(TestCase):
             window.new_document()
             window.show()
             window.set_toolbox_visible(True)
-            for scale in (0.9, 1.0, 1.1, 1.25, 1.5):
-                with self.subTest(scale=scale):
-                    window.set_ui_scale(scale)
-                    window.resize(1080, 720)
-                    for _ in range(5):
-                        application.processEvents()
-                    splitter = window.main_splitter
-                    source, pdf = splitter.widget(0), splitter.widget(1)
-                    area = window.source_preview_area
-                    if area._compact:
-                        area.select_pdf(False)
-                        application.processEvents()
-                        self.assertTrue(source.isVisible())
-                        self.assertFalse(pdf.isVisible())
-                        self.assertTrue(splitter.rect().contains(source.geometry()))
-                        area.select_pdf(True)
-                        application.processEvents()
-                        self.assertFalse(source.isVisible())
-                    else:
-                        self.assertFalse(source.geometry().intersects(pdf.geometry()),
-                                         (scale, source.geometry(), pdf.geometry()))
-                    self.assertTrue(pdf.isVisible())
-                    self.assertTrue(splitter.rect().contains(pdf.geometry()))
-                    for control in (window.pdf_panel.page_spin, window.pdf_panel.zoom_out_button,
-                                    window.pdf_panel.zoom_in_button, window.pdf_panel.fit_width_button,
-                                    window.pdf_panel._more_button):
-                        bounds = QRect(control.mapTo(splitter, QPoint()), control.size())
-                        self.assertTrue(pdf.geometry().contains(bounds), (scale, control, bounds))
-                        if source.isVisible():
-                            self.assertFalse(source.geometry().intersects(bounds))
-                        ancestor = control.parentWidget()
-                        while ancestor is not None:
-                            self.assertTrue(ancestor.rect().contains(QRect(
-                                control.mapTo(ancestor, QPoint()), control.size())), (scale, control, ancestor))
-                            ancestor = ancestor.parentWidget()
+            panel = window.pdf_panel
+            self.assertTrue(wait_until(lambda: not window.dependencies.is_busy))
+            for loaded in (False, True):
+                if loaded:
+                    panel.load_pdf(pdf_path)
+                    self.assertTrue(wait_until(lambda: panel._document.pageCount() == 3))
+                for scale in (0.9, 1.0, 1.1, 1.25, 1.5):
+                    with self.subTest(loaded=loaded, scale=scale):
+                        window.set_ui_scale(scale)
+                        window.resize(1080, 720)
+                        for _ in range(5):
+                            application.processEvents()
+                        splitter = window.main_splitter
+                        source, pdf = splitter.widget(0), splitter.widget(1)
+                        area = window.source_preview_area
+                        if area._compact:
+                            area.select_pdf(False)
+                            application.processEvents()
+                            self.assertTrue(source.isVisible())
+                            self.assertFalse(pdf.isVisible())
+                            self.assertTrue(splitter.rect().contains(source.geometry()))
+                            area.select_pdf(True)
+                            application.processEvents()
+                            self.assertFalse(source.isVisible())
+                        else:
+                            self.assertFalse(source.geometry().intersects(pdf.geometry()),
+                                             (scale, source.geometry(), pdf.geometry()))
+                        self.assertTrue(pdf.isVisible())
+                        self.assertTrue(splitter.rect().contains(pdf.geometry()))
+                        self.assertEqual(panel._toolbar.isVisible(), loaded)
+                        if not loaded:
+                            # Empty PDFs intentionally hide the navigation toolbar;
+                            # its unlaid-out children do not describe visible geometry.
+                            self.assertFalse(panel.page_spin.isVisible())
+                            controls = (panel.empty_compile_button,)
+                        else:
+                            controls = (panel.page_spin, panel.zoom_out_button, panel.zoom_in_button,
+                                        panel.fit_width_button, panel.pdf_search_button)
+                            if panel._more_button.isVisible():
+                                controls += (panel._more_button,)
+                            else:
+                                self.assertTrue(panel._secondary_panel.isVisible())
+                                controls += (panel.prev_page_button, panel.next_page_button,
+                                             panel.fit_page_button, panel.export_pdf_button, panel.reveal_pdf_button)
+                        for control in controls:
+                            self.assertTrue(control.visibleRegion().contains(control.rect()), (scale, control))
+                            bounds = QRect(control.mapTo(splitter, QPoint()), control.size())
+                            self.assertTrue(pdf.geometry().contains(bounds), (scale, control, bounds))
+                            if source.isVisible():
+                                self.assertFalse(source.geometry().intersects(bounds))
+                            ancestor = control.parentWidget()
+                            while ancestor is not None:
+                                self.assertTrue(ancestor.rect().contains(QRect(
+                                    control.mapTo(ancestor, QPoint()), control.size())), (scale, control, ancestor))
+                                ancestor = ancestor.parentWidget()
         finally:
             window.close()
             application.sendPostedEvents(None, QEvent.Type.DeferredDelete)

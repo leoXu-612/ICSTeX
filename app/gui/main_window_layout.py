@@ -153,13 +153,15 @@ def _install_sidebar(window: "MainWindow") -> None:
 
     sidebar = ToolboxNavigation(window)
     sidebar.setMinimumWidth(320)
-    sidebar.addTab(window.tree, "文件", "files", SIDEBAR_TAB_TIPS[0])
+    sidebar.addTab(window.tree, "文件", "files", SIDEBAR_TAB_TIPS[0], section_title="项目")
     sidebar.addTab(window.outline_panel, "大纲", "list-tree", SIDEBAR_TAB_TIPS[1])
-    sidebar.addTab(window.search_panel, "搜索", "search", SIDEBAR_TAB_TIPS[2])
+    sidebar.addTab(window.search_panel, "搜索", "search", SIDEBAR_TAB_TIPS[2],
+                   section_break=True, section_title="工具")
     sidebar.addTab(scrollable_panel(window.images_panel), "图片", "image", SIDEBAR_TAB_TIPS[3])
     sidebar.addTab(window.history_panel, "历史", "history", SIDEBAR_TAB_TIPS[4])
     sidebar.addTab(
-        scrollable_panel(window.insert_panel), "插入", "square-plus", SIDEBAR_TAB_TIPS[5], section_break=True
+        scrollable_panel(window.insert_panel), "插入", "square-plus", SIDEBAR_TAB_TIPS[5],
+        section_break=True, section_title="写作"
     )
     sidebar.addTab(scrollable_panel(window.templates_panel), "模板", "layout-template", SIDEBAR_TAB_TIPS[6])
     sidebar.addTab(scrollable_panel(window.references_panel), "引用", "book-open", SIDEBAR_TAB_TIPS[7])
@@ -177,6 +179,9 @@ def _install_source_pane(window: "MainWindow") -> None:
     window.editor_tabs.setTabsClosable(True)
     window.editor_tabs.setDocumentMode(True)
     configure_tab_bar(window.editor_tabs)
+    window.source_title = QLabel("LaTeX 源码")
+    window.source_title.setObjectName("sourcePaneTitle")
+    window.editor_tabs.setCornerWidget(window.source_title, Qt.Corner.TopLeftCorner)
 
     window.find_replace_bar = FindReplaceBar()
     window.welcome_page = WelcomePage()
@@ -202,7 +207,7 @@ def _install_pdf_pane(window: "MainWindow") -> None:
 
 
 def _install_toolbox_dock(window: "MainWindow") -> None:
-    dock = QDockWidget("工具箱", window)
+    dock = QDockWidget("项目导航", window)
     dock.setObjectName("toolboxDock")
     dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea)
     dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetClosable)
@@ -225,7 +230,7 @@ def _install_main_splitter(window: "MainWindow") -> None:
     window.pdf_panel_wrapper = pdf_panel
 
     area = EditorPdfArea(source_panel, pdf_panel, editor_label="编辑源码",
-                         compact_width=960, compact_columns=90, wide_sizes=(790, 650))
+                         compact_width=960, compact_columns=76, wide_sizes=(790, 650))
     splitter = area.splitter
     splitter.setChildrenCollapsible(False)
     splitter.setHandleWidth(8)

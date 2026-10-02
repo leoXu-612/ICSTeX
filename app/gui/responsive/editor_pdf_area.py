@@ -69,6 +69,20 @@ class EditorPdfArea(QWidget):
         if not self._compact and self._document_available:
             self._restore_timer.start(0)
 
+    def wide_ratio(self):
+        """The user's wide layout, independent of temporary widget clamping."""
+        return self._wide_sizes[0] / sum(self._wide_sizes)
+
+    def restore_wide_ratio(self, value):
+        """Restore optional QSettings geometry without rebuilding either pane."""
+        try:
+            ratio = float(value)
+        except (TypeError, ValueError, OverflowError):
+            return
+        if 0 < ratio < 1:
+            self._wide_sizes = [ratio, 1 - ratio]
+            self._restore_timer.start(0)
+
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._arrange()
@@ -83,10 +97,13 @@ class EditorPdfArea(QWidget):
             self.fontMetrics().horizontalAdvance("M") * self._compact_columns)
 
     def _remember_wide_sizes(self, *_):
-        if self._compact is False and self._document_available and self._preview_available and not self.pdf.isHidden():
+        if (self._compact is False and not self._is_compact() and self._document_available
+                and self._preview_available and not self.pdf.isHidden()):
             # Only a handle move changes the user's preference. Minimum-size
             # clamping during font/window layout must not become a new ratio.
-            self._wide_sizes = self.splitter.sizes()
+            sizes = self.splitter.sizes()
+            if all(sizes):
+                self._wide_sizes = sizes
 
     def _restore_wide_sizes(self):
         if self._compact or not self._document_available or self._is_compact():

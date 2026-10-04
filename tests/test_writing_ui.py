@@ -30,6 +30,9 @@ class WritingUiTests(TestCase):
         self.window.set_ui_scale(1.)
         self.window.resize(1440, 900)
         self.window.new_document()
+        # This suite measures the focused writing surface; the new-user
+        # navigation default has its own workbench-layout coverage.
+        self.window.source_panels.set_toolbox(False)
         self.window.auto_compile_action.setChecked(False)
         self.window.show()
         self.window.activateWindow()
@@ -121,17 +124,21 @@ class WritingUiTests(TestCase):
         self.assertEqual(editor.textCursor().position(), position)
         self.assertEqual(editor.firstVisibleBlock().blockNumber(), before_line)
 
-    def test_toolbar_labels_toggle_scale_and_source_header_share_one_row(self):
+    def test_toolbar_labels_scale_with_separate_project_status_row(self):
         toolbar = self.window.findChild(QToolBar, "mainToolbar")
-        for scale in (.9, 1., 1.1, 1.25, 1.5, 1.):
+        for scale in (1., .9, 1., 1.1, 1.25, 1.5, 1.):
             self.window.set_ui_scale(scale)
             self.settle()
             toggle = self.window.auto_compile_toggle
             self.assertEqual(toggle.height(), round(32 * scale))
             self.assertGreaterEqual(toggle.width(), toggle.sizeHint().width())
-            self.assertFalse(self.window.toolBarBreak(self.window.workspace.toolbar))
+            self.assertTrue(self.window.toolBarBreak(self.window.workspace.toolbar))
             for action in (self.window.open_file_action, self.window.save_action, self.window.console_action):
                 self.assertEqual(toolbar.widgetForAction(action).toolButtonStyle(), Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
             button = toolbar.widgetForAction(self.window.compile_action)
             self.assertTrue(button.visibleRegion().contains(button.rect()))
+            # Compact rows remove unused outer padding, not button hit areas.
+            self.assertLessEqual(toolbar.height(), max(toggle.height(), button.height()) + 8)
+            self.assertLessEqual(self.window.workspace.toolbar.height(),
+                                 max(self.window.workspace.bar.height(), round(34 * scale)))
         self.assertFalse(self.window.current_tab().editor.highlighter.comment_format.fontItalic())

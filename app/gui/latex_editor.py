@@ -181,6 +181,20 @@ class LaTeXEditor(QPlainTextEdit):
         self._sync_selection = None
         self._refresh_extra_selections()
 
+    def flash_source_range(self, cursor: QTextCursor) -> None:
+        """Reveal a structure block with a strong range cue, without selecting text."""
+        selection = QTextEdit.ExtraSelection()
+        selection.cursor = QTextCursor(cursor)
+        selection.format.setBackground(QColor("#f9d36a"))
+        selection.format.setForeground(QColor("#31250c"))
+        selection.format.setProperty(QTextFormat.Property.FullWidthSelection, True)
+        caret = QTextCursor(cursor)
+        caret.setPosition(cursor.selectionStart())
+        self.setTextCursor(caret)
+        self._sync_selection = selection
+        self._refresh_extra_selections()
+        self._sync_highlight_timer.start()
+
     def hideEvent(self, event) -> None:
         self._clear_sync_highlight()
         super().hideEvent(event)

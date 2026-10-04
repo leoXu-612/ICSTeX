@@ -143,6 +143,43 @@ class GuiPreviewPipelineTests(TestCase):
         self._finish(result)
         return result.pdf_file
 
+    def test_successful_preview_and_final_both_leave_time_for_first_pdf_paint(self):
+        tab = self._add_document()
+        for build_id, purpose in enumerate((BuildPurpose.PREVIEW, BuildPurpose.FINAL), 1):
+            with self.subTest(purpose=purpose):
+                result = self._result(tab, purpose, build_id)
+                self._start(tab, purpose, build_id)
+                cursor = tab.editor.textCursor().position()
+                with patch.object(self.window.word_counts, "schedule") as schedule, \
+                     patch.object(self.window, "update_word_count") as immediate, \
+                     patch.object(self.window, "run_project_check", return_value=[]), \
+                     patch.object(self.window, "_create_history_snapshot"):
+                    self.window.on_compile_finished(result)
+                schedule.assert_called_once_with(delay_ms=1000)
+                immediate.assert_not_called()
+                store = self.window.preview_state if purpose is BuildPurpose.PREVIEW else self.window.pdf_state
+                record = store.record_for(tab.manager.root_file)
+                self.assertEqual(record.latest_build_id, build_id)
+                self.assertEqual(record.last_successful_pdf, result.pdf_file)
+                self.assertEqual(record.last_successful_revision, record.source_revision)
+                self.assertEqual(tab.editor.textCursor().position(), cursor)
+
+    def test_failed_final_preserves_immediate_statistics_request_and_stale_pdf(self):
+        tab = self._add_document()
+        pdf = self._finish_success(tab, BuildPurpose.FINAL, 1)
+        failed = replace(self._result(tab, BuildPurpose.FINAL, 2), outcome=CompileOutcome.LATEX_ERROR,
+                         returncode=1)
+        self._start(tab, BuildPurpose.FINAL, 2)
+        with patch.object(self.window.word_counts, "schedule") as schedule, \
+             patch.object(self.window, "update_word_count") as immediate, \
+             patch.object(self.window, "run_project_check", return_value=[]):
+            self.window.on_compile_finished(failed)
+        immediate.assert_called_once_with()
+        schedule.assert_not_called()
+        record = self.window.pdf_state.record_for(tab.manager.root_file)
+        self.assertEqual(record.last_successful_pdf, pdf)
+        self.assertEqual(record.freshness, PdfFreshness.FAILED_STALE)
+
     def test_preview_updates_only_preview_state_and_limits_pdf_actions(self) -> None:
         tab = self._add_document()
         manager = tab.manager
@@ -653,19 +690,19 @@ class GuiPreviewPipelineTests(TestCase):
         self.assertEqual(child.read_text(encoding="utf-8"), child_text)
         self.assertEqual(tab.path.read_text(encoding="utf-8"), source_text)
 
-    def test_preview_only_export_requires_review_and_separate_final_never_copies_preview(self) -> None:
+    def test_preview_only_export_waits_for_destination_before_updating(self) -> None:
         tab = self._add_document()
         manager = tab.manager
         assert manager is not None
         self._finish_success(tab, BuildPurpose.PREVIEW, 1)
         target = self.directory / "submission.pdf"
 
-        with patch.object(manager, "compile_async") as compile_async, patch(
-            "app.gui.submission_delivery_dialog.show_submission_delivery", return_value=None,
-        ) as review:
+        with patch.object(manager, "compile_async") as compile_async, patch.object(
+            self.window.pdf_export, "choose_destination", return_value=False,
+        ) as choose:
             self.assertFalse(self.window.export_pdf())
 
-        review.assert_called_once_with(self.window)
+        choose.assert_called_once_with(manager.root_file)
         compile_async.assert_not_called()
         self.assertFalse(target.exists())
         self.assertIsNone(self.window.pdf_export.pending_for(manager.root_file))

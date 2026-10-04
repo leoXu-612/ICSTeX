@@ -6394,3 +6394,769 @@ runs. The application release tag remains81b1672; no published archive was chang
 - Evidence: local icstex-beta4-release/public-check/verified.json, signed-package-receipt.json,
   preflight-final/result.json, build.log and this turn's browser/API output. Preserved old assets,
   tags and installed Beta3; Actions stays disabled. No CI/rule bypass or force-push.
+
+## 2026-09-26 - Simplify ordinary PDF export to one destination confirmation
+
+- User requested simple update/export interaction within two steps. Branched from clean mainb6fa58d
+  to codex/simplify-pdf-export. Ordinary source export now opens one destination picker labelled
+  update-and-export, then saves/builds/verifies/publishes automatically. Current verified FINAL
+  skips recompilation. Existing filenames receive a free-name suggestion; no overwrite publication.
+  Advanced reviewed submission, Block export and project ZIP keep their independent gates.
+- Reused compile controller, immutable FinalBuildEvidence, CaptureLease, existing worker signals,
+  exact PDF/input revalidation and exclusive publication. Compiler entry now reports request
+  acceptance so failed/deferred saves cannot leave an export waiting forever. Preview/old result,
+  input conflict, other-window drafts, source/PDF mutation, cancellation and reentry are covered.
+  QObject/timer ownership and shutdown protect the newly asynchronous export result receiver.
+- Updated UI routing, tutorial copy and docs; D027 records ordinary PDF versus reviewed delivery.
+  Existing legacy-copy/review-only tests were adapted to the requested behavior, retaining file,
+  revision and cancellation assertions. Atomic failure now exercises the actual exclusive publisher.
+- Related106 tests passed12.209s; added deferred-failure test passed0.615s and guide test1.161s.
+  Initial runs exposed an outdated modal stub, a mock-enum expectation and an obsolete shutil
+  test seam; the owned blocked test was terminated143 and fixtures corrected. Early real probe
+  automated QFileDialog.selectFile without actually changing its accepted name; the harness now
+  fills the real name field and verifies selectedFiles before acceptance. A failure-exit timer
+  lifetime error was fixed with QObject/timer ownership and idempotent shutdown.
+- Final real probe on app8f41a822: isolated offscreen Qt with actual local LaTeX. Two exports,
+  one FINAL build, updated PDF text found, first25943-byte artifact identical to canonical FINAL,
+  second export identical without rebuilding, cursor AND nonzero scroll position preserved.
+  User action was automated on a real Qt picker; no native macOS picker/student acceptance claim.
+- Initial full gate was deliberately interrupted275.542s/exit130 to synchronize remaining in-app
+  guidance. Final preflight includes required compileall and full1848 tests569.349s,
+  command572.269s, exit0. Before/after app8f41a822e18608f2971c43baca0b12e46f31166d7a811bc30b439a8415f71e97;
+  app+tests308896c72344383c5f3103e25565f22782111918580e2f7ceeb51352d8d68e1d unchanged.
+  Qt/font/link-model/offscreen and temporary-directory async diagnostics plus stale artifact
+  reminders retained. No percentage performance claim or claim of fixing all historical Qt issues.
+- Evidence: local 2026/09/26/icstex-simple-export/before.tgz, probe.py, result.json,
+  picker-1.png, picker-2.png, export-complete.png, preflight-final[-v2]/result.json and logs.
+  No manuscripts, installed app, GitHub, website, dependencies or models changed. Installation
+  choice was requested but not yet answered; source-only handoff, no commit/push/release or CI.
+
+## 2026-09-28 - Install the two-step PDF export source locally
+
+- User explicitly requested local replacement. Preserved branch codex/simplify-pdf-export,
+  HEAD b6fa58d and existing uncommitted source; no application code changed this turn.
+  App 8f41a822 and app+tests 308896c7 exactly match the completed 2026-09-26 preflight
+  (1848 tests, exit 0). Reused that gate with unchanged Python 3.12.6, PySide6 6.11.1,
+  PyInstaller 6.21.0 and packaging inputs; compileall passed again. No dependency upgrade.
+- Built in a new evidence directory with existing spec and Beta 4 updater runtime, exit 0.
+  Verified 209 modules/entry, assets and three raw optional worker files against current source;
+  no previously bundled module lost. Arm64/ad-hoc deep/strict checks passed. Existing libobjc
+  ctypes warning retained; no Developer ID/notarization or new public-release claim.
+- InstallationLease found no active installed app/installer. Backed up the entire old bundle
+  to ~/Applications/ICSTeX Backups/ICSTeX-2.1.0-beta.3-before-two-step-export-20260928.app,
+  then replaced /Applications/ICSTeX.app. Candidate and installed manifests match across
+  475 files/160 links; backup manifest unchanged. Old executable 0e06c53d, new executable
+  0964f8b8277175f1050c030363e20e3bbb3c4e23129a55bdb718ac18ae24f994.
+  Package all-app-files digest a3bdd344 differs by design from the Python-only app identity.
+- Launched the exact installed path; native guide visibly shows the two-step export instructions.
+  Closed the guide and left the app on its welcome page. No student document opened or modified;
+  no repeated native save-panel/export acceptance claimed. App/tests remained unchanged after build.
+  Version label 2.1.0-beta.4 / 210004 and updater feed/key retained; local bytes intentionally
+  differ from public Beta 4. No commit, push, tag, website/feed update or CI activation.
+- Evidence: ~/.codex/visualizations/2026/09/28/icstex-simple-export-install/build.log,
+  package-receipt.json, install-receipt.json, install_local.py and native tool observations.
+
+## 2026-09-28 - Remember ordinary PDF destination and update after successful FINAL
+
+- Extended the same uncommitted export task on codex/simplify-pdf-export, HEAD b6fa58d.
+  Captured the pre-turn affected files in icstex-auto-export/before.tgz; previous changes to
+  compile_controller and existing preview/submission tests were retained, not counted as new work.
+- Successful ordinary export now persists a local per-root target and its last published
+  content/filesystem identity. Later current FINAL success reuses the export worker, build
+  proof, CaptureLease and same-directory staging. Only that unchanged prior output can be
+  atomically replaced; default Agent/new-file publication stays exclusive. No additional compile.
+  Preview, failure, stale result, changed/missing/linked destination, write failure and input/
+  internal-path protections remain. D028 documents this explicit exception to D027.
+- Reopening retains the target. A successful new export changes it; the File menu can stop
+  updates without deleting the PDF. Background-root completion does not alter active-tab
+  indicators. An in-flight callback cannot re-enable another window's stopped/changed binding.
+  Automatic failures use status/log instead of a modal. In-app guide and user docs explain it.
+- Final related batch: 84 tests, 10.970s, pass. Initial synthetic automatic tests omitted the
+  real compile manager ownership; corrected the fixture rather than weakening root checks.
+  A test-edit placement error caused one NameError and was repaired. Reproduced the cross-window
+  stop/re-enrollment bug with a failing test, then fixed the callback's persistent-intent check.
+- Final real probe at app192fbb24: one automated real Qt picker, six requested local-LaTeX
+  builds (including preview and deliberate failure), zero extra builds. Updated export exactly
+  matches FINAL bytes and new parsed text; preview/failure preserve it, reopening retains the
+  target, external annotation is preserved, cursor/nonzero scroll are unchanged. Offscreen Qt
+  and isolated settings/projects only; not native save-panel, cloud-drive or human acceptance.
+  The first probe's business assertions passed but double-closing an already closed test window
+  failed cleanup; fixed the harness and retained its failed exit/log, not an application change.
+- Two early full runs were intentionally interrupted before source repairs (45.929s/32.113s,
+  child exit -2), not counted as passes. Final compileall and complete unittest discovery passed:
+  1869 tests / 359.943s, command361.765s, exit0. Before/after app
+  192fbb24d61484590207c8c0c40ff7e52b1926ce73c55b0417f4d19e48ace03a and app+tests
+  32d0f8baa701ccfc2186f825e6ba5fc68a98af28012921c9b038e4a68948c90a unchanged.
+  Existing Qt font/offscreen/QPdfLinkModel and temporary-directory async diagnostics retained.
+- Evidence: ~/.codex/visualizations/2026/09/28/icstex-auto-export/{before.tgz,probe.py,
+  probe-final.log,final-probe/result.json,regression-complete/result.json,regression-complete/unittest.log}.
+  No student files, dependency changes, installation, commit/push, website/feed or CI work.
+  Installed executable remains0964f8b8 (the prior two-step export source, without this addition).
+
+## 2026-09-28 - Install remembered-PDF automatic-update build locally
+
+- User authorized local update. Rechecked repository/branch/dirty tree and source identities;
+  no application or test edits. The installed app was already closed; no forced quit or save.
+  Ran required packaging/preflight.sh on app192fbb24 / app+tests32d0f8ba: version checks,
+  compileall and1869 tests passed337.823s, command339.729s, exit0, before/after identities equal.
+- Reused existing PyInstaller spec and Beta4 updater runtime with unchanged Python3.12.6,
+  PySide6 6.11.1 and PyInstaller6.21.0. Build exit0;209 modules/entry, assets and three raw
+  optional worker files match source. Arm64/ad-hoc deep/strict signature passed; no Developer ID
+  or notarization claim. Existing Qt/async temporary-path diagnostics, libobjc ctypes warning
+  and old-artifact reminders retained; no unrelated test matrices or dependency downloads.
+- Existing InstallationLease protected replacement.475 files/160 links match the candidate;
+  complete old bundle remains unchanged at ~/Applications/ICSTeX Backups/
+  ICSTeX-2.1.0-beta.4-before-auto-export-20260928.app. Previous executable0964f8b8, new
+  0c35dca663dfb721939d594d587d547038765fecfe40c104f796ad84359be445. All-app-files identity
+  f047e19af97ee56bcdedbc129355041de75787440df3cbd6e70521bdd90543dc is distinct from Python-only digest.
+- Opened exact /Applications/ICSTeX.app and verified its running executable path/hash. Native
+  File menu shows the new stop-auto-update action, disabled without a document/binding; menu
+  closed and welcome page left open. No student document, setting or recent entry modified.
+  Native compile/export or cloud-drive acceptance was not repeated or inferred from the menu.
+- Version remains a local2.1.0-beta.4/210004 build; embedded feed/key and previous backups retained.
+  No public assets, GitHub/website/feed changes, commit/push or CI activation. Evidence under
+  ~/.codex/visualizations/2026/09/28/icstex-auto-export-install/: preflight/result.json,
+  build.log, package-receipt.json, install-receipt.json, reused install_local.py and native tool observations.
+
+## 2026-10-01 - Submit verified export work, then visualize automatic-export status
+
+- User requested existing changes submitted to GitHub first, then status visualization. Verified
+  app192fbb24 / app+tests32d0f8ba match the completed1869-test receipt and preserved the entire
+  previously accepted dirty source. Committed22 files as8ddfc13a46b38633993fcbdd7f7ffe6dd44ee123,
+  pushed codex/simplify-pdf-export and opened/attached PR#7 against main. Remote head matches;
+  PR was OPEN/MERGEABLE, not merged. Actions API still false; main remainedb6fa58d.
+- Started clean follow-up branch codex/pdf-export-status from8ddfc13. Added an ordinary-PDF
+  footer using existing widgets, colors, flow layout and export callbacks: target/full tooltip,
+  last export timestamp, synced/waiting/working/failed/cancelled/stopped states, folder/change/stop
+  actions. Hidden for unbound projects, welcome and Block. Notices do not expire with statusbar.
+  Reopening a remembered target reports unconfirmed until a verified current export succeeds.
+- Display observations remain per-root and target-bound; success includes actual exported
+  revision/build evidence. No new persistent state schema, watcher, compile request, file scan
+  or write authority. No PDF read/stat in presentation refresh. Current source state, required
+  writer revalidation and original byte/overwrite guards are unchanged. Guide copy updated.
+- PDF/export focused suite60 tests passed15.299s. Added state timeout/root-switch/reopen checks,
+  mocked folder/destination actions plus real stop action, zero presentation I/O/timer checks,
+  and360/1000-width path/button geometry checks without replacing widget instances.
+- Native isolated fixture: first actual Save panel export, reopened state unconfirmed, edit
+  became waiting, explicit real LaTeX FINAL produced current visible PDF and green sync. Renaming
+  only the owned exported fixture left current FINAL green but export red; change-location UI
+  recovered to a new file without an extra build, then stop disabled updates while keeping files.
+  Exported/recovered bytes match canonical FINAL and parsed updated title. Initial harness lacked
+  apply_theme; production theme was applied on restart before color/layout acceptance. CUA used
+  explicit Python3.12 app path after ambiguous bundle-ID lookup. Owned window exited normally;
+  user's installed ICSTeX process/document/settings were not touched.
+- Required compileall passed. Full discovery ran1877 tests356.081s, command357.731s, exit1:
+  only test_release_consistency_verifier_checks_all_pages failed because an ignored local old
+  release DMG was missing. The verifier, test and manifest were unchanged. Downloaded that exact
+  existing GitHub Release asset, verified65672242bytes/SHA256
+  cfcffab1e0b80f7c78df49fd953d4c4d213ab138a2735862306a9f7ed2821c94, and restored it without
+  overwrite. Affected tests.test_release_site:17 tests0.159s, exit0. Did not weaken assertions,
+  relabel the original failed full receipt, regenerate packages or repeat unrelated tests.
+- Before/after full suite and asset restoration: app
+  5aece7ca6825e20b1fafa5d7eb2b0af0bc2516015b71167fef8a6d4b140debee; app+tests
+  8df33741ce681ee71fd088c87523e8df1984325383d83f477dd0ba9e6dfad4cf unchanged. Existing Qt
+  QPdfLinkModel/offscreen/temp-directory and native IMK/window-move diagnostics retained.
+- Evidence: ~/.codex/visualizations/2026/10/01/icstex-export-status/{baseline-pr.md,
+  native_probe.py,native/,regression/result.json,regression/unittest.log,release-recheck.json}.
+  Follow-up UI remains local/uncommitted, not in PR#7; no new release, install, website/feed,
+  dependency/model update or CI change. Current installed build stays the September28 version.
+
+## 2026-10-02 - Install persistent export-status visualization locally
+
+- User explicitly requested local replacement. Rechecked authoritative root, branch
+  codex/pdf-export-status, HEAD8ddfc13 and preserved existing uncommitted UI/source work.
+  Installed application was already closed; no forced quit, user save or manuscript operation.
+  Current app5aece7ca/app+tests8df33741 exactly match the prior validated visualization source.
+- Required packaging/preflight.sh completed with version checks, compileall and1877 tests,
+  tests335.014s, command338.267s, exit0; before/after source identities unchanged. The restored
+  original Beta4 DMG was present and hash-matched before execution. Prior failed receipt remains
+  historical evidence; no assertion changes or unrelated acceptance matrices added.
+- Built via existing PyInstaller spec and prepared Beta4 updater runtime, exit0; unchanged
+  Python3.12.6, PySide6 6.11.1 and PyInstaller6.21.0.209 modules/entry, assets and three raw
+  optional worker files match current source. Arm64/ad-hoc deep/strict verification passed;
+  libobjc ctypes build warning, Qt/temp-directory diagnostics and stale-artifact notices retained.
+  No Developer ID/notarization, new public version, dependency update or bundled-model claim.
+- InstallationLease protected complete old-bundle backup and replacement.475 files/160 links
+  match candidate; backup unchanged at ~/Applications/ICSTeX Backups/
+  ICSTeX-2.1.0-beta.4-before-export-status-20261002.app. New executable SHA256
+  ae4d24e1841b443c6b46dddca0529a657601a058d82088ee1c1e882d8f1f959d, previous0c35dca6.
+  All-app-files digest4ad6a01082456e795ccd06b6082fc1e0d9abaf75925eaf17afe3f80cdb96a974;
+  Python-only source identities remain5aece7ca/8df33741. Local label2.1.0-beta.4/210004,
+  embedded feed/public key and all previous backups retained.
+- Launched exact /Applications/ICSTeX.app, verified running executable path/hash, and read the
+  native guide's new persistent-status/change-location/stop instructions. Closed only the guide
+  and left welcome page open. Did not repeat the source's native compile/export matrix or touch
+  student documents/settings. No Git commit/push/merge, website/feed, release or CI action.
+- Evidence: ~/.codex/visualizations/2026/10/02/icstex-export-status-install/{preflight/result.json,
+  preflight/preflight.log,build.log,package-receipt.json,install-receipt.json,install_local.py}
+  and native tool observations. Source and installed identities are recorded in PROJECT_STATE.
+
+## 2026-10-02 - Bounded first-compile and writing-session performance changes
+
+- Verified primary root/HEAD8ddfc13/branch codex/pdf-export-status and preserved its dirty
+  export-status source and index. Reused the attached completed GitHub-workflow checkout on
+  a new codex/first-compile-session-perf branch; seeded the effective working source, not just
+  HEAD. Initial app5aece7ca/app+tests8df33741 matched primary exactly. Only the primary task
+  brief now routes here; no primary app/tests, installed bundle or remote changes.
+- Used Ponytail's bounded real-workload/whole-latency rule. Independent audits narrowed the
+  changes to five GUI files: existing automatic Word Count scheduling now yields during tab
+  opening/switching and all current-root pending compiles; successful FINAL reuses PREVIEW's
+  1000ms post-build delay. Count content, explicit force, failure handling and build acceptance
+  are unchanged. A running count is not cancelled. No engine/command/compression changes.
+- Reproduced three closed-tab/Save-As lifetime failures before repair. Save timers now belong
+  to editors, and saved-text echoes are released only when no remaining tab uses that path.
+  Six new lifetime tests passed1.858s plus19 related tests11.047s; four count scheduling tests
+  plus related async/dependency/IME scope37 tests passed15.774s. Two FINAL/PREVIEW success and
+  failure scheduling/state tests passed0.637s. Mocks cover scheduling/result callbacks; real
+  LaTeX and native observations below are distinct evidence.
+- Read-only open-wall/thread-CPU A-B-B-A diagnostic: baseline open1465-1487ms versus defer
+  60-64ms, GUI CPU55-67ms. Early pure-Python counting contention is supported; this is not a
+  GIL-level trace. Initial candidate B moved the cost into FINAL paint: open-to-visible7525.7ms
+  versus original7190.5ms, rejected. Extending the existing successful-preview delay to FINAL
+  repaired that regression; the repair itself is not counted as a separate gain.
+- Isolated real26-page EE, same evaluator, new process/empty project build+proxy caches,
+  auto initially off, immediate first explicit FINAL then four real auto-save/PREVIEW cycles:
+  A-C-C-A open-to-current-marker upper bounds7190.5/5634.2/5556.6/7315.1ms; medians7252.8→5595.4.
+  Open-call medians1528.8→62.6ms; request-to-first-visible5723.4→5532.0ms. Warm medians3209.8
+  versus3238.3ms: no demonstrated warm gain. Cursor/scroll, current root/build/revision,
+  latest marker pixels, exact expected build count and cleanup assertions passed.
+- Hardened the reusable evaluator with unique colors, old-frame negative checks, separate
+  grab/scan timestamps and original-entry after-hash. Final A/C verification passed on the same
+  app identities and evaluator3d744704: open-to-visible14760.0/9886.4ms, warm3798.4/6357.0ms.
+  The compiler durations also rose (cold PREVIEW6435/18018ms); concurrent host snapshot load
+  averages23.55/17.24/11.84. Do not pool this with the earlier series or infer a stable warm
+  gain/regression cause. First screenshot scans134.1/91.8ms are included in the upper bounds.
+  No unchanged-condition retry or user-process termination. Small multi-file/BibTeX A/C runs
+  passed; first open-to-visible2759.5/2450.3ms, warm1595.6/1589.9ms, one pair only.
+- 20 independent~64KiB documents edited/saved/closed: retained save timers/tab wrappers/echo
+  entries20/20/20→0/0/0; held saved text1,310,420→0 bytes. Files preserved/no compilation.
+  RSS155520→172064KiB across separate short runs does not establish memory-footprint reduction.
+  Lifetime probe used candidate e73663bc; the later only app change is the successful-FINAL
+  count delay, not executed in this no-compile probe. Final full suite covers lifetime tests.
+- Native isolated small project: clicked actual FINAL, saw complete new PDF; changed title
+  and enabled automatic PREVIEW, saw updated title/current banner and completed count23 total,
+  15 effective,6 heading. Manual refresh remained usable and only two builds occurred. Closed
+  owned window normally. Initial probe referenced nonexistent PdfBuildRecord.status and was
+  corrected outside app; its failed observation is not acceptance. Qt font/QPdfLinkModel and
+  IMK/keyboard diagnostics retained. Native interaction is not a timing benchmark or IME proof.
+- Required compileall and diff check passed. Full discovery completed1889 tests542.158s,
+  command545.392s/exit1:1878 passed,11 InstallationGuardTests errors at begin/--idle. Read-only
+  evidence found PID33344 /Applications/ChatGPT.app/.../Autoupdate and PID33345 host Updater,
+  started15:54:30, still active after test end. Existing native guard conservatively blocks
+  any live Autoupdate; Python/C guard and assertions were unchanged. No fake idle result,
+  termination or repeated full suite. Once host update naturally exits, recheck only
+  QT_QPA_PLATFORM=offscreen python3 -m unittest tests.test_update_install_guard.
+- Existing missing-temporary-directory dependency diagnostics were matched to the prior
+  successful export-status-install preflight at the same unchanged function lines; likely
+  test-lifetime cleanup, not proven fixed here. The original Beta4 release fixtures were copied
+  from primary and consistency-verified, preventing the previous unrelated missing-asset case.
+- Final app7f0048e36e308b58182339215cd08033d6094ccd3b7cbfb4fc44bf4589f08fb4 and app+tests
+  f2f078b067c8738ea0dea72336247243ee50cab2646ce2ee2517c52cc1d1eac6 stayed identical across
+  full regression and final measurements. Real original entry stayed SHA256ab4179b6…2858b750.
+  Evidence: ~/.codex/visualizations/2026/10/02/icstex-first-session-perf/ including ee-a1/b1/c1/c2/a2,
+  ee-final-a/c, small-a1/c1, lifetime-before/after, native-corrected and regression receipts.
+  Local source handoff only;11 environment-blocked checks and hours-long acceptance remain
+  explicit. No commit/push/merge, packaging/install/release, dependency change or student edits.
+
+## 2026-10-02 - Workbench regions and layout memory; pushed, local install blocked
+
+- User approved the MATLAB-inspired layout proposal and explicitly requested GitHub traceability
+  and local installation. Preserved the primary dirty checkout/index. Checkpointed previous
+  export-status/performance work as7284b20, pushed its task branch and attached draft PR#8
+  stacked on#7. New codex/workbench-layout branch isolates this UI task;2532862 and6e1603c
+  were pushed promptly to attached draft PR#9, based on#8. No merge/main push or Actions change.
+- Applied Ponytail and frontend-design local-refinement rules: reuse QAction, dock, tab and
+  splitter instances, retain palette/fonts and all nine navigation pages. Added File / Compile
+  and Output / View labels, existing ordinary export action on the toolbar, source tab-corner
+  title, navigation group labels, and a separate project-status row. Renamed the context menu
+  to Project Actions to distinguish it from the navigation toggle. Updated Chinese guides.
+- New wide-window users see navigation by default; saved hide/show choices remain authoritative.
+  Visual inspection found default navigation forced1440/100% into a single editor/PDF pane;
+  changed only the source area's column budget90→76, retaining960px and font-size boundaries.
+  Real test-PDF geometry confirms all three regions at1440/100%, and switching at1080/150%.
+- Splitter moves update in-memory ratios; accepted close writes two existing-settings keys.
+  Cancelled close, missing/invalid values, compact/welcome/no-PDF/minimum-size constraints,
+  console tab changes and Block round trips are covered; no resize-time disk writes or new
+  timers/framework. Cross-review reproduced wide navigation lost after closing a compact
+  document window. The regression test failed before a two-line window_state guard change;
+  it now serializes the remembered wide choice for compact as well as welcome states.
+- Layout/action targeted checks5 passed1.187s, narrow navigation1 passed0.536s, layout memory
+  scope7 passed3.218s plus7 existing responsive tests1.755s; default/explicit-hide tests2 passed
+  0.652s. GUI batch96 tests35.620s exited1 on two geometry assumptions: hidden PDF toolbar
+  controls carried default640x480 geometry, and960px was no longer a compact boundary. Fixed
+  the oracles with empty/real-PDF states plus visible ancestor bounds and production-supported
+  1080/150%→1920/100% restart; affected3 tests1.753s and1 test0.994s passed. Final compact-close
+  repair plus affected scope17 passed4.687s. No protection assertion was removed.
+- Reused probe_writing_ui on isolated synthetic files. Initial150% whole-window capture could
+  precede a second PDF layout despite prior viewport readiness. Added actual final-capture
+  marker validation, then four current-source captures passed and were inspected; early blank
+  images remain evidence, not acceptance. No PDF renderer change, student input or benchmark
+  speedup claim. Final captures use app7cb9d8f6 and preserve source/no-compile assertions.
+- Native source window on appe610fc7c: real FINAL visible with project/source/PDF/console;
+  actual splitter drags, accepted close, relaunch and second explicit FINAL restored ratios
+  0.5973534971644613 /0.3562913907284768 exactly. New toolbar export opened the original native
+  Save panel; cancellation created no export or extra build. Two sessions each compiled once
+  and exited0. An initial logical-coordinate drag selected synthetic text; corrected pixel
+  coordinates moved the dividers, without editing content. Final7cb9d8f6 differs only in the
+  later compact-close save guard, verified separately, not falsely attributed to this native run.
+- First packaging/preflight.sh completed1901 tests377.423s, command379.159s, exit1/11 install
+  errors. After compact-close repair, final preflight completed1902 tests353.540s, command
+  355.318s, exit1:1891 passed,11 InstallationGuardTests blocked at the unchanged helper--idle
+  gate. Full receipts preserved separately; final app/tests identity unchanged throughout.
+  Existing font/offscreen/QPdfLinkModel/temp-directory and native IMK diagnostics retained.
+- Host /Applications/ChatGPT.app/.../Autoupdate PID33344 and its Updater PID33345 remain active;
+  installed ICSTeXInstallGuard --idle also exited1. Did not kill the host updater, simulate idle,
+  weaken assertions or bypass InstallationLease. Packaging/replacement stopped before mutation.
+  Installed executable remainsae4d24e1841b443c6b46dddca0529a657601a058d82088ee1c1e882d8f1f959d.
+- Final app7cb9d8f6bc17b6fc2bb925f03638fecde5cdfe99c811751b4f7e9166c1aa3204; app+tests
+  7a5cabf37ca21024d19cd846314694ec9337e15cd07211c9c67fbd4d59873da5. Evidence under
+  ~/.codex/visualizations/2026/10/02/icstex-workbench-layout/: before, after, after-wide-fix,
+  after-paint-verified, compact_close_probe.json, native first/restart receipts, preflight and
+  preflight-final. App/tests stayed frozen; docs and the screenshot oracle are separate changes.
+- Remaining authorized work: after host update exits, recheck the installation-guard module
+  on these same source identities, then build/verify, intact backup, guarded local replacement
+  and actual installed launch. No new public version/feed/website, dependency installation,
+  student edits or installed-app acceptance claim. Stop additional UI/performance experiments.
+
+## 2026-10-02 - Resume and complete local workbench installation
+
+- User explicitly requested continuing installation. Re-established primary and actual worktree
+  roots; preserved primary dirty source/index. Actual codex/workbench-layout was clean at5fa92d3.
+  Host Autoupdate was gone, installed helper--idle exited0 and ICSTeX was not running; no process
+  was killed, no manuscript was saved/closed by the agent and no protection was bypassed.
+- Rechecked only tests.test_update_install_guard:13 tests3.264s, command3.391s/exit0, covering
+  all11 errors in the previous1902-test preflight. Application/test identities exactly matched
+  that original before/after receipt; its exit1 remains unchanged. The local combined validation
+  receipt records the prior failure names and successful targeted recheck, not a fictitious
+  green full-preflight run. Did not repeat the unaffected1891 cases or earlier UI/performance probes.
+- Built fresh via existing PyInstaller spec and prepared Beta4 updater runtime:33.093s/exit0,
+  Python3.12.6, PySide6 6.11.1, PyInstaller6.21.0 unchanged, no dependency install.209 modules/
+  entry plus assets match source; not_packaged list is identical to the previous local build,
+  and three raw pix2tex worker files match byte-for-byte. Arm64/ad-hoc deep/strict integrity
+  passed. Retained libobjc ctypes warning; no Developer ID/notarization/public-release claim.
+- Verified candidate, copied to a fresh same-volume hidden stage, verified again, then acquired
+  InstallationLease. Rechecked the old bundle under the lock, renamed it intact to backup,
+  installed the candidate and verified both complete manifests/signatures before releasing the
+  lease.475 files/160 links match candidate; backup is unchanged. A failed post-replacement
+  verification would preserve the failed candidate and restore the old bundle; not exercised here.
+- Target:/Applications/ICSTeX.app. Backup:~/Applications/ICSTeX Backups/
+  ICSTeX-2.1.0-beta.4-before-workbench-20261002.app. Old executableae4d24e1…1f959d retained;
+  new executable7f830b5e9f810a1bf61944bca9d57a12f2ad503106a359c539fb834276191fcb.
+  App7cb9d8f6bc17b6fc2bb925f03638fecde5cdfe99c811751b4f7e9166c1aa3204;
+  app+tests7a5cabf37ca21024d19cd846314694ec9337e15cd07211c9c67fbd4d59873da5 unchanged;
+  source including assetsceff216a970a9aec35cf8c8ce9c1fcc8f63c94c697a81b2f9fb0a5485fe1ce27.
+- Opened exact installed path through native app control, verified live executable path/hash
+  and visible File/Compile-Output/View groups. Opened the guide and observed current workbench/
+  splitter-memory instructions; closed only the guide, leaving welcome open. No student document,
+  recent-file mutation or preference test. This is installed startup/content verification, not
+  a repeated installed compile/export matrix or user acceptance. Local label remainsBeta4/210004;
+  feed and public key preserved, website/public assets/Actions unchanged, no PR merge.
+- Evidence:~/.codex/visualizations/2026/10/02/icstex-workbench-install/{validation-receipt.json,
+  guard-recheck.log,build-receipt.json,build.log,package-receipt.json,install-receipt.json} and
+  native tool observations. Local scripts adapt the earlier verified workflow; original failed
+  preflight receipts and all prior application backups remain. Authorized local delivery complete.
+
+## 2026-10-02 - Paired project navigation and local button surfaces
+
+- Followed the user's structure-first order on codex/workbench-structure-polish, based on
+  installed772aa7d. Stage one88ac73f was committed/pushed to draft PR#10, stacked on#9.
+  Primary worktree source/index and student manuscripts were not changed.
+- Reused file tree/outline widgets in one vertical splitter with headings; preserved nine
+  logical identities, current-file revision refresh and other tool pages. The ratio is written
+  only after accepted close; temporary hidden/compact/Block clamps do not overwrite it.
+  Removed unused toolbar margins with fixed QSS and one initialization style notification.
+  Initial1440x900 editor height657→697px is geometry evidence, not a speedup benchmark.
+- Then added scoped static gradients/fine edges and hover/pressed/checked/focus/disabled
+  feedback to workbench controls. AutoCompileToggle paints its own local gradient. No blur,
+  new dependency, animation timer, global hover restyle, size movement or compile request.
+  Corrected checked-pressed contrast before freeze; normal and pressed geometry stay equal.
+- Structure batch20 passed7.346s; broader UI batch105 passed93.239s before final contrast
+  adjustment, then final surface tests4 passed1.951s. Four-state offscreen captures were
+  inspected; intermediate toolbar-padding attempts remain outside the repository as evidence.
+  Paint-only samples showed no material cost increase; they do not measure input/PDF latency
+  or justify an application-performance percentage. Read-only cross-review found no blocker.
+- Native independent example first exitedSIGBUS during AX hierarchy inspection on macOS27.0,
+  Qt6.11.1/ARM64. Crash return0x87794 and independently read method0x876bc/ABI@16@0:8 match
+  the existing selected-children mitigation, which only opted in macOS26. Extended it to
+  exact27.0, retaining future-OS/Qt exclusion, GUI-thread and ABI checks, callback lifetime,
+  and the single selector. Six guard tests plus one MainWindow ordering test passed.
+  Selected-child enumeration remains unavailable in this environment; no full AX/VoiceOver
+  acceptance is claimed. Original crash report and failed native attempt remain local.
+- Guarded native run on appf3457db4: edited Results→Observations, saw outline update and
+  latest real FINAL with the changed section; one build, exit0, source identity unchanged.
+  Coordinate input was unavailable (noWindowsAvailable), so it is not counted as verified.
+  AX checks exposed an older idClicked-only navigation bug, also reproduced on772aa7d.
+  Switched to checked idToggled; real QAccessible/keyboard/structure batch22 passed16.881s.
+  Final-source native navigation opened search fields and returned to both project panels,
+  exited0 with zero builds. No repeated compile/performance matrix.
+- Frozen app1cc875a9dac5d0d439d8d5bb0920eaf55dd7f84d4c7f00b02bec5c596fce07b0;
+  app+tests3a34d6768114c0f8b67d33b968098b10cdde59230ad892ad80ad590c49d32b4f.
+  Full preflight completed1912 tests928.625s (command933.777s), exit1:1911 passed, one
+  display-fixture failure. A pending dependency membership callback restarted the workspace
+  timer after the fixture injected long text. Controlled callback delivery reproduced the
+  same failure using772aa7d's test/WorkspaceController with current dependencies; replacing
+  only stop with shutdown passed all original assertions in both variants.
+- Product source stayed frozen. Corrected only that fixture; compileall passed and eight
+  affected display/live-state tests passed4.158s (command5.280s). Original full receipt remains
+  failed, not a retroactively green run. Combined validation records the exact one-fixture
+  delta, unchanged app and final app+tests91f73d20158730a1abe0291a6fd81999a8555764581f89f7cc0a6dd321c1e828.
+  Existing Qt/offscreen/font/QPdfLinkModel/temp-directory diagnostics retained. Full runtime
+  is not a comparable application-speed benchmark; local delivery is recorded separately.
+- Evidence:~/.codex/visualizations/2026/10/02/icstex-structure-polish/ including before,
+  structure-verified, polished, paint-before/after, ax-abi-observation.json, native-guarded,
+  native-navigation and preflight. No public release, website/feed or Actions changes.
+
+## 2026-10-02 - Deliver the structure and surface build locally
+
+- Pushed source/test/docs checkpointf24ceb4 to codex/workbench-structure-polish/PR#10.
+  The only change after full validation was the evidenced display-fixture correction above;
+  combined validation is explicit, with the original full exit1 preserved. No app-source change.
+- Existing PyInstaller/spec/Beta4 runtime built the fresh commit-labelled candidate in52.624s,
+  exit0, source/test hashes unchanged.209 modules/entry and all assets match; omission list
+  unchanged, three raw optional worker files byte-identical. Arm64/ad-hoc deep/strict verified;
+  libobjc ctypes warning retained, no Developer ID/notarization claim or dependency upgrade.
+- No ICSTeX or host Autoupdate process was running at replacement. InstallationLease rechecked
+  eligibility and the old manifest under lock, backed up the old bundle, installed and validated
+  all475 files/160 links/signatures before unlock. Candidate and package receipt identity were
+  explicitly bound. Old executable7f830b5e…76191fcb remains intact in
+  ~/Applications/ICSTeX Backups/ICSTeX-2.1.0-beta.4-before-structure-polish-20261002.app.
+- Installed executablebba9a75154b2d0027c214b013f4d88e8de4cbcdc63b67631ee0b8ecd639c4a07;
+  app with assetsc439bfd1a6d548ef12b3746e1c5592394ea8e0f01e76cc338910d75ad180be1f.
+  Opened /Applications/ICSTeX.app and verified live executable path/hash plus visible welcome
+  toolbar surfaces. Left welcome open; no student document, real recent list or editing setting
+  changed. This installed startup check is distinct from native independent-source compilation.
+- Evidence:icstex-structure-polish/{validation-receipt.json,fixture-recheck.log,build-receipt.json,
+  package-receipt.json,install-receipt.json}; originals and earlier backups preserved.
+  Local label remains2.1.0-beta.4/210004; no PR merge, public release, feed, website or Actions
+  mutation. Current bounded task complete; do not continue into unrelated UI/performance work.
+
+## 2026-10-03 - Finish the guided first PDF export in source
+
+- User requested continued onboarding improvement. Created codex/onboarding-next-steps from
+  clean10cb905 in the existing task worktree; primary source/index stayed unchanged except the
+  Codex routing brief. Followed local-refinement/minimal-implementation Skills: existing Qt
+  dialog, exercise, template, compile/export paths and four local images, no new framework,
+  dependency, network feature, automatic playback or always-running tutorial observer.
+- Extended the existing sequence to edit, explicit compile, view, export, then completion.
+  A GUI-thread exportSucceeded notification carries the actual immutable publication receipt,
+  root, revision and build id; it does not change publication/overwrite/lease rules. The guide
+  requires current viewed FINAL identity plus that receipt, not a clicked picker or remembered
+  destination. Hidden success does not restart its timer; edits/old/foreign/preview results do
+  not complete it. Missing LaTeX now makes the primary action open Environment Doctor.
+- Rewrote four Chinese pages around concrete actions and placed pictures next to their steps.
+  Replaced old advanced-submission imagery with the real synchronized ordinary-export strip;
+  updated paired file/outline layout, distinct error-page navigation and the exact-current-FINAL
+  condition for avoiding recompilation. Explicit folder opening uses the actual receipt path.
+  Four refreshed PNGs total265218 bytes; text-only fallback and local-only image links remain.
+- Initial13 existing tutorial tests passed3.783s; changed tutorial scope18 passed5.442s.
+  Combined core/tutorial/export/layout scope52 passed16.379s. Updated-image/guide layout scope3
+  passed1.276s. Publication tests observe the actual worker result on the GUI thread, including
+  a real file winning late cancellation; synthetic TeX proofs remain explicitly labelled.
+- Reused capture_user_guide on owned /tmp input: real title compile and visible pixels, exact
+  exported bytes, failed compile retaining old PDF/export, and hide/resume passed. Only picker
+  selection was simulated. Inspected all four guide pages. Capture app7f0e59d9 precedes only
+  the final first-page wording about continuing a previous exercise; follow-up and native
+  checks use final appbd419233. Image hashes in capture/result.json remain the final assets.
+- Native input paused on a user-window-change warning and resumed only after explicit user
+  permission. Initial typeText did not change the selected title; paste did, so no IME typing
+  acceptance is inferred. Saw the new Chinese title in real FINAL, advanced from3/4 to4/4,
+  accepted the actual macOS Save panel, then observed synchronized output and completion.
+  Save buttons were initially disabled, later enabled; no bypass or product repair was used.
+  A stale dialog binding returned noWindowsAvailable after acceptance; rebinding showed the
+  completed main window. Exactly one FINAL and one export; bytes matched, exit0, both owned
+  windows closed normally. Finder opening is unit-verified, not exercised outside the permitted
+  test window. Student documents, installed ICSTeX and real settings were not operated.
+- Required compileall passed. Full unittest ran1919 tests1215.566s (command1219.049s), exit1:
+  1918 passed, one new layout check saw1px overflow. Controlled startup reproduced607px viewport
+  versus608px document on page2/100% when Qt cached stylesheet fonts before registration;
+  proper startup gave607/607/0. Three extra event passes/100ms did not fix the wrong fixture.
+- Changed only this pixel-level test to a fresh process following actual startup order, keeping
+  maximum()==0 and all original visibility/content checks. Eight adjacent checks passed5.482s;
+  a controlled parent retaining premature caches also passed the isolated check2.159s without
+  mutating those caches. Final compileall and diff checks passed. Did not rerun the unaffected
+  suite or retroactively change its failure receipt; no product-source change after the full run.
+- Full/native/final appbd419233caccd159b12b8bd2579afed16e7bbc902e2ef5302d2ddd9f48fb5b14;
+  full app+tests0c651c876bfd58732bbc9e76cca2384c5bdd6b5e6d7f82902b033a8f8736f68b;
+  after test-only isolation21c39b78a55df690a385e18102098d1b3303e85dec5fc57a81d38f4bfe3febe5.
+  Existing Qt/font/QPdfLinkModel/temporary-directory and native IMK diagnostics remain. This is
+  source/automation verification, not student usability research or an application-speed claim.
+- Evidence:~/.codex/visualizations/2026/10/03/icstex-onboarding/{capture/result.json,
+  native/receipt.json,regression/result.json,regression/unittest.log}, pre-recheck snapshots and
+  tool outputs. Installed executable stillbba9a751…39c4a07. No commit/push, packaging, installation,
+  PR/Actions/website/feed changes. Bounded source task ends here; delivery requires later authority.
+
+## 2026-10-03 - Deduplicate visible controls and rename the sidebar
+
+- User reported repeated export/console controls and an inaccurate sidebar name. Worked on
+  the actual codex/onboarding-next-steps dirty tree, retaining its previous tutorial changes
+  and the primary checkout's source/index. Saved affected-file snapshots before this increment;
+  did not count the earlier onboarding implementation as this task's work. No subagents used.
+- Kept ordinary export on the main toolbar and console on the status bar. MainWindow hides
+  the PDF toolbar's export button and status strip's duplicate destination picker; standalone
+  PdfPanel/menu/signal endpoints remain compatible. Project-status next action and exercise
+  export stage no longer repeat the toolbar export button. File/View/PDF overflow menus remain;
+  open-location, stop-update, project ZIP and advanced submission keep their distinct purposes.
+- Renamed the toggle/dock to sidebar and aligned help/tooltips. Changing the export destination
+  now uses the top export action. The retained console action still preserves selected tabs
+  and does not force word count. No compile/export safety or root/revision/build policy changed.
+- First22 targeted cases had two obsolete toolbar-console expectations; updated them to assert
+  absence on the toolbar, presence in View and the existing status-bar action identity. The
+  next7 cases found one new test's temporary QMenu wrapper lifetime issue; retained its QAction
+  wrappers and the final9-case writing/control/guide batch passed3.279s. Product code did not
+  change for these test repairs. Existing affected tutorial/export cases had passed.
+- Reused the owned guide-capture workflow: actual current PDF, top-action export, exact-byte
+  match, failed build preserving old PDF/export, cursor/scroll and hide/resume checks passed.
+  Only picker selection was simulated. Inspected refreshed workbench and export-strip images;
+  image/text assets show sidebar and the two distinct status actions. Four PNGs262836 bytes.
+- Initial native probe exited134 because it generated a PDF before QApplication; fixed only
+  that external probe and retained its failed directory. Ready probe showed the renamed
+  toggle/dock and one visible console/export entry. AX-only Toggle changed a check mark but
+  did not invoke the existing triggered route, so real mouse clicks were used: two console
+  and two sidebar triggers, panels visibly opened/closed/restored. No compilation or source
+  edit; normal exit0. The initially injected layout PDF was not accepted as a displayed build;
+  this native check is control behavior, not PDF-render or accessibility acceptance.
+- Required compileall passed. Full unittest completed1920 tests382.537s (command384.332s),
+  exit1, with five failures from one legacy layout test requiring the now-hidden PDF export
+  button to be visible at every scale. Replaced that expectation with explicit hidden checks,
+  preserving bounds/visibility checks for all remaining controls. Eleven affected checks then
+  passed4.487s; final compileall/diff checks passed. Original full failure receipt remains,
+  not a retroactively green run; no application edit after full validation.
+- App31c939d30bc0883c43ed60690b7ef7b85edb49450d07e88059dacea83841c625 throughout capture,
+  native, full and recheck. Full app+testsa879fa83576dbea14bbe7b880133a0a672ed2d5777a5718de8a2a5286f15215a;
+  after test-contract correction527d788dfd0fe3a0653fbabfe5849189667d5e3f9b59906bcdf30add94872930.
+  Existing Qt/font/temporary-directory diagnostics retained; no overall speedup claim.
+- Evidence:~/.codex/visualizations/2026/10/03/icstex-control-dedup/{before,capture/result.json,
+  native-ready/receipt.json,regression/result.json,regression/unittest.log}, the test snapshot
+  and tool outputs. Installed executable remainsbba9a751…39c4a07. No commit/push, installation,
+  packaging, dependency or system change. Quota check allowed ordinary usage; no reset or paid
+  continuation authorized. This bounded source feedback is complete.
+
+## 2026-10-03 - Roll back the rejected control deduplication
+
+- User preferred the preceding UI and requested rollback. Reversed only the control-dedup/
+  sidebar-naming increment against its actual pre-change snapshots; the one unsnapshotted
+  Block notice was restored from its inspected single-line diff. No reset, stash, branch/index
+  replacement, student edit or rollback of the earlier four-step onboarding work.
+- Application and test content now exactly match the pre-dedup source:
+  appbd419233caccd159b12b8bd2579afed16e7bbc902e2ef5302d2ddd9f48fb5b14 and
+  app+tests21c39b78a55df690a385e18102098d1b3303e85dec5fc57a81d38f4bfe3febe5.
+  Original button positions, export/destination actions and project-navigation label restored;
+  corresponding tests, capture entry and user-guide wording restored with them.
+- The earlier snapshot contained no standalone PNG originals. Preserved rejected images in
+  icstex-ui-rollback/rejected-assets and regenerated illustrations from the restored source,
+  rather than falsely claiming byte-identical image recovery. Four PNGs265725 bytes; actual
+  owned compile/current PDF/export bytes, failure retention and hide/resume checks passed.
+  Picker selection was simulated; capture/result.json records exact image/source identities.
+- The rejected Python window was observed on welcome with no document, then closed normally
+  (exit0). Existing /Applications/ICSTeX.app instance was not closed or replaced. Restarted
+  python3 -m app from the restored task worktree and observed project-navigation plus top
+  console controls. That restored instance later exited0 without an agent close; the installed
+  instance remains running. Did not open a manuscript.
+- Required compileall passed. Fresh complete unittest:1919 tests379.186s, command380.809s,
+  exit0, app/test identities unchanged before/after. Qt/font/QPdfLinkModel/temporary-directory
+  and native IMK diagnostics retained; no zero-warning or performance claim. Older failed
+  receipts/log entries remain untouched, not retroactively marked green.
+- Evidence:~/.codex/visualizations/2026/10/03/icstex-ui-rollback/{capture/result.json,
+  regression/result.json,regression/unittest.log,rejected-assets} and native observations.
+  Installed executable stillbba9a75154b2d0027c214b013f4d88e8de4cbcdc63b67631ee0b8ecd639c4a07.
+  No commit/push, packaging, installation, new design or global instruction/skill changes.
+  Rollback complete; preserve the user's preference and await the next bounded request.
+
+## 2026-10-04 — Source-backed structure/code experiment, locally installed; GitHub approval pending
+
+- Scope: implement the user-selected paired views after checking reusable open source, install
+  locally after verification, and wait for user acceptance before any commit/push. Created
+  `codex/structured-writing` at10cb905 in its own managed worktree, carrying the effective
+  prior uncommitted source. The inherited binary diff and the original worktree were verified
+  unchanged; no stash/reset or unrelated cleanup. Original tutorial/rollback edits are not
+  attributed to this task.
+- Reused existing MIT pylatexenc2.10/make_walker and Qt views, drag/drop, text/Undo, compile,
+  PDF/SyncTeX/export. Inspected TexSoup, tree-sitter-latex and Blockly; added no parser,
+  browser engine, dependency upgrade or model. Added original Lucide grip SVG and bundled
+  pylatexenc license. Architecture and exact support boundaries are recorded inD029.
+- Added source-range-backed section/content structure, local editing and heading nesting;
+  one source document/Undo stack remains authoritative. Background snapshots are gated by
+  editor/revision/path/scope. Unknown syntax remains source; incomplete/dynamic/oversized
+  files do not authorize structure writes. Old JSON Block projects remain compatible.
+- Implemented independent structure/code and current-block/whole-PDF controls, explicit PDF
+  search, compact outline, retained typography roles, and one persistent console/export entry
+  with a console fallback when the toolbar overflows. Current-block mode is full-PDF focus,
+  not separate compilation or a new export path. Legacy Block menu is underFile.
+- Focused checks and native observations exposed and repaired a QMenu-wrapper lifetime issue,
+  accessibility Toggle changing only checkmarks, source caret affinity, stale local-focus exit,
+  long table preview height/clip, and navigation targeting a hidden editor. Native own-window
+  paste, structure synchronization, real drag, Undo, FINAL, native save panel export and PDF
+  keyword search were observed. Export matched FINAL bytes; user manuscripts were not opened.
+- An initial Chinese fixture omitted its XeLaTeX magic comment and failed on a missing pdfTeX
+  font; fixed the fixture, not compiler behavior. First preflight:1948 tests/469.161s, exit1,
+  16 failures across4 old UI-oracle groups. Updated those intentional layout/name expectations
+  while retaining geometry/accessibility/identity checks. A following gate was deliberately
+  interrupted at99.292s (130) to repair hidden-source navigation; receipts are retained.
+- Final focused79 tests passed. Final packaging/preflight.sh: compileall and1950 tests all
+  passed,441.021s (command444.267s), exit0; before/afterapp, app+tests and assets unchanged.
+  Python app SHA2562db5722aa3da65bf5b943779027c3622d494784c8b87971c1e16306cfe915cd3;
+  app+tests a517eba8898e06a2fd5156fde9767ab440f1c469813e96f15b03c5ce5126fd48;
+  app with assets6efb4cd9f7868ca1967e9e9a725c9697d22a82e3d426df10bcdd7c3aa395f728.
+- Existing PyInstaller spec/runtime built in27.103s, exit0. Verified211 modules/entry,
+  52 assets and3 raw workers against source, unchanged missing-module set, arm64 and ad-hoc
+  deep/strict signature. Feed/public key/210004 sequence preserved. No Developer ID/notarization
+  claim. Version label remains2.1.0-beta.4; this is a new local build, not the public artifact.
+- After user confirmed saving/quitting, InstallationLease guarded backup/replacement of
+  `/Applications/ICSTeX.app`;477 files/160 links matched the candidate. Old bundle remains at
+  `~/Applications/ICSTeX Backups/ICSTeX-2.1.0-beta.4-before-structured-writing-20261004.app`.
+  Installed executable SHA2567c99a4a5331b5a67d4b925e235cccdbf447ed23dd2a818fc9dfd78e793539f03.
+  Verified the running path/hash, opened the owned demonstration in the installed app,
+  selected structure and explicitly compiled with XeLaTeX; current PDF showedthe updated
+  formula. Left the window open for acceptance. Only the demo was added to recent projects.
+- Warnings retained: Qt/offscreen/font/QPdfLinkModel/temporary-directory asynchronous
+  diagnostics, IMK and table AX messages; packaging libobjc ctypes warning. No zero-warning,
+  performance-percentage, arbitrary-LaTeX or student-acceptance claim.
+- Evidence:`~/.codex/visualizations/2026/10/04/icstex-structured-writing/` includes inherited
+  diff, native observations and export, preflight histories, build/package/install receipts.
+  No commit, push, merge, tag, website/feed deployment or global skill/memory change.
+
+## 2026-10-04 — Structure interaction feedback fixes, installed locally; acceptance pending
+
+- Continued the existing structured-writing worktree, preserving its inherited dirty files and
+  index. Saved feedback-start diff and five affected-file snapshots in interaction-fixes/before.
+  No new branch/worktree, agents, dependency upgrade, network service or GitHub write.
+- Added block deletion/Backspace with source Undo; deleting a section confirms its subtree,
+  clearing a title retains the declaration needed by maketitle. Added ancestry guides/path and
+  a strong gold source-range cue that does not leave a destructive native text selection.
+- Replaced plain content modal entry with a workspace-local editor and explicitly labeled
+  content sketch. Text/cell edits immediately patch the original document; Save/Compile see
+  active cell typing before focus loss. Target/revision/conflict changes reject old bindings.
+  Undo remains source-owned. No separate draft persistence or compilation pipeline.
+- Plain paragraphs support visible Enter breaks and blank-line paragraphs, including leading
+  empty lines. Shared escaping now runs once rather than re-escaping generated braces.
+  Reused TableGrid and pylatexenc source spans: normal table cells edit directly without
+  regenerating captions, labels, rules or column specifications. Merged/ragged/nested complex
+  tables remain local code; formatted/math cells retain LaTeX. Existing table_snippet defaults
+  (including booktabs and ruled variants) resolve to editable exact cell spans.
+- Updated old popup/selection tests to the new intentional behavior while retaining revision,
+  stale-result, conflict and Undo checks. Focused79 passed; an extra leading-break case passed.
+  Native isolated keyboard cell edit/save, deletion/Undo, real FINAL, source highlight and
+  hierarchy were observed. Coordinate double-click was blocked by CUA AXError.notImplemented;
+  do not count this as native mouse acceptance. Qt IME event tests are not physical IME proof.
+- Real XeLaTeX sample showed first/second text lines at PDF y251.680528/270.459528 and changed
+  table values. Native subsequent cell edit to3 kg saved and appeared in the latest PDF.
+  Six additional newline/empty/escaping cases compiled in1.554s, exit0. An initial inspection
+  script failed after successful compilation because fitz was unavailable; used existing
+  pdftotext for that artifact instead of adding a dependency or repeating its compile.
+- One early gate was interrupted130 at64.920s to handle leading breaks. A complete1966-test
+  run failed only the existing console minimum-height assertion (459 <580; isolated439).
+  The hidden local page contributed its minimum size to QStackedLayout. Wrapped it in native
+  QScrollArea so short workspaces scroll instead of constraining the console; did not weaken
+  the assertion. That unchanged check plus structure GUI28 tests passed14.579s.
+- Final packaging/preflight.sh: compileall and1966 unittest tests passed476.489s, command
+  479.285s, exit0, before/after app/tests/assets unchanged. app Python:
+  8a5adf3e886ad98c74b7b9a289b708b50643a3d12b1e1deaae8f4b5ab2e75b2f;
+  app+tests:fd85f5c05984862ade180de846af542e0d7f0d37a207ee59fc4e8286cfc82b12;
+  app+assets:261fddebc4f84648d15ce2ca04d1debc6c808c1b72f05a293657c7ff8be80723.
+- Built existing PyInstaller spec in27.165s, exit0.212 modules/entry,52 assets and3 raw workers
+  match source; no new missing modules. arm64, ad-hoc deep/strict signature; no Developer ID
+  or notarization. Version2.1.0-beta.4/feed/key/sequence210004 unchanged; new local bytes only.
+- User confirmed saved/exited, process check clear. InstallationLease guarded replacement;
+  477 files/160 links matched candidate. New executable:
+  968dd0e346cd4af69bd01877e42d57bb7377e32bfe87ca2fbc26e5eb02811424.
+  Previous7c99a4a5 bundle is preserved unchanged at
+  ~/Applications/ICSTeX Backups/ICSTeX-2.1.0-beta.4-before-structure-interaction-20261004.app.
+  Verified installed process83308/path/hash, opened only the owned synthetic project, explicitly
+  compiled with XeLaTeX and saw latest PDF. Opened table editing in the installed workspace,
+  with grid/content sketch and focused current PDF visible. Left it open for user acceptance.
+- Retained Qt/offscreen/font/QPdfLinkModel/temporary-directory, IMK/TSM/table AX and build
+  libobjc ctypes warnings. No zero-warning, overall speedup, arbitrary-LaTeX or user-approval
+  claim. Evidence:~/.codex/visualizations/2026/10/04/icstex-structured-writing/interaction-fixes/.
+  No student manuscript edits, commit/push/merge/tag, Actions, feed or website deployment.
+
+## 2026-10-04–05 — Table specifications, compact controls and compile activity, installed
+
+- Scope: address the user's missing table specifications in local content editing, oversized
+  table controls and compile activity motion. Reused the same dirty structured-writing
+  worktree/index; inherited text diff and small affected-file snapshots are in
+  table-spec-progress/before. No new agents, worktrees, dependencies or release scope.
+- Extracted shared TableOptions for TableDialog and source-backed editing. Ordinary tabular
+  supports1–40 data rows/1–12 columns, alignment, rules, caption/label/placement. Existing
+  TableGrid and table_snippet remain the grid/renderer; source edits preserve outside bytes,
+  use raw cell content and enter the original Undo transaction. Shrink asks before data loss.
+  Caption removal/reinsertion preserves label order; required packages are added only to a
+  current documentclass source, never implicitly to another root. Complex columns/comments/
+  custom rules remain cell-only; formatted captions retain a code-edit boundary.
+- Compact, scoped table styles remove doubled content-height/padding. Default-scale measured
+  secondary buttons28px and primary34px; metadata collapses and the alignment field no longer
+  fills an oversized row. Existing app layout, font/scale and user preferences are retained.
+- CompileActivityBar keeps the existing QProgressBar visibility API and root/build guards.
+  A33ms timer paints a small flowing highlight, not a percentage. Hide/minimize/completion
+  stops it. The documented NSWorkspace Reduce Motion getter is read-only and verified in
+  local AppKit headers; tests override the preference without changing system settings.
+- Focused combined specification/structure/control/layout60 tests passed27.994s; final
+  core/metadata12 passed3.937s. Earlier focused batches and warnings are retained in evidence;
+  totals overlap and are not additive. Existing TableDialog/lifetime/background-root tests
+  remain intact. No protective assertion was removed or weakened.
+- Owned native probe compiled an expanded3-column/3-data-row table with original cells and
+  new5 kg content. Three real compile-frame hashes differed,77 animation ticks during work,
+  none after finish. Native Reduce Motion=false; static/hidden/minimized behavior additionally
+  covered by Qt tests. This is lifecycle evidence, not a CPU or compilation-speed benchmark.
+- Native AX setValue alone did not commit the non-keyboard-tracking spin box and was not
+  counted as a pass. Real click/typing/Return set4 data rows. Booktabs toggle, plain caption
+  containing%, Cmd-S and FINAL produced the expected grid/rules/caption in a latest PDF.
+  Only the isolated fixture/settings were used; owned test window closed normally, exit0.
+- One final preflight completed: compileall and1985 tests passed686.697s, command691.510s,
+  exit0. Source/tests/assets were unchanged before and after. App Python identity:
+  26c95cd746e466e0aa046f0bdb4f565bc2a1a712ad01b96c00f5d8b7871958c3;
+  app+tests:d97d350c393039b0cbea8b8d46ca4e529c34b30fd481081f302066bf66c120cc;
+  app+assets:b71103276f39858d356eb510c25cc98724e975a7d6d127b1562f43f7397f0495.
+- Existing spec build39.443s, exit0;215 modules/entry,52 resources and3 raw workers matched
+  source; no new missing module. arm64 and ad-hoc deep/strict codesign verified. Existing
+  Beta4 label/feed/key/build210004 unchanged, no Developer ID/notarization or public release.
+- User saved/closed the installed app and additionally authorized normal closure of clearly
+  identified independent test-.tex windows without repeated questions, not real/mixed
+  documents or force-killing. Live process recheck preceded InstallationLease replacement.
+  Installed477 files/160 links match candidate. New executable:
+  87a78d730de77041bbc957ab36012e73609c0a62baff244318e5b6a6c81abd08.
+  Previous968dd0e3 bundle retained unchanged at
+  ~/Applications/ICSTeX Backups/ICSTeX-2.1.0-beta.4-before-table-spec-progress-8a5adf3e88.app.
+- Verified installed process23336/path/hash, opened this batch's synthetic project, explicitly
+  compiled and observed the real activity indicator followed by latest FINAL. Local editor
+  showed4 data rows/3 columns/left alignment/rules/metadata controls at the retained user scale.
+  Left that test view open for acceptance; did not collapse the user's console preference.
+- Warnings retained: Qt offscreen/font/QPdfLinkModel, removed temporary-directory dependency
+  logs, Cocoa AX/table/IMK/TSM; PyInstaller warnings for system libobjc/AppKit absolute paths
+  not being bundled. Native installed startup/compile succeeded. No zero-warning, performance
+  gain, arbitrary-LaTeX or user-acceptance claim. Evidence: table-spec-progress under the
+  structured-writing2026/10/04 evidence root. No commit/push/merge/tag, website/feed or Actions.
+
+## 2026-10-05 — Accepted structured-writing source and Beta 5 candidate
+
+- User accepted the other features, requested distinct path segments ending at block type,
+  and authorized local installation, GitHub publication and the existing Vercel downloads.
+  Reused structured-writing at10cb905, preserving the primary checkout and prior work.
+- Replaced the summary breadcrumb with stable painted Qt label chips: file/section names
+  followed by type, not paragraph/table text. Width elision retains a full tooltip and native
+  static-text accessibility. No new navigation action, parsing trigger or compiler change.
+- Native own-document render and real XeLaTeX observed. The first custom QWidget omitted
+  its text from Cocoa AX; QLabel semantics restored it. UI-only recheck exposed the entire
+  path without repeating compilation. All owned test windows closed normally.
+- Source version2.1.0-beta.5 and runtime210005 keep the existing account/public key/feed.
+  Downloaded only the pinned Sparkle2.9.6 archive; SHA256 matched52bf9e88cdd972fc0c81501377a880e90d47031bd8ca5462488f843e2609e192.
+  Candidate/public metadata states are now distinct; an explicit production gate rejects
+  unpublished metadata. Test fixture import was corrected without weakening that gate.
+- Final focused55 passed21.968s. Full preflight once: compileall and1990 tests passed628.381s,
+  command631.913s, exit0. App, tests, resources and release-tool source identities unchanged.
+  App:c1741e25f3053309f8df840a9ef914c659982377804842e2b7bf394a13edb682;
+  app+tests:f8e21bdd88d1dda15f666c964e203647efed5543718ee835771a23396d3f9bc5;
+  app+assets:44844322851baf40d5497a0666583c83c01c971f1413bc191ad44fb14b337dd3;
+  release code:fdde8feaad505ff0c090159d6344a2a985d64271c0f17c2181b721f10a50b795.
+- Existing spec built once43.786s, exit0.215 modules/entry,52 assets and raw workers matched;
+  arm64/ad-hoc deep/strict signature passed. Candidate executable:
+  8bef21d8757fa3e74c9268511fd6b5482042d7d569031d2480d51ec6613598a6.
+- ZIP CRC/executable/version checked. DMG checksum verified and read-only mounted; app tree,
+  signature, documents and Applications link matched, then unmounted. No older asset renamed
+  or overwritten. Artifact receipts retain actual sizes/digests and hdiutil deprecation warnings.
+- Live GitHub main requires PR/squash with Actions disabled. Existing release79fcd868 and
+  incorporated main4ea00ff have identical trees, allowing a no-tree-change lineage freeze.
+  Existing Vercel project/account/production aliases confirmed; no security setting changed.
+- This entry records source/candidate verification, not completed online publication. Signing,
+  installed identity, PR/tag/Release and production deployment are recorded in the closeout.
+  Qt/font/offscreen/temp-path/QPdfLinkModel/AX/IMK and ctypes warnings retained. Evidence:
+  ~/.codex/visualizations/2026/10/05/icstex-beta5-release/. No student document touched.

@@ -88,7 +88,9 @@ class ReleaseSiteTests(TestCase):
             manifest["github_release_published"],
         )
         self.assertTrue(release["github_repository_public"])
-        self.assertTrue(release["github_release_published"])
+        # A locally prepared candidate is not already a public release. The
+        # deployment gate below, not source preparation, requires publication.
+        self.assertIsInstance(release["github_release_published"], bool)
         self.assertTrue(any(item["primary_download"] for item in release["assets"]))
 
         primary = next(item for item in release["assets"] if item["primary_download"])
@@ -97,6 +99,36 @@ class ReleaseSiteTests(TestCase):
             f"{release['tag']}/{primary['name']}"
         )
         self.assertEqual(primary["download_url"], expected_url)
+
+    def test_unpublished_candidate_remains_unpublished_in_site_projection(self):
+        manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        manifest["github_release_published"] = False
+        self.assertFalse(update_release_site.generated_release_data(manifest)["github_release_published"])
+
+    def test_production_gate_rejects_unpublished_metadata(self):
+        import io
+        from contextlib import redirect_stderr, redirect_stdout
+        from tempfile import TemporaryDirectory
+        # The production entry point runs as a tools/ script with a sibling
+        # import. Bind that same module while exercising its CLI in-process.
+        with patch.dict(sys.modules, {"update_release_site": update_release_site}):
+            from tools import verify_release_consistency
+        manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        manifest["github_release_published"] = False
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary) / "manifest.json"
+            path.write_text(json.dumps(manifest), encoding="utf-8")
+            site = Path(temporary) / "site.json"
+            site.write_text(update_release_site.render(update_release_site.generated_release_data(manifest)), encoding="utf-8")
+            error = io.StringIO()
+            with patch.object(verify_release_consistency, "MANIFEST_PATH", path), patch.object(
+                    verify_release_consistency, "SITE_PATH", site), redirect_stdout(io.StringIO()):
+                with patch.object(sys, "argv", ["verify_release_consistency.py"]):
+                    self.assertEqual(verify_release_consistency.main(), 0)
+                with patch.object(sys, "argv", ["verify_release_consistency.py", "--require-published"]), redirect_stderr(error):
+                    result = verify_release_consistency.main()
+            self.assertEqual(result, 1)
+            self.assertIn("production deployment requires confirmed github_release_published", error.getvalue())
 
     def test_static_site_has_no_local_or_development_urls(self) -> None:
         forbidden = ("localhost", "127.0.0.1", "file://", "/Users/", "C:\\\\Users\\\\")

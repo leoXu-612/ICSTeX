@@ -71,24 +71,33 @@ class SubmissionCheckController(QObject):
         action = getattr(self.window, "block_mode_action", None)
         return getattr(self.window, "block_session", None) if action and action.isChecked() else None
 
-    def _context(self):
+    def _context(self, *, root=None, scope=None):
+        """An explicit source root lets export observe a background build without switching tabs."""
         window = self.window
-        session = self._active_block()
+        explicit_root = root is not None
+        session = self._active_block() if root is None else None
         if session is not None:
             scope = session.project_dir
             root = scope / "main.tex" if scope else None
             tabs = tuple(tab for tab in window.tabs.values()
                          if scope and tab.path and tab.path.is_relative_to(scope))
             return self._quick_key(root), scope, root, tabs, None, session
-        tab = window.current_tab()
-        root = window._compile_root_for_tab(tab)
-        scope = window.selected_project_scope or (root.parent if root else None)
+        tab = window.current_tab() if root is None else window.compile._tab_for_compile_root(root)
+        root = window._compile_root_for_tab(tab) if root is None else root
+        scope = scope or window.selected_project_scope or (root.parent if root else None)
         paths = window.dependencies.paths_for(root) if root else frozenset()
         tabs = tuple(candidate for candidate in window.tabs.values()
                      if candidate is tab or (root is not None and
                      (window._compile_root_for_tab(candidate) == root or candidate.path in paths)))
         record = window.pdf_state.record_for(root) if root else None
-        key = self._quick_key(root)
+        if explicit_root:
+            # Focus changes in another document do not invalidate this root's export.
+            key = (scope, root, tuple((candidate.path, id(candidate.editor), candidate.editor.source_revision,
+                                      candidate.modified, candidate.dirty, candidate.external_conflict)
+                                     for candidate in tabs), repr(record), window.current_engine,
+                   window.toolchain, window.dependencies.generation_for(root))
+        else:
+            key = self._quick_key(root)
         return key, scope, root, tabs, record, None
 
     def _quick_key(self, root):
@@ -166,10 +175,10 @@ class SubmissionCheckController(QObject):
             tuple(draft.label for draft in session.editor_drafts.values()),
         )
 
-    def capture_request(self):
+    def capture_request(self, *, root=None, scope=None):
         """Snapshot existing GUI state without saving, compiling or starting a check."""
-        key, scope, root, tabs, record, session = self._context()
-        tab = self.window.current_tab()
+        tab = self.window.current_tab() if root is None else self.window.compile._tab_for_compile_root(root)
+        key, scope, root, tabs, record, session = self._context(root=root, scope=scope)
         engine = (self.window.compile._effective_engine_for(tab.path, root)
                   if tab is not None and tab.path is not None and root is not None
                   else self.window.current_engine)

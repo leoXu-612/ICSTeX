@@ -48,6 +48,7 @@ from app.core.latex_insertions import (
 )
 from app.core.table_clipboard import parse_grid
 from app.gui.table_grid import TableGrid
+from app.gui.table_options import TableOptions
 from app.gui.theme import PRIMARY_BUTTON_STATE_STYLE
 
 
@@ -329,32 +330,16 @@ class TableDialog(QDialog):
         super().__init__(parent)
         self._validate_target = validate_target
         self.setWindowTitle("插入表格")
-        self.resize(840, 660)
+        self.setObjectName("tableDialog")
+        self.resize(780, 600)
         self._loading = True
         self._undo: list[TableSpec] = []
         self._redo: list[TableSpec] = []
-        self.rows_spin = QSpinBox()
-        self.rows_spin.setRange(1, 40)
-        self.rows_spin.setValue(3)
-        self.rows_spin.setKeyboardTracking(False)
-        self.columns_spin = QSpinBox()
-        self.columns_spin.setRange(1, 12)
-        self.columns_spin.setValue(3)
-        self.columns_spin.setKeyboardTracking(False)
-        self.alignment_combo = QComboBox()
-        self.alignment_combo.addItems(["c", "l", "r"])
-        self.alignment_combo.setItemText(0, "居中 (c)")
-        self.alignment_combo.setItemText(1, "左对齐 (l)")
-        self.alignment_combo.setItemText(2, "右对齐 (r)")
-        for index, alignment in enumerate(("c", "l", "r")):
-            self.alignment_combo.setItemData(index, alignment)
-        self.booktabs_check = QCheckBox("三线表 · booktabs")
-        self.booktabs_check.setChecked(True)
-        self.caption_edit = QLineEdit()
-        self.label_edit = QLineEdit("tab:")
-        self.placement_combo = _placement_combo()
-        self.caption_edit.setPlaceholderText("可选，例如：实验测量结果")
-        self.label_edit.setPlaceholderText("例如 tab:results")
+        self.options = TableOptions(self)
+        # Preserve TableDialog's public fields and its existing callers/tests.
+        for name in TableOptions.fields:
+            setattr(self, name, getattr(self.options, name))
+        self.rows_spin.setMinimum(1)
         self.preview_table = TableGrid()
         self.status_label = QLabel()
         self.target_error_label = QLabel()
@@ -411,15 +396,12 @@ class TableDialog(QDialog):
 
     def _build(self) -> None:
         layout = QVBoxLayout(self)
-        hint = QLabel("第一行为表头；双击或直接键入编辑。Tab 移动，复制 / 粘贴支持矩形区域。")
+        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setSpacing(8)
+        hint = QLabel("第一行是表头。双击编辑，Tab 换格；可粘贴 Excel / CSV。")
         hint.setWordWrap(True)
         layout.addWidget(hint)
-        sizes = QHBoxLayout()
-        for label, widget in (("数据行", self.rows_spin), ("列", self.columns_spin), ("对齐", self.alignment_combo)):
-            sizes.addWidget(QLabel(label))
-            sizes.addWidget(widget)
-        sizes.addWidget(self.booktabs_check)
-        layout.addLayout(sizes)
+        layout.addWidget(self.options)
         actions = QHBoxLayout()
         actions.addWidget(self.undo_button)
         actions.addWidget(self.redo_button)
@@ -427,25 +409,17 @@ class TableDialog(QDialog):
         clear_button.clicked.connect(self.clear_selection)
         actions.addWidget(clear_button)
         actions.addStretch()
-        import_button = QPushButton("导入现有表格")
+        import_button = QPushButton("导入 LaTeX")
         import_button.setToolTip("粘贴已有的 table/tabular LaTeX 代码，反向填入下面的网格。")
         import_button.clicked.connect(self._import_existing)
         actions.addWidget(import_button)
-        paste_button = QPushButton("粘贴 CSV / Excel")
+        paste_button = QPushButton("粘贴数据")
         paste_button.setToolTip("从当前格开始粘贴剪贴板数据；粘贴到表头行时第一行作为表头。")
         paste_button.clicked.connect(lambda: self.paste_clipboard_text(QApplication.clipboard().text()))
         actions.addWidget(paste_button)
         layout.addLayout(actions)
-        self.preview_table.setMinimumSize(600, 220)
+        self.preview_table.setMinimumSize(360, 160)
         layout.addWidget(self.preview_table, 1)
-        details = QGridLayout()
-        details.addWidget(QLabel("标题"), 0, 0)
-        details.addWidget(self.caption_edit, 0, 1, 1, 3)
-        details.addWidget(QLabel("标签"), 1, 0)
-        details.addWidget(self.label_edit, 1, 1)
-        details.addWidget(QLabel("浮动位置"), 1, 2)
-        details.addWidget(self.placement_combo, 1, 3)
-        layout.addLayout(details)
         self.preview_check = QCheckBox("查看将插入的 LaTeX")
         self.source_preview = QPlainTextEdit()
         self.source_preview.setReadOnly(True)

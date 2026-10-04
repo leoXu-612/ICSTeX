@@ -20,16 +20,20 @@ _original = None
 _runtime = None
 
 
-def _affected_runtime(app):
-    return (sys.platform == "darwin" and platform.mac_ver()[0].split(".")[0] == "26"
+def _affected_runtime(app: QApplication) -> bool:
+    mac_version = platform.mac_ver()[0]
+    # The same method offset and ABI were independently confirmed on 27.0;
+    # do not opt future macOS or Qt versions into this temporary workaround.
+    affected_macos = mac_version.split(".")[0] == "26" or mac_version == "27.0"
+    return (sys.platform == "darwin" and affected_macos
             and platform.machine() == "arm64" and qVersion() == "6.11.1"
             and app.platformName() == "cocoa")
 
 
-def install_selected_children_guard():
+def install_selected_children_guard() -> bool:
     """Call on the GUI thread after QApplication, before creating editor UI.
 
-    Local crash: libqcocoa + 0x87794 inside accessibilitySelectedChildren
+    Verified on macOS 26 and 27.0: libqcocoa + 0x87794 inside accessibilitySelectedChildren
     (method starts at 0x876bc), following a stale selectedChild->isValid call.
     No binary, system setting or other process is changed.
     """

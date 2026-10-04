@@ -54,7 +54,7 @@ class ProjectPanelController:
     _ALL = frozenset({"outline", "assets", "image_usage", "history", "labels", "references", "completion"})
     _TEXT = frozenset({"outline", "labels", "references", "completion"})
     _PANEL_DOMAINS = {
-        1: {"outline"}, 3: {"assets", "image_usage"}, 4: {"history"},
+        0: {"outline"}, 1: {"outline"}, 3: {"assets", "image_usage"}, 4: {"history"},
         7: {"references"}, 8: {"labels"},
     }
 
@@ -171,7 +171,7 @@ class ProjectPanelController:
             return
         tab = window.current_tab()
         if tab is not None and diagnostic.line:
-            editor_view_state.jump_to_line(tab.editor, diagnostic.line)
+            window._jump_to_line(tab.editor, diagnostic.line)
 
     # --- outline / search --------------------------------------------------
 
@@ -180,7 +180,7 @@ class ProjectPanelController:
         tab = window.current_tab()
         if tab is None:
             return
-        editor_view_state.jump_to_line(tab.editor, line)
+        window._jump_to_line(tab.editor, line)
         window.statusBar().showMessage(f"已跳转到大纲第 {line} 行。", 2500)
 
     def run_project_search(self, query: str, case_sensitive: bool, whole_word: bool) -> None:

@@ -12,13 +12,12 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
 from PySide6.QtCore import QEvent, QRect, QSettings
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QDialog
 from app.core.pdf_state import PdfFreshness
 from app.core.settings import AppSettings
 from app.core.tutorial import TutorialStep
 from app.gui.diagnostics_panel import DiagnosticsPanel
 from app.gui.main_window import MainWindow
-from app.gui.submission_delivery_dialog import SubmissionDeliveryDialog
 from app.gui.theme import apply_theme
 from app.gui.tutorial_controller import open_example
 from app.gui.user_guide import UserGuideDialog
@@ -77,10 +76,25 @@ def main():
         wait_gui(lambda: window.pdf_panel.isVisibleTo(window))
         wait_gui(lambda: interior_ink_pixels(window.pdf_panel._view.viewport().grab().toImage()) > 100, timeout=10)
         window.resize(1440, 900)
-        app.processEvents()
-        capture(window.source_preview_area, "write-preview.png", QRect(0, 0, window.source_preview_area.width(), 350))
+        window.set_toolbox_visible(True)
+        controller.dock.hide()
+        wait_gui(lambda: window.toolbox_navigation.project_splitter.isVisible())
+        wait_gui(lambda: interior_ink_pixels(window.pdf_panel._view.viewport().grab().toImage()) > 100)
+        capture(window, "write-preview.png")
+        controller.resume()
         controller.act()
-        assert controller.step is TutorialStep.DONE
+        assert controller.step is TutorialStep.EXPORT
+        target = out / "我的第一篇文章.pdf"
+        # Only the picker selection is simulated. Compilation, proof validation,
+        # publication and the completion notification use the real local path.
+        with patch("app.gui.pdf_export_controller.QFileDialog.exec", return_value=QDialog.DialogCode.Accepted), \
+             patch("app.gui.pdf_export_controller.QFileDialog.selectedFiles", return_value=[str(target)]):
+            controller.act()
+        wait_gui(lambda: controller.step is TutorialStep.DONE, timeout=15)
+        assert target.read_bytes() == window.pdf_state.record_for(root).last_successful_pdf.read_bytes()
+        assert "已同步" in window.pdf_panel.export_state_label.text()
+        capture(window.pdf_panel.export_status, "export-pdf.png")
+        exported = target.read_bytes()
         valid = tab.editor.toPlainText()
         tab.editor.setPlainText(valid.replace("\\end{document}", "\\notacommand\n\\end{document}"))
         wait_gui(lambda: controller.step is TutorialStep.COMPILE, timeout=5)
@@ -88,6 +102,7 @@ def main():
         wait_gui(lambda: window.pdf_state.record_for(root).freshness is PdfFreshness.FAILED_STALE, timeout=50)
         wait_gui(lambda: controller.secondary.text() == "查看错误", timeout=5)
         assert controller.step is TutorialStep.COMPILE
+        assert target.read_bytes() == exported
         errors = DiagnosticsPanel()
         errors.set_diagnostics(window.diagnostic_panel.diagnostics)
         errors.resize(680, 320)
@@ -99,13 +114,6 @@ def main():
         controller.refresh()
         controller.act()
         wait_gui(lambda: controller.step is TutorialStep.VIEW, timeout=50)
-        delivery = SubmissionDeliveryDialog(window)
-        delivery.resize(720, 620)
-        delivery.show()
-        capture(delivery, "export-pdf.png")
-        delivery._close()
-        delivery.close()
-        delivery.deleteLater()
         guide = UserGuideDialog(window)
         guide.show()
         for index in range(guide.pages.count()):
@@ -128,7 +136,8 @@ def main():
     report = dict(app_sha256=digest, backend=app.platformName(), images=images,
                   real_title_compile_and_pixels=True, failure_retains_old_pdf=True,
                   hide_resume_preserves_window=True, cursor_and_scroll_preserved=True,
-                  export_image="prepare page only; no delivery created")
+                  export_image="actual synchronized export status; real publication with simulated picker selection",
+                  exported_pdf_matches_final=True, failed_build_keeps_export=True)
     (out / "result.json").write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
     print(json.dumps(report, indent=2, ensure_ascii=False))
 

@@ -1,6 +1,6 @@
 # ICSTeX Project State
 
-更新时间：2026-09-20（Asia/Taipei）
+更新时间：2026-10-05（Asia/Taipei）
 
 本文件是当前已验证状态的权威来源；历史证据写入 `PROJECT_LOG.md`，未来计划写入
 `docs/ROADMAP.md`，长期约束写入 `docs/DECISION_LOG.md`。
@@ -13,8 +13,402 @@
   cancellation, cache-release and CRLF/privacy fixes are included in this integration.
 - Current integration combines accepted local source a5451d8 with main 69ca0b6;
   the previously merged feature head 44eecb8 is an ancestor of the local source.
+- 2026-10-01: verified installed-export source committed as 8ddfc13 and pushed to
+  codex/simplify-pdf-export. PR #7 targets main, is OPEN/MERGEABLE, not merged.
+  Remote main remains b6fa58d; Actions is still disabled. Follow-up visualization was
+  developed locally on codex/pdf-export-status, based on 8ddfc13. It was subsequently
+  included in checkpoint7284b20/PR#8; workbench layout is tracked by PR#9, neither merged here.
 
 ## Product and Source State
+
+### 当前任务：Beta 5 类型面包屑修正与公开发布准备
+
+- 用户已接受其他功能，并授权修正路径后更新本机、提交GitHub、更新Vercel安装包。
+  原待验收/不发布门槛被本次授权取代；不包含新平台、密钥轮换、Developer ID或公证。
+- 当前仍在同一structured-writing工作树，HEAD10cb905；相对远端main b6fa58d为9 ahead/0 behind。
+  既有PR7–10是该已验收源的堆叠祖先。Actions实查disabled；main要求PR/squash，
+  无必过CI、无approval最低数、无bypass。旧release79fcd868与已并入main的4ea00ff树相同。
+- 路径改为独立分段，文件/章节保留名称，末级是块类型；正文/单元格摘要不再参与路径。
+  窄窗绘制省略不丢完整tooltip/原生静态文本；复用Qt标签，不增加路径点击操作或重建控件。
+  原生独立示例可见且实际编译成功；补齐QLabel语义后的UI-only检查确认AX完整路径可读。
+- 源码版本2.1.0-beta.5、更新序号210005；维持原Sparkle2.9.6、公钥及固定beta feed。
+  新runtime由已核验官方SDK生成。公开网页和发布记录暂仍指Beta4，未提前切换链接。
+  候选准备可标记未发布；新增独立production gate要求真实确认公开/已发布状态。
+- 最后55项相关专项通过21.968s；冻结源码完整preflight的compileall和1990项unittest
+  通过，628.381s，退出0；前后身份一致，不沿用旧批次结果。
+  app Python摘要c1741e25f3053309f8df840a9ef914c659982377804842e2b7bf394a13edb682；
+  app+tests f8e21bdd88d1dda15f666c964e203647efed5543718ee835771a23396d3f9bc5；
+  app+assets44844322851baf40d5497a0666583c83c01c971f1413bc191ad44fb14b337dd3。
+  发布工具/打包源码也加入前后身份核对。新证据在`~/.codex/visualizations/2026/10/05/icstex-beta5-release/`。
+- GitHub/Vercel登录有效。沿用现有website项目及ics-tex.vercel.app、旧内嵌feed域名；
+  API确认无生产SSO/password保护、无Git自动部署关联，没有修改安全设置。
+  当前本机仍是下节87a78d73构建；尚未创建本轮公开Release或替换安装。
+
+### 前一已验收本机源码：表格规格对齐与编译动效
+
+- 用户确认双视图布局，授权开源复用核对、开发及本机安装；GitHub 提交/推送仍须
+  用户验收批准。独立工作树 `~/.codex/worktrees/structured-writing/ICSTeX`，分支
+  `codex/structured-writing`，从10cb905带入下节有效未提交改动，原树和索引保留。
+- 复用现有pylatexenc 2.10、Qt文本编辑器/Undo、编译、PDF搜索、SyncTeX与导出；
+  普通`.tex`是唯一内容真值。结构修改只作用于原文范围，未知片段不重新序列化；
+  编辑器身份/revision/路径/范围变化拒绝迟到结果和旧对话框。当前文件按需后台解析，
+  源码视图键入不运行结构解析。长期边界与选型见D029。
+- 支持常见章节、正文、公式、表格、图片与列表的识别、添加、编辑和拖动嵌套。
+  本轮补上删除/Backspace入口（章节含子块先确认、标题清空声明内容）、清晰的层级
+  竖线/归属路径，以及金色原文范围提示；提示不原生选中整段，避免下一次打字误替换。
+  双击内容在工作区内编辑并显示局部内容示意，不弹简单确认窗口。局部写入即时进入
+  原源码文档/Undo；外部修改、撤销、切换目标会结束旧范围绑定，保存与编译无待应用草稿。
+  纯文本 Enter 显式换行，空行另起段；段首空行及特殊字符转义可逆，原表格/Block共用
+  转义函数改为单次替换，避免重复转义生成的花括号。
+  复用TableGrid直接改普通表格单元格，保留未编辑的题注、标签、列格式和线条；
+  含公式/格式的格子保留LaTeX。合并/不规则/嵌套等复杂表格不做有损转换，留在局部代码。
+  原公式编辑器仍在插入工具中。列表表格摘要最多六行，局部示意最多十二行。
+  局部编辑与插入表格现在共用TableOptions：支持普通tabular的1–40行数据、1–12列、
+  对齐、三线表及题注/标签/浮动位置。缩小先确认；清空题注/标签移除声明，重新加题注
+  保持其在标签前。仅对识别出的简单表格体复用已有生成器，其他部分按范围保留。
+  特殊列、注释、自定义规则和超限表格保留单元格编辑；格式化题注保留代码入口。
+  必需宏包只在有documentclass的当前主文件内加入；不会隐式改另一主文件。
+  两处表格控件布局收紧，题注区可展开；默认缩放普通按钮28px，主操作34px。
+  编译活动条只装饰既有忙状态，不估算百分比；33ms局部刷新，隐藏/最小化/结束停止。
+  通过官方AppKit NSWorkspace只读查询减少动态效果；不加系统配置或新依赖。
+  “当前块”复用整篇PDF定位放大，不是独立局部编译；正式交付保护不变。
+  旧Block JSON工程留在文件菜单兼容入口，不强制迁移或把它当作普通源码视图。
+- 本轮组合规格/结构GUI/控件/布局专项60项通过，27.994s；最终元数据与core专项
+  12项通过，3.937s。既有插入表格、生命周期、后台root状态与小窗口检查均做对应专项。
+  冻结源码完整preflight包含compileall及1985项unittest，686.697s（命令691.510s），
+  退出0；前后源码、测试、资源身份一致。本轮只执行这一轮完整回归，不沿用旧结果。
+- 隔离示例实际XeLaTeX验证了正文两行及单元格新值；原生键盘进入单元格、保存、
+  删除/撤销、正式编译、金色高亮与层级线已观察。鼠标单元格双击被CUA的
+  AXError.notImplemented阻断，未当作鼠标验收通过。段首/空段/特殊字符六组真实
+  XeLaTeX检查退出0；不改学生原稿。Qt字体/离屏/QPdfLinkModel/临时目录、IMK及
+  table AX警告保留，不宣称零警告或整体性能提升。
+- 本轮隔离示例已真实XeLaTeX编译：程序化扩展为3列/3数据行，保留旧内容并显示新增5 kg。
+  原生键盘提交4行、关闭三线表、编辑含%的题注、保存与FINAL后，UI显示最新PDF且
+  内容正确。编译期3帧活动条摘要不同，77个计时器tick；结束后新增0个tick。
+  原生Reduce Motion读取false；启用减少动态效果及隐藏/最小化停动画通过隔离Qt测试。
+- 当前app Python摘要`26c95cd746e466e0aa046f0bdb4f565bc2a1a712ad01b96c00f5d8b7871958c3`；
+  app+tests为`d97d350c393039b0cbea8b8d46ca4e529c34b30fd481081f302066bf66c120cc`；
+  app含资源为`b71103276f39858d356eb510c25cc98724e975a7d6d127b1562f43f7397f0495`。
+- 现有spec构建39.443s、退出0。215个模块/入口、52资源及三个raw worker与受测源码
+  相同，未新增缺失模块；arm64及ad-hoc deep/strict签名通过。2.1.0-beta.4标签、
+  210004序号及更新feed/公钥保持不变，是新的本地构建，不是新的公开版本。
+  构建保留libobjc/AppKit绝对路径不打包的ctypes警告；它们由macOS提供，已通过
+  安装版启动与实际编译观察。没有Developer ID签名、公证或线上部署。
+- 用户确认保存关闭、进程复查后，InstallationLease保护备份与替换。安装版
+  `/Applications/ICSTeX.app`的477文件/160链接与候选一致；执行文件SHA256为
+  `87a78d730de77041bbc957ab36012e73609c0a62baff244318e5b6a6c81abd08`。
+  旧版`968dd0e3…`完整保留于
+  `~/Applications/ICSTeX Backups/ICSTeX-2.1.0-beta.4-before-table-spec-progress-8a5adf3e88.app`。
+- 已核对安装路径进程/摘要，在安装版打开本轮独立示例并显式XeLaTeX编译，PDF显示
+  最新状态及3 kg/4 m/s/5 kg和含%的题注。进入表格的工作区局部编辑，看到4个数据行、
+  3列、左对齐、线条和折叠题注设置，以及收紧后的按钮。保留用户原控制台/缩放/自动
+  预览偏好，没有更改个人设置；当前窗口仍在独立示例局部编辑页供验收。尚未
+  获得本轮用户验收/提交批准。没有操作学生原稿，仅演示项目进入最近记录。
+- 本轮证据根 `~/.codex/visualizations/2026/10/04/icstex-structured-writing/`；继承差异
+  保存为`inherited.patch`并与新树初始差异逐字节核验。本轮六项修复证据/前快照位于
+  子目录`interaction-fixes/`。没有提交、推送或更新网站/feed。
+  表格规格/动效这一批的前快照、专项/原生/完整回归证据位于`table-spec-progress/`。
+  用户新增授权：可正常关闭明确辨认的独立测试.tex窗口，不必反复询问；真实或混合
+  文稿窗口仍须保护，不能只凭相似文件名或强杀进程代替辨认。
+
+### 前一开发源码：已撤回按钮去重与改名（2026-10-03，未安装/推送）
+
+- 用户认为去重/改名版不如上一版，要求回滚。仅恢复该轮开始时的代码、测试和
+  使用说明：按钮回到原位置，左侧恢复“项目导航”。四步新手指导保留，不回退
+  其他开发、不改变分支/索引或主树原有修改，也未使用整仓库reset/stash。
+- 应用Python摘要恢复为`bd419233caccd159b12b8bd2579afed16e7bbc902e2ef5302d2ddd9f48fb5b14`；
+  app+tests恢复为`21c39b78a55df690a385e18102098d1b3303e85dec5fc57a81d38f4bfe3febe5`，
+  与去重前的有效源码完全一致。该轮没有独立PNG前快照，故按恢复后的界面重新捕获
+  配图，共265725字节；不宣称图片字节与旧图一致。被拒绝的图片和原检查记录保留。
+- 确认源码窗口停在欢迎页、没有文稿后正常关闭，退出0；回滚后从实际工作树重启
+  `python3 -m app`，原生窗口已显示“项目导航”和顶部控制台；该源码实例随后正常退出0。
+  另一安装版实例仍运行、未关闭，
+  未打开/修改学生文稿。安装包仍为bba9a751构建，没有被覆盖，无需安装包回退。
+- 独立配图捕获验证了恢复后的真实编译、当前PDF、字节一致导出、失败保留旧结果及
+  收起重入；仅选址模拟。compileall通过；完整unittest **1919项全部通过**，
+  379.186s（命令380.809s）、退出0，回归前后上述源码/测试身份一致。
+  Qt/字体/QPdfLinkModel/临时目录及IMK提示仍保留，不声称零警告或性能提升。
+- 证据在`~/.codex/visualizations/2026/10/03/icstex-ui-rollback/`，原去重实现的历史
+  留在PROJECT_LOG及icstex-control-dedup证据目录。回滚完成，不重新提出或实施替代设计。
+
+### 前批未安装源码：四步新手练习与新版配图（2026-10-03）
+
+- 分支`codex/onboarding-next-steps`基于10cb905；沿用现有独立副本、设置隔离和
+  120ms单次刷新。练习为改标题、主动编译、确认当前PDF、导出；真实发布成功且
+  FINAL root/revision/build与已确认显示一致才完成。点击、取消、失败、旧结果和
+  持久保存位置不等于完成；编辑后回退，收起后不启动刷新，重开需要重新确认。
+- 导出控制器仅新增GUI线程成功通知，不改文件写入、覆盖、原子替换或编译规则。
+  完成按钮显式打开实际收据的文件夹，不自动打开。缺少LaTeX时主按钮进入环境医生。
+- 四页中文指南改为短任务说明，当前文件/大纲同屏配图与普通“已同步”导出图替换
+  旧截图；修正检查/错误入口和“不重复编译”的前提。配图当前身份见上述回滚记录，本地读取，
+  无新依赖、网络图片、自动播放或全局导览框架；缺图时文字步骤仍保留。
+- 52项相关专项通过；更新配图后3项图文/布局检查通过。独立离屏示例真实编译、
+  最新标题可见、字节一致导出、失败保留旧PDF/导出及收起重入通过；仅选址被模拟。
+  原生输入在用户重新确认后继续：中文标题经粘贴修改，真实最新PDF可见，系统保存
+  窗口确认后文件字节与FINAL一致，随后显示“练习完成”；一次FINAL、一次导出，
+  两个隔离窗口正常退出。未把最初未生效的typeText当作IME验收，也未操作安装版。
+  不以自动化结果代替学生试用。
+- compileall通过；完整unittest执行1919项/1215.566s（命令1219.049s）退出1，
+  1918通过，新增尺寸测试在“先缓存样式、后注册字体”的共享Qt测试环境多出1像素。
+  正式启动顺序0像素；错误顺序1像素且等待不消失。仅将该测试放在独立进程按正常
+  启动顺序执行，保留全部断言；相关8项/5.482s及保留旧缓存的受控1项/2.159s通过。
+  不修改产品样式、其他测试缓存或原失败收据，不声称全量命令退出0。
+- app `bd419233caccd159b12b8bd2579afed16e7bbc902e2ef5302d2ddd9f48fb5b14`
+  在完整回归、原生验收、补验期间不变；最终app+tests为
+  `21c39b78a55df690a385e18102098d1b3303e85dec5fc57a81d38f4bfe3febe5`。
+  四图摘要保持capture收据值；最终正文只比截图生成时补了“继续上次练习”的文案，
+  后续图文专项与原生窗口使用最终源码。Qt/字体/临时目录诊断及原生IMK提示仍保留。
+- 当前安装版仍是下节bba9a751构建；本批未打包/安装/推送。证据在
+  `~/.codex/visualizations/2026/10/03/icstex-onboarding/`。本轮源码交付结束，不自动发布。
+
+### 当前安装版：项目文件/大纲同屏与局部按钮质感（2026-10-02）
+
+- 新任务分支`codex/workbench-structure-polish`基于已安装源码772aa7d。阶段一88ac73f
+  已推送：现有文件树与大纲上下同屏，保留九个逻辑入口、原实例和dirty-domain防抖；
+  左侧分隔比例只在接受关闭后保存。顶部空白用固定样式和一次初始化布局事件收紧。
+- 结构20项相关专项及四状态离屏截图通过。阶段二已补顶部按钮、控制台和视图开关
+  的局部高光、细边框及悬停/按下/选中/焦点/禁用状态；自动预览开关使用局部渐变绘制。
+  不添加持续模糊、动画框架、逐帧全局样式更新或编译请求。按下时几何不变。
+- 原生测试发现Qt6.11.1/ARM64在macOS27.0读取selectedChildren仍会SIGBUS；确认
+  同一Cocoa方法地址与ABI后，把现有26系列缓解仅扩展至精确27.0。该环境选中子项
+  枚举仍不可用，不声称完整无障碍修复；初次失败记录保留。修复后独立示例编辑与
+  大纲更新、真实FINAL的最新内容可见、正常退出已验证。
+- 原生AX导航暴露旧问题：Toggle只改变选中、不发clicked。改用选中事件同步面板；
+  真QAccessible及键盘/结构22项专项通过，原生搜索与返回同屏补验通过且无编译。
+- 最终preflight执行1912项/928.625s，命令933.777s退出1：1911通过，一项人工
+  长状态文本被真实异步刷新覆盖。旧772aa7d测试/控制器在同一受控回调顺序也复现。
+  仅将展示夹具的stop改为shutdown，保留全部只读/复制/高度断言；相关8项复验
+  4.158s退出0，compileall通过，不重复其余用例或改写原失败收据。
+- app摘要`1cc875a9dac5d0d439d8d5bb0920eaf55dd7f84d4c7f00b02bec5c596fce07b0`
+  在全套及补验间不变；夹具修正后app+tests为`91f73d20…1c1e828`，补验前后一致。
+  `icstex-structure-polish/validation-receipt.json`记录组合验证，不声称全量命令退出0。
+  既有Qt/字体/QPdfLinkModel/临时目录诊断保留，无整体性能提升比例结论。
+- 两阶段源码分别以88ac73f、f24ceb4推送至草稿PR#10（base为PR#9），未合并。
+  构建52.624s退出0；209模块/入口、资源、三个raw worker、更新配置均匹配；缺失
+  模块列表无新增。arm64/ad-hoc deep/strict通过，保留libobjc ctypes警告，不声称公证。
+- InstallationLease内复核、备份与替换完成，475文件/160链接与候选一致；
+  `/Applications/ICSTeX.app`程序摘要为
+  `bba9a75154b2d0027c214b013f4d88e8de4cbcdc63b67631ee0b8ecd639c4a07`。
+  旧7f830b5e构建完整保留在`~/Applications/ICSTeX Backups/ICSTeX-2.1.0-beta.4-before-structure-polish-20261002.app`。
+  实际安装路径启动已核对运行路径/摘要与欢迎页按钮外观；停在欢迎页，未动用户文稿、
+  最近列表或编辑偏好。结构/真实编译验收来自上述独立源码窗口，不扩大为安装版全流程验收。
+- 标签仍为本地Beta4/210004，不是新公开版本；官网/feed/公钥/Actions未改。
+  主树原有未提交源码保持不动。证据目录为
+  `~/.codex/visualizations/2026/10/02/icstex-structure-polish/`，含完整/补验/构建/安装收据。
+  本轮交付结束，等待用户体验反馈，不自动追加改造。
+
+### 前一安装版：工作台分区与布局记忆（2026-10-02，已被上节替换）
+
+- `codex/workbench-layout` 基于已推送的 `7284b20`；此前导出状态与性能源码在草稿
+  PR #8 单独留痕，依赖 PR #7。布局提交 `2532862`、窄窗退出修复 `6e1603c` 均已
+  推送到 PR #9（base 为 PR #8 分支）；保持草稿，未合并、不直接推 main、不启用 Actions。
+- 顶部按文件、编译/输出、视图分组，普通导出 PDF 复用原 QAction 直接显示；项目
+  状态独立一行，相关菜单改称“项目操作”。左侧“项目导航”按项目/工具/写作分组，
+  原九个面板及索引保留。源码标题复用标签栏空位，不新增编辑器或 PDF 实例。
+- 新用户宽窗默认显示项目导航，欢迎页隐藏；已有显隐选择继续恢复。源码区保留
+  960px与字号阈值，调整列宽预算后1440/100%导航、源码、PDF可并排，1080/150%
+  仍切换显示。配色与字体体系不变，不增加刷新定时器、动画或编译请求。
+- 用户拖动源码/PDF、控制台分隔线只更新内存比例，接受关闭后写本机QSettings；
+  取消退出不写。欢迎页、窄窗、无PDF、最小尺寸夹紧和Block暂时布局不覆盖比例。
+- 分项测试通过；96项相关GUI批次发现两条旧几何前提，已针对性修正并保留边界
+  断言：隐藏工具条不当作可见控件，compact测试使用生产支持的1080/150%路径。
+  另复现并修复文稿仍打开时在窄窗直接退出会保存临时隐藏导航的问题；17项相关专项
+  通过，保留用户宽屏的显示/隐藏选择，不新增设置键。
+- 原生隔离示例通过真实FINAL、三栏与控制台显示、拖动两条分隔线、正常退出/重启、
+  恢复比例和再次显示PDF；0.5973535/0.3562914 两项比例重启前后相同。新工具栏导出
+  打开原保存面板，取消无额外导出/编译。原生记录对应 `e610fc7c`；最终只再改了窄窗
+  退出保存条件，由上述复现/专项覆盖，未重复原生宽窗流程。
+- 最终离屏四状态截图对应当前源码。旧探针在150%截图早于最后一轮PDF绘制，曾拍到
+  空白；补充整窗最终截图的目标像素检查后通过，不改PDF渲染逻辑、不把早期空白算验收。
+- 最终 `packaging/preflight.sh` 完整执行：版本/compileall通过，1902项/353.540s，
+  命令355.318s、退出1。当时1891项通过，11项安装互斥测试被宿主ChatGPT/Codex的
+  Autoupdate阻挡，真实已安装helper的`--idle`也返回1。该原始失败收据保持不变。
+  首轮1901项/377.423s的失败收据也保留，最终检查对应窄窗修复后的源码，不拼接版本。
+- 最终app `7cb9d8f6bc17b6fc2bb925f03638fecde5cdfe99c811751b4f7e9166c1aa3204`；
+  app+tests `7a5cabf37ca21024d19cd846314694ec9337e15cd07211c9c67fbd4d59873da5`，
+  最终全套前后相同。Qt/字体、临时目录异步日志及原生IMK提示保留，不声称零警告。
+- 证据：`~/.codex/visualizations/2026/10/02/icstex-workbench-layout/` 的
+  `after-paint-verified/`、`native/{first,restart}-receipt.json`、`compact_close_probe.json`、
+  `preflight-final/result.json`。后续用户明确要求继续安装，完成以下同源码补验与交付。
+- 宿主更新器退出且真实helper `--idle`返回0后，仅补跑安装互斥模块：13项/3.264s，
+  命令3.391s、退出0，覆盖全部11项受阻检查。补验前后摘要与上次全套完全相同；
+  组合门槛满足，不把原preflight退出1追溯改成0，也未重复其他1891项。
+- 沿用现有spec、Python3.12.6/PySide6 6.11.1/PyInstaller6.21.0和Beta4 runtime，
+  新包构建33.093s、退出0。209个模块/入口及资源匹配源码，无新增漏包；三个raw
+  可选worker逐字节匹配。arm64、ad-hoc deep/strict签名通过；保留libobjc ctypes警告，
+  不声称Developer ID或公证。版本标签仍为本地2.1.0-beta.4/210004，feed/公钥不变。
+- 通过InstallationLease备份并替换`/Applications/ICSTeX.app`，475文件/160链接与
+  候选逐项一致；验证在释放互斥前完成。新程序SHA256：
+  `7f830b5e9f810a1bf61944bca9d57a12f2ad503106a359c539fb834276191fcb`。
+  旧版完整保留于`~/Applications/ICSTeX Backups/ICSTeX-2.1.0-beta.4-before-workbench-20261002.app`，
+  旧摘要`ae4d24e1…1f959d`未变。含资源源码摘要为`ceff216a…fe1ce27`。
+- 从实际安装路径启动，运行路径/摘要匹配；原生工具栏显示文件/编译输出/视图分组，
+  导引实际显示新分区与布局记忆说明。关闭导引后留在欢迎页；未打开学生文稿、改变
+  最近列表或测试偏好，不把此检查扩称新的安装版完整编译/导出验收。
+- 安装证据在`~/.codex/visualizations/2026/10/02/icstex-workbench-install/`：
+  `validation-receipt.json`、`guard-recheck.log`、`build-receipt.json`、`package-receipt.json`、
+  `install-receipt.json`与沿用保护流程的本地脚本。本轮交付结束，不自动发布、合并PR
+  或继续UI/性能实验；官网、公开更新源、Actions和依赖均未改。
+
+### 已并入当前源码的性能基线：首次打开/编译让行与文档关闭回收（2026-10-02）
+
+- 实现在独立工作树 `/Users/leo.xu/.codex/worktrees/github-workflow/ICSTeX`，分支
+  `codex/first-compile-session-perf`。以主树当前有效未提交源码 app `5aece7ca` 为基线，
+  完整保留此前自动导出状态 UI；主树应用代码、安装版和远端未替换。
+- 打开/切换文稿后复用 500ms 字数定时器；当前 root 的手动或自动编译在执行、排队、
+  等待依赖时，尚未启动的自动统计让行。成功 FINAL 和 PREVIEW 都延后 1000ms 统计，
+  让 PDF 先显示；失败、空文稿和手动强制刷新保留原行为。不会中断已经运行的统计。
+- 保存定时器随 editor 销毁；关闭或成功另存为后，只有该路径不再有打开的文稿时才
+  释放保存回声文本。取消关闭、保存失败、共用路径和外部冲突保护保留。
+- 真实 26 页 EE 的隔离副本，新进程/空项目缓存 A–C–C–A 对照：打开后立即手动 FINAL，
+  打开到当前 PDF 像素验证完成中位数 7.253s → 5.595s；打开调用 1.529s → 0.063s。
+  点编译后的等待 5.723s → 5.532s，暖预览约 3.2s，未证明暖预览提速。
+  这是离屏截图验证上界，不是 OS 冷启动、屏幕刷新时刻或所有首次编译情形。
+- 20 份独立约 64KiB 文稿编辑/保存/关闭后，残留 timer/tab/保存文本由 20/20/20 降为
+  0/0/0，消除 1,310,420 字节被引用的保存文本。RSS 未下降，不声称小时级稳定或内存
+  占用降低比例。另有短多文件/BibTeX 项目的真实编译与自动保存验证。
+- 原生独立示例已看到最新正式 PDF、修改标题后的最新快速预览及完成的字数结果，
+  测试窗口正常退出；未操作安装版、用户文稿或实际设置。
+- 最终测量工具另补唯一色、编辑前旧帧反例和截图/扫色分段。末轮 A/C 首份 PDF 上界
+  14.760s/9.886s，暖预览 3.798s/6.357s；编译器耗时也大幅变化，系统负载快照为
+  23.55/17.24/11.84。不能从这对样本判定暖预览改善或回退原因，也不保证固定提速比例。
+  两树源码和原稿摘要不变，旧帧对下一目标色命中为 0；原始较差样本未删。
+- 新增 12 项回归及相关专项通过；compileall 通过。完整 discovery 执行 1889 项，
+  542.158s（命令 545.392s），退出 1：1878 项通过，11 项安装互斥测试在进入测试主体前
+  被宿主 `/Applications/ChatGPT.app/.../Autoupdate` 阻挡。该全局 `--idle` 门槛代码未改，
+  未终止宿主更新、模拟成功或削弱断言；待它自然退出后仅补跑 `tests.test_update_install_guard`。
+  既有 QPdfLinkModel/离屏字体/临时目录异步诊断仍存在，不能称全套通过或零警告。
+- 回归前后 app `7f0048e36e308b58182339215cd08033d6094ccd3b7cbfb4fc44bf4589f08fb4`，
+  app+tests `f2f078b067c8738ea0dea72336247243ee50cab2646ce2ee2517c52cc1d1eac6` 一致。
+  证据在 `~/.codex/visualizations/2026/10/02/icstex-first-session-perf/`：
+  `ee-{a1,c1,c2,a2}`、`ee-final-{a,c}`、`lifetime-{before,after}`、`native-corrected`、
+  `regression/result.json`。源码完成局部修复，不宣称完整验收；未提交、推送、打包或安装。
+
+### 前一安装版：常驻自动导出状态（源码 2026-10-01，本机安装 2026-10-02，已被上节替换）
+
+- 普通 PDF 首次导出后，在 PDF 区下方显示目标路径、上次导出时间和当前同步状态；
+  未开启的项目不占预览空间。长路径中间省略、悬停可见完整路径，三个操作按钮复用
+  现有选址/停止和系统文件夹入口；Block/欢迎页不显示普通导出状态条。
+- 成功显示“已同步”；源码修改、正式编译、导出进行、失败、取消、停止分别显示对应
+  状态。失败提示保留，不随临时状态栏消失。重开只凭持久目标不能确认最新，显示
+  “待正式编译确认”。提示绑定 root 与目标记录；成功还绑定已发布的 revision/build。
+- 这是显示状态，不是新的写入授权/文件有效性缓存。没有新常驻扫描器或自动编译；
+  刷新时不读 PDF，不用 mtime 决定新旧；时间字段只展示上次已记录导出的写入时间。
+  未常驻监视的外部目标修改仍在后续正式编译/导出时重新核验。
+- 60 项 PDF/导出专项通过，覆盖状态持久显示、root 切换、恢复目标但不误报同步、
+  三个入口、无额外读文件/定时器、360/1000 宽路径省略与按钮不重建。
+  compileall 通过。完整回归已执行 1877 项/356.081 秒（命令 357.731 秒），1876 项通过，
+  唯一失败是发布检查缺少本地旧 Beta 4 DMG。检查脚本/发布元数据未改；从既有 GitHub
+  Release 恢复原 DMG，65672242 字节与清单 SHA256 cfcffab1…821c94 一致后，受影响的
+  17 项网站/发布检查复验通过（0.159 秒）。没有改断言、重打包、修改原始失败收据，
+  也没有重复整套；其余检查复用同源码结果。Qt/临时目录异步诊断保留。
+- 冻结 app `5aece7ca6825e20b1fafa5d7eb2b0af0bc2516015b71167fef8a6d4b140debee`，
+  app+tests `8df33741ce681ee71fd088c87523e8df1984325383d83f477dd0ba9e6dfad4cf`，
+  完整回归前后及缺失制品恢复后均一致。未宣称原始全量命令退出 0。
+- 独立原生示例已通过真实首次保存面板选址、重开待确认、编辑待编译、真实 FINAL
+  自动同步、目标移走后的红色失败、换位置恢复和停止；新的导出文件与 FINAL 字节
+  一致且含更新后的标题。首次探针未应用主题，只验证交互；随后按应用正式启动的
+  apply_theme 复核绿色/红色显示。Python bundle id 有歧义，改用已确认的 3.12 路径。
+  不操作学生文稿或真实设置；原生独立窗口已退出，用户安装版保持运行且未替换。
+- 本地证据目录 `~/.codex/visualizations/2026/10/01/icstex-export-status/`，包括
+  baseline-pr.md、native_probe.py、regression/result.json、release-recheck.json 与独立项目；
+  原生可见状态见工具记录。QPdfLinkModel、
+  IMKCFRunLoop/窗口移动提示保留。开发阶段未发布/打包/安装；GitHub 的 PR #7 不包含本增量。
+- 2026-10-02 按明确授权完成本机交付。当前源码的 packaging/preflight.sh 包含
+  compileall、版本检查与 1877 项测试，全部通过：335.014 秒，命令 338.267 秒、退出 0；
+  前后 app/app+tests 摘要与上文一致。10-01 的原始失败记录仍保留，不追溯改写。
+- 沿用既有 spec、Python/PySide6/PyInstaller 和 Beta 4 更新器 runtime；209 个模块/入口、
+  资源及三个 raw worker 源文件与源码匹配，arm64、ad-hoc deep/strict 签名通过。
+  InstallationLease 保护替换，475 个文件/160 个链接与候选一致。安装路径为
+  `/Applications/ICSTeX.app`，新程序 SHA256：
+  `ae4d24e1841b443c6b46dddca0529a657601a058d82088ee1c1e882d8f1f959d`。
+- 旧版完整保留于
+  `~/Applications/ICSTeX Backups/ICSTeX-2.1.0-beta.4-before-export-status-20261002.app`。
+  本机标签仍为 2.1.0-beta.4 / 210004，保留原更新源/公钥，是未公开发布的本地构建；
+  不声称 Developer ID 或公证。原生从安装路径启动，导引实际显示常驻状态/换位置/停止
+  的新说明，关闭导引后留在欢迎页；未打开学生文稿或修改设置，未重复原生导出矩阵。
+  构建保留 libobjc ctypes 警告及旧制品提示。证据在
+  `~/.codex/visualizations/2026/10/02/icstex-export-status-install/`：preflight/result.json、
+  build.log、package-receipt.json、install-receipt.json。本次没有源码提交/推送或网站/feed 更新。
+
+### 前一安装版：导出后随正式编译自动更新（2026-09-28，已被上节替换，未公开发布）
+
+- 普通 PDF 首次导出成功后，本机设置按编译 root 记住目标；后续有效 FINAL 成功后
+  复用同一后台校验/发布流程，原子更新上次导出的文件。无需再次选位置或额外编译。
+  重开窗口/设置仍保留绑定；导出到新位置成功后才改变目标，“文件 → 停止自动更新
+  导出 PDF”解除绑定而保留文件。导出对话框、成功提示和内置指引说明这一默认行为。
+- 快速预览、失败、旧 build/revision、未保存内容和外部冲突不更新目标；只允许替换
+  上次导出的同一身份和内容。缺失、改动、替换、符号链接、不可写目标或目录拒绝更新。
+  暂存/替换失败保留原文件；替换前复核不声称文件系统 compare-and-swap（D028）。
+  编译产物/项目输入/内部记录不能用作更新目标；Agent、高级固定交付、Block 规则不变。
+- 后台 root 不切换标签或替换当前文稿的状态栏；另一个窗口停止更新或更换目标后，
+  迟到的自动更新回调不能重新覆盖设置。自动失败只通知状态栏/本地日志，不弹模态框。
+- 84 项相关专项通过；最终源码真实离屏 Qt + 本地 LaTeX 验证通过：一个文件选择器、
+  六次明确请求的编译（含 PREVIEW 和故意失败），无额外编译；新 FINAL 与导出字节相同，
+  文本确实更新，预览/失败/外部编辑不覆盖，重开窗口仍更新原目标，光标和滚动保持。
+  这是隔离自动化，不是原生保存面板或用户验收。compileall 通过，完整回归 1869 项
+  359.943 秒、命令 361.765 秒、退出 0，前后源码身份一致。保留 Qt 字体/离屏/
+  QPdfLinkModel 与临时目录异步诊断，不声称零警告。
+- 源码 app `192fbb24d61484590207c8c0c40ff7e52b1926ce73c55b0417f4d19e48ace03a`；
+  app+tests `32d0f8baa701ccfc2186f825e6ba5fc68a98af28012921c9b038e4a68948c90a`。
+  证据在 `~/.codex/visualizations/2026/09/28/icstex-auto-export/`；包含修改前快照、
+  final-probe/result.json 和回归收据。该批源码已于 2026-10-01 提交至 PR #7，尚未合并/公开发布。
+  学生文稿、依赖、远端和网站未改；后续按用户“更新”授权完成了下面的本机交付。
+- 本机交付前执行 packaging/preflight.sh：compileall、版本一致性及 1869 项通过，
+  测试 337.823 秒、命令 339.729 秒、退出 0，app/app+tests 摘要与上文一致。
+  沿用 PyInstaller spec 与 Beta 4 更新器 runtime，209 个模块/入口、资源和三个 raw
+  worker 源文件匹配；arm64、ad-hoc deep/strict 签名通过。不声称 Developer ID/公证。
+- 已通过 InstallationLease 备份并替换 `/Applications/ICSTeX.app`，475 个文件与
+  160 个链接逐项匹配候选。版本标签仍为 2.1.0-beta.4 / 210004，保留原更新源/公钥；
+  这是本地构建，不是公开 Beta 4 的相同字节。程序 SHA256：
+  `0c35dca663dfb721939d594d587d547038765fecfe40c104f796ad84359be445`。
+  旧版完整备份：
+  `~/Applications/ICSTeX Backups/ICSTeX-2.1.0-beta.4-before-auto-export-20260928.app`。
+- 从正式安装路径启动，原生“文件”菜单已显示“停止自动更新导出 PDF”；无打开文稿时
+  正确禁用。收起菜单后留在欢迎页，未打开学生文稿或改设置；不把菜单核验称为新的
+  原生编译/导出验收。打包保留既有 libobjc ctypes 警告和旧制品提示。
+  交付证据在 `~/.codex/visualizations/2026/09/28/icstex-auto-export-install/`：
+  preflight/result.json、build.log、package-receipt.json、install-receipt.json。
+
+### 前一安装版：普通 PDF 两步导出（源码 2026-09-26，本机安装 2026-09-28，已被上节替换）
+
+- 普通 LaTeX 文稿点击“导出 PDF”，在一个文件选择窗口点“更新并导出”即可。
+  已有可核验的当前正式 PDF 直接导出；否则复用现有保存/依赖/FINAL 编译流程，完成后
+  自动导出。进度窗口可取消导出，但不撤销已完成的保存，已请求的编译可能继续。
+  不再要求用户经过固定内容、检查报告、摘要审阅和重复确认；同名目标默认推荐新名字。
+- 不恢复旧的仅凭状态/文件存在就复制的路径。复用真实 FINAL 输入/PDF 证据、
+  CaptureLease、冻结输入与独占新文件发布；校验在工作线程进行。预览、旧结果、
+  外部冲突、另一窗口未保存内容、输入/PDF 变化或已存在目标均不能冒充成功导出。
+  root/build/revision 绑定和 GUI 线程结果处理保留，迟到回调不能清掉新请求。
+- 高级“准备提交”、Block 交付、源码/报告选择与工程 ZIP 保留独立流程和原保护。
+  内置教程、练习完成提示及使用指引已区分普通导出与高级交付；决定见 D027。
+- 相关专项 106 项通过，另补依赖延后失败、教程文案各 1 项通过。最终 preflight
+  包含 compileall 和完整 1848 项：569.349 秒，命令 572.269 秒、退出 0。
+  前后 app `8f41a822e18608f2971c43baca0b12e46f31166d7a811bc30b439a8415f71e97`，
+  app+tests `308896c72344383c5f3103e25565f22782111918580e2f7ceeb51352d8d68e1d` 一致。
+- 隔离的离屏 Qt 真实流程：两次导出各只确认一个真实 Qt 文件选择器；第一次保存新
+  标题并正式编译，导出 25943 字节 PDF 与实际 FINAL 原字节一致，解析到新标题；
+  第二次导出没有再次编译。长文稿的源码光标和滚动位置保持不变。文件选择由测试
+  自动填写/确认，不称为 macOS 原生保存面板或真人验收。Qt/临时目录诊断仍保留。
+- 证据根 `~/.codex/visualizations/2026/09/26/icstex-simple-export/`：`result.json`、
+  选择器/完成截图、`preflight-final-v2/result.json`。先前完整检查为补齐内置教程
+  主动中断（退出 130），收据保留；不是最终通过记录。源码尚未提交/推送或部署。
+- 2026-09-28 用户授权替换本机。源码和测试身份与上述完整 preflight 一致，Python
+  3.12.6、PySide6 6.11.1、PyInstaller 6.21.0 及打包输入未改，复用该通过记录；
+  本次 compileall 另行通过，未重复无关测试。既有 spec 构建退出 0，209 个模块/入口、
+  资源和三个 raw worker 源文件匹配；arm64、ad-hoc deep/strict 签名通过。
+- 通过 InstallationLease 替换 `/Applications/ICSTeX.app`，475 个文件/160 个链接
+  与候选逐项一致。版本标签为 2.1.0-beta.4 / 210004，保留更新器与原 feed/key；
+  这是含两步导出的本地构建，不是下节公开 Beta 4 的相同字节。程序 SHA256：
+  `0964f8b8277175f1050c030363e20e3bbb3c4e23129a55bdb718ac18ae24f994`。
+  完整旧包保留于
+  `~/Applications/ICSTeX Backups/ICSTeX-2.1.0-beta.3-before-two-step-export-20260928.app`，
+  文件/链接均与替换前一致；未改用户设置或文稿，没有升级依赖或捆绑模型。
+- 从正式安装路径启动，原生导引“插图、引用和导出”页实际显示“导出 PDF → 更新并导出”
+  和自动保存/更新说明；关闭导引后留在欢迎页。本次未操作学生文稿，未重做原生保存
+  面板/真人导出验收。构建保留既有 libobjc ctypes 警告，不声称 Developer ID/公证。
+  安装证据：`~/.codex/visualizations/2026/09/28/icstex-simple-export-install/`
+  的 build.log、package-receipt.json、install-receipt.json；原生可见状态见工具记录。
 
 ### Beta 4 published: GitHub, production website and signed feed (2026-09-20)
 
@@ -24,7 +418,7 @@
   local source; it supplied the content merge base for the squashed main history.
 - Published identity is 2.1.0-beta.4 / 210004, macOS arm64 only. PR #4 merged source into
   main at 4ea00ff; PR #5 froze the identical tree into release/2.1 at 79fcd86. Tag
-  v2.1.0-beta.4 points to that release commit. Installed local Beta 3 remains unchanged.
+  v2.1.0-beta.4 points to that release commit. The current local installation is described above.
 - GitHub Release is public (prerelease, not draft), with both DMG/ZIP and six release documents.
   Anonymous ZIP download is 57188923 bytes, SHA256
   170696e77b5eca6b09fefe3bb4cdab95d2c4862c9ebe56589811220e4e01aa6a, identical to the
@@ -58,7 +452,7 @@
   package-receipt.json, signed-package-receipt.json, public-check/verified.json and build.log.
   Existing Qt/temp-path and libobjc build warnings remain. Old assets, tags and app are preserved.
 
-### 当前安装版：公式导航与显示留白（2026-09-20）
+### 前一安装版：公式导航与显示留白（2026-09-20，功能保留于当前安装版）
 
 - 用户已确认上一公式导航包功能可用，要求增大符号左右/上下间距并直接替换本机。
   本轮只改 MathEditorWidget 显示：字符额外字距 1.2、结构间隔 4、画布边距 16；
@@ -241,30 +635,12 @@
   测试 Qt/临时路径诊断、旧制品提醒及构建的系统 libobjc ctypes 提醒保留；普通 diff
   跟随 Qt 软链接产生循环提示，随后使用不跟随软链接的完整清单确认复制一致。
 
-### 已实现的任务导引与新手图文教程
+### 任务导引与图文教程基础
 
-- “帮助 / 欢迎页 → 新手导引”包含四页中文教程与四张真实界面配图，图片仅在打开
-  教程时读取，可显式单独打开；没有自动播放或网络图片。配图共 231294 字节。
-- “开始练习 / 继续上次练习”使用既有中文模板，在应用数据目录创建独立、不覆盖的
-  项目和设置文件；原窗口、草稿及编辑偏好保留。重开时使用当前应用缩放，避免旧练习
-  配置改变其他窗口。路径核验保留范围和符号链接保护。
-- 顶部导引按真实内容、主动编译动作和当前 root/revision/build-id 的 PDF 状态推进，
-  用户看到新标题后再确认。窄窗口提供“显示 PDF”，错误/旧预览不能充当成功；导出
-  仍进入既有准备提交流程。普通窗口无导引控制器，收起后停止导引刷新。
-- 练习内容可以保存并重新进入；关闭窗口后须重新编译确认当前 PDF。练习仅识别
-  单行普通文字标题，不是通用 LaTeX 教程引擎。14 项专项已通过；真实离屏练习已
-  验证新标题编译/可见像素、失败保留旧 PDF、光标/滚动和收起/继续。
-- 该批完成时 app Python 身份为
-  `003d6540a3c01fdad30464de54316cd9b84326387297126784d04ee0697adb32`。
-  证据根为 `/Users/leo.xu/.codex/visualizations/2026/09/16/icstex-task-guide/`，
-  `capture-delivery/result.json` 记录相同源码与四张图片摘要。
-- 最终 compileall / 工具语法检查通过；完整回归 1803 项/718.104 秒，命令 721.288 秒，
-  退出 0、前后身份一致。app+tests 为
-  `e4ceb8d5ddeb067241dbad4861a30ed7a6dc9e20a6a272db3076d505f6440df0`，
-  完整收据在 `full-final/result.json`。Qt 提示及临时目录异步读取诊断仍保留，不称零警告。
-- 该源码阶段未提交/推送或部署官网；后续本地打包安装状态见上节。
-  离屏检查不是学生试用或原生全流程验收；导出图仅展示准备页，未把截图当成完成交付。
-  历史 allWidgets 原生异常未在此任务归因，不宣称根除。
+当前四步导引与验证事实见本文件开头；首批三步导引的历史收据在
+`~/.codex/visualizations/2026/09/16/icstex-task-guide/`，不是当前源码的验证结果。
+独立练习继续复用中文模板及不覆盖事务，保留路径范围/符号链接保护、原窗口草稿
+和应用缩放；仅识别单行普通标题，不是通用LaTeX教学引擎。普通窗口不创建导引控制器。
 
 ### 已完成的局部精简与一致性优化（本轮保留）
 

@@ -112,6 +112,8 @@ def main() -> int:
     parser.add_argument("--require-tag-at-head", action="store_true")
     parser.add_argument("--require-source-version", action="store_true",
                         help="release gate: published manifest must match this checkout")
+    parser.add_argument("--require-published", action="store_true",
+                        help="deployment gate: both public repository and published release must be confirmed")
     args = parser.parse_args()
 
     problems: list[str] = []
@@ -123,6 +125,11 @@ def main() -> int:
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"Release consistency FAILED: {exc}", file=sys.stderr)
         return 1
+
+    if args.require_published:
+        for flag in ("github_repository_public", "github_release_published"):
+            if manifest.get(flag) is not True:
+                fail(problems, f"production deployment requires confirmed {flag}")
 
     try:
         site = json.loads(SITE_PATH.read_text(encoding="utf-8"))

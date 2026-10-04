@@ -1,15 +1,34 @@
 # FORCODEX.md
 
-Completed (2026-09-20): authorized GitHub integration and macOS Beta 4 publication.
+## 当前任务：类型面包屑修正与 Beta 5 发布（2026-10-05）
 
-Source PR #4 and release-freeze PR #5 are merged. v2.1.0-beta.4 / 210004 is public
-with verified DMG/ZIP; the existing Vercel website and signed feed serve that release.
-Live anonymous feed/archive verification and visible download-page checks passed.
-Current facts, hashes and acceptance limits are in docs/PROJECT_STATE.md.
+用户接受其他功能，要求路径分层突出且末级为块类型，不再显示表格/正文摘要。
+只修改路径呈现和相应验证，不扩展编译、表格或整体布局。用户已明确授权修复后
+更新本机、提交GitHub及更新Vercel网站安装包；按现有流程发布独立Beta 5/210005，
+沿用现有更新账户/公钥/通道，不覆盖旧版本资产，不新建密钥。Keychain或登录提示
+需用户接管。GitHub用PR和Squash流程，Actions保持关闭，不绕过规则。
+先专项与原生查看，版本冻结后完整preflight，再核对制品/签名、本机与公开状态。
+收口当前已验收的累积源码，保留原工作树与索引。新证据根为
+~/.codex/visualizations/2026/10/05/icstex-beta5-release/，此前证据与备份保留。
 
-Actions remains disabled. No force-push, rule bypass, key export, document changes,
-model download or installed-app replacement occurred. The local Beta 3 is retained
-as an upgrade starting point. Collaborator owns final other-device automatic discovery,
-download/install/restart acceptance; do not mark that as passed from HTTP tests.
-Stop this release task after the delivery-record PR is merged. Continue only for
-specific new feedback, not more feature development or an unrequested test matrix.
+本轮发布授权取代此前待验收/不发布门槛；没有额外平台、Developer ID或公证授权。
+
+工作树 `~/.codex/worktrees/structured-writing/ICSTeX`，分支 `codex/structured-writing`。
+基于10cb905并带入原有效工作树全部未提交改动；继承差异逐字节核验一致，原工作树、
+主树及索引不动。证据：`~/.codex/visualizations/2026/10/04/icstex-structured-writing/`。
+
+复用已安装pylatexenc 2.10及make_walker，不新增解析器、浏览器或AI依赖。源码是
+唯一内容真值；块是带原文范围的结构视图。局部修改、拖动、嵌套使用源编辑器与同一
+Undo栈，不重生成全文。未知语法原样保留，不完整源码拒绝结构操作；旧Block JSON
+工程继续兼容，不强制迁移。多文件通过已有文件树逐文件编辑，不宣称任意LaTeX可视化。
+
+交付：结构／源码切换，章节、正文、公式、图片、表格、列表的添加、编辑、拖动、
+嵌套与定位。PDF当前块使用当前整篇结果定位聚焦，不增加独立编译链或导出权限。
+复用保存、编译、PDF搜索、SyncTeX及导出。按选定稿统一外观，不混入其他功能。
+
+先专项及真实隔离示例，再必需compileall、完整unittest及packaging/preflight.sh。
+安装保留旧包、检查运行实例，不强退应用或丢失文稿。额度触顶即停，不用Credits或
+重置券；不调用代理。原有四步教程、回滚历史和主树修改保留。
+
+用户已授权：明确辨认为独立测试.tex的窗口可直接正常关闭，不必反复询问；不能
+仅凭相似文件名推断，也不能连带关闭其他真实文稿。当前这次用户已自行保存退出。

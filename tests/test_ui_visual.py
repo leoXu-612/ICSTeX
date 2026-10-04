@@ -45,6 +45,110 @@ def _app() -> QApplication:
     return instance
 
 
+class CompileActivityAndTableControlsTests(TestCase):
+    def test_breadcrumb_paints_distinct_path_segments_and_current_kind(self):
+        from PySide6.QtGui import QAccessible
+        from app.gui.structure_view import StructureBreadcrumb
+        from app.gui.theme import COLOR_SELECTED
+        app = _app()
+        breadcrumb = StructureBreadcrumb()
+        try:
+            breadcrumb.set_path(("main.tex", "实验方法", "数据处理", "表格"))
+            interface = QAccessible.queryAccessibleInterface(breadcrumb)
+            self.assertEqual(interface.role(), QAccessible.Role.StaticText)
+            self.assertIn("表格", interface.text(QAccessible.Text.Name))
+            for width in (220, 460):
+                breadcrumb.resize(width, breadcrumb.sizeHint().height())
+                breadcrumb.show()
+                app.processEvents()
+                labels, gap = breadcrumb._visible_parts()
+                self.assertEqual(labels[-1][0], "表格")
+                self.assertGreater(len(labels), 1)
+                last_x = sum(w for _, w in labels[:-1]) + gap * (len(labels) - 1)
+                image = breadcrumb.grab().toImage()
+                scale = image.devicePixelRatio()
+                y = round(breadcrumb.height() * .5 * scale)
+                self.assertEqual(image.pixelColor(round((last_x + 4) * scale), y).name(), COLOR_SELECTED)
+                self.assertEqual(image.pixelColor(round(4 * scale), y).name(), "#f0f2ef")
+                self.assertEqual(breadcrumb.toolTip(), "main.tex › 实验方法 › 数据处理 › 表格")
+        finally:
+            breadcrumb.close()
+            breadcrumb.deleteLater()
+            app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_activity_moves_only_while_visible_and_respects_reduced_motion(self):
+        from PySide6.QtWidgets import QWidget
+        from app.gui.compile_activity import CompileActivityBar
+        app = _app()
+        window = QWidget()
+        bar = CompileActivityBar(window)
+        bar.resize(112, 16)
+        bar.set_reduced_motion(False)
+        try:
+            window.show()
+            bar.show()
+            app.processEvents()
+            first = bar.grab().toImage()
+            QTest.qWait(180)
+            second = bar.grab().toImage()
+            self.assertNotEqual(first, second)
+            self.assertTrue(bar._timer.isActive())
+            self.assertEqual((bar.minimum(), bar.maximum()), (0, 0))
+            self.assertFalse(bar.isTextVisible())
+            bar.set_reduced_motion(True)
+            still = bar.grab().toImage()
+            QTest.qWait(80)
+            self.assertEqual(still, bar.grab().toImage())
+            self.assertFalse(bar._timer.isActive())
+            bar.set_reduced_motion(False)
+            bar.hide()
+            self.assertFalse(bar._timer.isActive())
+            bar.show()
+            window.showMinimized()
+            app.processEvents()
+            self.assertFalse(bar._timer.isActive())
+            window.showNormal()
+            app.processEvents()
+            self.assertTrue(bar._timer.isActive())
+        finally:
+            window.close()
+            window.deleteLater()
+            app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_table_controls_fit_compact_dialog_without_oversized_buttons(self):
+        from PySide6.QtWidgets import QPushButton
+        from app.gui.insert_panel import TableDialog
+        from app.gui.theme.ui_scale_manager import UiScaleManager
+        application = _app()
+        if not hasattr(application, "ui_scale_manager"):
+            application.ui_scale_manager = UiScaleManager(application)
+        manager = application.ui_scale_manager
+        previous_scale = manager.scale
+        manager.apply_scale(1.0)
+        dialog = TableDialog()
+        try:
+            for width in (620, 840):
+                dialog.resize(width, 640)
+                dialog.show()
+                application.processEvents()
+                self.assertLessEqual(dialog.width(), width)
+                self.assertGreaterEqual(dialog.preview_table.height(), 160)
+                for button in dialog.findChildren(QPushButton):
+                    if button.isVisibleTo(dialog):
+                        self.assertLess(button.height(), 50)
+                        self.assertTrue(dialog.rect().contains(button.mapTo(dialog, button.rect().center())))
+                dialog.options.details_button.setChecked(True)
+                application.processEvents()
+                self.assertTrue(dialog.caption_edit.isVisibleTo(dialog))
+                self.assertTrue(dialog.label_edit.isVisibleTo(dialog))
+                dialog.options.details_button.setChecked(False)
+        finally:
+            dialog.close()
+            dialog.deleteLater()
+            application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+            manager.apply_scale(previous_scale)
+
+
 class ModalWorkflowKeyboardTests(TestCase):
     """Actual focus traversal; synthetic FINAL evidence is used only for layout."""
 
@@ -707,7 +811,117 @@ class WritingWorkspaceLayoutTests(TestCase):
         self.assertFalse(self.window.pdf_panel_wrapper.isVisible())
         self.assertFalse(self.window.bottom_panel.isVisible())
         self.assertFalse(self.window.workspace.toolbar.isVisible())
+        self.assertFalse(self.window.source_title.isVisible())
         self.assertGreater(self.window.welcome_page.width(), self.window.width() * 0.95)
+
+    def test_workbench_groups_reuse_actions_and_expose_ordinary_pdf_export(self):
+        toolbar = self.window.findChild(QToolBar, "mainToolbar")
+        self.assertEqual([label.text() for label in toolbar.findChildren(QLabel, "toolbarGroupLabel")],
+                         [])
+        self.assertGreaterEqual(sum(action.isSeparator() for action in toolbar.actions()), 2)
+        actions = toolbar.actions()
+        expected = (self.window.new_project_action, self.window.open_file_action, self.window.save_action,
+                    self.window.compile_action, self.window.stop_compile_action, self.window.export_pdf_action,
+                    self.window.sync_pdf_action, self.window.toolbox_action, self.window.console_action)
+        positions = [actions.index(action) for action in expected]
+        self.assertEqual(positions, sorted(positions))
+        for action in expected:
+            self.assertEqual(actions.count(action), 1)
+            self.assertIs(toolbar.widgetForAction(action).defaultAction(), action)
+        menu_actions = self.window.menuBar().actions()
+        file_action = next(action for action in menu_actions if action.text() == "文件")
+        file_menu = file_action.menu()
+        self.assertIn(self.window.export_pdf_action, file_menu.actions())
+        self.assertFalse(self.window.export_pdf_action.isEnabled())
+        self.assertFalse(self.window.compile_authorized_roots)
+        self.assertEqual(self.window.toolbox_action.text(), "项目导航")
+
+    def test_source_view_switch_and_project_navigation_keep_existing_widget_identity(self):
+        from PySide6.QtCore import QPoint, QRect
+        self.window.resize(1440, 900)
+        self.window.new_document()
+        self.window.set_toolbox_visible(True)
+        self.settle()
+        self.assertTrue(self.window.source_title.isHidden())
+        title = self.window.structure.mode_widget
+        self.assertIs(self.window.editor_tabs.cornerWidget(Qt.Corner.TopRightCorner), title)
+        self.assertEqual(self.window.structure.structure_button.text(), "结构")
+        self.assertEqual(self.window.structure.code_button.text(), "源码")
+        self.assertTrue(title.visibleRegion().contains(title.rect()))
+        title_rect = QRect(title.mapTo(self.window, QPoint()), title.size())
+        tab_bar = self.window.editor_tabs.tabBar()
+        tab_rect = QRect(tab_bar.mapTo(self.window, tab_bar.tabRect(0).topLeft()), tab_bar.tabRect(0).size())
+        self.assertFalse(title_rect.intersects(tab_rect))
+        navigation = self.window.toolbox_navigation
+        self.assertEqual(navigation.count(), 9)
+        self.assertIs(navigation.widget(0), self.window.tree)
+        self.assertIs(navigation.widget(1), self.window.outline_panel)
+        self.assertEqual([label.text() for label in navigation.findChildren(QLabel, "toolboxSectionLabel")],
+                         ["项目", "工具", "写作"])
+        buttons = [navigation.navigationButton(index) for index in range(9)]
+        for index in (1, 7, 0):
+            navigation.setCurrentIndex(index)
+            self.assertIs(navigation.currentWidget(), navigation.widget(index))
+            self.assertTrue(buttons[index].isChecked())
+        self.window.resize(1080, 720)
+        self.settle()
+        self.window.resize(1440, 900)
+        self.settle()
+        self.assertIs(self.window.structure.mode_widget, title)
+        self.assertEqual([navigation.navigationButton(index) for index in range(9)], buttons)
+        self.assertFalse(self.window.compile_authorized_roots)
+
+    def test_wide_navigation_keeps_source_and_loaded_pdf_beside_each_other(self):
+        from PySide6.QtCore import QPoint, QRect
+        from tests.test_gui_editor import wait_until
+        from tests.test_pdf_panel import _write_zoom_pdf
+        self.window.resize(1440, 900)
+        self.window.new_document()
+        self.window.set_toolbox_visible(True)
+        self.assertTrue(wait_until(lambda: not self.window.dependencies.is_busy))
+        editor = self.window.current_tab().editor
+        text = editor.toPlainText()
+        area = self.window.source_preview_area
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "layout.pdf"
+            _write_zoom_pdf(path)
+            self.window.pdf_panel.load_pdf(path)
+            self.assertTrue(wait_until(lambda: area._preview_available))
+            self.settle()
+            self.assertTrue(self.window.toolbox_dock.isVisible())
+            self.assertFalse(area._compact)
+            self.assertTrue(editor.isVisible())
+            self.assertTrue(area.pdf.isVisible())
+            self.assertFalse(area.switcher.isVisible())
+
+            def bounds(widget):
+                return QRect(widget.mapTo(self.window, QPoint()), widget.size())
+
+            panes = [bounds(widget) for widget in (self.window.toolbox_dock, area.editor, area.pdf)]
+            for index, pane in enumerate(panes):
+                self.assertTrue(self.window.rect().contains(pane), (index, pane))
+                self.assertGreater(pane.width(), 250)
+                for other in panes[index + 1:]:
+                    self.assertFalse(pane.intersects(other), (pane, other))
+
+            self.window.set_ui_scale(1.5)
+            self.window.resize(1080, 720)
+            self.window.set_toolbox_visible(True)
+            self.settle()
+            self.assertTrue(area._compact)
+            for selected in (True, False):
+                area.select_pdf(selected)
+                self.settle()
+                self.assertEqual(area.pdf.isVisible(), selected)
+                self.assertEqual(editor.isVisible(), not selected)
+                pane = area.pdf if selected else area.editor
+                self.assertTrue(self.window.rect().contains(bounds(pane)))
+                for button in (area.editor_button, area.pdf_button):
+                    self.assertTrue(button.visibleRegion().contains(button.rect()))
+            self.assertIs(self.window.current_tab().editor, editor)
+            self.assertEqual(editor.toPlainText(), text)
+            self.assertFalse(self.window.compile_authorized_roots)
+            self.window.pdf_panel.clear_pdf()
 
     def test_restored_toolbox_waits_for_project_and_survives_welcome_restart(self):
         self.window.resize(1440, 900)
@@ -921,14 +1135,14 @@ class WritingWorkspaceLayoutTests(TestCase):
         self.window.new_document()
         self.settle()
         self.assertTrue(self.window.bottom_tabs.isHidden())
-        self.window.bottom_collapse_button.click()
+        self.window.console_button.click()
         self.settle()
         self.assertFalse(self.window.bottom_tabs.isHidden())
         self.assertFalse(self.settings.settings.value("window/console_collapsed", True, type=bool))
         self.window.update_document_view_state()
         self.settle()
         self.assertFalse(self.window.bottom_tabs.isHidden())
-        self.window.bottom_collapse_button.click()
+        self.window.console_button.click()
         self.window.update_document_view_state()
         self.assertTrue(self.window.bottom_tabs.isHidden())
 
@@ -955,7 +1169,7 @@ class WritingWorkspaceLayoutTests(TestCase):
         self.assertFalse(self.window.bottom_tabs.isHidden())
         self.assertIs(self.application.focusWidget(), editor)
         self.assertTrue(self.settings.settings.value("window/console_collapsed", True, type=bool))
-        self.window.bottom_collapse_button.click()
+        self.window.console_button.click()
         self.window.run_project_check(switch_to_panel=True)
         self.assertFalse(self.window.bottom_tabs.isHidden())
 
@@ -994,6 +1208,9 @@ class WritingWorkspaceLayoutTests(TestCase):
     def test_narrow_pair_preserves_widgets_selection_scroll_undo_and_wide_split(self):
         from PySide6.QtGui import QTextCursor
         self.window.new_document()
+        # Compare the same explicit wide layout before and after compact mode;
+        # new workspaces now start with navigation visible.
+        self.window.set_toolbox_visible(False)
         editor = self.window.current_tab().editor
         editor.setPlainText("line\n" * 300)
         editor.moveCursor(QTextCursor.MoveOperation.End)
@@ -1056,6 +1273,209 @@ class WritingWorkspaceLayoutTests(TestCase):
         self.window.resize(1440, 900)
         self.settle()
         self.assertEqual(area.splitter.sizes(), widths)
+
+
+class WorkbenchSurfaceTests(TestCase):
+    """Local paint feedback must not move controls or delay their actions."""
+
+    setUp = WritingWorkspaceLayoutTests.setUp
+    settle = WritingWorkspaceLayoutTests.settle
+    dispose = WritingWorkspaceLayoutTests.dispose
+
+    def test_tool_surfaces_distinguish_states_without_changing_geometry(self):
+        from PySide6.QtGui import QImage, QPainter
+        from PySide6.QtWidgets import QStyle, QStyleOptionToolButton
+        self.window.new_document()
+        self.window.resize(1440, 900)
+        self.settle()
+        toolbar = self.window.findChild(QToolBar, "mainToolbar")
+        targets = (toolbar.widgetForAction(self.window.save_action),
+                   toolbar.widgetForAction(self.window.compile_action),
+                   self.window.workspace.navigation, self.window.console_button,
+                   self.window.source_preview_area.editor_button)
+        state = QStyle.StateFlag
+        extras = {"normal": state.State_Enabled,
+                  "hover": state.State_Enabled | state.State_MouseOver,
+                  "pressed": state.State_Enabled | state.State_MouseOver | state.State_Sunken,
+                  "focus": state.State_Enabled | state.State_HasFocus | state.State_KeyboardFocusChange,
+                  "checked": state.State_Enabled | state.State_On,
+                  "checked_pressed": state.State_Enabled | state.State_On | state.State_Sunken,
+                  "disabled": state.State_None, "disabled_hover": state.State_MouseOver}
+        for button in targets:
+            option = QStyleOptionToolButton()
+            button.initStyleOption(option)
+            base = option.state & ~(state.State_Enabled | state.State_MouseOver | state.State_Sunken |
+                                    state.State_HasFocus | state.State_KeyboardFocusChange | state.State_On)
+            geometry, hint = button.geometry(), button.sizeHint()
+            images = {}
+            for name, extra in extras.items():
+                option.state = base | extra
+                image = QImage(button.size(), QImage.Format.Format_ARGB32_Premultiplied)
+                image.fill(Qt.GlobalColor.transparent)
+                painter = QPainter(image)
+                button.style().drawComplexControl(QStyle.ComplexControl.CC_ToolButton, option, painter, button)
+                painter.end()
+                images[name] = image
+            for left, right in (("normal", "hover"), ("hover", "pressed"),
+                                ("normal", "focus"), ("normal", "disabled")):
+                self.assertNotEqual(images[left], images[right], (button.objectName(), left, right))
+            if button.isCheckable():
+                self.assertNotEqual(images["normal"], images["checked"], button.objectName())
+                self.assertNotEqual(images["checked"], images["checked_pressed"], button.objectName())
+            self.assertEqual(images["disabled"], images["disabled_hover"], button.objectName())
+            self.assertEqual((button.geometry(), button.sizeHint()), (geometry, hint))
+            enabled = button.isEnabled()
+            for down, active in ((True, True), (False, False), (False, enabled)):
+                button.setDown(down)
+                button.setEnabled(active)
+                self.settle()
+                self.assertEqual((button.geometry(), button.sizeHint()), (geometry, hint), button.objectName())
+            self.assertIsNone(button.graphicsEffect())
+        self.assertFalse(self.window.compile_authorized_roots)
+
+    def test_enabled_surface_text_contrast_including_checked_press(self):
+        from app.gui.theme import (COLOR_ACCENT, COLOR_ACCENT_HOVER, COLOR_PRESSED,
+                                   COLOR_SELECTED, COLOR_SURFACE, COLOR_TEXT)
+        for foreground, background in ((COLOR_TEXT, COLOR_PRESSED),
+                (COLOR_ACCENT, COLOR_SELECTED), (COLOR_SURFACE, COLOR_ACCENT),
+                (COLOR_SURFACE, COLOR_ACCENT_HOVER)):
+            self.assertGreaterEqual(_contrast_ratio(foreground, background), 4.5)
+
+    def test_auto_compile_surface_has_static_hover_press_focus_and_disabled_states(self):
+        self.window.new_document()
+        self.settle()
+        toggle = self.window.auto_compile_toggle
+        geometry, hint = toggle.geometry(), toggle.sizeHint()
+        images = {}
+        for name, checked, hover, down, enabled, focus in (
+                ("normal", False, False, False, True, False),
+                ("hover", False, True, False, True, False),
+                ("pressed", False, True, True, True, False),
+                ("checked", True, False, False, True, False),
+                ("focus", False, False, False, True, True),
+                ("disabled", False, False, False, False, False),
+                ("disabled_hover", False, True, True, False, False)):
+            toggle.setChecked(checked)
+            toggle.setEnabled(enabled)
+            toggle.setAttribute(Qt.WidgetAttribute.WA_UnderMouse, hover)
+            toggle.setDown(down)
+            if focus:
+                toggle.setFocus(Qt.FocusReason.TabFocusReason)
+            else:
+                toggle.clearFocus()
+            images[name] = toggle.grab().toImage()
+            self.assertEqual((toggle.geometry(), toggle.sizeHint()), (geometry, hint), name)
+        for name in ("hover", "checked", "focus", "disabled"):
+            self.assertNotEqual(images["normal"], images[name], name)
+        self.assertNotEqual(images["hover"], images["pressed"])
+        self.assertEqual(images["disabled"], images["disabled_hover"])
+        self.assertIsNone(toggle.graphicsEffect())
+        self.assertFalse(self.window.compile_authorized_roots)
+
+    def test_feedback_preserves_immediate_actions_without_timers_or_restyling(self):
+        from PySide6.QtCore import QAbstractAnimation, QTimer
+        from PySide6.QtTest import QSignalSpy
+        self.window.new_document()
+        self.settle()
+        toggle = self.window.auto_compile_toggle
+        action = self.window.auto_compile_action
+        signal = QSignalSpy(action.toggled)
+        timers = set(self.window.findChildren(QTimer))
+        animations = self.window.findChildren(QAbstractAnimation)
+        with patch.object(self.application, "setStyleSheet") as restyle, \
+                patch.object(self.window, "compile_current") as compile:
+            QTest.mouseClick(toggle, Qt.MouseButton.LeftButton)
+            self.assertEqual(signal.count(), 1)
+            self.assertTrue(toggle.isChecked())
+            self.assertTrue(action.isChecked())
+            self.assertEqual(self.window.status_auto_label.text(), action.text())
+            toggle.setFocus(Qt.FocusReason.TabFocusReason)
+            QTest.keyClick(toggle, Qt.Key.Key_Space)
+            self.assertEqual(signal.count(), 2)
+            self.assertFalse(toggle.isChecked())
+            self.assertFalse(action.isChecked())
+            self.assertEqual(self.window.status_auto_label.text(), "手动编译")
+            toggle.setEnabled(False)
+            QTest.mouseClick(toggle, Qt.MouseButton.LeftButton)
+            QTest.keyClick(toggle, Qt.Key.Key_Space)
+            self.assertEqual(signal.count(), 2)
+            button = self.window.findChild(QToolBar, "mainToolbar").widgetForAction(self.window.compile_action)
+            self.window.compile_action.setEnabled(False)
+            QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+            self.window.current_tab().editor.insertPlainText("local draft")
+            self.settle()
+            compile.assert_not_called()
+            restyle.assert_not_called()
+        self.assertEqual(set(self.window.findChildren(QTimer)), timers)
+        self.assertEqual(self.window.findChildren(QAbstractAnimation), animations)
+        self.assertFalse(self.window.compile_authorized_roots)
+
+
+class UserGuideLayoutTests(TestCase):
+    def test_guide_actions_and_local_images_fit_normal_and_large_text(self):
+        import subprocess
+        import sys
+        # The application registers platform fonts before caching its stylesheet.
+        # Other tests can create QApplication in the opposite order; isolate this
+        # pixel-level check instead of changing their caches or allowing overflow.
+        result = subprocess.run(
+            [sys.executable, "-c", "from tests.test_ui_visual import UserGuideLayoutTests; "
+             "UserGuideLayoutTests().check_guide_layout()"],
+            cwd=Path(__file__).resolve().parents[1],
+            env={**os.environ, "QT_QPA_PLATFORM": "offscreen"},
+            capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def check_guide_layout(self):
+        from PySide6.QtWidgets import QDialogButtonBox
+        from app.gui.user_guide import UserGuideDialog
+        from tests.test_gui_editor import isolated_settings
+        QApplication.setDesktopSettingsAware(False)
+        application = _app()
+        owner = MainWindow(settings_store=isolated_settings())
+        scale = application.ui_scale_manager.scale
+        try:
+            for value, width, height in ((1.0, 660, 600), (1.5, 900, 720)):
+                owner.set_ui_scale(value)
+                dialog = UserGuideDialog(owner)
+                try:
+                    dialog.resize(width, height)
+                    dialog.show()
+                    QTest.qWait(20)
+                    close = dialog.findChild(QDialogButtonBox).button(QDialogButtonBox.StandardButton.Close)
+                    for control in (dialog.start_button, dialog.pages.tabBar(), close):
+                        self.assertTrue(control.visibleRegion().contains(control.rect()))
+                    for index in range(dialog.pages.count()):
+                        dialog.pages.setCurrentIndex(index)
+                        application.processEvents()
+                        browser = dialog.pages.widget(index)
+                        self.assertEqual(browser.horizontalScrollBar().maximum(), 0)
+                        self.assertIn("点击图片可放大", browser.toPlainText())
+                        self.assertNotIn("<!-- illustration -->", browser.toHtml())
+                    close.click()
+                    self.assertFalse(dialog.isVisible())
+                    self.assertFalse(owner.compile_authorized_roots)
+                finally:
+                    dialog.close()
+                    dialog.deleteLater()
+                    application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        finally:
+            owner.close()
+            owner.deleteLater()
+            application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+            application.ui_scale_manager.apply_scale(scale)
+
+    def test_missing_guide_image_keeps_the_steps_readable(self):
+        from app.gui.user_guide import illustrated_page
+        with TemporaryDirectory() as directory, \
+             patch("app.gui.user_guide.asset_path", return_value=Path(directory) / "missing.png"):
+            html = illustrated_page("<h2>导出</h2><!-- illustration --><p>点更新并导出。</p>",
+                                    "missing.png", "导出状态")
+        self.assertIn("本机未找到图示", html)
+        self.assertIn("点更新并导出", html)
+        self.assertNotIn("<img", html)
+        self.assertNotIn("<!-- illustration -->", html)
 
 
 class SourceWorkspacePanelTests(TestCase):
@@ -1145,7 +1565,9 @@ class SourceWorkspacePanelTests(TestCase):
         self.window.set_ui_scale(1.5)
         self.window.resize(1080, 720)
         self.window.workspace.refresh()
-        self.window.workspace._timer.stop()
+        # This fixture supplies display text, not live project state. A pending
+        # dependency callback can otherwise restart a stopped refresh timer.
+        self.window.workspace.shutdown()
         details = self.window.workspace.details
         self.assertIsInstance(details, QPlainTextEdit)
         text = "入口：" + "中文目录/" * 80 + "main.tex\n保存：尚未保存\nPDF：未编译\n提交检查：未知"
@@ -1391,8 +1813,13 @@ class BlockWorkspacePanelTests(TestCase):
 class WorkbenchVisualSmokeTests(TestCase):
     def test_source_and_pdf_panes_do_not_overlap_at_supported_small_window(self):
         from PySide6.QtCore import QPoint, QRect
-        from tests.test_gui_editor import isolated_settings
+        from tests.test_gui_editor import isolated_settings, wait_until
+        from tests.test_pdf_panel import _write_zoom_pdf
         application = _app()
+        fixture = TemporaryDirectory()
+        self.addCleanup(fixture.cleanup)
+        pdf_path = Path(fixture.name) / "layout.pdf"
+        _write_zoom_pdf(pdf_path)
         window = MainWindow(settings_store=isolated_settings())
         previous = application.ui_scale_manager.scale
         try:
@@ -1400,41 +1827,65 @@ class WorkbenchVisualSmokeTests(TestCase):
             window.new_document()
             window.show()
             window.set_toolbox_visible(True)
-            for scale in (0.9, 1.0, 1.1, 1.25, 1.5):
-                with self.subTest(scale=scale):
-                    window.set_ui_scale(scale)
-                    window.resize(1080, 720)
-                    for _ in range(5):
-                        application.processEvents()
-                    splitter = window.main_splitter
-                    source, pdf = splitter.widget(0), splitter.widget(1)
-                    area = window.source_preview_area
-                    if area._compact:
-                        area.select_pdf(False)
-                        application.processEvents()
-                        self.assertTrue(source.isVisible())
-                        self.assertFalse(pdf.isVisible())
-                        self.assertTrue(splitter.rect().contains(source.geometry()))
-                        area.select_pdf(True)
-                        application.processEvents()
-                        self.assertFalse(source.isVisible())
-                    else:
-                        self.assertFalse(source.geometry().intersects(pdf.geometry()),
-                                         (scale, source.geometry(), pdf.geometry()))
-                    self.assertTrue(pdf.isVisible())
-                    self.assertTrue(splitter.rect().contains(pdf.geometry()))
-                    for control in (window.pdf_panel.page_spin, window.pdf_panel.zoom_out_button,
-                                    window.pdf_panel.zoom_in_button, window.pdf_panel.fit_width_button,
-                                    window.pdf_panel._more_button):
-                        bounds = QRect(control.mapTo(splitter, QPoint()), control.size())
-                        self.assertTrue(pdf.geometry().contains(bounds), (scale, control, bounds))
-                        if source.isVisible():
-                            self.assertFalse(source.geometry().intersects(bounds))
-                        ancestor = control.parentWidget()
-                        while ancestor is not None:
-                            self.assertTrue(ancestor.rect().contains(QRect(
-                                control.mapTo(ancestor, QPoint()), control.size())), (scale, control, ancestor))
-                            ancestor = ancestor.parentWidget()
+            panel = window.pdf_panel
+            self.assertTrue(wait_until(lambda: not window.dependencies.is_busy))
+            for loaded in (False, True):
+                if loaded:
+                    panel.load_pdf(pdf_path)
+                    self.assertTrue(wait_until(lambda: panel._document.pageCount() == 3))
+                for scale in (0.9, 1.0, 1.1, 1.25, 1.5):
+                    with self.subTest(loaded=loaded, scale=scale):
+                        window.set_ui_scale(scale)
+                        window.resize(1080, 720)
+                        for _ in range(5):
+                            application.processEvents()
+                        splitter = window.main_splitter
+                        source, pdf = splitter.widget(0), splitter.widget(1)
+                        area = window.source_preview_area
+                        if area._compact:
+                            area.select_pdf(False)
+                            application.processEvents()
+                            self.assertTrue(source.isVisible())
+                            self.assertFalse(pdf.isVisible())
+                            self.assertTrue(splitter.rect().contains(source.geometry()))
+                            area.select_pdf(True)
+                            application.processEvents()
+                            self.assertFalse(source.isVisible())
+                        else:
+                            self.assertFalse(source.geometry().intersects(pdf.geometry()),
+                                             (scale, source.geometry(), pdf.geometry()))
+                        self.assertTrue(pdf.isVisible())
+                        self.assertTrue(splitter.rect().contains(pdf.geometry()))
+                        self.assertEqual(panel._toolbar.isVisible(), loaded)
+                        if not loaded:
+                            # Empty PDFs intentionally hide the navigation toolbar;
+                            # its unlaid-out children do not describe visible geometry.
+                            self.assertFalse(panel.page_spin.isVisible())
+                            controls = (panel.empty_compile_button,)
+                        else:
+                            controls = (panel.page_spin, panel.zoom_out_button, panel.zoom_in_button,
+                                        panel.fit_width_button, panel.pdf_search_button)
+                            if panel._more_button.isVisible():
+                                controls += (panel._more_button,)
+                            else:
+                                self.assertTrue(panel._secondary_panel.isVisible())
+                                self.assertTrue(panel.export_pdf_button.isHidden())
+                                toolbar = window.findChild(QToolBar, "mainToolbar")
+                                self.assertIs(toolbar.widgetForAction(window.export_pdf_action).defaultAction(),
+                                              window.export_pdf_action)
+                                controls += (panel.prev_page_button, panel.next_page_button,
+                                             panel.fit_page_button, panel.reveal_pdf_button)
+                        for control in controls:
+                            self.assertTrue(control.visibleRegion().contains(control.rect()), (scale, control))
+                            bounds = QRect(control.mapTo(splitter, QPoint()), control.size())
+                            self.assertTrue(pdf.geometry().contains(bounds), (scale, control, bounds))
+                            if source.isVisible():
+                                self.assertFalse(source.geometry().intersects(bounds))
+                            ancestor = control.parentWidget()
+                            while ancestor is not None:
+                                self.assertTrue(ancestor.rect().contains(QRect(
+                                    control.mapTo(ancestor, QPoint()), control.size())), (scale, control, ancestor))
+                                ancestor = ancestor.parentWidget()
         finally:
             window.close()
             application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
@@ -1800,11 +2251,14 @@ class WorkbenchVisualSmokeTests(TestCase):
                     window.bottom_tabs.setCurrentIndex(3)
                     for _ in range(5):
                         application.processEvents()
-                    window.bottom_collapse_button.click()
+                    button = (window.bottom_collapse_button if not window.bottom_collapse_button.isHidden()
+                              else window.console_button)
+                    button.click()
                     for _ in range(5):
                         application.processEvents()
                     self.assertTrue(window.bottom_tabs.isHidden())
-                    button = window.bottom_collapse_button
+                    button = (window.bottom_collapse_button if not window.bottom_collapse_button.isHidden()
+                              else window.console_button)
                     self.assertTrue(button.visibleRegion().contains(button.rect()))
                     self.assertEqual(button.toolTip(), "展开控制台：日志、错误、字数和检查")
                     window.resize(1100, 740)

@@ -1,242 +1,461 @@
-"""Coordinate exports that must come from a current, canonical PDF build."""
+"""Two-action PDF export and remembered FINAL updates, sharing exact-byte verification."""
 from __future__ import annotations
 
-from dataclasses import dataclass
-import os
+from dataclasses import dataclass, replace
+from datetime import datetime
 from pathlib import Path
-import shutil
-import tempfile
-from typing import TYPE_CHECKING, Any
+import threading
+from typing import TYPE_CHECKING
 
+from PySide6.QtCore import QObject, QTimer, Qt, QUrl, Signal
+from PySide6.QtGui import QDesktopServices
+from PySide6.QtWidgets import QFileDialog, QDialog, QProgressDialog
+from shiboken6 import isValid
+
+from app.core.artifact_export import (
+    EXPORT_CONTEXT_PATHS, ExportedPdf, capture_export_inputs, exported_pdf,
+    pdf_export_destination, publish_exact_file, verified_final_pdf,
+)
 from app.core.compiler import BuildPurpose, CompileResult
 from app.core.paths import normalize_path
 from app.core.pdf_state import PdfBuildRecord, PdfFreshness
+from app.gui.project_checkpoint_dialog import CaptureLease, _Signals, _run
 
-if TYPE_CHECKING:  # pragma: no cover - typing only
+if TYPE_CHECKING:
     from app.gui.main_window import MainWindow
 
 
 @dataclass(frozen=True)
 class PendingExport:
-    """One requested destination, tied to the latest observed source revision."""
-
     root_file: Path
     target: Path
     requested_revision: int
+    scope: Path
+    tab_id: int
     bound_build_id: int | None = None
+    ready: bool = False
+    previous: ExportedPdf | None = None
+    automatic: bool = False
 
 
-class PdfExportController:
-    """Export only a current PDF produced by a ``FINAL`` build.
+class PdfExportController(QObject):
+    """GUI-thread coordination; the publication worker receives immutable evidence only."""
 
-    ``MainWindow`` owns destination selection.  This controller owns the
-    freshness check and keeps a request pending while a canonical build is in
-    flight.  Preview PDFs are never accepted as an export source.
-    """
+    # GUI-thread observation after publication: root, immutable receipt, revision, build id.
+    exportSucceeded = Signal(object, object, int, int)
 
     def __init__(self, window: "MainWindow") -> None:
+        super().__init__(window)
         self.window = window
         self._pending: dict[Path, PendingExport] = {}
+        self._automatic_results = {}  # Latest accepted FINAL per root, drained by the existing timer.
+        self._stopped_roots = set()
+        # Display-only observations. Neither authorizes a write or makes a FINAL current.
+        self._last_success: dict[Path, tuple[ExportedPdf, int, int]] = {}
+        self._notices: dict[Path, tuple[Path | None, str, str, ExportedPdf | None]] = {}
+        self._publication = None
+        self._closed = False
+        self._progress = None
+        self._signals = _Signals()
+        self._signals.finished.connect(self._finished, Qt.ConnectionType.QueuedConnection)
+        self._timer = QTimer(self)
+        self._timer.setInterval(75)
+        self._timer.timeout.connect(self._poll)
+        window.destroyed.connect(self.shutdown)
 
     def pending_for(self, root: str | Path) -> PendingExport | None:
         return self._pending.get(normalize_path(root))
 
-    def handle_compile_started(
-        self,
-        root: str | Path,
-        build_id: int,
-        purpose: BuildPurpose | str,
-    ) -> bool:
-        """Bind a pending export to the newest FINAL started after its request.
+    def refresh_status(self, root, record, remembered, *, can_choose: bool) -> None:
+        """GUI-thread projection of existing state; do not stat/hash outputs while typing."""
+        panel = self.window.pdf_panel
+        if root is None:
+            panel.export_status.hide()
+            return
+        pending = self._pending.get(root)
+        exported = remembered[1] if remembered else None
+        notice = self._notices.get(root)
+        if exported is None and pending is None and notice is None:
+            panel.export_status.hide()
+            return
+        target = pending.target if pending else exported.target if exported else notice[0] if notice else None
+        detail, severity = "", "neutral"
+        if pending or root in self._automatic_results:
+            state = "正在更新…"
+        elif exported is not None and record is not None and record.freshness is PdfFreshness.COMPILING:
+            state = "正在正式编译…"
+        elif exported is not None and record is not None and record.freshness in (PdfFreshness.FAILED_STALE, PdfFreshness.FAILED_NO_PDF):
+            state, severity, detail = "更新失败", "error", "正式编译未成功；请修正错误后重新编译。"
+        elif notice and notice[3] == exported:
+            _, state, detail, _ = notice
+            severity = "error" if state == "更新失败" else "warning"
+        elif exported is None:
+            state, detail = "未开启", "成功导出一次后，每次正式编译会更新目标文件。"
+        elif record is not None and record.freshness is PdfFreshness.DIRTY:
+            state, severity = "待正式编译", "warning"
+        elif (record is not None and record.freshness is PdfFreshness.CURRENT
+              and self._last_success.get(root) == (exported, record.source_revision, record.latest_build_id)):
+            state, severity = "已同步", "success"
+        else:
+            state, detail = "待正式编译确认", "已记住位置；尚未确认与本次打开的文稿一致。"
+        if exported is not None:
+            try:
+                timestamp = datetime.fromtimestamp(exported.signature[3] / 1_000_000_000).strftime("%m-%d %H:%M")
+                state += f" · 上次导出 {timestamp}"
+            except (ValueError, OverflowError, OSError):
+                pass  # A malformed stored timestamp must not break the UI; never used for freshness.
+        panel.set_export_status(state=state, severity=severity, target=target, detail=detail,
+                                can_choose=can_choose and not self._pending,
+                                can_stop=remembered is not None)
 
-        A FINAL that was already running when the user requested export has
-        already emitted its started event, so it cannot claim the new request.
-        Rebinding to a newer FINAL also makes late results from an older build
-        harmless.
-        """
-        if BuildPurpose(purpose) is not BuildPurpose.FINAL:
+    def open_export_location(self) -> None:
+        """Open the selected export's folder, never the compiler's internal output directory."""
+        root = self.window._compile_root_for_tab(self.window.current_tab())
+        remembered = self.window.app_settings.pdf_export_target(root) if root else None
+        pending = self._pending.get(root)
+        notice = self._notices.get(root)
+        target = pending.target if pending else remembered[1].target if remembered else notice[0] if notice else None
+        if target is not None and not QDesktopServices.openUrl(QUrl.fromLocalFile(str(target.parent))):
+            self._report_status("无法打开导出文件夹；可在状态条悬停查看完整路径。", 6000)
+
+    def _set_notice(self, root, target, state, detail):
+        remembered = self.window.app_settings.pdf_export_target(root)
+        self._notices[root] = (target, state, detail, remembered[1] if remembered else None)
+
+    def choose_destination(self, root: Path) -> bool:
+        if self._pending:
+            self._report_status("正在导出，请稍候。", 4000)
             return False
-        root_file = normalize_path(root)
-        pending = self._pending.get(root_file)
-        if pending is None:
+        remembered = self.window.app_settings.pdf_export_target(root)
+        target = remembered[1].target if remembered else root.with_suffix(".pdf")
+        number = 2
+        while not remembered and target.exists():
+            target = root.with_name(f"{root.stem}-{number}.pdf")
+            number += 1
+        dialog = QFileDialog(self.window, "导出 PDF · 以后正式编译会更新此文件", str(target), "PDF (*.pdf)")
+        dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
+        dialog.setDefaultSuffix("pdf")
+        dialog.setLabelText(QFileDialog.DialogLabel.Accept, "更新并导出")
+        dialog.setOption(QFileDialog.Option.DontConfirmOverwrite, True)
+        try:
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return False
+            destination = dialog.selectedFiles()[0]
+        finally:
+            dialog.deleteLater()
+        # Recheck after the file dialog; another window may have changed the project.
+        if not self.request_export(root, destination):
             return False
-        if pending.bound_build_id is not None and build_id <= pending.bound_build_id:
-            return False
-        self._pending[root_file] = PendingExport(
-            root_file=pending.root_file,
-            target=pending.target,
-            requested_revision=pending.requested_revision,
-            bound_build_id=build_id,
-        )
+        self._progress = QProgressDialog("正在更新 PDF，完成后自动导出…", "取消", 0, 0, self.window)
+        self._progress.setWindowTitle("导出 PDF")
+        self._progress.setWindowModality(Qt.WindowModality.ApplicationModal)
+        self._progress.canceled.connect(lambda: self.cancel_root(root))
+        self._progress.show()
         return True
+
+    def _request(self, root: Path, *, scope: Path | None = None):
+        kwargs = {} if scope is None else dict(root=root, scope=scope)
+        request = self.window.readiness.capture_request(**kwargs)
+        if request.root != root or request.scope is None or request.block is not None:
+            raise ValueError("导出目标已切换，请从对应文稿重新导出。")
+        tabs = self.window.readiness._context(**kwargs)[3]
+        if any(tab.external_conflict for tab in tabs):
+            raise ValueError("文件有外部修改冲突，请先处理后再导出。")
+        if any(tab.editor.has_preedit() for tab in tabs):
+            raise ValueError("请先完成正在输入的文字，再导出 PDF。")
+        return request
+
+    def _current(self, request) -> bool:
+        record, proof = request.final, request.build_evidence
+        return bool(record is not None and proof is not None
+                    and record.freshness is PdfFreshness.CURRENT and record.has_valid_pdf
+                    and record.last_successful_revision == record.source_revision
+                    and proof.build_id == record.latest_build_id
+                    and proof.inputs is not None and proof.inputs.stable
+                    and proof.job_key.root_file == request.root
+                    and proof.job_key.source_revision == record.source_revision
+                    and proof.job_key.engine == request.engine
+                    and proof.job_key.toolchain == request.tools
+                    and not any(buffer.modified for buffer in request.buffers))
 
     def request_export(self, root: str | Path, target: str | Path) -> bool:
-        """Export immediately when canonical state is current, or queue FINAL.
-
-        ``True`` means the request was either completed or successfully queued.
-        ``False`` means saving, manager lookup, or the atomic copy failed.
-        """
-        root_file = normalize_path(root)
-        destination = Path(target).expanduser().resolve()
-        if not self.window.documents.flush_root_documents(root_file):
-            self._report_error("无法保存项目中的待写入修改，已取消 PDF 导出。")
+        """Accept the explicit save/update/export intent; no file write on picker cancellation."""
+        if self._closed or self._pending or self._publication is not None:
             return False
-
-        record = self.window.pdf_state.record_for(root_file)
-        if self._is_current_canonical(record):
-            assert record.last_successful_pdf is not None
-            return self._copy_atomic(record.last_successful_pdf, destination)
-
-        manager = self._manager_for_root(root_file)
-        if manager is None:
-            self._report_error("无法为当前项目启动正式编译，已取消 PDF 导出。")
-            return False
-
-        self._pending[root_file] = PendingExport(
-            root_file=root_file,
-            target=destination,
-            requested_revision=record.source_revision,
-        )
-        self._start_final(manager)
-        self._report_status("正在使用原图生成正式 PDF，完成后将自动导出…", 5000)
-        return True
-
-    def handle_compile_result(
-        self,
-        result: CompileResult,
-        record: PdfBuildRecord | None,
-    ) -> bool:
-        """Advance a pending request after a canonical compile result.
-
-        Returns whether this result belonged to a pending export.  Preview and
-        superseded results are ignored without changing the pending request.
-        """
-        if BuildPurpose(result.purpose) is not BuildPurpose.FINAL:
-            return False
-
-        root_file = normalize_path(result.root_file)
-        pending = self._pending.get(root_file)
-        if pending is None:
-            return False
-        if pending.bound_build_id != result.build_id:
-            return False
-        if record is None:
-            return False
-
-        if not result.ok:
-            self._pending.pop(root_file, None)
-            self._report_error("正式 PDF 编译失败，未导出任何预览或旧版本。")
-            return True
-
-        if self._is_current_canonical(record):
-            self._pending.pop(root_file, None)
-            assert record.last_successful_pdf is not None
-            self._copy_atomic(record.last_successful_pdf, pending.target)
-            return True
-
-        # A successful build can already be stale when the source changed
-        # while it was running.  Flush again and require another FINAL build.
-        if record.source_revision != record.last_successful_revision:
-            if not self.window.documents.flush_root_documents(root_file):
-                self._pending.pop(root_file, None)
-                self._report_error("无法保存编译期间的新修改，已取消 PDF 导出。")
-                return True
-            manager = self._manager_for_root(root_file)
-            if manager is None:
-                self._pending.pop(root_file, None)
-                self._report_error("无法重新启动正式编译，已取消 PDF 导出。")
-                return True
-            self._pending[root_file] = PendingExport(
-                root_file=root_file,
-                target=pending.target,
-                requested_revision=record.source_revision,
-                bound_build_id=None,
-            )
-            self._start_final(manager)
-            self._report_status("检测到编译期间有新修改，正在重新生成正式 PDF…", 5000)
-            return True
-
-        # A success with matching revisions but non-current/invalid state is
-        # an invariant violation; retrying indefinitely would hide it.
-        self._pending.pop(root_file, None)
-        self._report_error("正式编译结果不可用，已取消 PDF 导出。")
-        return True
-
-    def cancel_root(self, root: str | Path) -> bool:
-        """Forget any queued destination for ``root``."""
-        return self._pending.pop(normalize_path(root), None) is not None
-
-    @staticmethod
-    def _is_current_canonical(record: PdfBuildRecord) -> bool:
-        return (
-            record.freshness is PdfFreshness.CURRENT
-            and record.last_successful_revision == record.source_revision
-            and record.has_valid_pdf
-        )
-
-    def _manager_for_root(self, root_file: Path) -> Any | None:
-        managers = getattr(self.window, "compile_managers", None)
-        manager = managers.get(root_file) if managers is not None else None
-        if manager is not None:
-            return manager
-        creator = getattr(self.window, "create_compile_manager", None)
-        if callable(creator):
-            return creator(root_file)
-        return None
-
-    @staticmethod
-    def _start_final(manager: Any) -> None:
-        cancel_pending = getattr(manager, "cancel_pending", None)
-        if callable(cancel_pending):
-            cancel_pending()
-        manager.compile_async(BuildPurpose.FINAL)
-
-    def _copy_atomic(self, source: Path, target: Path) -> bool:
-        temp_name: str | None = None
+        root = normalize_path(root)
+        target = Path(target).expanduser().absolute()
         try:
-            handle, temp_name = tempfile.mkstemp(
-                dir=str(target.parent),
-                prefix=f".{target.name}.",
-                suffix=".part",
-            )
-            os.close(handle)
-            shutil.copy2(source, temp_name)
-            os.replace(temp_name, target)
-            try:
-                # Finder shows "Date Modified" = export time, not the build
-                # time preserved by copy2. This is cosmetic; a failure here
-                # must never fail a successful export.
-                os.utime(target, None)
-            except OSError:
-                pass
-            temp_name = None
-        except OSError as exc:
-            self._report_error(f"PDF 导出失败：{exc}")
+            request = self._request(root)
+            if target.suffix.lower() != ".pdf":
+                raise ValueError("请选择 PDF 文件名。")
+            remembered = self.window.app_settings.pdf_export_target(root)
+            previous = (remembered[1] if remembered and remembered[0] == request.scope
+                        and remembered[1].target == target else None)
+            if previous is None and (target.exists() or target.is_symlink()):
+                raise ValueError("已有同名文件，请换个名字；原文件不会覆盖。")
+            tab = self.window.current_tab()
+            if tab is None:
+                return False
+            self._stopped_roots.discard(root)
+            self._notices.pop(root, None)
+            self._pending[root] = PendingExport(root, target, request.source_revision,
+                                                request.scope, id(tab.editor), ready=self._current(request),
+                                                previous=previous)
+            if not self._pending[root].ready and not self._start_final(self._pending[root]):
+                self._pending.pop(root, None)
+                return False
+            self._timer.start()
+            self._report_status("正在更新 PDF，完成后自动导出…", 0)
+            self.window._update_pdf_action_state()
+            return True
+        except (OSError, ValueError) as exc:
+            self._pending.pop(root, None)
+            self._report_error(str(exc))
             return False
-        finally:
-            if temp_name is not None:
-                try:
-                    os.unlink(temp_name)
-                except OSError:
-                    pass
-        self._report_status(f"已导出 PDF：{target}", 5000)
+
+    def _start_final(self, pending: PendingExport) -> bool:
+        return self.window.compile.compile_current(
+            immediate=True, show_missing_warning=True, purpose=BuildPurpose.FINAL,
+            user_initiated=True, _tab_id=pending.tab_id, _reason="更新并导出 PDF",
+        )
+
+    def handle_compile_started(self, root, build_id, purpose) -> bool:
+        if BuildPurpose(purpose) is not BuildPurpose.FINAL:
+            return False
+        root = normalize_path(root)
+        pending = self._pending.get(root)
+        if pending is not None and pending.automatic:
+            self.cancel_root(root)  # Its newer result may enqueue a fresh automatic update.
+            return True
+        if pending is None or (pending.bound_build_id is not None and build_id <= pending.bound_build_id):
+            return False
+        self._pending[root] = replace(pending, bound_build_id=build_id, ready=False)
         return True
+
+    def handle_compile_result(self, result: CompileResult, record: PdfBuildRecord | None) -> bool:
+        if self._closed or result.purpose is not BuildPurpose.FINAL:
+            return False
+        root = normalize_path(result.root_file)
+        pending = self._pending.get(root)
+        if pending is None or pending.automatic:
+            if (result.ok and record is not None and record.latest_build_id == result.build_id
+                    and record.freshness is PdfFreshness.CURRENT
+                    and self.window.app_settings.pdf_export_target(root) is not None):
+                self._automatic_results[root] = result.build_id
+                self._timer.start()
+                return True
+            return False
+        if pending is None or pending.bound_build_id != result.build_id or record is None:
+            return False
+        if not result.ok:
+            self.cancel_root(root)
+            self._report_failure(pending, "PDF 更新失败，未导出旧版本。请查看编译错误。")
+            return True
+        try:
+            request = self._request(root)
+            if self._current(request):
+                self._pending[root] = replace(pending, ready=True)
+            elif record.source_revision != record.last_successful_revision:
+                pending = replace(pending, requested_revision=record.source_revision, bound_build_id=None)
+                self._pending[root] = pending
+                if not self._start_final(pending):
+                    self.cancel_root(root)
+            else:
+                raise ValueError("PDF 尚未验证为最新版本，未导出。请重新正式编译。")
+        except (OSError, ValueError) as exc:
+            self.cancel_root(root)
+            self._report_failure(pending, str(exc))
+        return True
+
+    def _poll(self) -> None:
+        if not self._closed and not self._pending:
+            self._queue_automatic()
+        if self._closed or not self._pending:
+            self._timer.stop()
+            return
+        pending = next(iter(self._pending.values()))
+        try:
+            kwargs = dict(root=pending.root_file, scope=pending.scope) if pending.automatic else {}
+            key, scope, root, tabs, _, session = self.window.readiness._context(**kwargs)
+            if root != pending.root_file or scope != pending.scope or session is not None:
+                raise ValueError("项目已切换，导出已取消。")
+            if pending.automatic and pending.tab_id not in self.window.tabs:
+                raise ValueError("文稿已关闭，自动更新已取消。")
+            if any(tab.external_conflict for tab in tabs):
+                raise ValueError("文件有外部修改冲突，请先处理后再导出。")
+            if self._publication is not None:
+                _, lease, expected, _proof = self._publication
+                lease.validate()
+                if key != expected:
+                    lease.cancelled.set()
+                return
+            if not pending.ready:
+                return
+            # A queued GUI result can precede the worker's final idle cleanup.
+            managers = self.window.compile_managers.values()
+            if any(manager.is_busy or manager._scheduled_request is not None or manager._pending_request is not None
+                   for manager in managers
+                   if manager.root_file.is_relative_to(pending.scope)):
+                return
+            request = self._request(pending.root_file, scope=pending.scope if pending.automatic else None)
+            if not self._current(request):
+                raise ValueError("内容已变化，请重新导出；已有文件保持不变。")
+            try:
+                lease = CaptureLease(self.window, pending.scope)
+            except ValueError as exc:
+                self.window.append_log(str(exc))
+                raise ValueError("同项目还有编译、导入或未保存草稿，请处理后再导出。") from exc
+            try:
+                if lease.drafts or any(tab.editor.has_preedit() for _, tab, *_ in lease.tabs):
+                    raise ValueError("另一个窗口有未保存内容，请先处理后再导出。")
+                proof, scope, target, cancel = request.build_evidence, pending.scope, pending.target, lease.cancelled
+                self._publication = pending, lease, request.key, proof
+
+                def work(stop):
+                    context = capture_export_inputs(scope, EXPORT_CONTEXT_PATHS, cancelled=stop)
+                    payload = verified_final_pdf(proof, context, cancelled=stop)
+                    destination = pdf_export_destination(target, proof)
+                    published = publish_exact_file(destination, payload,
+                        check_source=lambda: verified_final_pdf(proof, context, cancelled=stop),
+                        cancelled=stop, previous=pending.previous)
+                    return exported_pdf(published, payload)
+
+                self._thread = threading.Thread(target=_run, args=(work, cancel, self._signals),
+                                                name="icstex-pdf-export", daemon=True)
+                self._thread.start()
+            except BaseException:
+                lease.release()
+                self._publication = None
+                raise
+        except (OSError, ValueError, RuntimeError) as exc:
+            if self._publication is not None:
+                self._publication[1].cancelled.set()
+            else:
+                self.cancel_root(pending.root_file)
+                self._report_failure(pending, str(exc))
+
+    def _queue_automatic(self):
+        """No compile/save request here: only consume a successful, still-current FINAL."""
+        while self._automatic_results:
+            root = next(iter(self._automatic_results))
+            build_id = self._automatic_results.pop(root)
+            remembered = self.window.app_settings.pdf_export_target(root)
+            tab = self.window.compile._tab_for_compile_root(root)
+            record = self.window.pdf_state.record_for(root)
+            if (remembered is None or tab is None or record is None
+                    or record.latest_build_id != build_id or record.freshness is not PdfFreshness.CURRENT):
+                continue
+            scope, previous = remembered
+            self._stopped_roots.discard(root)  # Another window may have explicitly exported again.
+            pending = PendingExport(root, previous.target, record.source_revision, scope,
+                                    id(tab.editor), build_id, True, previous, True)
+            self._pending[root] = pending
+            return
+
+    def stop_automatic(self):
+        root = self.window._compile_root_for_tab(self.window.current_tab())
+        if root is not None:
+            remembered = self.window.app_settings.pdf_export_target(root)
+            self._stopped_roots.add(root)
+            self.window.app_settings.forget_pdf_export(root)
+            self.cancel_root(root)
+            self._set_notice(root, remembered[1].target if remembered else None,
+                             "已停止更新", "已有 PDF 保留；重新导出可再次开启。")
+            self.window._update_pdf_action_state()
+            self._report_status("已停止自动更新导出 PDF；已有文件保留。", 5000)
+
+    def _report_failure(self, pending, message):
+        self._set_notice(pending.root_file, pending.target, "更新失败", message)
+        self.window._update_pdf_action_state()
+        if pending.automatic:
+            self.window.append_log(message)
+            self._report_pending_status(pending,
+                f"未更新 {pending.target.name}；请检查目标文件，或重新导出到新位置。", 12000)
+        else:
+            self._report_error(message)
+
+    def _report_pending_status(self, pending, message, duration):
+        if (not pending.automatic
+                or self.window._compile_root_for_tab(self.window.current_tab()) == pending.root_file):
+            self._report_status(message, duration)
+        else:
+            self.window.append_log(message)  # Do not replace another document's current indicators.
+
+    def _finished(self, value, error) -> None:
+        publication, self._publication = self._publication, None
+        if publication is None:
+            return
+        pending, lease, _, proof = publication
+        lease.release()
+        cancelled = lease.cancelled.is_set()
+        self._pending.pop(pending.root_file, None)
+        if not self._automatic_results:
+            self._timer.stop()
+        self._close_progress()
+        if self._closed:
+            return
+        if value is not None:
+            # Publication may win a late cancellation: report the real file. A user
+            # stopping updates during a worker must not be silently enrolled again.
+            remembered = self.window.app_settings.pdf_export_target(pending.root_file)
+            remember = (pending.root_file not in self._stopped_roots
+                        and (not pending.automatic or remembered == (pending.scope, pending.previous)))
+            if remember:
+                self.window.app_settings.remember_pdf_export(pending.root_file, pending.scope, value)
+                self._last_success[pending.root_file] = (value, proof.job_key.source_revision, proof.build_id)
+                self._notices.pop(pending.root_file, None)
+            self.window._update_pdf_action_state()
+            hint = "；正式编译后自动更新。" if remember else "；自动更新已停止或目标已更改。"
+            self._report_pending_status(pending,
+                f"已{'更新' if pending.previous else '导出'} PDF：{value.target}{hint}", 8000)
+            self.exportSucceeded.emit(pending.root_file, value, proof.job_key.source_revision, proof.build_id)
+        elif cancelled:
+            if pending.root_file not in self._stopped_roots:
+                self._set_notice(pending.root_file, pending.target, "更新已取消", "尚未完成同步；可再次正式编译。")
+            self.window._update_pdf_action_state()
+            self._report_pending_status(pending, "导出已取消，未覆盖已有文件。", 5000)
+        else:
+            self.window.append_log(error)
+            self._report_failure(pending, "导出未完成，已有文件未覆盖。文稿或 PDF 可能已变化，请重试。")
+
+    def _close_progress(self):
+        progress, self._progress = self._progress, None
+        if progress is not None and isValid(progress):
+            progress.close()
+            progress.deleteLater()
+
+    def cancel_root(self, root) -> bool:
+        root = normalize_path(root)
+        self._automatic_results.pop(root, None)
+        pending = self._pending.get(root)
+        if self._publication is not None and self._publication[0].root_file == root:
+            self._publication[1].cancelled.set()
+        else:
+            self._pending.pop(root, None)
+        if not self._pending and not self._automatic_results:
+            self._timer.stop()
+            self._close_progress()
+        if pending is not None and not self._closed:
+            self._set_notice(root, pending.target, "更新已取消", "尚未完成同步；可再次正式编译。")
+            self.window._update_pdf_action_state()
+            self._report_pending_status(pending, "已取消导出；没有覆盖已有文件。", 4000)
+        return pending is not None
+
+    def shutdown(self):
+        if self._closed:
+            return
+        self._closed = True
+        self._automatic_results.clear()
+        if isValid(self._timer):
+            self._timer.stop()
+        for root in tuple(self._pending):
+            self.cancel_root(root)
+        if self._publication is not None:
+            self._publication[1].cancelled.set()
+            self._publication[1].release()
 
     def _report_status(self, message: str, duration_ms: int) -> None:
-        callback = getattr(self.window, "notify_pdf_export_status", None)
-        if callable(callback):
-            callback(message, duration_ms)
-            return
-        status_bar = getattr(self.window, "statusBar", None)
-        if callable(status_bar):
-            status_bar().showMessage(message, duration_ms)
+        self.window.notify_pdf_export_status(message, duration_ms)
 
     def _report_error(self, message: str) -> None:
-        callback = getattr(self.window, "notify_pdf_export_error", None)
-        if callable(callback):
-            callback(message)
-            return
-        append_log = getattr(self.window, "append_log", None)
-        if callable(append_log):
-            append_log(message)
-        self._report_status(message, 6000)
+        self.window.notify_pdf_export_error(message)

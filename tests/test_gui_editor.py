@@ -143,6 +143,20 @@ class SyncTargetHighlightTests(TestCase):
         self.assertIsNone(editor._sync_selection)
         self.assertFalse(editor._sync_highlight_timer.isActive())
 
+    def test_structure_range_highlight_does_not_select_or_edit_source(self):
+        editor = self.editor
+        before, revision = editor.toPlainText(), editor.source_revision
+        cursor = QTextCursor(editor.document())
+        cursor.setPosition(2)
+        cursor.setPosition(12, QTextCursor.MoveMode.KeepAnchor)
+        selected = cursor.selectedText()
+        editor.flash_source_range(cursor)
+        self.assertEqual(editor._sync_selection.cursor.selectedText(), selected)
+        self.assertEqual(editor._sync_selection.format.background().color().name(), "#f9d36a")
+        self.assertFalse(editor.textCursor().hasSelection())
+        self.assertEqual(editor.textCursor().position(), 2)
+        self.assertEqual((editor.toPlainText(), editor.source_revision), (before, revision))
+
 
 class SourceIdleCompositionTests(TestCase):
     """Real default save timers and Qt IME events; not physical IME evidence."""
@@ -1526,7 +1540,7 @@ class TutorialGuiTests(TestCase):
         self.assertEqual(window.current_engine, LaTeXEngine.AUTO)
         self.assertFalse(window.compile_authorized_roots)
         self.assertFalse(hasattr(self.owner, "tutorial"))
-        self.assertEqual(window.tutorial.title.text(), "1/3 · 改一下标题")
+        self.assertEqual(window.tutorial.title.text(), "1/4 · 改一下标题")
         async_.assert_not_called()
         now.assert_not_called()
 
@@ -1565,6 +1579,7 @@ class TutorialGuiTests(TestCase):
         self.assertEqual(root.read_bytes(), before)
         self.assertEqual(resumed.current_tab().editor.toPlainText().encode(), before)
         self.assertFalse(resumed.tutorial.manual_requested)
+        self.assertIsNone(resumed.tutorial.exported)
 
     def test_existing_student_path_in_saved_tutorial_setting_is_not_opened(self):
         from app.gui.tutorial_controller import EXAMPLE_SETTING, remembered_example, open_example
@@ -1578,6 +1593,7 @@ class TutorialGuiTests(TestCase):
         self.assertEqual(outside.read_text(), "Do not modify")
 
     def test_stale_busy_foreign_and_failed_pdf_never_complete_the_exercise(self):
+        from app.core.artifact_export import exported_pdf
         from app.core.tutorial import INITIAL_TITLE, TutorialStep
         from app.gui.main_window_support import DisplayedPdf
         from tests.test_pdf_panel import _write_zoom_pdf
@@ -1617,6 +1633,13 @@ class TutorialGuiTests(TestCase):
         self.assertTrue(controller.action.visibleRegion().contains(controller.action.rect()))
         self.assertGreaterEqual(controller.action.width(), controller.action.fontMetrics().horizontalAdvance(controller.action.text()) + 16)
         controller.act()
+        self.assertEqual(controller.step, TutorialStep.EXPORT)
+        # A synthetic publication receipt tests tutorial state, not the exporter.
+        target = root.parent / "exported.pdf"
+        target.write_bytes(pdf.read_bytes())
+        window.pdf_export.exportSucceeded.emit(root, exported_pdf(target, pdf.read_bytes()),
+                                              record.source_revision, record.latest_build_id)
+        controller.refresh()
         self.assertEqual(controller.step, TutorialStep.DONE)
         for target, name, value in ((record, "freshness", PdfFreshness.FAILED_STALE),
                                    (record, "source_revision", record.source_revision + 1),
@@ -1634,6 +1657,144 @@ class TutorialGuiTests(TestCase):
         self.assertEqual(controller.action.text(), "打开练习文件")
         self.assertNotEqual(window.current_tab().path, root)
 
+    def export_exercise(self):
+        """Synthetic current PDF and receipt payload; no real TeX or publication worker."""
+        from app.core.artifact_export import exported_pdf
+        from app.core.tutorial import INITIAL_TITLE, TutorialStep
+        from app.gui.main_window_support import DisplayedPdf
+        from tests.test_pdf_panel import _write_zoom_pdf
+        window = self.exercise()
+        tab, controller = window.current_tab(), window.tutorial
+        tab.editor.setPlainText(tab.editor.toPlainText().replace(INITIAL_TITLE, "My first page"))
+        self.assertTrue(window.save_current())
+        root = controller.root
+        pdf = root.parent / "fixture.pdf"
+        _write_zoom_pdf(pdf)
+        record = window.pdf_state.record_for(root)
+        record.last_successful_pdf = pdf
+        record.last_successful_revision = record.source_revision
+        record.latest_build_id = 50
+        record.freshness = PdfFreshness.CURRENT
+        window.displayed_pdfs[root] = DisplayedPdf(root, BuildPurpose.FINAL, record.source_revision, pdf, 50)
+        window.pdf_panel.load_pdf(pdf, logical_key=root)
+        window.source_preview_area.select_pdf(True)
+        with patch.object(window, "compile_current"):
+            window.compile_action.trigger()
+        controller.refresh()
+        self.assertEqual(controller.step, TutorialStep.VIEW)
+        controller.act()
+        self.assertEqual(controller.step, TutorialStep.EXPORT)
+        target = root.parent / "exported.pdf"
+        target.write_bytes(pdf.read_bytes())
+        return window, record, exported_pdf(target, pdf.read_bytes())
+
+    def test_export_requires_current_success_receipt_and_opens_only_that_folder_on_click(self):
+        from app.core.tutorial import TutorialStep
+        window, record, receipt = self.export_exercise()
+        controller, root = window.tutorial, window.tutorial.root
+        window.app_settings.remember_pdf_export(root, root.parent, receipt)
+        for accepted in (False, True):
+            with self.subTest(picker_accepted=accepted), patch.object(window, "export_pdf", return_value=accepted) as export:
+                controller.act()
+                export.assert_called_once_with()
+                controller.refresh()
+                self.assertEqual(controller.step, TutorialStep.EXPORT)
+        for signal_root, revision, build in ((root.parent / "other.tex", record.source_revision, 50),
+                                             (root, record.source_revision - 1, 50),
+                                             (root, record.source_revision, 49)):
+            with self.subTest(root=signal_root, revision=revision, build=build):
+                window.pdf_export.exportSucceeded.emit(signal_root, receipt, revision, build)
+                controller.refresh()
+                self.assertEqual(controller.step, TutorialStep.EXPORT)
+        with patch("app.gui.tutorial_controller.QDesktopServices.openUrl", return_value=True) as opened:
+            window.pdf_export.exportSucceeded.emit(root, receipt, record.source_revision, 50)
+            controller.refresh()
+            self.assertEqual(controller.step, TutorialStep.DONE)
+            self.assertIn(str(receipt.target), controller.description.text())
+            self.assertEqual(controller.action.text(), "打开导出文件夹")
+            opened.assert_not_called()
+            # The action uses its confirmed receipt, not a later remembered target.
+            window.app_settings.forget_pdf_export(root)
+            controller.act()
+            opened.assert_called_once_with(QUrl.fromLocalFile(str(receipt.target.parent)))
+        window.current_tab().editor.insertPlainText("% changed after export\n")
+        controller.refresh()
+        self.assertEqual(controller.step, TutorialStep.COMPILE)
+
+    def test_export_success_while_hidden_waits_for_resume_without_starting_timer(self):
+        from app.core.tutorial import TutorialStep
+        window, record, receipt = self.export_exercise()
+        controller = window.tutorial
+        controller.dock.hide()
+        self.assertFalse(controller.active)
+        window.pdf_export.exportSucceeded.emit(controller.root, receipt, record.source_revision, 50)
+        self.assertFalse(controller._timer.isActive())
+        self.assertEqual(controller.step, TutorialStep.EXPORT)
+        controller.resume()
+        self.assertEqual(controller.step, TutorialStep.DONE)
+
+    def test_seen_preview_cannot_complete_a_final_export_until_final_is_seen(self):
+        from app.core.tutorial import TutorialStep
+        window, final, receipt = self.export_exercise()
+        controller, root = window.tutorial, window.tutorial.root
+        displayed = window.displayed_pdfs[root]
+        preview = window.preview_state.record_for(root)
+        preview.last_successful_pdf = displayed.path
+        preview.source_revision = preview.last_successful_revision = displayed.revision
+        preview.latest_build_id = 70
+        preview.freshness = PreviewFreshness.CURRENT
+        window.displayed_pdfs[root] = replace(displayed, purpose=BuildPurpose.PREVIEW, build_id=70)
+        controller.refresh()
+        self.assertEqual(controller.step, TutorialStep.VIEW)
+        controller.act()
+        window.pdf_export.exportSucceeded.emit(root, receipt, final.source_revision, final.latest_build_id)
+        controller.refresh()
+        self.assertEqual(controller.step, TutorialStep.EXPORT)
+        window.displayed_pdfs[root] = displayed
+        controller.refresh()
+        self.assertEqual(controller.step, TutorialStep.VIEW)
+        controller.act()
+        self.assertEqual(controller.step, TutorialStep.DONE)
+
+    def test_missing_engine_primary_action_opens_environment_without_compiling(self):
+        from app.core.tutorial import INITIAL_TITLE, TutorialStep
+        window = self.exercise()
+        controller, tab = window.tutorial, window.current_tab()
+        tab.editor.setPlainText(tab.editor.toPlainText().replace(INITIAL_TITLE, "My first page"))
+        window.toolchain = LaTeXToolchain(None, None)
+        controller.refresh()
+        self.assertEqual(controller.step, TutorialStep.COMPILE)
+        self.assertEqual(controller.action.text(), "检查环境")
+        before = tab.editor.toPlainText()
+        with patch.object(window, "show_environment_doctor") as doctor, \
+             patch.object(window, "compile_current") as compile_:
+            controller.action.click()
+        doctor.assert_called_once_with()
+        compile_.assert_not_called()
+        self.assertFalse(controller.manual_requested)
+        self.assertEqual(tab.editor.toPlainText(), before)
+
+    def test_failed_compile_preserves_error_recovery_and_requires_view_then_export(self):
+        from app.core.tutorial import TutorialStep
+        window, record, _ = self.export_exercise()
+        controller = window.tutorial
+        window.toolchain = LaTeXToolchain(None, None, xelatex="synthetic-xelatex")
+        record.freshness = PdfFreshness.FAILED_STALE
+        controller.refresh()
+        self.assertEqual(controller.step, TutorialStep.COMPILE)
+        self.assertEqual(controller.secondary.text(), "查看错误")
+        with patch("app.gui.main_window_layout.show_console") as show:
+            controller.secondary_action()
+        show.assert_called_once_with(window, window.diagnostic_panel)
+        # A newer successful build must be seen again before export is offered.
+        record.freshness = PdfFreshness.CURRENT
+        record.latest_build_id += 1
+        window.displayed_pdfs[controller.root] = replace(window.displayed_pdfs[controller.root], build_id=51)
+        controller.refresh()
+        self.assertEqual(controller.step, TutorialStep.VIEW)
+        controller.act()
+        self.assertEqual(controller.step, TutorialStep.EXPORT)
+
     def test_guide_has_local_readable_illustrations_and_an_explicit_start(self):
         from PySide6.QtGui import QImage
         from app.gui.assets import asset_path
@@ -1646,7 +1807,8 @@ class TutorialGuiTests(TestCase):
         self.assertIn("更新并导出", GUIDE_PAGES[3][3])
         self.assertIn("每次正式编译成功", GUIDE_PAGES[3][3])
         self.assertIn("停止自动更新导出 PDF", GUIDE_PAGES[3][3])
-        self.assertIn("高级", GUIDE_PAGES[3][2])
+        self.assertIn("已同步", GUIDE_PAGES[3][2])
+        self.assertIn("打开位置", GUIDE_PAGES[3][2])
         self.assertNotIn("然后点“检查并固定内容”", GUIDE_PAGES[3][3])
         for index, (_name, filename, _caption, _body) in enumerate(GUIDE_PAGES):
             with self.subTest(image=filename):
@@ -2902,7 +3064,7 @@ class GuiEditorTests(TestCase):
         self.assertIsInstance(window.toolbox_navigation, ToolboxNavigation)
         self.assertEqual(window.sidebar_tabs.tabText(0), "文件")
         self.assertEqual(window.sidebar_tabs.tabText(1), "大纲")
-        self.assertEqual(window.sidebar_tabs.tabText(2), "搜索")
+        self.assertEqual(window.sidebar_tabs.tabText(2), "项目搜索")
         self.assertEqual(window.sidebar_tabs.tabText(3), "图片")
         self.assertEqual(window.sidebar_tabs.tabText(4), "历史")
         self.assertEqual(window.sidebar_tabs.tabText(5), "插入")
@@ -3064,22 +3226,22 @@ class GuiEditorTests(TestCase):
             self.assertEqual(settings.recent_projects()[0], root.resolve())
             window.close()
 
-    def test_bottom_console_header_stays_available_when_collapsed(self) -> None:
+    def test_main_console_control_stays_available_when_collapsed(self) -> None:
         window = MainWindow(settings_store=isolated_settings())
         window.new_document()
         window.show()
         app().processEvents()
 
         self.assertLessEqual(window.vertical_splitter.sizes()[1], 44)
-        window.bottom_collapse_button.click()
+        window.console_button.click()
         app().processEvents()
         self.assertGreater(window.vertical_splitter.sizes()[1], 44)
-        window.bottom_collapse_button.click()
+        window.console_button.click()
         app().processEvents()
         self.assertLessEqual(window.vertical_splitter.sizes()[1], 44)
-        self.assertEqual(window.bottom_collapse_button.toolTip(), "展开控制台：日志、错误、字数和检查")
+        self.assertEqual(window.console_button.toolTip(), "展开控制台：日志、错误、字数和检查")
 
-        window.bottom_collapse_button.click()
+        window.console_button.click()
         app().processEvents()
         self.assertGreater(window.vertical_splitter.sizes()[1], 44)
         window.close()

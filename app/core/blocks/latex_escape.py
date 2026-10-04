@@ -2,18 +2,10 @@
 from __future__ import annotations
 
 
-def escape_latex(text: str) -> str:
-    """Escape LaTeX special characters in user text (backslash first)."""
+LATEX_ESCAPES = {"\\": r"\textbackslash{}", "#": r"\#", "$": r"\$", "%": r"\%",
+                 "&": r"\&", "_": r"\_", "{": r"\{", "}": r"\}",
+                 "~": r"\textasciitilde{}", "^": r"\textasciicircum{}"}
 
-    return (
-        text.replace("\\", r"\textbackslash{}")
-        .replace("#", r"\#")
-        .replace("$", r"\$")
-        .replace("%", r"\%")
-        .replace("&", r"\&")
-        .replace("_", r"\_")
-        .replace("{", r"\{")
-        .replace("}", r"\}")
-        .replace("~", r"\textasciitilde{}")
-        .replace("^", r"\textasciicircum{}")
-    )
+def escape_latex(text: str) -> str:
+    """Escape once: never re-escape braces introduced by another replacement."""
+    return text.translate(str.maketrans(LATEX_ESCAPES))

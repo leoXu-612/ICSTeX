@@ -5,11 +5,12 @@ from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import QObject, QSettings, QStandardPaths, QTimer, Qt, Slot
-from PySide6.QtGui import QTextCursor
+from PySide6.QtCore import QObject, QSettings, QStandardPaths, QTimer, Qt, QUrl, Slot
+from PySide6.QtGui import QDesktopServices, QTextCursor
 from PySide6.QtWidgets import QApplication, QDockWidget, QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget
 from shiboken6 import isValid
 
+from app.core.artifact_export import ExportedPdf
 from app.core.compiler import BuildPurpose
 from app.core.latex_tools import LaTeXEngine
 from app.core.pdf_state import PdfFreshness
@@ -89,6 +90,7 @@ class TutorialController(QObject):
         self.active = False
         self.manual_requested = False
         self.seen = None
+        self.exported: tuple[ExportedPdf, int, int] | None = None
         self.step = TutorialStep.EDIT
         self._secondary_role = "help"
         self._editor = None
@@ -115,7 +117,7 @@ class TutorialController(QObject):
         self.action.setStyleSheet(PRIMARY_BUTTON_STATE_STYLE)
         self.secondary = QPushButton()
         self.hide_button = QPushButton("收起导引")
-        self.hide_button.setToolTip("练习内容会保留；从“帮助 → 新手导引”可以继续。")
+        self.hide_button.setToolTip("练习内容会保留；从“帮助 → 新手导引”点“继续上次练习”可以回来。")
         row = ButtonFlowLayout()
         for button in (self.action, self.secondary, self.hide_button):
             row.addWidget(button)
@@ -134,6 +136,7 @@ class TutorialController(QObject):
         window.pdf_panel.viewChanged.connect(self.schedule)
         window.block_mode_action.toggled.connect(self.schedule)
         window.compile_action.triggered.connect(self._manual_compile)
+        window.pdf_export.exportSucceeded.connect(self._export_succeeded)
 
     @Slot(bool)
     def _visibility(self, visible: bool) -> None:
@@ -159,6 +162,28 @@ class TutorialController(QObject):
         if tab is not None and tab.path == self.root and not self.window.block_mode_action.isChecked():
             self.manual_requested = True
             self.schedule()
+
+    @Slot(object, object, int, int)
+    def _export_succeeded(self, root: Path, exported: ExportedPdf, revision: int, build_id: int) -> None:
+        if root == self.root:
+            self.exported = (exported, revision, build_id)
+            self.schedule()
+
+    def _current_export(self) -> bool:
+        """Match a published receipt; refresh also requires the same viewed, current PDF.
+
+        This is tutorial progress, not a new export authorization or file-validity cache.
+        """
+        if self.exported is None or self.seen is None or self.seen.purpose is not BuildPurpose.FINAL:
+            return False
+        _, revision, build_id = self.exported
+        record = self.window.pdf_state.record_for(self.root)
+        return (record.freshness is PdfFreshness.CURRENT
+                and revision == record.source_revision == record.last_successful_revision
+                and build_id == record.latest_build_id)
+
+    def _engine_ready(self, tab) -> bool:
+        return self.window.toolchain.supports_engine(tab.manager.engine if tab.manager else LaTeXEngine.XELATEX)
 
     def _current_pdf(self) -> bool:
         window = self.window
@@ -202,39 +227,44 @@ class TutorialController(QObject):
             self.action.setText("打开练习文件")
             return
         self.step = tutorial_step(tab.editor.toPlainText(), manual_requested=self.manual_requested,
-            current_pdf=self._current_pdf(), acknowledged=self.seen == window.displayed_pdfs.get(self.root))
+            current_pdf=self._current_pdf(), acknowledged=self.seen == window.displayed_pdfs.get(self.root),
+            exported=self._current_export())
         busy = bool(tab.manager and tab.manager.is_busy)
         if self.step is TutorialStep.EDIT:
-            self.title.setText("1/3 · 改一下标题")
+            self.title.setText("1/4 · 改一下标题")
             self.description.setText(f"点击“选中标题”，把“{INITIAL_TITLE}”换成自己的标题。只改大括号里面的字。")
             self.action.setText("选中标题")
         elif self.step is TutorialStep.COMPILE:
-            self.title.setText("2/3 · 生成 PDF")
+            self.title.setText("2/4 · 生成 PDF")
             self.description.setText("点击“正式编译”，把文字排成 PDF。重开练习后也请编译一次，确认右边是最新内容。")
+            self.action.setText("正式编译")
             if busy:
                 self.description.setText("正在生成 PDF，请稍等。你可以从顶部工具栏停止编译。")
-            elif not window.toolchain.supports_engine(tab.manager.engine if tab.manager else LaTeXEngine.XELATEX):
+                self.action.setText("正在编译…")
+            elif not self._engine_ready(tab):
                 self.description.setText("本机还没找到 LaTeX 工具。先点“检查环境”查看安装办法，练习内容会保留。")
-                self.secondary.setText("检查环境")
-                self._secondary_role = "environment"
+                self.action.setText("检查环境")
             elif (window.pdf_state.record_for(self.root).freshness in (PdfFreshness.FAILED_STALE, PdfFreshness.FAILED_NO_PDF)
                   or window.preview_state.record_for(self.root).freshness in (PreviewFreshness.FAILED_STALE, PreviewFreshness.FAILED_NO_PDF)):
                 self.description.setText("这次没编译成功。点“查看错误”，先处理第一条提示，再点“正式编译”。")
                 self.secondary.setText("查看错误")
                 self._secondary_role = "errors"
-            self.action.setText("正在编译…" if busy else "正式编译")
             self.action.setEnabled(not busy)
         elif self.step is TutorialStep.VIEW:
-            self.title.setText("3/3 · 在 PDF 中找到新标题")
+            self.title.setText("3/4 · 在 PDF 中找到新标题")
             self.description.setText("右边应该已经出现你刚写的标题。窗口较窄时，先点“显示 PDF”。看到后再确认。")
             self.action.setText("我看到了新标题")
             self.action.setEnabled(window.pdf_panel.isVisibleTo(window))
             self.secondary.setText("显示 PDF")
             self._secondary_role = "pdf"
-        else:
-            self.title.setText("练习完成 · 你已经改过内容，也看到了新 PDF")
-            self.description.setText("可以继续在这个副本里试写。点“导出 PDF”，选位置并点“更新并导出”；以后每次正式编译成功，会自动更新这个 PDF。")
+        elif self.step is TutorialStep.EXPORT:
+            self.title.setText("4/4 · 导出一份 PDF")
+            self.description.setText("点“导出 PDF”，选位置并点“更新并导出”。PDF 下方会显示进度和结果；取消或失败都可以重新试。")
             self.action.setText("导出 PDF…")
+        else:
+            self.title.setText("练习完成 · PDF 已导出")
+            self.description.setText(f"已导出到：{self.exported[0].target}\n可以打开文件夹查看；要保留固定版本，点 PDF 下方的“停止更新”。")
+            self.action.setText("打开导出文件夹")
 
     @Slot()
     def act(self) -> None:
@@ -263,13 +293,21 @@ class TutorialController(QObject):
             tab.editor.setFocus()
         elif self.step is TutorialStep.COMPILE:
             if not tab.manager or not tab.manager.is_busy:
-                window.compile_action.trigger()
+                if self._engine_ready(tab):
+                    window.compile_action.trigger()
+                else:
+                    window.show_environment_doctor()
+                    self.schedule()
         elif self.step is TutorialStep.VIEW:
             if self._current_pdf() and window.pdf_panel.isVisibleTo(window):
                 self.seen = window.displayed_pdfs.get(self.root)
                 self.refresh()
-        else:
+        elif self.step is TutorialStep.EXPORT:
             window.export_pdf()
+        else:
+            target = self.exported[0].target
+            if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(target.parent))):
+                window.statusBar().showMessage("无法打开导出文件夹；可以按上面的路径查找 PDF。", 6000)
 
     @Slot()
     def secondary_action(self) -> None:
@@ -279,8 +317,5 @@ class TutorialController(QObject):
         elif self._secondary_role == "errors":
             from app.gui.main_window_layout import show_console
             show_console(self.window, self.window.diagnostic_panel)
-        elif self._secondary_role == "environment":
-            self.window.show_environment_doctor()
-            self.schedule()
         else:
             self.window.show_user_guide()

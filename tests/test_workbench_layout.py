@@ -366,7 +366,7 @@ class WorkbenchLayoutMemoryTests(TestCase):
                     self.settings.settings.setValue("window/source_console_ratio", value)
                     self.settings.settings.setValue("window/project_outline_ratio", value)
                 window = self.window(document=False)
-                self.assertAlmostEqual(window.source_preview_area.wide_ratio(), 790 / (790 + 650))
+                self.assertAlmostEqual(window.source_preview_area.wide_ratio(), 550 / (550 + 590))
                 self.assertIsNone(window.source_panels._console_ratio)
                 self.assertAlmostEqual(window.source_panels._project_ratio, 0.55)
                 window.close()

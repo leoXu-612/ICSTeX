@@ -33,9 +33,10 @@ class TutorialRulesTests(TestCase):
             self.assertIsNone(existing_example(base, str(root)))
             self.assertEqual(outside.read_text(), "original student fixture")
 
-    def test_progress_requires_an_edit_manual_attempt_and_current_pdf(self):
-        def stage(text, manual=True, current=True, seen=True):
-            return tutorial_step(text, manual_requested=manual, current_pdf=current, acknowledged=seen)
+    def test_progress_requires_an_edit_manual_attempt_current_pdf_and_export(self):
+        def stage(text, manual=True, current=True, seen=True, exported=True):
+            return tutorial_step(text, manual_requested=manual, current_pdf=current,
+                                 acknowledged=seen, exported=exported)
         self.assertEqual(stage(""), TutorialStep.EDIT)
         self.assertEqual(stage("% \\title{Different}"), TutorialStep.EDIT)
         self.assertEqual(stage("\\title{" + INITIAL_TITLE + "}"), TutorialStep.EDIT)
@@ -44,6 +45,7 @@ class TutorialRulesTests(TestCase):
         self.assertEqual(stage(source, manual=False), TutorialStep.COMPILE)
         self.assertEqual(stage(source, current=False), TutorialStep.COMPILE)
         self.assertEqual(stage(source, seen=False), TutorialStep.VIEW)
+        self.assertEqual(stage(source, exported=False), TutorialStep.EXPORT)
         self.assertEqual(stage(source), TutorialStep.DONE)
 
     def test_title_selection_returns_exact_python_boundaries(self):

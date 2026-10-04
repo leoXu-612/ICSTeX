@@ -264,12 +264,16 @@ class PdfPanel(QWidget):
         self.pdf_search_edit.installEventFilter(self)
         search_keys = self.search_action.shortcut().toString(QKeySequence.SequenceFormat.NativeText)
         self.pdf_search_button = self._icon_button("search", f"搜索 PDF（{search_keys}）")
+        self.pdf_search_button.setObjectName("pdfSearchButton")
+        self.pdf_search_button.setText("搜索 PDF")
+        self.pdf_search_button.setMinimumWidth(94)
         self.pdf_search_button.clicked.connect(self.search_action.trigger)
         self.pdf_search_prev_button = self._icon_button("chevron-left", "上一个匹配")
         self.pdf_search_next_button = self._icon_button("chevron-right", "下一个匹配")
         self.pdf_search_status = QLabel("")
         self.pdf_search_status.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
         self.export_pdf_button = self._icon_button("save", "导出 PDF")
+        self.export_pdf_button.hide()  # Main toolbar is the single persistent export entry.
         reveal_tooltip = "在 Finder 中显示" if sys.platform == "darwin" else "在文件夹中显示"
         self.reveal_pdf_button = self._icon_button("folder-open", reveal_tooltip)
         self.export_pdf_button.setEnabled(False)

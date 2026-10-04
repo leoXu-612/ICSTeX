@@ -87,7 +87,13 @@ class PdfExportControllerTests(TestCase):
         return self.finish()
 
     def test_current_exact_pdf_exports_without_compile_or_review(self):
-        self.current()
+        from PySide6.QtCore import QThread
+        from PySide6.QtTest import QSignalSpy
+        result, record = self.current()
+        published = QSignalSpy(self.controller.exportSucceeded)
+        observations = []
+        self.controller.exportSucceeded.connect(lambda _root, receipt, _revision, _build: observations.append(
+            (QThread.currentThread() == self.app.thread(), receipt.target.read_bytes())))
         original = self.root.read_bytes()
         target = self.directory / "export.pdf"
         with patch.object(self.window, "prepare_submission", side_effect=AssertionError("not a submission review")):
@@ -97,6 +103,11 @@ class PdfExportControllerTests(TestCase):
         self.assertEqual(self.root.read_bytes(), original)
         self.compile.assert_not_called()
         self.assertEqual(self.errors, [])
+        self.assertEqual(published.count(), 1)
+        root, receipt, revision, build = published.at(0)
+        self.assertEqual((root, revision, build), (self.root, record.source_revision, result.build_id))
+        self.assertEqual(receipt.target, target)
+        self.assertEqual(observations, [(True, target.read_bytes())])
 
     def export_once(self):
         self.current()
@@ -347,7 +358,9 @@ class PdfExportControllerTests(TestCase):
 
     def test_stop_during_publication_does_not_rearm_after_late_success(self):
         from app.gui import pdf_export_controller as module
+        from PySide6.QtTest import QSignalSpy
         target = self.export_once()
+        published = QSignalSpy(self.controller.exportSucceeded)
         entered, resume = threading.Event(), threading.Event()
         original = module.exported_pdf
         def paused(*args):
@@ -366,6 +379,8 @@ class PdfExportControllerTests(TestCase):
         self.assertEqual(target.read_bytes(), self.canonical_pdf.read_bytes())
         self.assertIsNone(self.window.app_settings.pdf_export_target(self.root))
         self.assertIn("自动更新已停止", self.statuses[-1])
+        self.assertEqual(published.count(), 1)  # Real publication won the late cancellation.
+        self.assertEqual(published.at(0)[1].target, target)
 
     def test_shared_settings_stop_is_not_undone_by_inflight_automatic_result(self):
         from app.gui import pdf_export_controller as module
@@ -390,7 +405,9 @@ class PdfExportControllerTests(TestCase):
         self.assertIsNone(self.window.app_settings.pdf_export_target(self.root))
 
     def test_picker_cancel_does_not_save_compile_or_export(self):
+        from PySide6.QtTest import QSignalSpy
         self.current()
+        published = QSignalSpy(self.controller.exportSucceeded)
         tab = self.window.current_tab()
         tab.editor.insertPlainText("new")
         before = self.root.read_bytes()
@@ -401,6 +418,7 @@ class PdfExportControllerTests(TestCase):
         self.assertEqual(self.root.read_bytes(), before)
         self.assertTrue(tab.modified)
         self.assertFalse((self.directory / "main.pdf").exists())
+        self.assertEqual(published.count(), 0)
 
     def test_one_picker_accepts_update_export_and_avoids_existing_default_name(self):
         self.current()
@@ -459,7 +477,9 @@ class PdfExportControllerTests(TestCase):
         self.assertEqual(target.read_bytes(), b"%PDF-1.4 current")
 
     def test_failed_update_exports_nothing_and_keeps_old_pdf(self):
+        from PySide6.QtTest import QSignalSpy
         self.current()
+        published = QSignalSpy(self.controller.exportSucceeded)
         old = self.canonical_pdf.read_bytes()
         self.store.mark_edited(self.root)
         target = self.directory / "export.pdf"
@@ -471,6 +491,7 @@ class PdfExportControllerTests(TestCase):
         self.assertEqual(self.canonical_pdf.read_bytes(), old)
         self.assertFalse(self.controller._pending)
         self.assertIn("未导出旧版本", self.errors[-1])
+        self.assertEqual(published.count(), 0)
 
     def test_nonempty_pdf_record_without_real_evidence_requires_update(self):
         self.current()

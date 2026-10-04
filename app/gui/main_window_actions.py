@@ -78,7 +78,7 @@ def build_actions(window: "MainWindow") -> None:
     window.save_action.setShortcut(QKeySequence.StandardKey.Save)
     window.save_as_action = QAction(icon("save"), "另存为", window)
     window.export_pdf_action = QAction(icon("save"), "导出 PDF", window)
-    window.export_pdf_action.setToolTip("选择位置后导出 PDF，以后正式编译成功会自动更新此文件。Block 项目或源码/报告交付请用‘准备提交’。")
+    window.export_pdf_action.setToolTip("结构与源码视图共用导出：选择位置后导出 PDF，以后正式编译成功会自动更新此文件。旧版 Block 工程或源码/报告交付请用‘准备提交’。")
     window.stop_pdf_update_action = QAction("停止自动更新导出 PDF", window)
     window.stop_pdf_update_action.setEnabled(False)
     window.export_project_action = QAction("导出为工程文件…", window)
@@ -111,7 +111,7 @@ def build_actions(window: "MainWindow") -> None:
     window.feedback_bundle_action.setToolTip("复制环境、编译与项目诊断摘要，不包含论文正文。")
     window.import_perf_action = QAction("导入性能诊断", window)
     window.import_perf_action.setToolTip("查看最近图片导入事务的编译次数与各阶段耗时。")
-    window.block_project_action = QAction("Block 项目（MVP）", window)
+    window.block_project_action = QAction("旧版 Block 工程工具…", window)
     window.block_project_action.setToolTip("打开 Block 模型化排版 MVP 控制台（布局/表格/同步/主题/导出）。")
     window.user_guide_action = QAction(icon("book-open"), "新手导引", window)
     window.console_action = QAction(icon("chevron-up"), "控制台", window)
@@ -146,16 +146,9 @@ def build_actions(window: "MainWindow") -> None:
     engine_index = window.engine_selector.findData(window.current_engine.value)
     window.engine_selector.setCurrentIndex(max(engine_index, 0))
 
-    def group_label(text: str) -> None:
-        label = QLabel(text)
-        label.setObjectName("toolbarGroupLabel")
-        toolbar.addWidget(label)
-
-    group_label("文件")
     for action in (window.new_project_action, window.open_file_action, window.save_action):
         toolbar.addAction(action)
     toolbar.addSeparator()
-    group_label("编译 / 输出")
     toolbar.addAction(window.compile_action)
     toolbar.addAction(window.stop_compile_action)
     window.auto_compile_toolbar_action = toolbar.addWidget(window.auto_compile_toggle)
@@ -164,9 +157,9 @@ def build_actions(window: "MainWindow") -> None:
     toolbar.addAction(window.export_pdf_action)
     toolbar.addAction(window.sync_pdf_action)
     toolbar.addSeparator()
-    group_label("视图")
     for action in (window.toolbox_action, window.console_action):
         toolbar.addAction(action)
+    window.console_button = toolbar.widgetForAction(window.console_action)
     compile_button = toolbar.widgetForAction(window.compile_action)
     if compile_button:
         compile_button.setObjectName("primaryAction")
@@ -176,6 +169,7 @@ def build_actions(window: "MainWindow") -> None:
         compile_button.style().polish(compile_button)
 
     file_menu = window.menuBar().addMenu("文件")
+    window.file_menu = file_menu  # Retain the wrapper while legacy tools attach their submenu.
     for action in (
         window.new_project_action,
         window.new_action,

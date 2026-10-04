@@ -101,7 +101,7 @@ def install_block_mode(window) -> None:
     window.block_redo_action.setShortcut("Ctrl+Shift+Y")
     window.block_redo_action.triggered.connect(lambda: _redo_block(window))
 
-    block_menu = window.menuBar().addMenu("Block")
+    block_menu = window.file_menu.addMenu("旧版 Block 工程")
     block_menu.addAction(window.open_block_project_action)
     block_menu.addAction(window.close_block_project_action)
     block_menu.addAction(window.block_save_action)

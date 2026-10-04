@@ -24,6 +24,7 @@ UI_LATIN_SANS_FONT_CANDIDATES = [
     "Arial",
 ]
 CJK_SANS_FONT_CANDIDATES = [
+    *(["PingFang SC"] if sys.platform == "darwin" else []),
     "Source Han Sans SC",
     "Noto Sans CJK SC",
     "PingFang SC",
@@ -780,6 +781,19 @@ def stylesheet(
         text-align: left;
     }}
 
+    QPushButton#outlineRefreshButton {{
+        min-height: {max(0, minh_compact - 8)}px;
+        padding: 3px 8px;
+        border-color: {COLOR_BORDER_SOFT};
+        font-size: {fs_toolbar}px;
+    }}
+
+    QPushButton#pdfSearchButton {{
+        min-height: {max(0, minh_compact - 8)}px;
+        padding: 3px 8px;
+        font-size: {fs_toolbar}px;
+    }}
+
     QPushButton#toolCard:hover {{
         background: {COLOR_HOVER};
         border-color: {COLOR_BORDER_SOFT};
@@ -1032,6 +1046,26 @@ def stylesheet(
     QComboBox QAbstractItemView::item:hover {{
         background: {COLOR_HOVER};
         color: {COLOR_TEXT};
+    }}
+
+    QDialog#tableDialog QPushButton,
+    QWidget#localBlockEditor QPushButton,
+    QWidget#tableOptions QToolButton {{
+        min-height: {max(0, minh_compact - 8)}px;
+        padding: 3px 10px;
+        border-radius: 6px;
+    }}
+
+    QDialog#tableDialog QLineEdit, QDialog#tableDialog QSpinBox, QDialog#tableDialog QComboBox,
+    QWidget#tableOptions QLineEdit, QWidget#tableOptions QSpinBox, QWidget#tableOptions QComboBox {{
+        min-height: {max(0, minh_compact - 8)}px;
+        padding: 3px 8px;
+        border-radius: 6px;
+    }}
+
+    QDialog#tableDialog QPushButton#primaryButton {{
+        min-height: {max(0, minh_control - 12)}px;
+        padding: 5px 12px;
     }}
 
     QProgressBar#compileProgress {{

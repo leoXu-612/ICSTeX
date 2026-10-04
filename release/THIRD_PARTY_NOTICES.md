@@ -1,5 +1,11 @@
 # Third-Party Notices
 
+## pylatexenc (LaTeX source structure)
+
+ICSTeX uses the existing [pylatexenc 2.10](https://github.com/phfaist/pylatexenc)
+parser for source ranges and readable text. It is licensed under the MIT License.
+The complete notice is bundled at `app/assets/licenses/PYLATEXENC_LICENSE.txt`.
+
 ## Sparkle (macOS application updates)
 
 The configured macOS build bundles unmodified [Sparkle 2.9.6](https://github.com/sparkle-project/Sparkle/releases/tag/2.9.6).

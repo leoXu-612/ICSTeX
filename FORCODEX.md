@@ -1,19 +1,34 @@
 # FORCODEX.md
 
-本轮交付已结束（2026-10-02）：先完成文件/大纲上下分区和顶部留白收紧，再完成
-局部按钮高光、边框和即时状态反馈。源码88ac73f、f24ceb4已推送草稿PR#10，
-分支codex/workbench-structure-polish；不自动合并或发布。
+## 当前任务：类型面包屑修正与 Beta 5 发布（2026-10-05）
 
-最终app1cc875a9，夹具修正后app+tests91f73d20。全量1912项执行后唯一旧展示
-夹具时序问题已受控复现并仅修测试，8项补验通过；原全量退出1保留，不宣称全量
-命令退出0。原生示例编译/PDF与最后导航补验分别保留源码身份；细节见PROJECT_STATE。
+用户接受其他功能，要求路径分层突出且末级为块类型，不再显示表格/正文摘要。
+只修改路径呈现和相应验证，不扩展编译、表格或整体布局。用户已明确授权修复后
+更新本机、提交GitHub及更新Vercel网站安装包；按现有流程发布独立Beta 5/210005，
+沿用现有更新账户/公钥/通道，不覆盖旧版本资产，不新建密钥。Keychain或登录提示
+需用户接管。GitHub用PR和Squash流程，Actions保持关闭，不绕过规则。
+先专项与原生查看，版本冻结后完整preflight，再核对制品/签名、本机与公开状态。
+收口当前已验收的累积源码，保留原工作树与索引。新证据根为
+~/.codex/visualizations/2026/10/05/icstex-beta5-release/，此前证据与备份保留。
 
-已备份并替换/Applications/ICSTeX.app，运行程序bba9a751…39c4a07与候选一致，
-当前停在欢迎页。旧版位于~/Applications/ICSTeX Backups/
-ICSTeX-2.1.0-beta.4-before-structure-polish-20261002.app。
-本地版本标签仍Beta4/210004，官网、feed、公钥、Actions和依赖未变。
+本轮发布授权取代此前待验收/不发布门槛；没有额外平台、Developer ID或公证授权。
 
-后续等待用户验收，不自动追加UI、性能或无障碍重构；macOS27.0/Qt6.11.1的
-selectedChildren缓解仍不等于完整无障碍验收。学生文稿不改，运行版不强退。
-主树codex/pdf-export-status的未提交源码/索引保持原样，不从主树旧源码打包。
-所有当前事实和收据以本工作树docs/PROJECT_STATE.md及PROJECT_LOG.md为准。
+工作树 `~/.codex/worktrees/structured-writing/ICSTeX`，分支 `codex/structured-writing`。
+基于10cb905并带入原有效工作树全部未提交改动；继承差异逐字节核验一致，原工作树、
+主树及索引不动。证据：`~/.codex/visualizations/2026/10/04/icstex-structured-writing/`。
+
+复用已安装pylatexenc 2.10及make_walker，不新增解析器、浏览器或AI依赖。源码是
+唯一内容真值；块是带原文范围的结构视图。局部修改、拖动、嵌套使用源编辑器与同一
+Undo栈，不重生成全文。未知语法原样保留，不完整源码拒绝结构操作；旧Block JSON
+工程继续兼容，不强制迁移。多文件通过已有文件树逐文件编辑，不宣称任意LaTeX可视化。
+
+交付：结构／源码切换，章节、正文、公式、图片、表格、列表的添加、编辑、拖动、
+嵌套与定位。PDF当前块使用当前整篇结果定位聚焦，不增加独立编译链或导出权限。
+复用保存、编译、PDF搜索、SyncTeX及导出。按选定稿统一外观，不混入其他功能。
+
+先专项及真实隔离示例，再必需compileall、完整unittest及packaging/preflight.sh。
+安装保留旧包、检查运行实例，不强退应用或丢失文稿。额度触顶即停，不用Credits或
+重置券；不调用代理。原有四步教程、回滚历史和主树修改保留。
+
+用户已授权：明确辨认为独立测试.tex的窗口可直接正常关闭，不必反复询问；不能
+仅凭相似文件名推断，也不能连带关闭其他真实文稿。当前这次用户已自行保存退出。

@@ -98,6 +98,8 @@ def connect_signals(window: "MainWindow") -> None:
     # Editor tab life cycle
     window.editor_tabs.tabCloseRequested.connect(window.close_tab)
     window.editor_tabs.currentChanged.connect(window.on_current_tab_changed)
+    window.editor_tabs.currentChanged.connect(window.structure.current_changed)
+    window.block_mode_action.toggled.connect(window.structure.current_changed)
     window.tree.doubleClicked.connect(window.open_tree_item)
     window.tree.customContextMenuRequested.connect(window.show_file_tree_context_menu)
     window.error_table.cellDoubleClicked.connect(window.jump_to_error)

@@ -6829,3 +6829,334 @@ runs. The application release tag remains81b1672; no published archive was chang
   package-receipt.json,install-receipt.json}; originals and earlier backups preserved.
   Local label remains2.1.0-beta.4/210004; no PR merge, public release, feed, website or Actions
   mutation. Current bounded task complete; do not continue into unrelated UI/performance work.
+
+## 2026-10-03 - Finish the guided first PDF export in source
+
+- User requested continued onboarding improvement. Created codex/onboarding-next-steps from
+  clean10cb905 in the existing task worktree; primary source/index stayed unchanged except the
+  Codex routing brief. Followed local-refinement/minimal-implementation Skills: existing Qt
+  dialog, exercise, template, compile/export paths and four local images, no new framework,
+  dependency, network feature, automatic playback or always-running tutorial observer.
+- Extended the existing sequence to edit, explicit compile, view, export, then completion.
+  A GUI-thread exportSucceeded notification carries the actual immutable publication receipt,
+  root, revision and build id; it does not change publication/overwrite/lease rules. The guide
+  requires current viewed FINAL identity plus that receipt, not a clicked picker or remembered
+  destination. Hidden success does not restart its timer; edits/old/foreign/preview results do
+  not complete it. Missing LaTeX now makes the primary action open Environment Doctor.
+- Rewrote four Chinese pages around concrete actions and placed pictures next to their steps.
+  Replaced old advanced-submission imagery with the real synchronized ordinary-export strip;
+  updated paired file/outline layout, distinct error-page navigation and the exact-current-FINAL
+  condition for avoiding recompilation. Explicit folder opening uses the actual receipt path.
+  Four refreshed PNGs total265218 bytes; text-only fallback and local-only image links remain.
+- Initial13 existing tutorial tests passed3.783s; changed tutorial scope18 passed5.442s.
+  Combined core/tutorial/export/layout scope52 passed16.379s. Updated-image/guide layout scope3
+  passed1.276s. Publication tests observe the actual worker result on the GUI thread, including
+  a real file winning late cancellation; synthetic TeX proofs remain explicitly labelled.
+- Reused capture_user_guide on owned /tmp input: real title compile and visible pixels, exact
+  exported bytes, failed compile retaining old PDF/export, and hide/resume passed. Only picker
+  selection was simulated. Inspected all four guide pages. Capture app7f0e59d9 precedes only
+  the final first-page wording about continuing a previous exercise; follow-up and native
+  checks use final appbd419233. Image hashes in capture/result.json remain the final assets.
+- Native input paused on a user-window-change warning and resumed only after explicit user
+  permission. Initial typeText did not change the selected title; paste did, so no IME typing
+  acceptance is inferred. Saw the new Chinese title in real FINAL, advanced from3/4 to4/4,
+  accepted the actual macOS Save panel, then observed synchronized output and completion.
+  Save buttons were initially disabled, later enabled; no bypass or product repair was used.
+  A stale dialog binding returned noWindowsAvailable after acceptance; rebinding showed the
+  completed main window. Exactly one FINAL and one export; bytes matched, exit0, both owned
+  windows closed normally. Finder opening is unit-verified, not exercised outside the permitted
+  test window. Student documents, installed ICSTeX and real settings were not operated.
+- Required compileall passed. Full unittest ran1919 tests1215.566s (command1219.049s), exit1:
+  1918 passed, one new layout check saw1px overflow. Controlled startup reproduced607px viewport
+  versus608px document on page2/100% when Qt cached stylesheet fonts before registration;
+  proper startup gave607/607/0. Three extra event passes/100ms did not fix the wrong fixture.
+- Changed only this pixel-level test to a fresh process following actual startup order, keeping
+  maximum()==0 and all original visibility/content checks. Eight adjacent checks passed5.482s;
+  a controlled parent retaining premature caches also passed the isolated check2.159s without
+  mutating those caches. Final compileall and diff checks passed. Did not rerun the unaffected
+  suite or retroactively change its failure receipt; no product-source change after the full run.
+- Full/native/final appbd419233caccd159b12b8bd2579afed16e7bbc902e2ef5302d2ddd9f48fb5b14;
+  full app+tests0c651c876bfd58732bbc9e76cca2384c5bdd6b5e6d7f82902b033a8f8736f68b;
+  after test-only isolation21c39b78a55df690a385e18102098d1b3303e85dec5fc57a81d38f4bfe3febe5.
+  Existing Qt/font/QPdfLinkModel/temporary-directory and native IMK diagnostics remain. This is
+  source/automation verification, not student usability research or an application-speed claim.
+- Evidence:~/.codex/visualizations/2026/10/03/icstex-onboarding/{capture/result.json,
+  native/receipt.json,regression/result.json,regression/unittest.log}, pre-recheck snapshots and
+  tool outputs. Installed executable stillbba9a751…39c4a07. No commit/push, packaging, installation,
+  PR/Actions/website/feed changes. Bounded source task ends here; delivery requires later authority.
+
+## 2026-10-03 - Deduplicate visible controls and rename the sidebar
+
+- User reported repeated export/console controls and an inaccurate sidebar name. Worked on
+  the actual codex/onboarding-next-steps dirty tree, retaining its previous tutorial changes
+  and the primary checkout's source/index. Saved affected-file snapshots before this increment;
+  did not count the earlier onboarding implementation as this task's work. No subagents used.
+- Kept ordinary export on the main toolbar and console on the status bar. MainWindow hides
+  the PDF toolbar's export button and status strip's duplicate destination picker; standalone
+  PdfPanel/menu/signal endpoints remain compatible. Project-status next action and exercise
+  export stage no longer repeat the toolbar export button. File/View/PDF overflow menus remain;
+  open-location, stop-update, project ZIP and advanced submission keep their distinct purposes.
+- Renamed the toggle/dock to sidebar and aligned help/tooltips. Changing the export destination
+  now uses the top export action. The retained console action still preserves selected tabs
+  and does not force word count. No compile/export safety or root/revision/build policy changed.
+- First22 targeted cases had two obsolete toolbar-console expectations; updated them to assert
+  absence on the toolbar, presence in View and the existing status-bar action identity. The
+  next7 cases found one new test's temporary QMenu wrapper lifetime issue; retained its QAction
+  wrappers and the final9-case writing/control/guide batch passed3.279s. Product code did not
+  change for these test repairs. Existing affected tutorial/export cases had passed.
+- Reused the owned guide-capture workflow: actual current PDF, top-action export, exact-byte
+  match, failed build preserving old PDF/export, cursor/scroll and hide/resume checks passed.
+  Only picker selection was simulated. Inspected refreshed workbench and export-strip images;
+  image/text assets show sidebar and the two distinct status actions. Four PNGs262836 bytes.
+- Initial native probe exited134 because it generated a PDF before QApplication; fixed only
+  that external probe and retained its failed directory. Ready probe showed the renamed
+  toggle/dock and one visible console/export entry. AX-only Toggle changed a check mark but
+  did not invoke the existing triggered route, so real mouse clicks were used: two console
+  and two sidebar triggers, panels visibly opened/closed/restored. No compilation or source
+  edit; normal exit0. The initially injected layout PDF was not accepted as a displayed build;
+  this native check is control behavior, not PDF-render or accessibility acceptance.
+- Required compileall passed. Full unittest completed1920 tests382.537s (command384.332s),
+  exit1, with five failures from one legacy layout test requiring the now-hidden PDF export
+  button to be visible at every scale. Replaced that expectation with explicit hidden checks,
+  preserving bounds/visibility checks for all remaining controls. Eleven affected checks then
+  passed4.487s; final compileall/diff checks passed. Original full failure receipt remains,
+  not a retroactively green run; no application edit after full validation.
+- App31c939d30bc0883c43ed60690b7ef7b85edb49450d07e88059dacea83841c625 throughout capture,
+  native, full and recheck. Full app+testsa879fa83576dbea14bbe7b880133a0a672ed2d5777a5718de8a2a5286f15215a;
+  after test-contract correction527d788dfd0fe3a0653fbabfe5849189667d5e3f9b59906bcdf30add94872930.
+  Existing Qt/font/temporary-directory diagnostics retained; no overall speedup claim.
+- Evidence:~/.codex/visualizations/2026/10/03/icstex-control-dedup/{before,capture/result.json,
+  native-ready/receipt.json,regression/result.json,regression/unittest.log}, the test snapshot
+  and tool outputs. Installed executable remainsbba9a751…39c4a07. No commit/push, installation,
+  packaging, dependency or system change. Quota check allowed ordinary usage; no reset or paid
+  continuation authorized. This bounded source feedback is complete.
+
+## 2026-10-03 - Roll back the rejected control deduplication
+
+- User preferred the preceding UI and requested rollback. Reversed only the control-dedup/
+  sidebar-naming increment against its actual pre-change snapshots; the one unsnapshotted
+  Block notice was restored from its inspected single-line diff. No reset, stash, branch/index
+  replacement, student edit or rollback of the earlier four-step onboarding work.
+- Application and test content now exactly match the pre-dedup source:
+  appbd419233caccd159b12b8bd2579afed16e7bbc902e2ef5302d2ddd9f48fb5b14 and
+  app+tests21c39b78a55df690a385e18102098d1b3303e85dec5fc57a81d38f4bfe3febe5.
+  Original button positions, export/destination actions and project-navigation label restored;
+  corresponding tests, capture entry and user-guide wording restored with them.
+- The earlier snapshot contained no standalone PNG originals. Preserved rejected images in
+  icstex-ui-rollback/rejected-assets and regenerated illustrations from the restored source,
+  rather than falsely claiming byte-identical image recovery. Four PNGs265725 bytes; actual
+  owned compile/current PDF/export bytes, failure retention and hide/resume checks passed.
+  Picker selection was simulated; capture/result.json records exact image/source identities.
+- The rejected Python window was observed on welcome with no document, then closed normally
+  (exit0). Existing /Applications/ICSTeX.app instance was not closed or replaced. Restarted
+  python3 -m app from the restored task worktree and observed project-navigation plus top
+  console controls. That restored instance later exited0 without an agent close; the installed
+  instance remains running. Did not open a manuscript.
+- Required compileall passed. Fresh complete unittest:1919 tests379.186s, command380.809s,
+  exit0, app/test identities unchanged before/after. Qt/font/QPdfLinkModel/temporary-directory
+  and native IMK diagnostics retained; no zero-warning or performance claim. Older failed
+  receipts/log entries remain untouched, not retroactively marked green.
+- Evidence:~/.codex/visualizations/2026/10/03/icstex-ui-rollback/{capture/result.json,
+  regression/result.json,regression/unittest.log,rejected-assets} and native observations.
+  Installed executable stillbba9a75154b2d0027c214b013f4d88e8de4cbcdc63b67631ee0b8ecd639c4a07.
+  No commit/push, packaging, installation, new design or global instruction/skill changes.
+  Rollback complete; preserve the user's preference and await the next bounded request.
+
+## 2026-10-04 — Source-backed structure/code experiment, locally installed; GitHub approval pending
+
+- Scope: implement the user-selected paired views after checking reusable open source, install
+  locally after verification, and wait for user acceptance before any commit/push. Created
+  `codex/structured-writing` at10cb905 in its own managed worktree, carrying the effective
+  prior uncommitted source. The inherited binary diff and the original worktree were verified
+  unchanged; no stash/reset or unrelated cleanup. Original tutorial/rollback edits are not
+  attributed to this task.
+- Reused existing MIT pylatexenc2.10/make_walker and Qt views, drag/drop, text/Undo, compile,
+  PDF/SyncTeX/export. Inspected TexSoup, tree-sitter-latex and Blockly; added no parser,
+  browser engine, dependency upgrade or model. Added original Lucide grip SVG and bundled
+  pylatexenc license. Architecture and exact support boundaries are recorded inD029.
+- Added source-range-backed section/content structure, local editing and heading nesting;
+  one source document/Undo stack remains authoritative. Background snapshots are gated by
+  editor/revision/path/scope. Unknown syntax remains source; incomplete/dynamic/oversized
+  files do not authorize structure writes. Old JSON Block projects remain compatible.
+- Implemented independent structure/code and current-block/whole-PDF controls, explicit PDF
+  search, compact outline, retained typography roles, and one persistent console/export entry
+  with a console fallback when the toolbar overflows. Current-block mode is full-PDF focus,
+  not separate compilation or a new export path. Legacy Block menu is underFile.
+- Focused checks and native observations exposed and repaired a QMenu-wrapper lifetime issue,
+  accessibility Toggle changing only checkmarks, source caret affinity, stale local-focus exit,
+  long table preview height/clip, and navigation targeting a hidden editor. Native own-window
+  paste, structure synchronization, real drag, Undo, FINAL, native save panel export and PDF
+  keyword search were observed. Export matched FINAL bytes; user manuscripts were not opened.
+- An initial Chinese fixture omitted its XeLaTeX magic comment and failed on a missing pdfTeX
+  font; fixed the fixture, not compiler behavior. First preflight:1948 tests/469.161s, exit1,
+  16 failures across4 old UI-oracle groups. Updated those intentional layout/name expectations
+  while retaining geometry/accessibility/identity checks. A following gate was deliberately
+  interrupted at99.292s (130) to repair hidden-source navigation; receipts are retained.
+- Final focused79 tests passed. Final packaging/preflight.sh: compileall and1950 tests all
+  passed,441.021s (command444.267s), exit0; before/afterapp, app+tests and assets unchanged.
+  Python app SHA2562db5722aa3da65bf5b943779027c3622d494784c8b87971c1e16306cfe915cd3;
+  app+tests a517eba8898e06a2fd5156fde9767ab440f1c469813e96f15b03c5ce5126fd48;
+  app with assets6efb4cd9f7868ca1967e9e9a725c9697d22a82e3d426df10bcdd7c3aa395f728.
+- Existing PyInstaller spec/runtime built in27.103s, exit0. Verified211 modules/entry,
+  52 assets and3 raw workers against source, unchanged missing-module set, arm64 and ad-hoc
+  deep/strict signature. Feed/public key/210004 sequence preserved. No Developer ID/notarization
+  claim. Version label remains2.1.0-beta.4; this is a new local build, not the public artifact.
+- After user confirmed saving/quitting, InstallationLease guarded backup/replacement of
+  `/Applications/ICSTeX.app`;477 files/160 links matched the candidate. Old bundle remains at
+  `~/Applications/ICSTeX Backups/ICSTeX-2.1.0-beta.4-before-structured-writing-20261004.app`.
+  Installed executable SHA2567c99a4a5331b5a67d4b925e235cccdbf447ed23dd2a818fc9dfd78e793539f03.
+  Verified the running path/hash, opened the owned demonstration in the installed app,
+  selected structure and explicitly compiled with XeLaTeX; current PDF showedthe updated
+  formula. Left the window open for acceptance. Only the demo was added to recent projects.
+- Warnings retained: Qt/offscreen/font/QPdfLinkModel/temporary-directory asynchronous
+  diagnostics, IMK and table AX messages; packaging libobjc ctypes warning. No zero-warning,
+  performance-percentage, arbitrary-LaTeX or student-acceptance claim.
+- Evidence:`~/.codex/visualizations/2026/10/04/icstex-structured-writing/` includes inherited
+  diff, native observations and export, preflight histories, build/package/install receipts.
+  No commit, push, merge, tag, website/feed deployment or global skill/memory change.
+
+## 2026-10-04 — Structure interaction feedback fixes, installed locally; acceptance pending
+
+- Continued the existing structured-writing worktree, preserving its inherited dirty files and
+  index. Saved feedback-start diff and five affected-file snapshots in interaction-fixes/before.
+  No new branch/worktree, agents, dependency upgrade, network service or GitHub write.
+- Added block deletion/Backspace with source Undo; deleting a section confirms its subtree,
+  clearing a title retains the declaration needed by maketitle. Added ancestry guides/path and
+  a strong gold source-range cue that does not leave a destructive native text selection.
+- Replaced plain content modal entry with a workspace-local editor and explicitly labeled
+  content sketch. Text/cell edits immediately patch the original document; Save/Compile see
+  active cell typing before focus loss. Target/revision/conflict changes reject old bindings.
+  Undo remains source-owned. No separate draft persistence or compilation pipeline.
+- Plain paragraphs support visible Enter breaks and blank-line paragraphs, including leading
+  empty lines. Shared escaping now runs once rather than re-escaping generated braces.
+  Reused TableGrid and pylatexenc source spans: normal table cells edit directly without
+  regenerating captions, labels, rules or column specifications. Merged/ragged/nested complex
+  tables remain local code; formatted/math cells retain LaTeX. Existing table_snippet defaults
+  (including booktabs and ruled variants) resolve to editable exact cell spans.
+- Updated old popup/selection tests to the new intentional behavior while retaining revision,
+  stale-result, conflict and Undo checks. Focused79 passed; an extra leading-break case passed.
+  Native isolated keyboard cell edit/save, deletion/Undo, real FINAL, source highlight and
+  hierarchy were observed. Coordinate double-click was blocked by CUA AXError.notImplemented;
+  do not count this as native mouse acceptance. Qt IME event tests are not physical IME proof.
+- Real XeLaTeX sample showed first/second text lines at PDF y251.680528/270.459528 and changed
+  table values. Native subsequent cell edit to3 kg saved and appeared in the latest PDF.
+  Six additional newline/empty/escaping cases compiled in1.554s, exit0. An initial inspection
+  script failed after successful compilation because fitz was unavailable; used existing
+  pdftotext for that artifact instead of adding a dependency or repeating its compile.
+- One early gate was interrupted130 at64.920s to handle leading breaks. A complete1966-test
+  run failed only the existing console minimum-height assertion (459 <580; isolated439).
+  The hidden local page contributed its minimum size to QStackedLayout. Wrapped it in native
+  QScrollArea so short workspaces scroll instead of constraining the console; did not weaken
+  the assertion. That unchanged check plus structure GUI28 tests passed14.579s.
+- Final packaging/preflight.sh: compileall and1966 unittest tests passed476.489s, command
+  479.285s, exit0, before/after app/tests/assets unchanged. app Python:
+  8a5adf3e886ad98c74b7b9a289b708b50643a3d12b1e1deaae8f4b5ab2e75b2f;
+  app+tests:fd85f5c05984862ade180de846af542e0d7f0d37a207ee59fc4e8286cfc82b12;
+  app+assets:261fddebc4f84648d15ce2ca04d1debc6c808c1b72f05a293657c7ff8be80723.
+- Built existing PyInstaller spec in27.165s, exit0.212 modules/entry,52 assets and3 raw workers
+  match source; no new missing modules. arm64, ad-hoc deep/strict signature; no Developer ID
+  or notarization. Version2.1.0-beta.4/feed/key/sequence210004 unchanged; new local bytes only.
+- User confirmed saved/exited, process check clear. InstallationLease guarded replacement;
+  477 files/160 links matched candidate. New executable:
+  968dd0e346cd4af69bd01877e42d57bb7377e32bfe87ca2fbc26e5eb02811424.
+  Previous7c99a4a5 bundle is preserved unchanged at
+  ~/Applications/ICSTeX Backups/ICSTeX-2.1.0-beta.4-before-structure-interaction-20261004.app.
+  Verified installed process83308/path/hash, opened only the owned synthetic project, explicitly
+  compiled with XeLaTeX and saw latest PDF. Opened table editing in the installed workspace,
+  with grid/content sketch and focused current PDF visible. Left it open for user acceptance.
+- Retained Qt/offscreen/font/QPdfLinkModel/temporary-directory, IMK/TSM/table AX and build
+  libobjc ctypes warnings. No zero-warning, overall speedup, arbitrary-LaTeX or user-approval
+  claim. Evidence:~/.codex/visualizations/2026/10/04/icstex-structured-writing/interaction-fixes/.
+  No student manuscript edits, commit/push/merge/tag, Actions, feed or website deployment.
+
+## 2026-10-04–05 — Table specifications, compact controls and compile activity, installed
+
+- Scope: address the user's missing table specifications in local content editing, oversized
+  table controls and compile activity motion. Reused the same dirty structured-writing
+  worktree/index; inherited text diff and small affected-file snapshots are in
+  table-spec-progress/before. No new agents, worktrees, dependencies or release scope.
+- Extracted shared TableOptions for TableDialog and source-backed editing. Ordinary tabular
+  supports1–40 data rows/1–12 columns, alignment, rules, caption/label/placement. Existing
+  TableGrid and table_snippet remain the grid/renderer; source edits preserve outside bytes,
+  use raw cell content and enter the original Undo transaction. Shrink asks before data loss.
+  Caption removal/reinsertion preserves label order; required packages are added only to a
+  current documentclass source, never implicitly to another root. Complex columns/comments/
+  custom rules remain cell-only; formatted captions retain a code-edit boundary.
+- Compact, scoped table styles remove doubled content-height/padding. Default-scale measured
+  secondary buttons28px and primary34px; metadata collapses and the alignment field no longer
+  fills an oversized row. Existing app layout, font/scale and user preferences are retained.
+- CompileActivityBar keeps the existing QProgressBar visibility API and root/build guards.
+  A33ms timer paints a small flowing highlight, not a percentage. Hide/minimize/completion
+  stops it. The documented NSWorkspace Reduce Motion getter is read-only and verified in
+  local AppKit headers; tests override the preference without changing system settings.
+- Focused combined specification/structure/control/layout60 tests passed27.994s; final
+  core/metadata12 passed3.937s. Earlier focused batches and warnings are retained in evidence;
+  totals overlap and are not additive. Existing TableDialog/lifetime/background-root tests
+  remain intact. No protective assertion was removed or weakened.
+- Owned native probe compiled an expanded3-column/3-data-row table with original cells and
+  new5 kg content. Three real compile-frame hashes differed,77 animation ticks during work,
+  none after finish. Native Reduce Motion=false; static/hidden/minimized behavior additionally
+  covered by Qt tests. This is lifecycle evidence, not a CPU or compilation-speed benchmark.
+- Native AX setValue alone did not commit the non-keyboard-tracking spin box and was not
+  counted as a pass. Real click/typing/Return set4 data rows. Booktabs toggle, plain caption
+  containing%, Cmd-S and FINAL produced the expected grid/rules/caption in a latest PDF.
+  Only the isolated fixture/settings were used; owned test window closed normally, exit0.
+- One final preflight completed: compileall and1985 tests passed686.697s, command691.510s,
+  exit0. Source/tests/assets were unchanged before and after. App Python identity:
+  26c95cd746e466e0aa046f0bdb4f565bc2a1a712ad01b96c00f5d8b7871958c3;
+  app+tests:d97d350c393039b0cbea8b8d46ca4e529c34b30fd481081f302066bf66c120cc;
+  app+assets:b71103276f39858d356eb510c25cc98724e975a7d6d127b1562f43f7397f0495.
+- Existing spec build39.443s, exit0;215 modules/entry,52 resources and3 raw workers matched
+  source; no new missing module. arm64 and ad-hoc deep/strict codesign verified. Existing
+  Beta4 label/feed/key/build210004 unchanged, no Developer ID/notarization or public release.
+- User saved/closed the installed app and additionally authorized normal closure of clearly
+  identified independent test-.tex windows without repeated questions, not real/mixed
+  documents or force-killing. Live process recheck preceded InstallationLease replacement.
+  Installed477 files/160 links match candidate. New executable:
+  87a78d730de77041bbc957ab36012e73609c0a62baff244318e5b6a6c81abd08.
+  Previous968dd0e3 bundle retained unchanged at
+  ~/Applications/ICSTeX Backups/ICSTeX-2.1.0-beta.4-before-table-spec-progress-8a5adf3e88.app.
+- Verified installed process23336/path/hash, opened this batch's synthetic project, explicitly
+  compiled and observed the real activity indicator followed by latest FINAL. Local editor
+  showed4 data rows/3 columns/left alignment/rules/metadata controls at the retained user scale.
+  Left that test view open for acceptance; did not collapse the user's console preference.
+- Warnings retained: Qt offscreen/font/QPdfLinkModel, removed temporary-directory dependency
+  logs, Cocoa AX/table/IMK/TSM; PyInstaller warnings for system libobjc/AppKit absolute paths
+  not being bundled. Native installed startup/compile succeeded. No zero-warning, performance
+  gain, arbitrary-LaTeX or user-acceptance claim. Evidence: table-spec-progress under the
+  structured-writing2026/10/04 evidence root. No commit/push/merge/tag, website/feed or Actions.
+
+## 2026-10-05 — Accepted structured-writing source and Beta 5 candidate
+
+- User accepted the other features, requested distinct path segments ending at block type,
+  and authorized local installation, GitHub publication and the existing Vercel downloads.
+  Reused structured-writing at10cb905, preserving the primary checkout and prior work.
+- Replaced the summary breadcrumb with stable painted Qt label chips: file/section names
+  followed by type, not paragraph/table text. Width elision retains a full tooltip and native
+  static-text accessibility. No new navigation action, parsing trigger or compiler change.
+- Native own-document render and real XeLaTeX observed. The first custom QWidget omitted
+  its text from Cocoa AX; QLabel semantics restored it. UI-only recheck exposed the entire
+  path without repeating compilation. All owned test windows closed normally.
+- Source version2.1.0-beta.5 and runtime210005 keep the existing account/public key/feed.
+  Downloaded only the pinned Sparkle2.9.6 archive; SHA256 matched52bf9e88cdd972fc0c81501377a880e90d47031bd8ca5462488f843e2609e192.
+  Candidate/public metadata states are now distinct; an explicit production gate rejects
+  unpublished metadata. Test fixture import was corrected without weakening that gate.
+- Final focused55 passed21.968s. Full preflight once: compileall and1990 tests passed628.381s,
+  command631.913s, exit0. App, tests, resources and release-tool source identities unchanged.
+  App:c1741e25f3053309f8df840a9ef914c659982377804842e2b7bf394a13edb682;
+  app+tests:f8e21bdd88d1dda15f666c964e203647efed5543718ee835771a23396d3f9bc5;
+  app+assets:44844322851baf40d5497a0666583c83c01c971f1413bc191ad44fb14b337dd3;
+  release code:fdde8feaad505ff0c090159d6344a2a985d64271c0f17c2181b721f10a50b795.
+- Existing spec built once43.786s, exit0.215 modules/entry,52 assets and raw workers matched;
+  arm64/ad-hoc deep/strict signature passed. Candidate executable:
+  8bef21d8757fa3e74c9268511fd6b5482042d7d569031d2480d51ec6613598a6.
+- ZIP CRC/executable/version checked. DMG checksum verified and read-only mounted; app tree,
+  signature, documents and Applications link matched, then unmounted. No older asset renamed
+  or overwritten. Artifact receipts retain actual sizes/digests and hdiutil deprecation warnings.
+- Live GitHub main requires PR/squash with Actions disabled. Existing release79fcd868 and
+  incorporated main4ea00ff have identical trees, allowing a no-tree-change lineage freeze.
+  Existing Vercel project/account/production aliases confirmed; no security setting changed.
+- This entry records source/candidate verification, not completed online publication. Signing,
+  installed identity, PR/tag/Release and production deployment are recorded in the closeout.
+  Qt/font/offscreen/temp-path/QPdfLinkModel/AX/IMK and ctypes warnings retained. Evidence:
+  ~/.codex/visualizations/2026/10/05/icstex-beta5-release/. No student document touched.

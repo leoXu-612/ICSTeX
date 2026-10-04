@@ -7,7 +7,7 @@ from pathlib import Path
 import threading
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import QObject, QTimer, Qt, QUrl
+from PySide6.QtCore import QObject, QTimer, Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QFileDialog, QDialog, QProgressDialog
 from shiboken6 import isValid
@@ -40,6 +40,9 @@ class PendingExport:
 
 class PdfExportController(QObject):
     """GUI-thread coordination; the publication worker receives immutable evidence only."""
+
+    # GUI-thread observation after publication: root, immutable receipt, revision, build id.
+    exportSucceeded = Signal(object, object, int, int)
 
     def __init__(self, window: "MainWindow") -> None:
         super().__init__(window)
@@ -405,6 +408,7 @@ class PdfExportController(QObject):
             hint = "；正式编译后自动更新。" if remember else "；自动更新已停止或目标已更改。"
             self._report_pending_status(pending,
                 f"已{'更新' if pending.previous else '导出'} PDF：{value.target}{hint}", 8000)
+            self.exportSucceeded.emit(pending.root_file, value, proof.job_key.source_revision, proof.build_id)
         elif cancelled:
             if pending.root_file not in self._stopped_roots:
                 self._set_notice(pending.root_file, pending.target, "更新已取消", "尚未完成同步；可再次正式编译。")

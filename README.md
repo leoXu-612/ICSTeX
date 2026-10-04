@@ -1,6 +1,6 @@
 # ICSTeX
 
-Current version: 2.1.0-beta.4. Current packaged release: 2.1.0-beta.4 for macOS arm64.
+Current version: 2.1.0-beta.5. Public downloads remain on 2.1.0-beta.4 until the Beta 5 release is published.
 See [`release/BUILD_RECEIPT.json`](release/BUILD_RECEIPT.json) for the exact packaged source identity.
 This release includes opt-in, signed in-app updates. Older manual builds need one manual
 bootstrap installation. Windows stays on its historical Beta 1 package.
@@ -11,6 +11,17 @@ students, delivered as a Python/PySide6 desktop application. It combines LaTeX
 editing with live compilation, PDF preview, SyncTeX hooks, Word Count, error
 parsing, beginner-friendly insertion tools, project templates, and packaging
 scaffolding.
+
+The current local experimental source adds **结构 / 源码** views of the same
+`.tex` document: common sections and content blocks can be edited, deleted, moved
+and nested through the existing source editor and Undo history. Content editing
+stays in the workspace, with visible paragraph breaks and direct editing of
+ordinary table cells. Ordinary table dimensions, alignment, rules and caption metadata
+share the insertion controls; shrinking asks before removing data. A lightweight compile
+activity animation does not claim a percentage and respects macOS Reduce Motion. **当前块 / 整篇**
+changes PDF reading focus, not compilation or export scope. Unknown LaTeX stays
+source-editable; legacy Block projects remain under **文件 → 旧版 Block 工程**.
+This is not yet a new public release. See [the user guide](docs/user-guide.md).
 
 Recent builds also include an environment doctor, quick BibTeX/DOI/arXiv/URL
 reference import, drag-and-drop figure insertion, visual table editing, project
@@ -92,7 +103,7 @@ The local project wizard now previews Chinese-name destinations and templates,
 offers an explicit engine choice, and creates only new directories. First
 compilation remains an explicit action. A workspace row shows the current project,
 compile root, save/PDF state and next step, with links to existing project tools.
-The Block menu/header provides guarded Save, explicit FINAL and Stop. Save keeps
+The legacy Block submenu/header provides guarded Save, explicit FINAL and Stop. Save keeps
 metadata and managed TeX together without compiling; external/unknown-file
 conflicts retain the draft and refuse replacement. Close asks Save/Discard/Cancel;
 Stop does not close the project. Unresolved `.icstex/block-write.pending` evidence
@@ -304,7 +315,7 @@ macOS:
 bash packaging/build_macos.sh
 ```
 
-This creates both `dist/ICSTeX-2.1.0-beta.4.dmg` and a latest alias at
+This creates both `dist/ICSTeX-2.1.0-beta.5.dmg` and a latest alias at
 `dist/ICSTeX.dmg`. Share the versioned DMG when distributing test builds.
 
 Windows:

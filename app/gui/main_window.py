@@ -169,6 +169,8 @@ class MainWindow(QMainWindow):
         self.dependencies = DependencyController(self)
 
         self._build_ui()
+        from app.gui.structure_view import StructureController
+        self.structure = StructureController(self)
         self.readiness = SubmissionCheckController(self)
         self.citations = CitationHealthController(self)
         self.materials = MaterialUsageController(self)
@@ -891,7 +893,9 @@ class MainWindow(QMainWindow):
             self.source_panels.set_active(has_documents and source_active)
         self.source_preview_area.set_document_available(has_documents)
         self.bottom_panel.setVisible(has_documents and not self.bottom_tabs.isHidden())
-        self.bottom_collapse_button.setVisible(has_documents and source_active)
+        # The accepted dual-view layout has one persistent console control,
+        # in the main toolbar. Keep the compatibility action/widget alive.
+        self.bottom_collapse_button.hide()
         if hasattr(self, "workspace"):
             if not self.toolBarBreak(self.workspace.toolbar):
                 self.insertToolBarBreak(self.workspace.toolbar)
@@ -916,16 +920,21 @@ class MainWindow(QMainWindow):
         if hasattr(self, "workspace"):
             self.workspace.schedule()
 
+        if hasattr(self, "structure"):
+            self.structure.sync_view()
+
     def update_welcome_page(self) -> None:
         self.preferences_controller.update_welcome_page()
 
     def show_find_bar(self) -> None:
+        self.structure.set_active(False)
         self.source_preview_area.select_pdf(False)
         tab = self.current_tab()
         self.find_replace_bar.set_editor(tab.editor if tab else None)
         self.find_replace_bar.show_find()
 
     def show_replace_bar(self) -> None:
+        self.structure.set_active(False)
         self.source_preview_area.select_pdf(False)
         tab = self.current_tab()
         self.find_replace_bar.set_editor(tab.editor if tab else None)
@@ -1188,6 +1197,7 @@ class MainWindow(QMainWindow):
             return
         self.tab_manager.handle_close_event(event)
         if event.isAccepted():
+            self.structure.shutdown()
             self.pdf_export.shutdown()
             self.readiness.shutdown()
             self.citations.shutdown()
@@ -1305,10 +1315,12 @@ class MainWindow(QMainWindow):
         return self.tab_manager.index_for_tab_id(tab_id)
 
     def _jump_to_line(self, editor: LaTeXEditor, line: int) -> None:
+        self.structure.set_active(False)
         self.source_preview_area.select_pdf(False)
         view_state.jump_to_line(editor, line)
 
     def _jump_to_position(self, editor: LaTeXEditor, line: int, column: int) -> None:
+        self.structure.set_active(False)
         self.source_preview_area.select_pdf(False)
         view_state.jump_to_position(editor, line, column)
 

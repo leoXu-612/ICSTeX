@@ -1,22 +1,23 @@
 {
   "schema_version": 1,
-  "version": "2.1.0-beta.4",
-  "release_sequence": 210004,
+  "version": "2.1.0-beta.5",
+  "release_sequence": 210005,
   "distribution": "manual-bootstrap-and-sparkle-full-update",
   "platform": "macOS",
   "architecture": "arm64",
-  "application_source_sha256": "ca778fe504893584d5fe6ece318876062b450268b8f662147832725e40dfebe6",
-  "application_tree_sha256": "633b6b20fa8eeb31f3d25fca7d74c12ef888051ac2253b89d1cd0dd103063e9a",
-  "executable_sha256": "7437b0af923d2362d6285aa2ff42ec267d08e1711e424e324aee8887712baf95",
-  "matched_application_modules": 208,
+  "application_source_sha256": "c1741e25f3053309f8df840a9ef914c659982377804842e2b7bf394a13edb682",
+  "application_tree_sha256": "44844322851baf40d5497a0666583c83c01c971f1413bc191ad44fb14b337dd3",
+  "executable_sha256": "8bef21d8757fa3e74c9268511fd6b5482042d7d569031d2480d51ec6613598a6",
+  "matched_application_modules": 214,
   "matched_entrypoint": true,
-  "matched_assets": 36,
+  "matched_assets": 52,
   "signing": "ad-hoc",
   "notarized": false,
   "public_update_runtime": true,
   "sparkle_version": "2.9.6",
   "update_feed": "https://website-phi-beryl-92.vercel.app/updates/macos/arm64/beta/appcast.xml",
   "update_signature": "Ed25519; archive and appcast",
+  "feed_sha256": "6819cecce057917ab82fed874154c111dc758de9e34c1396f8c686f2f2be5c4d",
   "installation_guard": "shared kernel leases; native installer exit observation; fail-closed recovery journal",
   "not_packaged": [
     "app.core.agent_concurrency",
@@ -37,8 +38,8 @@
     "protocol.py"
   ],
   "preflight": {
-    "tests": 1843,
-    "seconds": 321.019,
+    "tests": 1990,
+    "seconds": 628.381,
     "exit_code": 0
   }
 }

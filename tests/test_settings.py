@@ -12,6 +12,32 @@ from app.core.settings import AppPreferences, AppSettings, MAX_RECENT_ITEMS
 
 
 class SettingsTests(TestCase):
+    def test_export_destination_survives_reload_and_is_root_specific(self):
+        from app.core.artifact_export import exported_pdf
+        with TemporaryDirectory() as directory:
+            scope = Path(directory).resolve()
+            root = scope / "main.tex"
+            target = scope / "export.pdf"
+            target.write_bytes(b"PDF bytes")
+            receipt = exported_pdf(target, b"PDF bytes")
+            settings_file = str(scope / "settings.ini")
+            first = AppSettings(QSettings(settings_file, QSettings.Format.IniFormat))
+            first.remember_pdf_export(root, scope, receipt)
+            second = AppSettings(QSettings(settings_file, QSettings.Format.IniFormat))
+            self.assertEqual(second.pdf_export_target(root), (scope, receipt))
+            self.assertIsNone(second.pdf_export_target(scope / "other.tex"))
+            second.forget_pdf_export(root)
+            self.assertIsNone(second.pdf_export_target(root))
+
+    def test_malformed_export_destination_is_not_adopted(self):
+        with TemporaryDirectory() as directory:
+            scope = Path(directory).resolve()
+            settings = AppSettings(QSettings(str(scope / "settings.ini"), QSettings.Format.IniFormat))
+            root = scope / "main.tex"
+            for bad in ('bad json', '{}', '[]', '1', '{"scope": null}'):
+                settings.settings.setValue(settings._pdf_export_key(root), bad)
+                self.assertIsNone(settings.pdf_export_target(root))
+
     def test_preferences_round_trip(self) -> None:
         with TemporaryDirectory() as directory:
             settings = AppSettings(QSettings(str(Path(directory) / "settings.ini"), QSettings.Format.IniFormat))

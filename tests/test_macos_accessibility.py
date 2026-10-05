@@ -31,7 +31,11 @@ class MacAccessibilityGuardTests(TestCase):
         cases = [
             ("darwin", "26.6.1", "arm64", "6.11.1", "cocoa", True),
             ("darwin", "25.1", "arm64", "6.11.1", "cocoa", False),
-            ("darwin", "27.0", "arm64", "6.11.1", "cocoa", False),
+            ("darwin", "27.0", "arm64", "6.11.1", "cocoa", True),
+            ("darwin", "27.1", "arm64", "6.11.1", "cocoa", False),
+            ("darwin", "28.0", "arm64", "6.11.1", "cocoa", False),
+            ("darwin", "27.0", "arm64", "6.11.2", "cocoa", False),
+            ("darwin", "27.0", "arm64", "6.11.1", "offscreen", False),
             ("darwin", "26.6.1", "x86_64", "6.11.1", "cocoa", False),
             ("darwin", "26.6.1", "arm64", "6.11.2", "cocoa", False),
             ("darwin", "26.6.1", "arm64", "6.11.1", "offscreen", False),

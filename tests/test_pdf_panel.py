@@ -41,6 +41,33 @@ def _write_zoom_pdf(path: Path, *, mixed: bool = False, color=Qt.GlobalColor.red
 
 
 class PdfPanelToolbarTests(TestCase):
+    def test_export_status_wraps_actions_and_preserves_full_path_without_recreating_widgets(self):
+        app = _app()
+        panel = PdfPanel()
+        self.addCleanup(panel.close)
+        self.addCleanup(panel.deleteLater)
+        target = Path("/temporary-projects/" + "long-directory-" * 12 + "/report.pdf")
+        buttons = (panel.export_location_button, panel.export_destination_button, panel.export_stop_button)
+        panel.set_export_status(state="已同步", severity="success", target=target,
+                                can_choose=True, can_stop=True)
+        for width in (360, 1000):
+            panel.resize(width, 680)
+            panel.show()
+            app.processEvents()
+            self.assertEqual(panel.export_target_label.toolTip(), str(target))
+            self.assertEqual(panel.export_target_label.accessibleDescription(), str(target))
+            for button in buttons:
+                self.assertTrue(button.isVisible())
+                self.assertGreater(button.width(), 0)
+                self.assertLessEqual(button.geometry().right(), panel.export_status.width())
+            self.assertLessEqual(panel.export_target_label.fontMetrics().horizontalAdvance(
+                panel.export_target_label.text()), panel.export_target_label.width())
+        panel.set_export_status(state="更新失败", severity="error", target=target,
+                                detail="请检查目标文件，或重新导出到新位置。", can_choose=True, can_stop=True)
+        self.assertEqual(buttons, (panel.export_location_button, panel.export_destination_button, panel.export_stop_button))
+        self.assertEqual(panel.export_state_label.property("severity"), "error")
+        self.assertTrue(panel.export_detail_label.isVisible())
+
     def test_successful_compile_does_not_hide_viewer_load_failure(self):
         from tempfile import TemporaryDirectory
         from pathlib import Path

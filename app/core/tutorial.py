@@ -21,7 +21,8 @@ class TutorialStep(IntEnum):
     EDIT = 1
     COMPILE = 2
     VIEW = 3
-    DONE = 4
+    EXPORT = 4
+    DONE = 5
 
 
 def title_span(text: str) -> tuple[int, int] | None:
@@ -31,14 +32,16 @@ def title_span(text: str) -> tuple[int, int] | None:
 
 
 def tutorial_step(text: str, *, manual_requested: bool, current_pdf: bool,
-                  acknowledged: bool) -> TutorialStep:
+                  acknowledged: bool, exported: bool) -> TutorialStep:
     span = title_span(text)
     title = text[slice(*span)].strip() if span else ""
     if not title or title == INITIAL_TITLE:
         return TutorialStep.EDIT
     if not manual_requested or not current_pdf:
         return TutorialStep.COMPILE
-    return TutorialStep.DONE if acknowledged else TutorialStep.VIEW
+    if not acknowledged:
+        return TutorialStep.VIEW
+    return TutorialStep.DONE if exported else TutorialStep.EXPORT
 
 
 def create_example(base: Path) -> Path:

@@ -139,6 +139,8 @@ class EditorTabManager:
             window.file_watcher.unwatch(tab.path)
         window.editor_tabs.removeTab(index)
         window.tabs.pop(tab_id, None)
+        if tab and tab.path:
+            window.documents.release_save_echo(tab.path)
         if widget is not None:
             # removeTab keeps the page alive in the stack. An accepted close
             # must also release its editor/document at the Qt event boundary.

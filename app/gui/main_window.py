@@ -169,6 +169,8 @@ class MainWindow(QMainWindow):
         self.dependencies = DependencyController(self)
 
         self._build_ui()
+        from app.gui.structure_view import StructureController
+        self.structure = StructureController(self)
         self.readiness = SubmissionCheckController(self)
         self.citations = CitationHealthController(self)
         self.materials = MaterialUsageController(self)
@@ -180,6 +182,9 @@ class MainWindow(QMainWindow):
         saved_window_state = self.app_settings.settings.value("window/block_console_state")
         if saved_window_state:
             self.restoreState(saved_window_state)
+        else:
+            # First-use writing layout; saved dock visibility remains the user's choice.
+            self.toolbox_dock.show()
         from app.gui.responsive.block_panels import BlockPanelController
         self.block_panels = BlockPanelController(self)
         from app.gui.responsive.source_panels import SourcePanelController
@@ -649,12 +654,17 @@ class MainWindow(QMainWindow):
 
     def _update_pdf_action_state(self) -> None:
         if getattr(self, "block_session", None) is not None and self.block_mode_action.isChecked():
+            self.stop_pdf_update_action.setEnabled(False)
+            self.pdf_panel.export_status.hide()
             from app.gui.block_mode import sync_block_pdf
             sync_block_pdf(self)
             return
         if hasattr(self.pdf_panel, "empty_compile_button"):
             self.pdf_panel.empty_compile_button.setEnabled(self.compile_action.isEnabled())
         root = self._compile_root_for_tab(self.current_tab())
+        remembered = self.app_settings.pdf_export_target(root) if root else None
+        self.stop_pdf_update_action.setEnabled(remembered is not None)
+        self.stop_pdf_update_action.setToolTip(str(remembered[1].target) if remembered else "尚未导出 PDF")
         record = self.pdf_state.record_for(root) if root is not None else None
         preview = self.preview_state.record_for(root) if root is not None else None
         canonical_file_available = record is not None and record.has_valid_pdf
@@ -671,6 +681,7 @@ class MainWindow(QMainWindow):
         canonical_ready = record is not None and record.can_export(file_available=canonical_file_available)
         self.export_pdf_action.setEnabled(export_ready)
         self.pdf_panel.export_pdf_button.setEnabled(export_ready)
+        self.pdf_export.refresh_status(root, record, remembered, can_choose=export_ready)
         self.reveal_pdf_action.setEnabled(canonical_ready)
         self.pdf_panel.reveal_pdf_button.setEnabled(canonical_ready)
         self.sync_pdf_action.setEnabled(
@@ -731,6 +742,7 @@ class MainWindow(QMainWindow):
                                    or (preview is not None and preview.has_valid_pdf)):
                 self.statusBar().showMessage("还没有可用的 PDF；可从‘准备提交’单独保存和正式编译。", 5000)
                 return False
+            return self.pdf_export.choose_destination(root)
         return self.prepare_submission()
 
     def prepare_submission(self) -> bool:
@@ -881,11 +893,11 @@ class MainWindow(QMainWindow):
             self.source_panels.set_active(has_documents and source_active)
         self.source_preview_area.set_document_available(has_documents)
         self.bottom_panel.setVisible(has_documents and not self.bottom_tabs.isHidden())
-        self.bottom_collapse_button.setVisible(has_documents and source_active)
+        # The accepted dual-view layout has one persistent console control,
+        # in the main toolbar. Keep the compatibility action/widget alive.
+        self.bottom_collapse_button.hide()
         if hasattr(self, "workspace"):
-            if source_active and self.toolBarBreak(self.workspace.toolbar):
-                self.removeToolBarBreak(self.workspace.toolbar)
-            elif not source_active and not self.toolBarBreak(self.workspace.toolbar):
+            if not self.toolBarBreak(self.workspace.toolbar):
                 self.insertToolBarBreak(self.workspace.toolbar)
             self.workspace.toolbar.setVisible(has_documents or not source_active)
         for action in (
@@ -908,16 +920,21 @@ class MainWindow(QMainWindow):
         if hasattr(self, "workspace"):
             self.workspace.schedule()
 
+        if hasattr(self, "structure"):
+            self.structure.sync_view()
+
     def update_welcome_page(self) -> None:
         self.preferences_controller.update_welcome_page()
 
     def show_find_bar(self) -> None:
+        self.structure.set_active(False)
         self.source_preview_area.select_pdf(False)
         tab = self.current_tab()
         self.find_replace_bar.set_editor(tab.editor if tab else None)
         self.find_replace_bar.show_find()
 
     def show_replace_bar(self) -> None:
+        self.structure.set_active(False)
         self.source_preview_area.select_pdf(False)
         tab = self.current_tab()
         self.find_replace_bar.set_editor(tab.editor if tab else None)
@@ -955,7 +972,11 @@ class MainWindow(QMainWindow):
         self.find_replace_bar.set_editor(tab.editor if tab else None)
         self._sync_pdf_panel_to_active_root()
         self._sync_compile_indicators_to_active_root()
-        self.update_word_count()
+        if tab is not None:
+            # Let opening/switching finish before the Python count worker competes for the GIL.
+            self.word_counts.schedule()
+        else:
+            self.update_word_count()
         self.project_panels.context_changed()
 
     def _sync_compile_indicators_to_active_root(self) -> None:
@@ -1176,10 +1197,13 @@ class MainWindow(QMainWindow):
             return
         self.tab_manager.handle_close_event(event)
         if event.isAccepted():
+            self.structure.shutdown()
+            self.pdf_export.shutdown()
             self.readiness.shutdown()
             self.citations.shutdown()
             self.materials.shutdown()
             self.block_panels.save_preferences()
+            self.source_panels.save_preferences()
             self.app_settings.settings.setValue("window/block_console_state", self.source_panels.window_state())
             _unregister_app_window(self)
             manager = getattr(QApplication.instance(), "ui_scale_manager", None)
@@ -1291,10 +1315,12 @@ class MainWindow(QMainWindow):
         return self.tab_manager.index_for_tab_id(tab_id)
 
     def _jump_to_line(self, editor: LaTeXEditor, line: int) -> None:
+        self.structure.set_active(False)
         self.source_preview_area.select_pdf(False)
         view_state.jump_to_line(editor, line)
 
     def _jump_to_position(self, editor: LaTeXEditor, line: int, column: int) -> None:
+        self.structure.set_active(False)
         self.source_preview_area.select_pdf(False)
         view_state.jump_to_position(editor, line, column)
 

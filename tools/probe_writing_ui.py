@@ -19,7 +19,9 @@ from tests.test_pdf_panel import _write_zoom_pdf
 
 def run(output, native):
     output.mkdir(parents=True, exist_ok=False)
-    root = output / "writing.tex"
+    project = output / "project"
+    project.mkdir()
+    root = project / "writing.tex"
     text = ("% Notes for this section stay readable without competing with the main text.\n" * 8 +
             "\\documentclass{article}\n\\begin{document}\n\\section{A clear writing workspace}\n"
             "Write, revise, and check the result. Keep the editor comfortable while the first preview is prepared.\n"
@@ -57,10 +59,17 @@ def run(output, native):
                                                 (255, 0, 0)) > 100, timeout=5)
             for _ in range(8):
                 app.processEvents()
+            if preview:
+                # Scaling can queue another PDF layout after the viewport was
+                # first ready. Validate the actual whole-window capture too.
+                wait_gui(lambda: marker_pixels(window.grab().toImage(), (255, 0, 0)) > 100, timeout=5)
             if native:
                 assert window.isActiveWindow() and window.windowHandle().isExposed()
             editor = window.current_tab().editor
-            window.grab().save(str(output / (label + ".png")))
+            capture = window.grab()
+            if preview:
+                assert marker_pixels(capture.toImage(), (255, 0, 0)) > 100
+            capture.save(str(output / (label + ".png")))
             toolbar = window.findChild(QToolBar, "mainToolbar")
             report["states"].append({"case": label, "scale": scale,
                 "editor_viewport": [editor.viewport().width(), editor.viewport().height()],

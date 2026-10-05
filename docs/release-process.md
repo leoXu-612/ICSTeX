@@ -15,7 +15,9 @@
    bash packaging/preflight.sh
    ```
 
-3. 检查 `git diff --check`；提交 source、Release metadata、网页和验证报告。
+3. 检查 `git diff --check`；按 CONTRIBUTING 通过短期分支 PR 合入 main，再以发布准备
+   PR 冻结到 release 分支。源码可先于线上版本；已验收候选的发布记录先使用
+   `github_release_published=false`，不能提前声明公开发布。官网在实际发布后才部署。
 4. 只有全部门禁通过后，才能把 `v<version>` 轻量标签指向当前 Release commit。
 
 ## 2. Prepare the static website
@@ -42,16 +44,19 @@ bash tools/deploy_release_site.sh --prepare
 1. 确认公共分发边界：当前下载 URL 指向 `leoXu-612/ICSTeX`，因此公开网站要使用
    这些 URL，仓库必须先经维护者审查并改为 Public。只有 `gh repo view` 返回
    `PUBLIC` 后，才能把 manifest 的 `github_repository_public` 设为 `true`；
-2. `git push origin release/2.1` 与 `git push origin v<version>`；
+2. 通过发布准备 PR 更新 `release/2.1`，核对标签指向的源码身份，再推送明确的版本标签；
 3. 用校验过的 assets 创建 GitHub **Draft prerelease**，核对名称、SHA-256、安装
    说明和限制；
 4. 发布 GitHub Release 后，将 manifest 的 `github_release_published` 设为 `true`，
-   重新生成 `website/release.json` 并提交；
+   重新生成 `website/release.json` 并通过 PR 提交；部署前运行
+   `python3 tools/verify_release_consistency.py --require-source-version --require-published`。
+   该标记必须来自真实 GitHub API 状态，离线检查本身不能证明线上资产已发布；
 5. 选择一种静态托管路径：执行受环境变量保护的 `--push` 并在 GitHub Pages 中选择
    `gh-pages` / root，或从 `website/` 直接部署到 Vercel production；Vercel 仅托管
    静态页面，GitHub Releases 继续作为下载与版本真值；
-6. Vercel 发布必须确认 production deployment 为 `READY`，并关闭阻止匿名访问的
-   SSO/password protection；保留 Git fork protection；
+6. Vercel 发布必须确认现有 production deployment 为 `READY`、原生产域名指向新部署。
+   保留现有访问保护与 Git fork protection；若匿名下载被保护阻止，报告并请维护者
+   决定，不擅自改变安全设置；
 7. 以无缓存浏览器检查首页、下载链接、移动端和 SHA-256。
 
 在没有明确批准时，禁止 `git push`、`git push --tags`、`gh release create`、

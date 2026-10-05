@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
+import json
 from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import QSettings
 
 from app.core.latex_tools import LaTeXEngine
+from app.core.artifact_export import ExportedPdf
 
 
 MAX_RECENT_ITEMS = 10
@@ -68,6 +71,38 @@ class AppSettings:
 
     def recent_files(self) -> list[Path]:
         return _paths(self.settings.value("recent/files", []))
+
+    @staticmethod
+    def _pdf_export_key(root: Path) -> str:
+        return "pdf_exports/" + hashlib.sha256(str(root.resolve()).encode()).hexdigest()
+
+    def pdf_export_target(self, root: Path) -> tuple[Path, ExportedPdf] | None:
+        """Local per-root intent: never import absolute output paths from a shared project."""
+        try:
+            data = json.loads(self.settings.value(self._pdf_export_key(root), "null"))
+            if data is None:
+                return None
+            scope, target = Path(data["scope"]), Path(data["target"])
+            signature, parent = tuple(data["signature"]), tuple(data["parent_identity"])
+            digest = data["digest"]
+            if (not scope.is_absolute() or not target.is_absolute() or not root.is_relative_to(scope)
+                    or target.suffix.lower() != ".pdf" or len(signature) != 5 or len(parent) != 2
+                    or not all(type(v) is int for v in (*signature, *parent))
+                    or len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest)):
+                return None
+            return scope, ExportedPdf(target, digest, signature, parent)
+        except (TypeError, ValueError, KeyError):
+            return None
+
+    def remember_pdf_export(self, root: Path, scope: Path, exported: ExportedPdf) -> None:
+        self.settings.setValue(self._pdf_export_key(root), json.dumps(dict(
+            scope=str(scope), target=str(exported.target), digest=exported.digest,
+            signature=exported.signature, parent_identity=exported.parent_identity)))
+        self.settings.sync()
+
+    def forget_pdf_export(self, root: Path) -> None:
+        self.settings.remove(self._pdf_export_key(root))
+        self.settings.sync()
 
     def recent_projects(self) -> list[Path]:
         return _paths(self.settings.value("recent/projects", []))

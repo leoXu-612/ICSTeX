@@ -17,7 +17,6 @@ from PySide6.QtWidgets import (
     QFileSystemModel,
     QHeaderView,
     QLabel,
-    QProgressBar,
     QSplitter,
     QStackedWidget,
     QStatusBar,
@@ -32,6 +31,7 @@ from PySide6.QtWidgets import (
 
 from app.core.project_file_ops import PROJECT_FILE_FILTERS
 from app.gui.diagnostics_panel import DiagnosticsPanel
+from app.gui.compile_activity import CompileActivityBar
 from app.gui.submission_check_panel import SubmissionCheckPanel
 from app.gui.find_replace import FindReplaceBar
 from app.gui.icons import icon
@@ -94,10 +94,7 @@ def _install_status_bar(window: "MainWindow") -> None:
     status_bar = QStatusBar(window)
     status_bar.setSizeGripEnabled(False)
     window.setStatusBar(status_bar)
-    window.compile_progress = QProgressBar()
-    window.compile_progress.setObjectName("compileProgress")
-    window.compile_progress.setRange(0, 0)
-    window.compile_progress.setFixedWidth(100)
+    window.compile_progress = CompileActivityBar(window)
     window.compile_progress.hide()
     window.status_engine_label = QLabel(window.current_engine.display_name)
     window.status_engine_label.setObjectName("statusPill")
@@ -145,6 +142,14 @@ def _install_sidebar(window: "MainWindow") -> None:
     window.insert_panel = InsertPanel()
     window.templates_panel = TemplatesPanel()
     window.outline_panel = OutlinePanel()
+    # The writing sidebar is an outline, not a diagnostic table. Preserve the
+    # hidden line/type data and navigation contracts for callers.
+    window.outline_panel.table.horizontalHeader().hide()
+    window.outline_panel.table.setColumnHidden(1, True)
+    window.outline_panel.table.setColumnHidden(2, True)
+    window.outline_panel.refresh_button.setObjectName("outlineRefreshButton")
+    window.outline_panel.setFocusProxy(window.outline_panel.table)
+    window.outline_panel.table.setAccessibleName("章节大纲")
     window.search_panel = ProjectSearchPanel()
     window.images_panel = ImagesPanel()
     window.history_panel = HistoryPanel()
@@ -153,17 +158,20 @@ def _install_sidebar(window: "MainWindow") -> None:
 
     sidebar = ToolboxNavigation(window)
     sidebar.setMinimumWidth(320)
-    sidebar.addTab(window.tree, "文件", "files", SIDEBAR_TAB_TIPS[0])
+    sidebar.addTab(window.tree, "文件", "files", SIDEBAR_TAB_TIPS[0], section_title="项目")
     sidebar.addTab(window.outline_panel, "大纲", "list-tree", SIDEBAR_TAB_TIPS[1])
-    sidebar.addTab(window.search_panel, "搜索", "search", SIDEBAR_TAB_TIPS[2])
+    sidebar.addTab(window.search_panel, "项目搜索", "search", SIDEBAR_TAB_TIPS[2],
+                   section_break=True, section_title="工具")
     sidebar.addTab(scrollable_panel(window.images_panel), "图片", "image", SIDEBAR_TAB_TIPS[3])
     sidebar.addTab(window.history_panel, "历史", "history", SIDEBAR_TAB_TIPS[4])
     sidebar.addTab(
-        scrollable_panel(window.insert_panel), "插入", "square-plus", SIDEBAR_TAB_TIPS[5], section_break=True
+        scrollable_panel(window.insert_panel), "插入", "square-plus", SIDEBAR_TAB_TIPS[5],
+        section_break=True, section_title="写作"
     )
     sidebar.addTab(scrollable_panel(window.templates_panel), "模板", "layout-template", SIDEBAR_TAB_TIPS[6])
     sidebar.addTab(scrollable_panel(window.references_panel), "引用", "book-open", SIDEBAR_TAB_TIPS[7])
     sidebar.addTab(scrollable_panel(window.labels_panel), "标签", "tag", SIDEBAR_TAB_TIPS[8])
+    sidebar.combine_project_panels()
     sidebar.finish()
     for index, tip in enumerate(SIDEBAR_TAB_TIPS):
         sidebar.setTabToolTip(index, tip)
@@ -177,6 +185,9 @@ def _install_source_pane(window: "MainWindow") -> None:
     window.editor_tabs.setTabsClosable(True)
     window.editor_tabs.setDocumentMode(True)
     configure_tab_bar(window.editor_tabs)
+    window.source_title = QLabel("LaTeX 源码")
+    window.source_title.setObjectName("sourcePaneTitle")
+    window.editor_tabs.setCornerWidget(window.source_title, Qt.Corner.TopLeftCorner)
 
     window.find_replace_bar = FindReplaceBar()
     window.welcome_page = WelcomePage()
@@ -202,7 +213,7 @@ def _install_pdf_pane(window: "MainWindow") -> None:
 
 
 def _install_toolbox_dock(window: "MainWindow") -> None:
-    dock = QDockWidget("工具箱", window)
+    dock = QDockWidget("项目导航", window)
     dock.setObjectName("toolboxDock")
     dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea)
     dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetClosable)
@@ -224,13 +235,13 @@ def _install_main_splitter(window: "MainWindow") -> None:
     # the toolbox is open in the supported 1080px window.
     window.pdf_panel_wrapper = pdf_panel
 
-    area = EditorPdfArea(source_panel, pdf_panel, editor_label="编辑源码",
-                         compact_width=960, compact_columns=90, wide_sizes=(790, 650))
+    area = EditorPdfArea(source_panel, pdf_panel, editor_label="编辑文稿",
+                         compact_width=960, compact_columns=76, wide_sizes=(550, 590))
     splitter = area.splitter
     splitter.setChildrenCollapsible(False)
     splitter.setHandleWidth(8)
-    splitter.setStretchFactor(0, 55)
-    splitter.setStretchFactor(1, 45)
+    splitter.setStretchFactor(0, 48)
+    splitter.setStretchFactor(1, 52)
     window.main_splitter = splitter
     window.source_preview_area = area
     area.set_preview_available(False)

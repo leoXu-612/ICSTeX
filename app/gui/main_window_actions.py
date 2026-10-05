@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QSize, Qt, QUrl
 from PySide6.QtGui import QAction, QDesktopServices, QKeySequence
-from PySide6.QtWidgets import QComboBox, QToolBar
+from PySide6.QtWidgets import QComboBox, QLabel, QToolBar
 
 from app.core.latex_tools import LaTeXEngine
 from app.gui.icons import icon
@@ -52,6 +52,9 @@ def build_actions(window: "MainWindow") -> None:
     """Build toolbar, menus, and per-action shortcuts on ``window``."""
     toolbar = QToolBar("主工具栏")
     toolbar.setObjectName("mainToolbar")
+    # Its layout was created before the object-name-specific compact QSS matched.
+    toolbar.style().unpolish(toolbar)
+    toolbar.style().polish(toolbar)
     toolbar.setMovable(False)
     toolbar.setIconSize(QSize(18, 18))
     toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
@@ -68,13 +71,16 @@ def build_actions(window: "MainWindow") -> None:
     window.new_action = QAction(icon("file-plus-2"), "新建文档", window)
     window.open_file_action = QAction(icon("folder-open"), "打开文件", window)
     window.open_folder_action = QAction(icon("folder"), "打开文件夹", window)
-    window.toolbox_action = QAction(icon("panel-left"), "工具箱", window)
+    window.toolbox_action = QAction(icon("panel-left"), "项目导航", window)
     window.toolbox_action.setCheckable(True)
+    window.toolbox_action.setToolTip("显示或隐藏项目文件、大纲及写作工具；保留当前选中的面板。")
     window.save_action = QAction(icon("save"), "保存", window)
     window.save_action.setShortcut(QKeySequence.StandardKey.Save)
     window.save_as_action = QAction(icon("save"), "另存为", window)
     window.export_pdf_action = QAction(icon("save"), "导出 PDF", window)
-    window.export_pdf_action.setToolTip("进入准备提交：单独保存和正式编译，核对固定输入后导出到新目录。")
+    window.export_pdf_action.setToolTip("结构与源码视图共用导出：选择位置后导出 PDF，以后正式编译成功会自动更新此文件。旧版 Block 工程或源码/报告交付请用‘准备提交’。")
+    window.stop_pdf_update_action = QAction("停止自动更新导出 PDF", window)
+    window.stop_pdf_update_action.setEnabled(False)
     window.export_project_action = QAction("导出为工程文件…", window)
     window.export_project_action.setToolTip("整理源码、图片、表格和引用库为 ZIP，方便换设备或分享；无需先编译 PDF。")
     reveal_text = "在 Finder 中显示 PDF" if sys.platform == "darwin" else "在文件夹中显示 PDF"
@@ -105,7 +111,7 @@ def build_actions(window: "MainWindow") -> None:
     window.feedback_bundle_action.setToolTip("复制环境、编译与项目诊断摘要，不包含论文正文。")
     window.import_perf_action = QAction("导入性能诊断", window)
     window.import_perf_action.setToolTip("查看最近图片导入事务的编译次数与各阶段耗时。")
-    window.block_project_action = QAction("Block 项目（MVP）", window)
+    window.block_project_action = QAction("旧版 Block 工程工具…", window)
     window.block_project_action.setToolTip("打开 Block 模型化排版 MVP 控制台（布局/表格/同步/主题/导出）。")
     window.user_guide_action = QAction(icon("book-open"), "新手导引", window)
     window.console_action = QAction(icon("chevron-up"), "控制台", window)
@@ -148,9 +154,12 @@ def build_actions(window: "MainWindow") -> None:
     window.auto_compile_toolbar_action = toolbar.addWidget(window.auto_compile_toggle)
     window.engine_toolbar_action = toolbar.addWidget(window.engine_selector)
     window.engine_toolbar_action.setVisible(False)
+    toolbar.addAction(window.export_pdf_action)
+    toolbar.addAction(window.sync_pdf_action)
     toolbar.addSeparator()
-    for action in (window.toolbox_action, window.console_action, window.sync_pdf_action):
+    for action in (window.toolbox_action, window.console_action):
         toolbar.addAction(action)
+    window.console_button = toolbar.widgetForAction(window.console_action)
     compile_button = toolbar.widgetForAction(window.compile_action)
     if compile_button:
         compile_button.setObjectName("primaryAction")
@@ -160,6 +169,7 @@ def build_actions(window: "MainWindow") -> None:
         compile_button.style().polish(compile_button)
 
     file_menu = window.menuBar().addMenu("文件")
+    window.file_menu = file_menu  # Retain the wrapper while legacy tools attach their submenu.
     for action in (
         window.new_project_action,
         window.new_action,
@@ -175,6 +185,7 @@ def build_actions(window: "MainWindow") -> None:
         window.save_action,
         window.save_as_action,
         window.export_pdf_action,
+        window.stop_pdf_update_action,
         window.export_project_action,
         window.reveal_pdf_action,
         window.new_window_action,

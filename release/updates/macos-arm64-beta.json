@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "version": "2.1.0-beta.4",
-  "release_sequence": 210004,
+  "version": "2.1.0-beta.5",
+  "release_sequence": 210005,
   "channel": "beta",
   "platform": "darwin",
   "architecture": "arm64",

@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.gui.icons import icon
+from app.gui.responsive.helpers import ButtonFlowLayout
 from app.core.pdf_identity import PdfContentIdentity
 from app.gui.main_window_support import set_dynamic_property
 from app.gui.theme import COLOR_TEXT_FAINT, PRIMARY_BUTTON_STATE_STYLE
@@ -53,6 +54,9 @@ class PdfPanel(QWidget):
     viewChanged = Signal(object)
     availabilityChanged = Signal(bool)
     compileRequested = Signal()
+    exportLocationRequested = Signal()
+    exportDestinationRequested = Signal()
+    exportStopRequested = Signal()
 
     _PDF_TOOLBAR_NARROW_WIDTH = 700
 
@@ -139,6 +143,68 @@ class PdfPanel(QWidget):
             label.setObjectName("panelHint")
             label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             layout.addWidget(label)
+        self._build_export_status(layout)
+
+    def _build_export_status(self, layout) -> None:
+        self.export_status = QWidget()
+        self.export_status.setObjectName("pdfExportStatus")
+        body = QVBoxLayout(self.export_status)
+        body.setContentsMargins(10, 6, 10, 6)
+        body.setSpacing(3)
+        self.export_state_label = QLabel()
+        self.export_state_label.setObjectName("pdfExportState")
+        self.export_state_label.setTextFormat(Qt.TextFormat.PlainText)
+        self.export_state_label.setWordWrap(True)
+        self.export_state_label.setToolTip("同步状态对应上次成功导出；下一次正式编译会重新核验目标文件，不常驻扫描外部文件。")
+        self.export_target_label = QLabel()
+        self.export_target_label.setObjectName("panelHint")
+        self.export_target_label.setTextFormat(Qt.TextFormat.PlainText)
+        self.export_target_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self.export_target_label.setMinimumWidth(0)
+        self.export_target_label.setAccessibleName("自动导出位置")
+        self.export_target_label.installEventFilter(self)
+        self._export_target_text = ""
+        self.export_detail_label = QLabel()
+        self.export_detail_label.setObjectName("panelHint")
+        self.export_detail_label.setTextFormat(Qt.TextFormat.PlainText)
+        self.export_detail_label.setWordWrap(True)
+        body.addWidget(self.export_state_label)
+        body.addWidget(self.export_target_label)
+        body.addWidget(self.export_detail_label)
+        buttons = ButtonFlowLayout()
+        self.export_location_button = QPushButton("打开位置")
+        self.export_destination_button = QPushButton("换位置…")
+        self.export_stop_button = QPushButton("停止更新")
+        for button, signal in ((self.export_location_button, self.exportLocationRequested),
+                               (self.export_destination_button, self.exportDestinationRequested),
+                               (self.export_stop_button, self.exportStopRequested)):
+            buttons.addWidget(button)
+            button.clicked.connect(signal.emit)
+        body.addLayout(buttons)
+        layout.addWidget(self.export_status)
+        self.export_status.hide()
+
+    def set_export_status(self, *, state: str, severity: str, target: Path | None,
+                          detail: str = "", can_choose: bool = False, can_stop: bool = False) -> None:
+        """Presentation only: no file reads, freshness decisions, or publication authority."""
+        self.export_state_label.setText("自动导出 · " + state)
+        set_dynamic_property(self.export_state_label, "severity", severity)
+        self._export_target_text = str(target) if target else "尚未选择导出位置"
+        self.export_target_label.setToolTip(self._export_target_text)
+        self.export_target_label.setAccessibleDescription(self._export_target_text)
+        self._elide_export_target()
+        self.export_detail_label.setText(detail)
+        self.export_detail_label.setVisible(bool(detail))
+        self.export_location_button.setEnabled(target is not None)
+        self.export_destination_button.setText("换位置…" if target else "导出 PDF…")
+        self.export_destination_button.setEnabled(can_choose)
+        self.export_stop_button.setEnabled(can_stop)
+        self.export_status.show()
+
+    def _elide_export_target(self) -> None:
+        label = self.export_target_label
+        label.setText(label.fontMetrics().elidedText(
+            self._export_target_text, Qt.TextElideMode.ElideMiddle, max(1, label.width())))
 
     def _create_pdf_view(self):
         view = QPdfView(self)
@@ -198,12 +264,16 @@ class PdfPanel(QWidget):
         self.pdf_search_edit.installEventFilter(self)
         search_keys = self.search_action.shortcut().toString(QKeySequence.SequenceFormat.NativeText)
         self.pdf_search_button = self._icon_button("search", f"搜索 PDF（{search_keys}）")
+        self.pdf_search_button.setObjectName("pdfSearchButton")
+        self.pdf_search_button.setText("搜索 PDF")
+        self.pdf_search_button.setMinimumWidth(94)
         self.pdf_search_button.clicked.connect(self.search_action.trigger)
         self.pdf_search_prev_button = self._icon_button("chevron-left", "上一个匹配")
         self.pdf_search_next_button = self._icon_button("chevron-right", "下一个匹配")
         self.pdf_search_status = QLabel("")
         self.pdf_search_status.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
         self.export_pdf_button = self._icon_button("save", "导出 PDF")
+        self.export_pdf_button.hide()  # Main toolbar is the single persistent export entry.
         reveal_tooltip = "在 Finder 中显示" if sys.platform == "darwin" else "在文件夹中显示"
         self.reveal_pdf_button = self._icon_button("folder-open", reveal_tooltip)
         self.export_pdf_button.setEnabled(False)
@@ -457,6 +527,9 @@ class PdfPanel(QWidget):
             self._empty_hint.setText("先编译一次，即可在这里查看排版结果。" if text == "尚未编译" else text)
 
     def eventFilter(self, watched: QObject, event: Any) -> bool:
+        if (watched is getattr(self, "export_target_label", None)
+                and event.type() in (QEvent.Type.Resize, QEvent.Type.FontChange)):
+            self._elide_export_target()
         if watched is getattr(self, "pdf_search_edit", None):
             if event.type() == QEvent.Type.InputMethod:
                 self._search_preedit = bool(event.preeditString())

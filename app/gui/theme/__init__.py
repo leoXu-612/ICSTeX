@@ -24,6 +24,7 @@ UI_LATIN_SANS_FONT_CANDIDATES = [
     "Arial",
 ]
 CJK_SANS_FONT_CANDIDATES = [
+    *(["PingFang SC"] if sys.platform == "darwin" else []),
     "Source Han Sans SC",
     "Noto Sans CJK SC",
     "PingFang SC",
@@ -308,7 +309,23 @@ def stylesheet(
     }}
 
     QToolBar#mainToolbar, QToolBar#workspaceToolbar {{
-        padding: 2px 8px;
+        padding: 0px;
+    }}
+
+    QLabel#toolbarGroupLabel, QLabel#toolboxSectionLabel {{
+        color: {COLOR_TEXT_MUTED};
+        font-size: {fs_caption}px;
+        font-weight: 600;
+        padding: 3px 4px;
+    }}
+
+    QLabel#sourcePaneTitle {{
+        background: {COLOR_SURFACE_ALT};
+        color: {COLOR_TEXT_MUTED};
+        font-size: {fs_section}px;
+        font-weight: 600;
+        border-right: 1px solid {COLOR_BORDER_SOFT};
+        padding: 4px 8px;
     }}
 
     QPlainTextEdit#workspaceDetails {{
@@ -358,29 +375,76 @@ def stylesheet(
     QWidget#workspaceHeader QToolButton,
     QToolButton#consoleToggle,
     QToolButton#workspaceViewButton {{
+        background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                    stop: 0 {COLOR_SURFACE}, stop: 1 {COLOR_HOVER});
+        color: {COLOR_TEXT};
+        border-color: {COLOR_BORDER_SOFT};
+        border-bottom-color: {COLOR_BORDER};
         min-height: {max(0, minh_compact - 8)}px;
         padding: 3px 8px;
         font-size: {fs_toolbar}px;
     }}
 
+    QToolBar#mainToolbar QToolButton:enabled:hover,
+    QWidget#workspaceHeader QToolButton:enabled:hover,
+    QToolButton#consoleToggle:enabled:hover,
+    QToolButton#workspaceViewButton:enabled:hover {{
+        background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                    stop: 0 {COLOR_SURFACE}, stop: 1 {COLOR_PRESSED});
+        border-color: {COLOR_BORDER};
+    }}
+
+    QToolBar#mainToolbar QToolButton:enabled:checked,
+    QWidget#workspaceHeader QToolButton:enabled:checked,
+    QToolButton#consoleToggle:enabled:checked,
+    QToolButton#workspaceViewButton:enabled:checked {{
+        background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                    stop: 0 {COLOR_SURFACE}, stop: 1 {COLOR_SELECTED});
+        color: {COLOR_ACCENT};
+        border-color: {COLOR_ACCENT};
+    }}
+
+    QToolBar#mainToolbar QToolButton:enabled:pressed,
+    QWidget#workspaceHeader QToolButton:enabled:pressed,
+    QToolButton#consoleToggle:enabled:pressed,
+    QToolButton#workspaceViewButton:enabled:pressed {{
+        background: {COLOR_PRESSED};
+        color: {COLOR_TEXT};
+        border-color: {COLOR_BORDER};
+    }}
+
     QToolBar#mainToolbar QToolButton#primaryAction {{
+        background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                    stop: 0 {COLOR_ACCENT}, stop: 1 {COLOR_ACCENT_HOVER});
+        color: {COLOR_SURFACE};
+        border-color: {COLOR_ACCENT_HOVER};
         min-height: {max(0, minh_compact - 8)}px;
+    }}
+
+    QToolBar#mainToolbar QToolButton#primaryAction:enabled:hover {{
+        background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                    stop: 0 {COLOR_ACCENT_HOVER}, stop: 1 {COLOR_ACCENT_PRESSED});
+        border-color: {COLOR_ACCENT_PRESSED};
+    }}
+
+    QToolBar#mainToolbar QToolButton:disabled,
+    QToolBar#mainToolbar QToolButton#primaryAction:disabled,
+    QWidget#workspaceHeader QToolButton:disabled,
+    QToolButton#consoleToggle:disabled,
+    QToolButton#workspaceViewButton:disabled {{
+        background: {COLOR_SURFACE_ALT};
+        color: {COLOR_TEXT_FAINT};
+        border-color: {COLOR_BORDER_SOFT};
     }}
 
     QWidget#autoCompileToggle {{ font-size: {fs_toolbar}px; }}
     QLabel#workspaceSummary {{ font-size: {fs_toolbar}px; }}
 
-    QToolBar#mainToolbar QToolButton:focus,
-    QWidget#workspaceHeader QToolButton:focus,
-    QToolButton#consoleToggle:focus,
-    QToolButton#workspaceViewButton:focus {{
-        border-color: {COLOR_ACCENT};
-    }}
-
-    QToolButton#workspaceViewButton:checked {{
-        background: {COLOR_SELECTED};
-        color: {COLOR_ACCENT};
-        border-color: {COLOR_BORDER};
+    QToolBar#mainToolbar QToolButton:enabled:focus,
+    QWidget#workspaceHeader QToolButton:enabled:focus,
+    QToolButton#consoleToggle:enabled:focus,
+    QToolButton#workspaceViewButton:enabled:focus {{
+        border-color: {COLOR_TEXT};
     }}
 
     QToolButton#primaryAction:pressed {{
@@ -488,6 +552,17 @@ def stylesheet(
     QWidget#panelHeader {{
         background: {COLOR_SURFACE_ALT};
         border-bottom: 1px solid {COLOR_BORDER_SOFT};
+    }}
+
+    QWidget#projectNavigationSection {{
+        background: {COLOR_SURFACE};
+    }}
+
+    QLabel#workbenchPanelTitle {{
+        background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                    stop: 0 {COLOR_SURFACE}, stop: 1 {COLOR_SURFACE_ALT});
+        color: {COLOR_TEXT_MUTED};
+        font-weight: 600;
     }}
 
     QToolButton#panelHeaderButton {{
@@ -706,6 +781,19 @@ def stylesheet(
         text-align: left;
     }}
 
+    QPushButton#outlineRefreshButton {{
+        min-height: {max(0, minh_compact - 8)}px;
+        padding: 3px 8px;
+        border-color: {COLOR_BORDER_SOFT};
+        font-size: {fs_toolbar}px;
+    }}
+
+    QPushButton#pdfSearchButton {{
+        min-height: {max(0, minh_compact - 8)}px;
+        padding: 3px 8px;
+        font-size: {fs_toolbar}px;
+    }}
+
     QPushButton#toolCard:hover {{
         background: {COLOR_HOVER};
         border-color: {COLOR_BORDER_SOFT};
@@ -794,6 +882,15 @@ def stylesheet(
     QLabel#pdfFreshnessBanner[severity="success"] {{ color: {COLOR_SUCCESS}; }}
     QLabel#pdfFreshnessBanner[severity="warning"] {{ color: {COLOR_WARNING}; }}
     QLabel#pdfFreshnessBanner[severity="error"] {{ color: {COLOR_ERROR}; }}
+
+    QWidget#pdfExportStatus {{
+        background: {COLOR_SURFACE_ALT};
+        border-top: 1px solid {COLOR_BORDER_SOFT};
+    }}
+    QLabel#pdfExportState {{ color: {COLOR_TEXT_MUTED}; font-size: {fs_caption}px; font-weight: 600; }}
+    QLabel#pdfExportState[severity="success"] {{ color: {COLOR_SUCCESS}; }}
+    QLabel#pdfExportState[severity="warning"] {{ color: {COLOR_WARNING}; }}
+    QLabel#pdfExportState[severity="error"] {{ color: {COLOR_ERROR}; }}
 
     QLabel#pdfEmptyIcon {{
         background: transparent;
@@ -949,6 +1046,26 @@ def stylesheet(
     QComboBox QAbstractItemView::item:hover {{
         background: {COLOR_HOVER};
         color: {COLOR_TEXT};
+    }}
+
+    QDialog#tableDialog QPushButton,
+    QWidget#localBlockEditor QPushButton,
+    QWidget#tableOptions QToolButton {{
+        min-height: {max(0, minh_compact - 8)}px;
+        padding: 3px 10px;
+        border-radius: 6px;
+    }}
+
+    QDialog#tableDialog QLineEdit, QDialog#tableDialog QSpinBox, QDialog#tableDialog QComboBox,
+    QWidget#tableOptions QLineEdit, QWidget#tableOptions QSpinBox, QWidget#tableOptions QComboBox {{
+        min-height: {max(0, minh_compact - 8)}px;
+        padding: 3px 8px;
+        border-radius: 6px;
+    }}
+
+    QDialog#tableDialog QPushButton#primaryButton {{
+        min-height: {max(0, minh_control - 12)}px;
+        padding: 5px 12px;
     }}
 
     QProgressBar#compileProgress {{

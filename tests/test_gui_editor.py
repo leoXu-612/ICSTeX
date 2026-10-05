@@ -143,6 +143,20 @@ class SyncTargetHighlightTests(TestCase):
         self.assertIsNone(editor._sync_selection)
         self.assertFalse(editor._sync_highlight_timer.isActive())
 
+    def test_structure_range_highlight_does_not_select_or_edit_source(self):
+        editor = self.editor
+        before, revision = editor.toPlainText(), editor.source_revision
+        cursor = QTextCursor(editor.document())
+        cursor.setPosition(2)
+        cursor.setPosition(12, QTextCursor.MoveMode.KeepAnchor)
+        selected = cursor.selectedText()
+        editor.flash_source_range(cursor)
+        self.assertEqual(editor._sync_selection.cursor.selectedText(), selected)
+        self.assertEqual(editor._sync_selection.format.background().color().name(), "#f9d36a")
+        self.assertFalse(editor.textCursor().hasSelection())
+        self.assertEqual(editor.textCursor().position(), 2)
+        self.assertEqual((editor.toPlainText(), editor.source_revision), (before, revision))
+
 
 class SourceIdleCompositionTests(TestCase):
     """Real default save timers and Qt IME events; not physical IME evidence."""
@@ -1010,6 +1024,175 @@ class WindowLifetimeTests(TestCase):
     def setUp(self):
         self.application = app()
 
+    def test_closed_saved_tab_releases_save_timer_and_tab_wrapper(self):
+        import weakref
+        from shiboken6 import isValid
+
+        with TemporaryDirectory() as directory:
+            path = Path(directory).resolve() / "closed.tex"
+            path.write_text("Original source", encoding="utf-8")
+            window = MainWindow(settings_store=isolated_settings())
+            try:
+                window.auto_compile_action.setChecked(False)
+                window.open_file(path)
+                tab = window.current_tab()
+                tab.editor.insertPlainText("Saved ")
+                timer = tab.save_timer
+                observed = weakref.ref(tab)
+                self.assertTrue(window.flush_pending_save(tab, compile_after_save=False))
+                saved = path.read_bytes()
+                window.close_tab(window._index_for_tab_id(id(tab.editor)))
+                del tab
+                self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+                self.application.processEvents()
+                self.assertFalse(isValid(timer))
+                self.assertIsNone(observed())
+                self.assertEqual(path.read_bytes(), saved)
+                self.assertFalse(window.compile_authorized_roots)
+            finally:
+                window.close()
+                self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_closed_saved_tab_releases_its_save_echo_text(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory).resolve() / "closed.tex"
+            path.write_text("Original source", encoding="utf-8")
+            window = MainWindow(settings_store=isolated_settings())
+            try:
+                window.auto_compile_action.setChecked(False)
+                window.open_file(path)
+                tab = window.current_tab()
+                tab.editor.insertPlainText("Saved ")
+                self.assertTrue(window.flush_pending_save(tab, compile_after_save=False))
+                self.assertIn(path, window.local_save_contents)
+                saved = path.read_bytes()
+                window.close_tab(window._index_for_tab_id(id(tab.editor)))
+                self.assertNotIn(path, window.local_save_contents)
+                self.assertEqual(path.read_bytes(), saved)
+            finally:
+                window.close()
+                self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_save_as_releases_old_save_echo_text(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            path, destination = root / "original.tex", root / "copy.tex"
+            path.write_text("Original source", encoding="utf-8")
+            window = MainWindow(settings_store=isolated_settings())
+            try:
+                window.auto_compile_action.setChecked(False)
+                window.open_file(path)
+                tab = window.current_tab()
+                tab.editor.insertPlainText("Saved ")
+                self.assertTrue(window.flush_pending_save(tab, compile_after_save=False))
+                saved = path.read_bytes()
+                self.assertTrue(window._save_tab(tab, destination))
+                self.assertNotIn(path, window.local_save_contents)
+                self.assertEqual(window.local_save_contents[destination], tab.editor.toPlainText())
+                self.assertEqual(path.read_bytes(), saved)
+                self.assertEqual(destination.read_bytes(), saved)
+            finally:
+                window.close()
+                self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_close_and_save_as_keep_echo_for_another_open_buffer(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            for action in ("close", "save_as"):
+                with self.subTest(action=action):
+                    path, destination = root / f"{action}.tex", root / f"{action}-copy.tex"
+                    path.write_text("Original source", encoding="utf-8")
+                    window = MainWindow(settings_store=isolated_settings())
+                    try:
+                        window.auto_compile_action.setChecked(False)
+                        window.open_file(path)
+                        original = window.current_tab()
+                        original.editor.insertPlainText("Saved ")
+                        self.assertTrue(window.flush_pending_save(original, compile_after_save=False))
+                        saved = path.read_text(encoding="utf-8")
+                        # Compatibility callers may create another buffer for
+                        # the same path without going through open_file's reuse.
+                        kept = EditorTab(window._make_editor(saved), path=path, manager=original.manager)
+                        window._add_tab(kept, path.name)
+                        if action == "close":
+                            window.close_tab(window._index_for_tab_id(id(original.editor)))
+                        else:
+                            self.assertTrue(window._save_tab(original, destination))
+                        self.assertEqual(window.local_save_contents[path], saved)
+                        kept.editor.insertPlainText("New draft ")
+                        draft = kept.editor.toPlainText()
+                        window.documents.reload_external_change(str(path))
+                        self.assertEqual(kept.editor.toPlainText(), draft)
+                        self.assertTrue(kept.modified and kept.dirty)
+                        self.assertFalse(kept.external_conflict)
+                        self.assertEqual(path.read_text(encoding="utf-8"), saved)
+                    finally:
+                        for tab in window.tabs.values():
+                            tab.modified = tab.dirty = False
+                        window.close()
+                        self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_cancelled_close_preserves_save_timer_and_echo(self):
+        from shiboken6 import isValid
+
+        with TemporaryDirectory() as directory:
+            path = Path(directory).resolve() / "draft.tex"
+            path.write_text("Original source", encoding="utf-8")
+            window = MainWindow(settings_store=isolated_settings())
+            try:
+                window.auto_compile_action.setChecked(False)
+                window.open_file(path)
+                tab = window.current_tab()
+                tab.editor.insertPlainText("Saved ")
+                self.assertTrue(window.flush_pending_save(tab, compile_after_save=False))
+                saved = path.read_text(encoding="utf-8")
+                tab.editor.insertPlainText("New draft ")
+                draft = tab.editor.toPlainText()
+                timer = tab.save_timer
+                with patch("app.gui.editor_tab_manager.QMessageBox.warning",
+                           return_value=QMessageBox.StandardButton.Cancel):
+                    window.close_tab(window._index_for_tab_id(id(tab.editor)))
+                self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+                self.assertIs(window.current_tab(), tab)
+                self.assertTrue(isValid(timer) and timer.isActive())
+                self.assertEqual(window.local_save_contents[path], saved)
+                self.assertEqual(tab.editor.toPlainText(), draft)
+                self.assertEqual(path.read_text(encoding="utf-8"), saved)
+            finally:
+                tab.modified = tab.dirty = False
+                window.close()
+                self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    def test_failed_save_as_preserves_original_save_echo_and_draft(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            path, destination = root / "original.tex", root / "copy.tex"
+            path.write_text("Original source", encoding="utf-8")
+            window = MainWindow(settings_store=isolated_settings())
+            try:
+                window.auto_compile_action.setChecked(False)
+                window.open_file(path)
+                tab = window.current_tab()
+                tab.editor.insertPlainText("Saved ")
+                self.assertTrue(window.flush_pending_save(tab, compile_after_save=False))
+                saved = path.read_text(encoding="utf-8")
+                tab.editor.insertPlainText("New draft ")
+                draft = tab.editor.toPlainText()
+                with patch("app.gui.document_lifecycle.write_latex_text_atomic", side_effect=OSError("denied")), \
+                     patch("app.gui.document_lifecycle.QMessageBox.warning"):
+                    self.assertFalse(window._save_tab(tab, destination))
+                self.assertEqual(tab.path, path)
+                self.assertEqual(window.local_save_contents[path], saved)
+                self.assertNotIn(destination, window.local_save_contents)
+                self.assertEqual(tab.editor.toPlainText(), draft)
+                self.assertTrue(tab.modified and tab.dirty)
+                self.assertEqual(path.read_text(encoding="utf-8"), saved)
+                self.assertFalse(destination.exists())
+            finally:
+                tab.modified = tab.dirty = False
+                window.close()
+                self.application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
     def test_closed_tab_releases_native_editor_and_preserves_surviving_document(self):
         from shiboken6 import isValid
 
@@ -1357,7 +1540,7 @@ class TutorialGuiTests(TestCase):
         self.assertEqual(window.current_engine, LaTeXEngine.AUTO)
         self.assertFalse(window.compile_authorized_roots)
         self.assertFalse(hasattr(self.owner, "tutorial"))
-        self.assertEqual(window.tutorial.title.text(), "1/3 · 改一下标题")
+        self.assertEqual(window.tutorial.title.text(), "1/4 · 改一下标题")
         async_.assert_not_called()
         now.assert_not_called()
 
@@ -1396,6 +1579,7 @@ class TutorialGuiTests(TestCase):
         self.assertEqual(root.read_bytes(), before)
         self.assertEqual(resumed.current_tab().editor.toPlainText().encode(), before)
         self.assertFalse(resumed.tutorial.manual_requested)
+        self.assertIsNone(resumed.tutorial.exported)
 
     def test_existing_student_path_in_saved_tutorial_setting_is_not_opened(self):
         from app.gui.tutorial_controller import EXAMPLE_SETTING, remembered_example, open_example
@@ -1409,6 +1593,7 @@ class TutorialGuiTests(TestCase):
         self.assertEqual(outside.read_text(), "Do not modify")
 
     def test_stale_busy_foreign_and_failed_pdf_never_complete_the_exercise(self):
+        from app.core.artifact_export import exported_pdf
         from app.core.tutorial import INITIAL_TITLE, TutorialStep
         from app.gui.main_window_support import DisplayedPdf
         from tests.test_pdf_panel import _write_zoom_pdf
@@ -1448,6 +1633,13 @@ class TutorialGuiTests(TestCase):
         self.assertTrue(controller.action.visibleRegion().contains(controller.action.rect()))
         self.assertGreaterEqual(controller.action.width(), controller.action.fontMetrics().horizontalAdvance(controller.action.text()) + 16)
         controller.act()
+        self.assertEqual(controller.step, TutorialStep.EXPORT)
+        # A synthetic publication receipt tests tutorial state, not the exporter.
+        target = root.parent / "exported.pdf"
+        target.write_bytes(pdf.read_bytes())
+        window.pdf_export.exportSucceeded.emit(root, exported_pdf(target, pdf.read_bytes()),
+                                              record.source_revision, record.latest_build_id)
+        controller.refresh()
         self.assertEqual(controller.step, TutorialStep.DONE)
         for target, name, value in ((record, "freshness", PdfFreshness.FAILED_STALE),
                                    (record, "source_revision", record.source_revision + 1),
@@ -1465,6 +1657,144 @@ class TutorialGuiTests(TestCase):
         self.assertEqual(controller.action.text(), "打开练习文件")
         self.assertNotEqual(window.current_tab().path, root)
 
+    def export_exercise(self):
+        """Synthetic current PDF and receipt payload; no real TeX or publication worker."""
+        from app.core.artifact_export import exported_pdf
+        from app.core.tutorial import INITIAL_TITLE, TutorialStep
+        from app.gui.main_window_support import DisplayedPdf
+        from tests.test_pdf_panel import _write_zoom_pdf
+        window = self.exercise()
+        tab, controller = window.current_tab(), window.tutorial
+        tab.editor.setPlainText(tab.editor.toPlainText().replace(INITIAL_TITLE, "My first page"))
+        self.assertTrue(window.save_current())
+        root = controller.root
+        pdf = root.parent / "fixture.pdf"
+        _write_zoom_pdf(pdf)
+        record = window.pdf_state.record_for(root)
+        record.last_successful_pdf = pdf
+        record.last_successful_revision = record.source_revision
+        record.latest_build_id = 50
+        record.freshness = PdfFreshness.CURRENT
+        window.displayed_pdfs[root] = DisplayedPdf(root, BuildPurpose.FINAL, record.source_revision, pdf, 50)
+        window.pdf_panel.load_pdf(pdf, logical_key=root)
+        window.source_preview_area.select_pdf(True)
+        with patch.object(window, "compile_current"):
+            window.compile_action.trigger()
+        controller.refresh()
+        self.assertEqual(controller.step, TutorialStep.VIEW)
+        controller.act()
+        self.assertEqual(controller.step, TutorialStep.EXPORT)
+        target = root.parent / "exported.pdf"
+        target.write_bytes(pdf.read_bytes())
+        return window, record, exported_pdf(target, pdf.read_bytes())
+
+    def test_export_requires_current_success_receipt_and_opens_only_that_folder_on_click(self):
+        from app.core.tutorial import TutorialStep
+        window, record, receipt = self.export_exercise()
+        controller, root = window.tutorial, window.tutorial.root
+        window.app_settings.remember_pdf_export(root, root.parent, receipt)
+        for accepted in (False, True):
+            with self.subTest(picker_accepted=accepted), patch.object(window, "export_pdf", return_value=accepted) as export:
+                controller.act()
+                export.assert_called_once_with()
+                controller.refresh()
+                self.assertEqual(controller.step, TutorialStep.EXPORT)
+        for signal_root, revision, build in ((root.parent / "other.tex", record.source_revision, 50),
+                                             (root, record.source_revision - 1, 50),
+                                             (root, record.source_revision, 49)):
+            with self.subTest(root=signal_root, revision=revision, build=build):
+                window.pdf_export.exportSucceeded.emit(signal_root, receipt, revision, build)
+                controller.refresh()
+                self.assertEqual(controller.step, TutorialStep.EXPORT)
+        with patch("app.gui.tutorial_controller.QDesktopServices.openUrl", return_value=True) as opened:
+            window.pdf_export.exportSucceeded.emit(root, receipt, record.source_revision, 50)
+            controller.refresh()
+            self.assertEqual(controller.step, TutorialStep.DONE)
+            self.assertIn(str(receipt.target), controller.description.text())
+            self.assertEqual(controller.action.text(), "打开导出文件夹")
+            opened.assert_not_called()
+            # The action uses its confirmed receipt, not a later remembered target.
+            window.app_settings.forget_pdf_export(root)
+            controller.act()
+            opened.assert_called_once_with(QUrl.fromLocalFile(str(receipt.target.parent)))
+        window.current_tab().editor.insertPlainText("% changed after export\n")
+        controller.refresh()
+        self.assertEqual(controller.step, TutorialStep.COMPILE)
+
+    def test_export_success_while_hidden_waits_for_resume_without_starting_timer(self):
+        from app.core.tutorial import TutorialStep
+        window, record, receipt = self.export_exercise()
+        controller = window.tutorial
+        controller.dock.hide()
+        self.assertFalse(controller.active)
+        window.pdf_export.exportSucceeded.emit(controller.root, receipt, record.source_revision, 50)
+        self.assertFalse(controller._timer.isActive())
+        self.assertEqual(controller.step, TutorialStep.EXPORT)
+        controller.resume()
+        self.assertEqual(controller.step, TutorialStep.DONE)
+
+    def test_seen_preview_cannot_complete_a_final_export_until_final_is_seen(self):
+        from app.core.tutorial import TutorialStep
+        window, final, receipt = self.export_exercise()
+        controller, root = window.tutorial, window.tutorial.root
+        displayed = window.displayed_pdfs[root]
+        preview = window.preview_state.record_for(root)
+        preview.last_successful_pdf = displayed.path
+        preview.source_revision = preview.last_successful_revision = displayed.revision
+        preview.latest_build_id = 70
+        preview.freshness = PreviewFreshness.CURRENT
+        window.displayed_pdfs[root] = replace(displayed, purpose=BuildPurpose.PREVIEW, build_id=70)
+        controller.refresh()
+        self.assertEqual(controller.step, TutorialStep.VIEW)
+        controller.act()
+        window.pdf_export.exportSucceeded.emit(root, receipt, final.source_revision, final.latest_build_id)
+        controller.refresh()
+        self.assertEqual(controller.step, TutorialStep.EXPORT)
+        window.displayed_pdfs[root] = displayed
+        controller.refresh()
+        self.assertEqual(controller.step, TutorialStep.VIEW)
+        controller.act()
+        self.assertEqual(controller.step, TutorialStep.DONE)
+
+    def test_missing_engine_primary_action_opens_environment_without_compiling(self):
+        from app.core.tutorial import INITIAL_TITLE, TutorialStep
+        window = self.exercise()
+        controller, tab = window.tutorial, window.current_tab()
+        tab.editor.setPlainText(tab.editor.toPlainText().replace(INITIAL_TITLE, "My first page"))
+        window.toolchain = LaTeXToolchain(None, None)
+        controller.refresh()
+        self.assertEqual(controller.step, TutorialStep.COMPILE)
+        self.assertEqual(controller.action.text(), "检查环境")
+        before = tab.editor.toPlainText()
+        with patch.object(window, "show_environment_doctor") as doctor, \
+             patch.object(window, "compile_current") as compile_:
+            controller.action.click()
+        doctor.assert_called_once_with()
+        compile_.assert_not_called()
+        self.assertFalse(controller.manual_requested)
+        self.assertEqual(tab.editor.toPlainText(), before)
+
+    def test_failed_compile_preserves_error_recovery_and_requires_view_then_export(self):
+        from app.core.tutorial import TutorialStep
+        window, record, _ = self.export_exercise()
+        controller = window.tutorial
+        window.toolchain = LaTeXToolchain(None, None, xelatex="synthetic-xelatex")
+        record.freshness = PdfFreshness.FAILED_STALE
+        controller.refresh()
+        self.assertEqual(controller.step, TutorialStep.COMPILE)
+        self.assertEqual(controller.secondary.text(), "查看错误")
+        with patch("app.gui.main_window_layout.show_console") as show:
+            controller.secondary_action()
+        show.assert_called_once_with(window, window.diagnostic_panel)
+        # A newer successful build must be seen again before export is offered.
+        record.freshness = PdfFreshness.CURRENT
+        record.latest_build_id += 1
+        window.displayed_pdfs[controller.root] = replace(window.displayed_pdfs[controller.root], build_id=51)
+        controller.refresh()
+        self.assertEqual(controller.step, TutorialStep.VIEW)
+        controller.act()
+        self.assertEqual(controller.step, TutorialStep.EXPORT)
+
     def test_guide_has_local_readable_illustrations_and_an_explicit_start(self):
         from PySide6.QtGui import QImage
         from app.gui.assets import asset_path
@@ -1474,6 +1804,12 @@ class TutorialGuiTests(TestCase):
         dialog.show()
         self.assertEqual(dialog.pages.count(), 4)
         self.assertEqual(dialog.start_button.text(), "开始练习（独立副本）")
+        self.assertIn("更新并导出", GUIDE_PAGES[3][3])
+        self.assertIn("每次正式编译成功", GUIDE_PAGES[3][3])
+        self.assertIn("停止自动更新导出 PDF", GUIDE_PAGES[3][3])
+        self.assertIn("已同步", GUIDE_PAGES[3][2])
+        self.assertIn("打开位置", GUIDE_PAGES[3][2])
+        self.assertNotIn("然后点“检查并固定内容”", GUIDE_PAGES[3][3])
         for index, (_name, filename, _caption, _body) in enumerate(GUIDE_PAGES):
             with self.subTest(image=filename):
                 image = QImage(str(asset_path("user-guide/" + filename)))
@@ -2656,12 +2992,11 @@ class GuiEditorTests(TestCase):
             self.assertTrue(window.pdf_panel.reveal_pdf_button.isEnabled())
             self.assertEqual(window.pdf_panel.freshness_label.text(), "PDF 已是最新")
 
-            # A cached fake PDF record is not build-input evidence. The UI now
-            # dispatches to explicit review; exact-byte publication is covered
-            # by test_submission_delivery_gui and the real-FINAL product probe.
-            with patch("app.gui.submission_delivery_dialog.show_submission_delivery", return_value=None) as review:
+            # Merely opening/cancelling the destination picker must not copy a
+            # cached record; the export controller requires actual FINAL evidence.
+            with patch.object(window.pdf_export, "choose_destination", return_value=False) as choose:
                 self.assertFalse(window.export_pdf())
-            review.assert_called_once_with(window)
+            choose.assert_called_once_with(tex.resolve())
             self.assertEqual(source.read_bytes(), b"%PDF-1.4 fake")
 
             with patch("app.gui.main_window.subprocess.Popen") as popen, patch(
@@ -2675,7 +3010,7 @@ class GuiEditorTests(TestCase):
             else:
                 open_url.assert_called_once()
 
-    def test_export_pdf_rejects_empty_and_reviews_stale_without_implicit_rebuild(self) -> None:
+    def test_export_pdf_rejects_empty_and_defers_stale_until_destination_confirmed(self) -> None:
         window = MainWindow(settings_store=isolated_settings())
         window._watch_file = lambda _path: None  # type: ignore[method-assign]
 
@@ -2696,8 +3031,8 @@ class GuiEditorTests(TestCase):
                 self.assertFalse(window.export_pdf())
             dialog.assert_not_called()
 
-            # A stale PDF is never copied. Save/FINAL now require separate
-            # explicit actions within the reviewed submission workflow.
+            # A stale PDF is never copied; cancelling destination selection
+            # must not save or start the subsequent update/export operation.
             pdf = Path(tmp) / "main.pdf"
             pdf.write_bytes(b"%PDF-1.4 old")
             window.pdf_state.begin_build(source, 2)
@@ -2709,11 +3044,11 @@ class GuiEditorTests(TestCase):
 
             exported = Path(tmp) / "exported"
             tab.manager = window.create_compile_manager(source)
-            with patch.object(tab.manager, "compile_async") as compile_async, patch(
-                "app.gui.submission_delivery_dialog.show_submission_delivery", return_value=None,
-            ) as review:
+            with patch.object(tab.manager, "compile_async") as compile_async, patch.object(
+                window.pdf_export, "choose_destination", return_value=False,
+            ) as choose:
                 self.assertFalse(window.export_pdf())
-            review.assert_called_once_with(window)
+            choose.assert_called_once_with(source.resolve())
             compile_async.assert_not_called()
             self.assertFalse(exported.with_suffix(".pdf").exists())
             self.assertIsNone(window.pdf_export.pending_for(source))
@@ -2729,7 +3064,7 @@ class GuiEditorTests(TestCase):
         self.assertIsInstance(window.toolbox_navigation, ToolboxNavigation)
         self.assertEqual(window.sidebar_tabs.tabText(0), "文件")
         self.assertEqual(window.sidebar_tabs.tabText(1), "大纲")
-        self.assertEqual(window.sidebar_tabs.tabText(2), "搜索")
+        self.assertEqual(window.sidebar_tabs.tabText(2), "项目搜索")
         self.assertEqual(window.sidebar_tabs.tabText(3), "图片")
         self.assertEqual(window.sidebar_tabs.tabText(4), "历史")
         self.assertEqual(window.sidebar_tabs.tabText(5), "插入")
@@ -2891,22 +3226,22 @@ class GuiEditorTests(TestCase):
             self.assertEqual(settings.recent_projects()[0], root.resolve())
             window.close()
 
-    def test_bottom_console_header_stays_available_when_collapsed(self) -> None:
+    def test_main_console_control_stays_available_when_collapsed(self) -> None:
         window = MainWindow(settings_store=isolated_settings())
         window.new_document()
         window.show()
         app().processEvents()
 
         self.assertLessEqual(window.vertical_splitter.sizes()[1], 44)
-        window.bottom_collapse_button.click()
+        window.console_button.click()
         app().processEvents()
         self.assertGreater(window.vertical_splitter.sizes()[1], 44)
-        window.bottom_collapse_button.click()
+        window.console_button.click()
         app().processEvents()
         self.assertLessEqual(window.vertical_splitter.sizes()[1], 44)
-        self.assertEqual(window.bottom_collapse_button.toolTip(), "展开控制台：日志、错误、字数和检查")
+        self.assertEqual(window.console_button.toolTip(), "展开控制台：日志、错误、字数和检查")
 
-        window.bottom_collapse_button.click()
+        window.console_button.click()
         app().processEvents()
         self.assertGreater(window.vertical_splitter.sizes()[1], 44)
         window.close()
@@ -5084,18 +5419,19 @@ class GuiPdfStateTests(TestCase):
         self.window.editor_tabs.setCurrentIndex(index_a)
         self.assertEqual(self.window.pdf_panel.current_pdf, pdf_a)
         reviewed = []
-        def inspect(window):
-            request = window.readiness.capture_request()
+        def inspect(root):
+            request = self.window.readiness.capture_request()
+            self.assertEqual(root, request.root)
             reviewed.append((request.root, request.final.last_successful_pdf))
-            return None  # No confirmed delivery from this synthetic record.
-        with patch("app.gui.submission_delivery_dialog.show_submission_delivery", side_effect=inspect):
+            return False  # Destination selection cancelled; no synthetic PDF is exported.
+        with patch.object(self.window.pdf_export, "choose_destination", side_effect=inspect):
             self.assertFalse(self.window.export_pdf())
         self.assertEqual(reviewed[-1], (tab_a.path.resolve(), pdf_a))
 
         index_b = self.window._index_for_tab_id(id(tab_b.editor))
         self.window.editor_tabs.setCurrentIndex(index_b)
         self.assertEqual(self.window.pdf_panel.current_pdf, pdf_b)
-        with patch("app.gui.submission_delivery_dialog.show_submission_delivery", side_effect=inspect):
+        with patch.object(self.window.pdf_export, "choose_destination", side_effect=inspect):
             self.assertFalse(self.window.export_pdf())
         self.assertEqual(reviewed[-1], (tab_b.path.resolve(), pdf_b))
         self.assertEqual(pdf_a.read_bytes(), b"%PDF-1.4 AAA")
@@ -5195,18 +5531,19 @@ class GuiPdfStateTests(TestCase):
         self.assertFalse(self.window.export_pdf_action.isEnabled())
         self.assertFalse(self.window.pdf_panel.export_pdf_button.isEnabled())
 
-    def test_legacy_copy_controller_failure_leaves_no_partial_files(self) -> None:
+    def test_export_request_failure_leaves_no_partial_files(self) -> None:
         tab = self._add_doc("a.tex")
         self._finish_success(tab, 1)
         target = self.dir / "exported.pdf"
 
-        # Internal compatibility helper, not the reviewed user-facing entrance.
-        with patch("app.gui.pdf_export_controller.shutil.copy2", side_effect=OSError("disk full")), patch(
-            "app.gui.main_window.QMessageBox.warning"
-        ) as warning:
+        original = tab.manager.pdf_file.read_bytes()
+        # A record alone is not a current build proof. If starting the required
+        # update is rejected, never fall back to copying that cached PDF.
+        with patch.object(self.window.compile, "compile_current", return_value=False) as compile_request:
             self.assertFalse(self.window.pdf_export.request_export(tab.path, target))
 
-        warning.assert_called_once()
+        compile_request.assert_called_once()
+        self.assertEqual(tab.manager.pdf_file.read_bytes(), original)
         self.assertFalse(target.exists())
         self.assertEqual(list(self.dir.glob("*.part")), [])
         self.assertEqual(list(self.dir.glob("*.pdf.part")), [])

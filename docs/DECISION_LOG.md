@@ -1,6 +1,6 @@
 # ICSTeX Architecture Decision Log
 
-更新时间：2026-09-19（Asia/Taipei）
+更新时间：2026-10-04（Asia/Taipei）
 
 本文件记录已经接受或明确提出的长期技术决策。它是 append-oriented 的决策
 记录，不保存任务过程。需要改变既有决策时，新增一条 Superseding decision，
@@ -39,6 +39,8 @@
 | D021 | Accepted, local development | macOS 受限编译使用启动前核验、失败即拒绝的 OS 隔离后端 |
 | D023 | Accepted | 自动编译到新PDF可见优先于后台统计与预览文件压缩率 |
 | D024 | Accepted | 不同PDF内容隔离Qt渲染队列，文档寿命长于其消费者 |
+| D027 | Accepted | 普通 PDF 导出与审阅式固定交付分离，保留同等 FINAL 字节真实性保护 |
+| D029 | Accepted | 普通文稿结构／源码共享原文与撤销，局部预览不改变正式导出资格 |
 
 ## D001 - Local Research Writing Infrastructure
 
@@ -669,3 +671,63 @@ Status: Accepted (2026-09-15, user requested completion through online activatio
 
 验证须包括真实内核跨进程持锁、晚启动、守护进程及安装器中断、损坏包拒绝、恢复，
 再验证精确新候选的签名 N/N+1 升级和线上 HTTPS。源码协议通过不等于发布验收。
+
+## D027 - Ordinary PDF Export Is Not Reviewed Submission
+
+状态：Accepted（2026-09-26，用户要求简化导出提示与操作）
+
+日常只需要一份 PDF 时，不强制完成源码清单、学术检查、摘要审阅和新交付目录向导。
+普通 LaTeX 文稿的“导出 PDF”在选择目标后可连续保存、正式编译、核验并导出；按钮
+明确说明更新与导出，取消目标选择不触发这些操作，成功不再要求额外确认。
+
+这不降低文件与构建保护：仍绑定当前 root/revision/build、实际输入与 PDF 摘要；预览、
+过期、变更、失败或证据不足的产物不能当作正式输出。发布复用冻结输入和独占新文件，
+不覆盖已有交付，不静默保存其他窗口的草稿。编译期间的新修改须取得后续 FINAL。
+
+“准备提交”继续独立承载审阅式固定版本、可选源码和报告；未知检查不能自动算作通过。
+Block 交付与工程 ZIP 保留各自流程。普通 PDF 导出不宣称完成学术或隐私认证。
+
+## D028 - Remembered Ordinary PDF Tracks Successful FINAL Builds
+
+状态：Accepted（2026-09-28，用户要求类似“另存为”后的自动更新）
+
+扩展 D027：普通 PDF 成功导出后，在本机设置中按编译 root 记录目标、内容摘要与文件/
+父目录身份。之后每个仍然有效的 FINAL 成功结果复用现有后台校验与导出；不额外保存或
+发起编译，不把快速预览、失败、过期结果作为更新源。新导出成功后才切换绑定；重启保留。
+提供“停止自动更新导出 PDF”，停止后文件保留；导出到新位置重新启用。
+
+无覆盖规则只有这一明确例外：仅当目标仍与上次成功导出的身份和内容一致时，在同目录
+暂存、核验并原子替换。未知同名文件、缺失/改动/替换的目标或目录、符号链接以及项目
+输入/内部产物不得自动覆盖。替换前再次检查不是对不合作写入者的文件系统 compare-and-swap。
+自动失败用状态栏和本地日志说明，不连续弹窗；成功编译与导出成功是不同状态。
+
+绑定不写进可共享项目，避免换电脑后意外写到原电脑的绝对路径。高级固定交付、Block、
+工程 ZIP 和 Agent 默认独占新文件规则不变；不引入新版本系统、云同步或网络服务。
+
+## D029 - Source-backed Structure and Code Views
+
+状态：Accepted（2026-10-04，用户确认同一文稿的结构／源码布局并授权实验版）
+
+普通文稿的 `.tex` 是唯一内容真值。结构视图复用已依赖的 MIT pylatexenc 2.10 与
+项目 `make_walker`，以原文位置识别常见章节、段落、公式和环境；不把 AST 重新
+序列化为整篇源码。块修改、排序和章节嵌套通过现有源编辑器的一次 Undo 事务应用，
+保存、编译、PDF 搜索、SyncTeX 与导出继续走原路径。快照绑定 editor、单调源码
+revision、路径和项目范围；编辑后撤销也不能让旧对话框重新获得写入资格。
+
+结构仅在用户打开时按需解析，后台工作只接收不可变文本；迟到结果与关闭后的结果
+不应用。未知片段原样显示为自定义 LaTeX；未闭合输入、明显动态 TeX 与超出当前
+实验范围的文件保留源码入口，不猜测修复。当前按文件展示，不拼接或改写多文件工程。
+
+“当前块／整篇”是独立的阅读范围选择。当前块复用当前整篇 PDF 的 SyncTeX 定位与
+放大，退出恢复阅读状态；它不是独立局部编译，不改变 PREVIEW/FINAL 及正式导出资格。
+旧 Block JSON 工程保留受保护的原有读写路径，入口收进文件菜单，不强制迁移。
+
+开源选型核对：pylatexenc 已在 requirements 内且提供 `pos/len` 原文范围，适配当前
+Python/Qt 路径；TexSoup 是另一套解析器，没有本轮引入必要；tree-sitter-latex 会增加
+解析运行时；Blockly 的 JavaScript 积木生成器不是任意 LaTeX 双向编辑器。因此不引入
+WebView 或第二个解析栈。复用原 Lucide 图标集，新增 grip-vertical 原始 SVG，保留许可。
+
+参考：[pylatexenc 2.10](https://pylatexenc.readthedocs.io/en/v2.10/latexwalker/)、
+[TexSoup](https://github.com/alvinwan/TexSoup)、
+[tree-sitter-latex](https://github.com/latex-lsp/tree-sitter-latex)、
+[Blockly 代码生成](https://developers.google.com/blockly/guides/create-custom-blocks/code-generation/block-code)。

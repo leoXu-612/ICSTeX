@@ -7160,3 +7160,49 @@ runs. The application release tag remains81b1672; no published archive was chang
   installed identity, PR/tag/Release and production deployment are recorded in the closeout.
   Qt/font/offscreen/temp-path/QPdfLinkModel/AX/IMK and ctypes warnings retained. Evidence:
   ~/.codex/visualizations/2026/10/05/icstex-beta5-release/. No student document touched.
+
+## 2026-10-05 — Beta 5 installed, published and deployed
+
+- Completed the same authorized release without changing the frozen application, tests,
+  assets or release-tool source. The previous identity-bound preflight and build receipts
+  remain applicable; no repeated full suite or rebuild was performed for metadata/docs.
+- Existing Keychain account com.icstex.app.beta signed the new ZIP and appcast. No key was
+  generated, rotated or exported. The new feed retains the original URL and public key.
+- InstallationLease replacement preserved the complete old87a78d73 app at
+  ~/Applications/ICSTeX Backups/ICSTeX-2.1.0-beta.4-before-beta5-26c95cd746.app.
+  The installed477 files/160 links match the candidate; executable8bef21d8757fa3e74c9268511fd6b5482042d7d569031d2480d51ec6613598a6.
+  Cold launch, native type breadcrumb and real XeLaTeX/latest FINAL used only this batch's
+  synthetic project. On continuation the installed process76284 still used /Applications.
+- Source commit b43c1bc merged via PR11 to main012e1d3. Freeze PR12 merged to
+  release/2.1 a107b259a5f7e5f3c9680fd1772a467e4cfaa558, the v2.1.0-beta.5 tag target.
+  Release/source/tag consistency passed. No direct main push or force operation occurred.
+- GitHub prerelease403305598 was published2026-10-05T02:00:59Z after checking all8 uploaded
+  assets against local sizes and SHA256. Draft-by-tag REST lookup returned404; using the
+  authenticated release ID resolved the draft check, without re-uploading or overwriting.
+  DMG68,209,289 bytes:0494814e8bed643ba69ce357ca696b4a78dcc88a49136373657e90676116f91e.
+  ZIP56,665,883 bytes:e0c010d4bbfec3622793434b1fe97f1d28aa5ff21e92ff9fca49d1cf447e691d.
+  All6 release documents also matched their uploaded digests.
+- Anonymous public ZIP download returnedHTTP200 and the same56,665,883 bytes. Independent
+  Ed25519 validation of the downloaded archive and signed appcast passed using the installed
+  bundle's original public key; 215 modules/entry and resources matched current source,
+  arm64 and deep/strict ad-hoc signature passed. DMG's local mount/API digest was checked;
+  no second anonymous full DMG download or collaborator upgrade is claimed.
+- Only after public verification, changed publication=true, regenerated website/release.json
+  using the existing generator and copied the exact signed feed bytes. Production consistency
+  gate passed; test_release_site19 tests passed0.425s. FeedSHA256:
+  6819cecce057917ab82fed874154c111dc758de9e34c1396f8c686f2f2be5c4d.
+- Delivery branch codex/publish-beta5 commit487553cf4f69f63a3dbb498f6966fd30dc3d432c
+  deployed through cached Vercel CLI59.25.4 to the existing website project. Production
+  dpl_4K3phGp4Q6ua3sYEstAMZserRsr6 is READY; aliasAssigned=true, aliasError=null.
+  Both ics-tex.vercel.app and website-phi-beryl-92.vercel.app point to it. All16 deployed
+  input identities match the local dry-run file set, including release JSON and signed feed.
+  Deployment URL:https://website-5ci7sqbxz-leoxuminghua-7962s-projects.vercel.app.
+- Followed the deployment Skill's no-deployed-URL-fetch rule: platform/API and file identities
+  are the website evidence, not a claimed fresh public-page/feed HTTP or native upgrade pass.
+  Local package/signature checks are separate from the collaborator's discovery/install/restart.
+  Preserved production protection settings, project, domains, older Releases and signing key.
+- PR13 carries the published metadata and these closeout records to main. Actions live check
+  remains enabled=false; no CI added. The primary dirty checkout and older PR lifecycle are
+  untouched. Only macOS arm64/ad-hoc is distributed, no Developer ID/Apple notarization or
+  new Windows/Intel build. Earlier Qt/AX/IMK/ctypes/hdiutil warnings remain in the receipts.
+  Evidence:~/.codex/visualizations/2026/10/05/icstex-beta5-release/.

@@ -11,38 +11,52 @@
   force-push or deletion. Actions remains disabled, with no required status checks.
 - PR/Issue templates and CONTRIBUTING.md from remote main are preserved. Existing
   cancellation, cache-release and CRLF/privacy fixes are included in this integration.
-- Current integration combines accepted local source a5451d8 with main 69ca0b6;
-  the previously merged feature head 44eecb8 is an ancestor of the local source.
-- 2026-10-01: verified installed-export source committed as 8ddfc13 and pushed to
-  codex/simplify-pdf-export. PR #7 targets main, is OPEN/MERGEABLE, not merged.
-  Remote main remains b6fa58d; Actions is still disabled. Follow-up visualization was
-  developed locally on codex/pdf-export-status, based on 8ddfc13. It was subsequently
-  included in checkpoint7284b20/PR#8; workbench layout is tracked by PR#9, neither merged here.
+- Accepted cumulative source was squash-merged by PR #11 to main at 012e1d3.
+  This includes the source carried by the older stacked PRs #7–10; their independent
+  PR lifecycle was not changed by this release task.
+- PR #12 froze the same tested application source on release/2.1 at a107b259.
+  Tag v2.1.0-beta.5 points there. PR #13 carries public download/feed metadata and
+  delivery records back to main; no direct push, rule bypass or Actions activation.
 
 ## Product and Source State
 
-### 当前任务：Beta 5 类型面包屑修正与公开发布准备
+### 当前交付：Beta 5 类型面包屑与结构写作
 
 - 用户已接受其他功能，并授权修正路径后更新本机、提交GitHub、更新Vercel安装包。
   原待验收/不发布门槛被本次授权取代；不包含新平台、密钥轮换、Developer ID或公证。
-- 当前仍在同一structured-writing工作树，HEAD10cb905；相对远端main b6fa58d为9 ahead/0 behind。
-  既有PR7–10是该已验收源的堆叠祖先。Actions实查disabled；main要求PR/squash，
-  无必过CI、无approval最低数、无bypass。旧release79fcd868与已并入main的4ea00ff树相同。
+- 本轮使用structured-writing隔离工作树，原主工作树及索引保留。源码、发布冻结、
+  下载同步分别由PR11/12/13留痕；不把主工作树的旧未提交内容冒称为本轮新改动。
+  Actions实查disabled；main要求PR/squash，无必过CI、无approval最低数、无bypass。
 - 路径改为独立分段，文件/章节保留名称，末级是块类型；正文/单元格摘要不再参与路径。
   窄窗绘制省略不丢完整tooltip/原生静态文本；复用Qt标签，不增加路径点击操作或重建控件。
   原生独立示例可见且实际编译成功；补齐QLabel语义后的UI-only检查确认AX完整路径可读。
 - 源码版本2.1.0-beta.5、更新序号210005；维持原Sparkle2.9.6、公钥及固定beta feed。
-  新runtime由已核验官方SDK生成。公开网页和发布记录暂仍指Beta4，未提前切换链接。
-  候选准备可标记未发布；新增独立production gate要求真实确认公开/已发布状态。
+  新runtime由已核验官方SDK生成。GitHub prerelease v2.1.0-beta.5已公开，8个资产
+  的大小及SHA-256均与本地一致；先公开并核验资产，再切换网站及原固定更新feed。
+  候选准备可标记未发布；独立production gate拒绝未确认公开/已发布的元数据。
 - 最后55项相关专项通过21.968s；冻结源码完整preflight的compileall和1990项unittest
   通过，628.381s，退出0；前后身份一致，不沿用旧批次结果。
   app Python摘要c1741e25f3053309f8df840a9ef914c659982377804842e2b7bf394a13edb682；
   app+tests f8e21bdd88d1dda15f666c964e203647efed5543718ee835771a23396d3f9bc5；
   app+assets44844322851baf40d5497a0666583c83c01c971f1413bc191ad44fb14b337dd3。
   发布工具/打包源码也加入前后身份核对。新证据在`~/.codex/visualizations/2026/10/05/icstex-beta5-release/`。
-- GitHub/Vercel登录有效。沿用现有website项目及ics-tex.vercel.app、旧内嵌feed域名；
-  API确认无生产SSO/password保护、无Git自动部署关联，没有修改安全设置。
-  当前本机仍是下节87a78d73构建；尚未创建本轮公开Release或替换安装。
+- 新ZIP为56,665,883 bytes，SHA-256 e0c010d4bbfec3622793434b1fe97f1d28aa5ff21e92ff9fca49d1cf447e691d；
+  匿名下载HTTP200，使用安装包原公钥独立验证下载ZIP及appcast的Ed25519签名。
+  DMG为68,209,289 bytes，SHA-256 0494814e8bed643ba69ce357ca696b4a78dcc88a49136373657e90676116f91e；
+  已核验本地只读挂载内容及GitHub上传摘要，未声称本轮另做了匿名DMG完整下载。
+- `/Applications/ICSTeX.app`已安全备份替换并冷启动，477文件/160链接与候选一致。
+  执行文件8bef21d8757fa3e74c9268511fd6b5482042d7d569031d2480d51ec6613598a6；
+  215模块/入口、52资源及raw workers与受测源码对应，arm64/ad-hoc deep/strict签名通过。
+  旧87a78d73安装保留于`~/Applications/ICSTeX Backups/ICSTeX-2.1.0-beta.4-before-beta5-26c95cd746.app`。
+  安装版在本轮独立示例中完成真实XeLaTeX，最新FINAL与末级“表格”路径已原生观察。
+- Vercel原website项目生产部署dpl_4K3phGp4Q6ua3sYEstAMZserRsr6为READY；
+  `ics-tex.vercel.app`及`website-phi-beryl-92.vercel.app`均已绑定，aliasError=null。
+  16个部署输入文件身份与本地一致，包含Beta5 release.json和原字节签名appcast；
+  沿用原项目、密钥、通道和安全设置。依部署Skill未请求线上页面/Feed URL，
+  此处是平台状态与上传文件证据，不冒充本次HTTP取回或异机自动升级验收。
+- 网站专项19项通过0.425s，生产一致性gate通过；应用/测试/资源/发布工具身份仍等于
+  冻结preflight，未重复全套、重打包或覆盖旧资产。仅发布macOS arm64；无Developer ID、
+  Apple公证、新Windows/Intel包或协作者异机安装验收。下文较早阶段记录不代表当前版本。
 
 ### 前一已验收本机源码：表格规格对齐与编译动效
 
@@ -2192,17 +2206,17 @@ r2–r4 保留各自 Return、创建/配置和普通交付/恢复证据，不改
 
 | 对象 | 状态 | 说明 |
 | --- | --- | --- |
-| 当前源码 | Beta 3 app/test source matches published tag | 2.1.0-beta.3；app/test摘要与最终验收快照一致，发布源码标签为81b1672；原开发分支HEAD仍为3bde2b5、索引和无关工作树改动保留，不称整个开发分支已推送 |
-| Beta 2 macOS arm64 候选 | Historical, local-only | 旧r2候选保留为历史证据；当前线上更新由Beta3替代，不重新激活或覆盖它 |
-| 本机 macOS 应用 | Beta 3 updater bootstrap installed | `/Applications/ICSTeX.app`来自匿名下载的公开ZIP，源码/签名一致，旧Beta2已完整备份；最终安装路径的窗口因再次锁屏尚未打开 |
-| macOS arm64 DMG/ZIP | Verified, rebuilt | hardened source；ad-hoc signed、未 notarize |
-| clean source ZIP | Verified, rebuilt | hardened source；publication hygiene scan passed |
-| Windows ARM64 ZIP | Verified beta artifact, rebuilt | Windows-local `C:\w3`；无系统 Python 启动通过 |
+| 当前源码 | Beta 5 matches frozen source | main源码整合PR11；发布标签v2.1.0-beta.5在a107b259，应用/测试/资源与冻结检查相同；原主树修改保留 |
+| 较早 macOS 候选/Release | Historical | Beta2候选与Beta3/4公开资产保留，不覆盖、不改名为Beta5 |
+| 本机 macOS 应用 | Beta 5 installed and launched | `/Applications/ICSTeX.app`与新候选相同；旧包备份；独立示例真实编译及原生路径已观察 |
+| macOS arm64 DMG/ZIP | Beta 5 published | 本地DMG挂载/ZIP完整性、GitHub上传摘要均通过；公开ZIP匿名下载及Ed25519通过；ad-hoc、未 notarize |
+| source archive | GitHub tag archive | 本轮未另做自定义clean source ZIP，不沿用旧制品验收结论 |
+| Windows ARM64 ZIP | Historical Beta 1 only | 旧Windows-local构建保留；不代表Beta5源码 |
 | Windows x64 ZIP | Pending | 当前构建机和 Python 均为 ARM64 |
 | Windows x64 Setup EXE | Blocked by tools | 需要 x64 构建环境和 Inno Setup |
 | Windows TeX acceptance | Blocked by tool | 构建机尚未安装 MiKTeX/TeX Live |
-| Static release website | Beta 3 production READY | `ics-tex.vercel.app`及固定签名appcast；下载链接/版本/SHA已实查，保留既有版式，更新联网说明 |
-| GitHub repository / Release | Beta 3 published prerelease | `v2.1.0-beta.3`；8个资产；DMG/ZIP匿名下载HTTP 200且摘要一致，旧版本保持不变 |
+| Static release website | Beta 5 production READY | 官网和旧固定feed域名同一部署；输入身份已核对；未以线上页面HTTP取回作本轮证据 |
+| GitHub repository / Release | Beta 5 published prerelease | `v2.1.0-beta.5`；8个资产；公开ZIP HTTP200且摘要/签名一致，旧版本保持不变 |
 
 旧的 `dist/ICSTeX-Windows.zip` 未版本化且早于当前源码，不是 2.1.0-beta.1 制品。
 
@@ -2220,7 +2234,8 @@ r2–r4 保留各自 Return、创建/配置和普通交付/恢复证据，不改
 
 ## Current Risks and Immediate Work
 
-当前范围仍是本地源码实现与验收，不是发布候选推荐。完整要求/证据对应关系见
+当前公开范围是上表的macOS arm64 Beta5；本次发布不消除下列历史未验收范围。
+完整要求/证据对应关系见
 [V1 验收矩阵](V1_ACCEPTANCE_MATRIX.md)，分层发布状态见
 [发布准备清单](V1_RELEASE_READINESS.md)。以下列当前缺口与限制，不重复旧阶段待办。
 

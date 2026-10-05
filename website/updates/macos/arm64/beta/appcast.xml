@@ -1,31 +1,49 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><!-- sparkle-sign-warning:
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<!-- sparkle-sign-warning:
 IMPORTANT: This file was signed by Sparkle. Any modifications to this file requires re-signing this file with generate_appcast or sign_update! The signed signature will be embedded at the end of this file.
---><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
-  <channel>
-    <title>ICSTeX macOS arm64 Beta Updates</title>
-    <link>https://ics-tex.vercel.app</link>
-    <description>ICSTeX 用户确认后下载并保存退出安装；完整包使用 Ed25519 签名。</description>
-    <item>
-      <title>ICSTeX 2.1.0-beta.4</title>
-      <sparkle:version>210004</sparkle:version>
-      <sparkle:shortVersionString>2.1.0-beta.4</sparkle:shortVersionString>
-      <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-      <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-      <description>公式导航与显示留白、快速预览双向定位、写作教程和工程 ZIP。更新前请保存文稿。本版本尚未经过 Apple 公证。</description>
-      <enclosure url="https://github.com/leoXu-612/ICSTeX/releases/download/v2.1.0-beta.4/ICSTeX-2.1.0-beta.4-macos-arm64.zip" length="57188923" type="application/octet-stream" sparkle:edSignature="p0k+lBoc5rkcfnIMOJjR7mR2HH482sJNauyMwnYj4FJ2Btng3USuGW8bBDw8oIXi7NeLnzHLkQxj2Lm1xmBYDQ=="></enclosure>
-    </item>
-    <item>
-      <title>ICSTeX 2.1.0-beta.3</title>
-      <sparkle:version>210003</sparkle:version>
-      <sparkle:shortVersionString>2.1.0-beta.3</sparkle:shortVersionString>
-      <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-      <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-      <description>启用应用内更新，并保护安装期间的实例启动。更新前请保存文稿。本版本尚未经过 Apple 公证。</description>
-      <enclosure url="https://github.com/leoXu-612/ICSTeX/releases/download/v2.1.0-beta.3/ICSTeX-2.1.0-beta.3-macos-arm64.zip" length="56747305" type="application/octet-stream" sparkle:edSignature="80kSzE6UuNwaH3xjqjdpZEeQPDgJddA9/AzwA3dTyL0TX7I3qcrh6xu+tXF++AS3jxYAHhbSRaKGwAMwQgJvAQ=="></enclosure>
-    </item>
-  </channel>
+-->
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>ICSTeX macOS arm64 Beta Updates</title>
+        <link>https://ics-tex.vercel.app</link>
+        <description>ICSTeX 用户确认后下载并保存退出安装；完整包使用 Ed25519 签名。</description>
+        <item>
+            <title>2.1.0-beta.5</title>
+            <pubDate>Mon, 05 Oct 2026 02:13:24 +0800</pubDate>
+            <link>https://ics-tex.vercel.app</link>
+            <sparkle:version>210005</sparkle:version>
+            <sparkle:shortVersionString>2.1.0-beta.5</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="plain-text"><![CDATA[ICSTeX 2.1 Beta 5
+
+结构与源码共用同一份文稿；路径分段显示章节与块类型。
+改进正文和普通表格局部编辑、写作工作台、导出反馈与新手练习。
+继续使用确认式更新。仅支持 macOS Apple Silicon，未经过 Apple 公证。
+]]></description>
+            <enclosure url="https://github.com/leoXu-612/ICSTeX/releases/download/v2.1.0-beta.5/ICSTeX-2.1.0-beta.5-macos-arm64.zip" length="56665883" type="application/octet-stream" sparkle:edSignature="BOZ+6fWr6I1YVvxzsHPlDYjmKHk2dmPsraY7B1DrEa1Ugu/R/+9LoauHhdHxvmhx+tDXpbwEFNJCVvK2XCN0Aw=="/>
+        </item>
+        <item>
+            <title>ICSTeX 2.1.0-beta.4</title>
+            <sparkle:version>210004</sparkle:version>
+            <sparkle:shortVersionString>2.1.0-beta.4</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description>公式导航与显示留白、快速预览双向定位、写作教程和工程 ZIP。更新前请保存文稿。本版本尚未经过 Apple 公证。</description>
+            <enclosure url="https://github.com/leoXu-612/ICSTeX/releases/download/v2.1.0-beta.4/ICSTeX-2.1.0-beta.4-macos-arm64.zip" length="57188923" type="application/octet-stream" sparkle:edSignature="p0k+lBoc5rkcfnIMOJjR7mR2HH482sJNauyMwnYj4FJ2Btng3USuGW8bBDw8oIXi7NeLnzHLkQxj2Lm1xmBYDQ=="/>
+        </item>
+        <item>
+            <title>ICSTeX 2.1.0-beta.3</title>
+            <sparkle:version>210003</sparkle:version>
+            <sparkle:shortVersionString>2.1.0-beta.3</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description>启用应用内更新，并保护安装期间的实例启动。更新前请保存文稿。本版本尚未经过 Apple 公证。</description>
+            <enclosure url="https://github.com/leoXu-612/ICSTeX/releases/download/v2.1.0-beta.3/ICSTeX-2.1.0-beta.3-macos-arm64.zip" length="56747305" type="application/octet-stream" sparkle:edSignature="80kSzE6UuNwaH3xjqjdpZEeQPDgJddA9/AzwA3dTyL0TX7I3qcrh6xu+tXF++AS3jxYAHhbSRaKGwAMwQgJvAQ=="/>
+        </item>
+    </channel>
 </rss>
 <!-- sparkle-signatures:
-edSignature: mM1ux+OCLpZBdDW01HKhg8t0MVSAQAQa3x6GgxhKAYBEt7FVHYmjE4yqIEY+MpuxFdlfaabxoygQ1pPQ/8b9Bw==
-length: 2235
+edSignature: MLlU9hcbhd+9Jgwus0qXekvB09HobOE06+XAP8IDcBhRAWdikgPnxg+HkiFajKLwXvWdK9G7OKaO6N2ug6PPDA==
+length: 3463
 -->

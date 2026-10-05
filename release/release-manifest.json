@@ -1,28 +1,28 @@
 {
   "schema_version": 1,
   "product": "ICSTeX",
-  "version": "2.1.0-beta.4",
-  "tag": "v2.1.0-beta.4",
+  "version": "2.1.0-beta.5",
+  "tag": "v2.1.0-beta.5",
   "channel": "beta",
-  "release_name": "写作与公式体验更新",
+  "release_name": "结构写作与表格体验",
   "github_repository_public": true,
   "github_release_published": true,
   "assets": [
     {
-      "name": "ICSTeX-2.1.0-beta.4-macos-arm64.dmg",
+      "name": "ICSTeX-2.1.0-beta.5-macos-arm64.dmg",
       "platform": "macOS",
       "architecture": "Apple Silicon (arm64)",
       "kind": "DMG",
-      "sha256": "cfcffab1e0b80f7c78df49fd953d4c4d213ab138a2735862306a9f7ed2821c94",
+      "sha256": "0494814e8bed643ba69ce357ca696b4a78dcc88a49136373657e90676116f91e",
       "status": "verified",
       "primary_download": true
     },
     {
-      "name": "ICSTeX-2.1.0-beta.4-macos-arm64.zip",
+      "name": "ICSTeX-2.1.0-beta.5-macos-arm64.zip",
       "platform": "macOS",
       "architecture": "Apple Silicon (arm64)",
       "kind": "ZIP",
-      "sha256": "170696e77b5eca6b09fefe3bb4cdab95d2c4862c9ebe56589811220e4e01aa6a",
+      "sha256": "e0c010d4bbfec3622793434b1fe97f1d28aa5ff21e92ff9fca49d1cf447e691d",
       "status": "verified",
       "primary_download": false
     }
@@ -41,6 +41,7 @@
     "安装中断后先检查进程与应用完整性；未知交接可能需要重启 Mac。没有自动回滚，重要项目请保留备份。",
     "Windows 新版安装包尚未提供，旧 ARM64 Developer Beta 保留在历史 Release 中；不支持常见的 Windows x64 电脑。",
     "LaTeX 发行版和可选 OCR 组件需另行安装，公式识别结果仍需人工核对。",
-    "这是 Beta 版本；系统输入法、辅助功能和全部历史原生崩溃尚未完成全面验收，重要项目请保留独立备份。"
+    "这是 Beta 版本；系统输入法、辅助功能和全部历史原生崩溃尚未完成全面验收，重要项目请保留独立备份。",
+    "结构视图按当前文件工作；复杂 LaTeX、特殊表格列或行规则保留代码编辑，局部示意不替代正式 PDF。"
   ]
 }

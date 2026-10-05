@@ -1,10 +1,11 @@
 # ICSTeX
 
-Current version: 2.1.0-beta.5. Public downloads remain on 2.1.0-beta.4 until the Beta 5 release is published.
+Current release: [2.1.0-beta.5](https://github.com/leoXu-612/ICSTeX/releases/tag/v2.1.0-beta.5), for macOS Apple Silicon.
 See [`release/BUILD_RECEIPT.json`](release/BUILD_RECEIPT.json) for the exact packaged source identity.
 This release includes opt-in, signed in-app updates. Older manual builds need one manual
 bootstrap installation. Windows stays on its historical Beta 1 package.
-Verified online delivery is recorded in [`docs/BETA3_DELIVERY.md`](docs/BETA3_DELIVERY.md).
+Current delivery and verification boundaries are recorded in [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md).
+The original updater bootstrap acceptance remains in [`docs/BETA3_DELIVERY.md`](docs/BETA3_DELIVERY.md).
 
 ICSTeX - ICC Student's TeX - is local research-writing infrastructure for ICC
 students, delivered as a Python/PySide6 desktop application. It combines LaTeX
@@ -12,7 +13,7 @@ editing with live compilation, PDF preview, SyncTeX hooks, Word Count, error
 parsing, beginner-friendly insertion tools, project templates, and packaging
 scaffolding.
 
-The current local experimental source adds **结构 / 源码** views of the same
+Beta 5 adds **结构 / 源码** views of the same
 `.tex` document: common sections and content blocks can be edited, deleted, moved
 and nested through the existing source editor and Undo history. Content editing
 stays in the workspace, with visible paragraph breaks and direct editing of
@@ -21,7 +22,7 @@ share the insertion controls; shrinking asks before removing data. A lightweight
 activity animation does not claim a percentage and respects macOS Reduce Motion. **当前块 / 整篇**
 changes PDF reading focus, not compilation or export scope. Unknown LaTeX stays
 source-editable; legacy Block projects remain under **文件 → 旧版 Block 工程**.
-This is not yet a new public release. See [the user guide](docs/user-guide.md).
+See [the user guide](docs/user-guide.md) for the supported structures and editing limits.
 
 Recent builds also include an environment doctor, quick BibTeX/DOI/arXiv/URL
 reference import, drag-and-drop figure insertion, visual table editing, project
